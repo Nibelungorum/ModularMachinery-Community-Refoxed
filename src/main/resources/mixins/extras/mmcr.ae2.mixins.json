@@ -4,19 +4,13 @@
   "package": "cn.howxu.mmcr.mixin.compat.appliedenergistics2",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "AppEngSlotMixin",
     "ConfigInventoryAccessor",
-    "InterfaceMenuMixin",
     "InterfaceLogicMixin",
     "PatternProviderLogicMixin",
     "PatternProviderLogicBatchAccessMixin",
     "ExecutingCraftingJobAccessor",
     "ExecutingCraftingJobTaskProgressAccessor",
     "CraftingCpuLogicMixin"
-  ],
-  "client": [
-    "InterfaceScreenMixin",
-    "PatternProviderScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

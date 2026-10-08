@@ -13,9 +13,12 @@ import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
 import appeng.core.settings.TickRates;
 import appeng.menu.SlotSemantics;
-import appeng.menu.implementations.InterfaceMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2InterfaceMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import appeng.menu.slot.AppEngSlot;
-import com.glodblock.github.extendedae.container.ContainerExInterface;
+import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
+import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
+import com.glodblock.github.extendedae.client.ExSemantics;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -230,7 +233,7 @@ public class AE2OutputInterfaceGameTest {
                             "mmcr-ae2-output-cache-menu".getBytes(StandardCharsets.UTF_8)),
                             "mmcr-ae2-output-cache-menu"),
                     ClientInformation.createDefault());
-            InterfaceMenu menu = new InterfaceMenu(InterfaceMenu.TYPE, 0,
+            AE2InterfaceMenu menu = new AE2InterfaceMenu(AE2MenuTypes.INTERFACE, 0,
                     menuPlayer.getInventory(), port);
             AppEngSlot storageSlot = (AppEngSlot) menu.getSlots(SlotSemantics.STORAGE).get(0);
             helper.assertTrue(storageSlot.mayPickup(menuPlayer),
@@ -238,6 +241,9 @@ public class AE2OutputInterfaceGameTest {
             menu.quickMoveStack(menuPlayer, storageSlot.index);
             helper.assertTrue(port.getInterfaceLogic().getStorage().getAmount(0) == 0L,
                     "AE2 menu shift-click extracts the occupied output cache slot");
+            helper.assertTrue(menuPlayer.getInventory().items.stream()
+                            .filter(stack -> stack.is(Items.IRON_INGOT)).mapToInt(ItemStack::getCount).sum() == 63,
+                    "Shift extraction transfers all cached resources into the player inventory");
         });
 
         helper.runAtTickTime(8, () -> {
@@ -265,9 +271,9 @@ public class AE2OutputInterfaceGameTest {
                             "mmcr-ae2-output-menu-test".getBytes(StandardCharsets.UTF_8)),
                             "mmcr-ae2-output-menu"),
                     ClientInformation.createDefault());
-            InterfaceMenu menu = new InterfaceMenu(InterfaceMenu.TYPE, 0,
+            AE2InterfaceMenu menu = new AE2InterfaceMenu(AE2MenuTypes.INTERFACE, 0,
                     menuPlayer.getInventory(), port);
-            menu.setFilter(0, new ItemStack(Items.DIAMOND));
+            menu.setFilter(menu.getSlots(SlotSemantics.CONFIG).getFirst().index, new ItemStack(Items.DIAMOND));
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0) == null,
                     "InterfaceMenu.setFilter cannot write into the locked output config");
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
@@ -288,8 +294,10 @@ public class AE2OutputInterfaceGameTest {
                     new GameProfile(UUID.nameUUIDFromBytes("mmcr-eae-output-menu".getBytes(StandardCharsets.UTF_8)),
                             "mmcr-eae-output-menu"), ClientInformation.createDefault());
             port.getInterfaceLogic().getStorage().insert(35, AEItemKey.of(Items.IRON_INGOT), 1L, Actionable.MODULATE);
-            ContainerExInterface menu = new ContainerExInterface(ContainerExInterface.TYPE, 0, player.getInventory(), port);
-            AppEngSlot storageSlot = (AppEngSlot) menu.getSlots(com.glodblock.github.extendedae.client.ExSemantics.EX_8).getLast();
+            ExtendedInterfaceMenu menu = new ExtendedInterfaceMenu(ExtendedAEMenuTypes.INTERFACE, 0, player.getInventory(), port);
+            menu.setPage(1);
+            helper.assertTrue(menu.getType() == ExtendedAEMenuTypes.INTERFACE, "Extended output uses its own registered menu");
+            AppEngSlot storageSlot = (AppEngSlot) menu.getSlots(ExSemantics.EX_8).getLast();
             storageSlot.set(Items.DIAMOND.getDefaultInstance());
             helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(35).what().equals(AEItemKey.of(Items.IRON_INGOT)),
                     "ExtendedAE output storage menu rejects item insertion");
@@ -297,7 +305,10 @@ public class AE2OutputInterfaceGameTest {
             menu.quickMoveStack(player, storageSlot.index);
             helper.assertTrue(port.getInterfaceLogic().getStorage().getStack(35) == null,
                     "Player menu extraction removes the extended output stack");
-            menu.setFilter(35, new ItemStack(Items.DIAMOND));
+            helper.assertTrue(player.getInventory().items.stream()
+                            .filter(stack -> stack.is(Items.IRON_INGOT)).mapToInt(ItemStack::getCount).sum() == 1,
+                    "Extracted slot 35 resource reaches the player without duplication or loss");
+            menu.setFilter(menu.getConfigSlots().get(35).index, new ItemStack(Items.DIAMOND));
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(35) == null,
                     "ExtendedAE output menu blocks filter edits");
             helper.succeed();

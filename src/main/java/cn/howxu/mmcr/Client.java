@@ -2,6 +2,8 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.publicapi.event.RegisterControllerRenderersEvent;
 import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
@@ -146,6 +148,14 @@ public class Client {
         event.register(ModUIs.COMBINED.get(), CombinedPortScreen::new);
         event.register(ModUIs.EXTENDED_COMBINED.get(), ExtendedCombinedScreen::new);
         event.register(ModUIs.UPGRADE_BUS.get(), UpgradeBusScreen::new);
+        if (AE2Bridge.get().available()) {
+            registerOptionalScreens(event,
+                    "cn.howxu.mmcr.compat.appliedenergistics2.loaded.client.AE2MenuScreens");
+            if (ExtendedAEContributorBootstrap.contributor().available()) {
+                registerOptionalScreens(event,
+                        "cn.howxu.mmcr.compat.extendedae.loaded.client.ExtendedAEMenuScreens");
+            }
+        }
         if (MekanismBridge.get().available()) {
             registerOptionalMenuScreen(event, ModUIs.CHEMICAL_PORT,
                     "cn.howxu.mmcr.client.gui.ChemicalHatchScreen");
@@ -159,6 +169,14 @@ public class Client {
         if (PneumaticCraftBridge.get().available()) {
             registerOptionalMenuScreen(event, ModUIs.AIR_PORT,
                     "cn.howxu.mmcr.compat.pneumaticcraft.client.AirPortScreen");
+        }
+    }
+
+    private static void registerOptionalScreens(RegisterMenuScreensEvent event, String className) {
+        try {
+            Class.forName(className).getMethod("register", RegisterMenuScreensEvent.class).invoke(null, event);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Unable to register optional menu screens: " + className, exception);
         }
     }
 

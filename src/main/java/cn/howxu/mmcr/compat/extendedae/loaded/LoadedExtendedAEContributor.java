@@ -17,19 +17,22 @@ import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedStockingInputInterfac
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeInputInterfaceKind;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeOutputInterfaceKind;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeStockingInputInterfaceKind;
+import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import com.glodblock.github.extendedae.common.EAESingletons;
-import com.glodblock.github.extendedae.container.ContainerExInterface;
-import com.glodblock.github.extendedae.container.ContainerExPatternProvider;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -57,29 +60,26 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
     @Override public boolean isPort(String id) { return KINDS.stream().anyMatch(kind -> kind.id().equals(id)); }
 
     @Override
+    public void registerMenus(BiConsumer<String, Supplier<? extends MenuType<?>>> registrar) {
+        ExtendedAEMenuTypes.register(registrar);
+    }
+
+    @Override
+    public @Nullable MenuType<?> menuType(IOPortKind kind) {
+        return KINDS.contains(kind) ? ExtendedAEMenuTypes.typeFor(kind) : null;
+    }
+
+    @Override
     public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
-        if (!(level.getBlockEntity(pos) instanceof cn.howxu.mmcr.internal.tile.IOPortBlockEntity host)
-                || !KINDS.contains(host.kind())) return false;
-        if (host.kind() == ExtendedPatternInterfaceKind.INSTANCE) {
-            return MenuOpener.open(ContainerExPatternProvider.TYPE, player, MenuLocators.forBlockEntity(host));
-        }
-        if (isOversize(host.kind())) {
-            return MenuOpener.open(ContainerExInterface.TYPE_OVERSIZE, player, MenuLocators.forBlockEntity(host));
-        }
-        return MenuOpener.open(ContainerExInterface.TYPE, player, MenuLocators.forBlockEntity(host));
+        if (!(level.getBlockEntity(pos) instanceof IOPortBlockEntity host)) return false;
+        MenuType<?> type = menuType(host.kind());
+        return type != null && MenuOpener.open(type, player, MenuLocators.forBlockEntity(host));
     }
 
     @Override
     public boolean returnToMainMenu(ServerPlayer player, ISubMenu subMenu, IOPortKind kind) {
-        if (!KINDS.contains(kind)) return false;
-        var locator = subMenu.getLocator();
-        if (kind == ExtendedPatternInterfaceKind.INSTANCE) {
-            return MenuOpener.returnTo(ContainerExPatternProvider.TYPE, player, locator);
-        }
-        if (isOversize(kind)) {
-            return MenuOpener.returnTo(ContainerExInterface.TYPE_OVERSIZE, player, locator);
-        }
-        return MenuOpener.returnTo(ContainerExInterface.TYPE, player, locator);
+        MenuType<?> type = menuType(kind);
+        return type != null && MenuOpener.returnTo(type, player, subMenu.getLocator());
     }
 
     @Override

@@ -13,6 +13,7 @@ import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksDeviceGameTest;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksRecipeGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.MirrorPatternInterfaceGameTest;
+import cn.howxu.mmcr.compat.extendedae_plus.ChannelCardMenuGameTest;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticRecipeGameTest;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticTransportGameTest;
 
@@ -37,6 +38,7 @@ import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
 import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.InterfaceMenuGameTest;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.registries.Registries;
@@ -266,35 +268,6 @@ public final class GameTestRegistry {
                 helper -> new MekanismPortGameTest().heatInputCapabilityAcceptsOnlyExternalHeatInput(helper));
         register(event, "mekanism_formed_port_reflects_texture_change", 100,
                 helper -> new MekanismPortGameTest().formedMultiblockPortReflectsBaseTextureChange(helper));
-         register(event, "ae2_me_input_interface", 200,
-                 helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
-        register(event, "ae2_me_input_manual_cache", 100,
-                helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
-        register(event, "eae_me_extended_input_provenance", 100,
-                helper -> new AE2InterfaceGameTest().extendedInputReturnsOnlyAeOwnedResourcesAfterCommittedExtraction(helper));
-        register(event, "ae2_me_input_memory_card", 100,
-                helper -> new AE2InterfaceGameTest().inputInterfaceMemoryCardRoundTrip(helper));
-        register(event, "ae2_me_stocking_input_interface", 100,
-                helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
-        register(event, "task2_ae2_output_lifecycle", 100,
-                helper -> new Task2AE2OutputGameTest().outputWakeUpAndActiveNodeLifecycle(helper));
-        register(event, "ae2_me_output_interface", 200,
-                helper -> new AE2OutputInterfaceGameTest().outputInterfaceDrainsToNetworkAndLocksConfig(helper));
-        register(event, "eae_me_extended_output_menu", 100,
-                helper -> new AE2OutputInterfaceGameTest().extendedOutputMenuAllowsExtractionButBlocksInsertionAndFilters(helper));
-        register(event, "ae2_me_async_output_interface", 200,
-                helper -> new AE2AsyncOutputInterfaceGameTest().asyncOutputInterfaceDrainsServiceAndSurvivesDisconnect(helper));
-        register(event, "ae2_me_pattern_memory_card", 100,
-                helper -> new AE2PatternInterfaceGameTest().patternInterfaceMemoryCardRoundTrip(helper));
-        register(event, "ae2_me_pattern_interface", 160,
-                helper -> new AE2PatternInterfaceGameTest().patternInterfaceRestoresPatternsAndWakesNativeWork(helper));
-        register(event, "ae2_me_pattern_interface_request", 100,
-                helper -> new AE2PatternInterfaceGameTest().patternRequestStartsControllerWithRemainingOrdinaryInput(helper));
-        // No need for this gameTest
-        // register(event, "ae2_cpu_factory_pattern_batch", 180,
-        //         helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));
-        register(event, "eae_me_extended_pattern_slot_35", 100,
-                helper -> new AE2PatternInterfaceGameTest().extendedPatternSlot35IsAdvertisedAndReturnsThroughCraftingMachine(helper));
         register(event, "appmek_local_simulation", 100,
                 helper -> new AppMekAdapterGameTest().localSimulationPreservesInventory(helper));
         register(event, "appmek_multi_chemical_queries_and_apis", 100,
@@ -355,6 +328,85 @@ public final class GameTestRegistry {
                 helper -> new AppMekAdapterGameTest().mixedViewsSharePhysicalSlotAndSyncPreservesItems(helper));
         register(event, "appmek_long_amounts", 100,
                 helper -> new AppMekAdapterGameTest().chemicalAmountsAreNotTruncated(helper));
+        if (ModList.get().isLoaded("ae2")) {
+            register(event, "ae2_menu_host_routes", 40,
+                    helper -> new InterfaceMenuGameTest().ae2HostsOpenAndReturnOwnTypes(helper));
+            register(event, "ae2_menu_mirror_sync", 40,
+                    helper -> new InterfaceMenuGameTest().mirrorSyncPreservesWrappedAmounts(helper));
+            register(event, "ae2_menu_small_stocking_mirror", 200,
+                    helper -> new AE2StockingInterfaceGameTest().smallStockingMirrorCannotMaterializeNetworkItems(helper));
+            register(event, "ae2_menu_output_local_policy", 40,
+                    helper -> new InterfaceMenuGameTest().outputCacheUsesLocalSlotPolicy(helper));
+            register(event, "ae2_menu_async_read_only", 40,
+                    helper -> new InterfaceMenuGameTest().asyncDisplayCannotMaterializeOutputs(helper));
+            register(event, "ae2_menu_native_isolation", 40,
+                    helper -> new InterfaceMenuGameTest().nativeAe2InterfaceRemainsEditable(helper));
+            register(event, "ae2_menu_submenu_return", 40,
+                    helper -> new AE2InterfaceGameTest().amountAndPriorityReturnToOwnMenu(helper));
+            register(event, "ae2_menu_fuzzy_restock", 200,
+                    helper -> new AE2InterfaceGameTest().fuzzyCardRestocksDamagedItem(helper));
+            register(event, "ae2_menu_crafting_restock_cancel", 400,
+                    helper -> new AE2InterfaceGameTest().craftingCardActuallyRestocksAndCancels(helper));
+            register(event, "ae2_pattern_menu_terminal", 100,
+                    helper -> new AE2PatternInterfaceGameTest().patternMenuStateAndTerminalVisibility(helper));
+            if (ModList.get().isLoaded("extendedae")) {
+                register(event, "eae_menu_host_routes", 40,
+                        helper -> new InterfaceMenuGameTest().extendedHostsOpenAndReturnOwnTypes(helper));
+                register(event, "eae_menu_page_semantics", 40,
+                        helper -> new InterfaceMenuGameTest().extendedPagesDoNotMutateSemanticLists(helper));
+                register(event, "eae_menu_pick_all_page", 40,
+                        helper -> new InterfaceMenuGameTest().extendedPickAllOnlyCollectsCurrentPage(helper));
+                register(event, "eae_menu_quick_craft_page", 40,
+                        helper -> new InterfaceMenuGameTest().extendedQuickCraftResetsOnEffectivePageChange(helper));
+                register(event, "eae_menu_player_shift_page", 40,
+                        helper -> new InterfaceMenuGameTest().extendedPlayerShiftUsesOnlyCurrentPage(helper));
+                register(event, "eae_menu_small_stocking_mirror", 200,
+                        helper -> new AE2StockingInterfaceGameTest().extendedSmallStockingMirrorCannotMaterializeNetworkItems(helper));
+                register(event, "eae_menu_output_conservation", 40,
+                        helper -> new InterfaceMenuGameTest().extendedOutputConservesItemsAndFluids(helper));
+                register(event, "eae_menu_native_isolation", 40,
+                        helper -> new InterfaceMenuGameTest().nativeExtendedInterfaceRemainsEditable(helper));
+                register(event, "eae_menu_amount_page_return", 40,
+                        helper -> new AE2InterfaceGameTest().extendedAmountReturnRetainsTransientPage(helper));
+                register(event, "eae_menu_fuzzy_restock", 200,
+                        helper -> new AE2InterfaceGameTest().extendedFuzzyCardRestocksDamagedItem(helper));
+                register(event, "eae_menu_crafting_restock_cancel", 400,
+                        helper -> new AE2InterfaceGameTest().extendedCraftingCardActuallyRestocksAndCancels(helper));
+                register(event, "eae_menu_upgrade_toolbox_profiles", 40,
+                        helper -> new AE2InterfaceGameTest().inputUpgradeToolboxAndOversizeAmount(helper));
+                register(event, "eae_pattern_menu_terminal", 100,
+                        helper -> new AE2PatternInterfaceGameTest().extendedPatternMenuStateAndTerminalVisibility(helper));
+                register(event, "eae_me_extended_input_provenance", 100,
+                        helper -> new AE2InterfaceGameTest().extendedInputReturnsOnlyAeOwnedResourcesAfterCommittedExtraction(helper));
+                register(event, "eae_me_extended_output_menu", 100,
+                        helper -> new AE2OutputInterfaceGameTest().extendedOutputMenuAllowsExtractionButBlocksInsertionAndFilters(helper));
+                register(event, "eae_me_extended_pattern_slot_35", 100,
+                        helper -> new AE2PatternInterfaceGameTest().extendedPatternSlot35IsAdvertisedAndReturnsThroughCraftingMachine(helper));
+            }
+            register(event, "ae2_me_input_interface", 200,
+                    helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
+            register(event, "ae2_me_input_manual_cache", 100,
+                    helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
+            register(event, "ae2_me_input_memory_card", 100,
+                    helper -> new AE2InterfaceGameTest().inputInterfaceMemoryCardRoundTrip(helper));
+            register(event, "ae2_me_stocking_input_interface", 100,
+                    helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
+            register(event, "task2_ae2_output_lifecycle", 100,
+                    helper -> new Task2AE2OutputGameTest().outputWakeUpAndActiveNodeLifecycle(helper));
+            register(event, "ae2_me_output_interface", 200,
+                    helper -> new AE2OutputInterfaceGameTest().outputInterfaceDrainsToNetworkAndLocksConfig(helper));
+            register(event, "ae2_me_async_output_interface", 200,
+                    helper -> new AE2AsyncOutputInterfaceGameTest().asyncOutputInterfaceDrainsServiceAndSurvivesDisconnect(helper));
+            register(event, "ae2_me_pattern_memory_card", 100,
+                    helper -> new AE2PatternInterfaceGameTest().patternInterfaceMemoryCardRoundTrip(helper));
+            register(event, "ae2_me_pattern_interface", 160,
+                    helper -> new AE2PatternInterfaceGameTest().patternInterfaceRestoresPatternsAndWakesNativeWork(helper));
+            register(event, "ae2_me_pattern_interface_request", 100,
+                    helper -> new AE2PatternInterfaceGameTest().patternRequestStartsControllerWithRemainingOrdinaryInput(helper));
+            // No need for this gameTest
+            // register(event, "ae2_cpu_factory_pattern_batch", 180,
+            //         helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));
+        }
         register(event, "appflux_me_flux_input_interface", 100,
                 helper -> new AppliedFluxInterfaceGameTest().portBlocksResolveToFluxBlockEntities(helper));
         register(event, "appflux_me_flux_input_grid_node", 100,
@@ -429,6 +481,8 @@ public final class GameTestRegistry {
                     helper -> new FluxNetworksRecipeGameTest().successfulCandidateRetractsFailedWarmup(helper));
         }
         if (ModList.get().isLoaded("extendedae_plus")) {
+            register(event, "eaep_channel_card_own_menu", 100,
+                    helper -> new ChannelCardMenuGameTest().channelCardsSurviveOwnMenusAndReconnect(helper));
             register(event, "eaep_mirror_sync", 200,
                     helper -> new MirrorPatternInterfaceGameTest().syncAndPersistence(helper));
             register(event, "eaep_mirror_tool", 100,

@@ -31,10 +31,6 @@ config="mixins/extras/mmcr.ae2.mixins.json"
 requiredMods=["ae2"]
 
 [[mixins]]
-config="mixins/extras/mmcr.extendedae.mixins.json"
-requiredMods=["extendedae"]
-
-[[mixins]]
 config="mixins/extras/mmcr.extendedae_plus.mixins.json"
 requiredMods=["ae2", "extendedae", "extendedae_plus"]
 

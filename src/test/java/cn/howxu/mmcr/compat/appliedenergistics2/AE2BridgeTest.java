@@ -7,6 +7,10 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKin
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedOutputInterfaceKind;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.OversizeOutputInterfaceKind;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
+import java.util.LinkedHashMap;
+import java.util.function.Supplier;
+import net.minecraft.world.inventory.MenuType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +29,23 @@ class AE2BridgeTest {
         assertThat(bridge.available()).isFalse();
         assertThat(bridge.portKinds()).isEmpty();
         assertThat(bridge.isPort("ae2_me_input_interface")).isFalse();
+    }
+
+    @Test
+    void unavailableBridgeDoesNotRegisterOptionalMenus() {
+        var menus = new LinkedHashMap<String, Supplier<? extends MenuType<?>>>();
+        AE2BridgeBootstrap.selectForTesting(false).registerMenus(menus::put);
+        assertThat(menus).isEmpty();
+    }
+
+    @Test
+    void unavailableContributorDoesNotRegisterOrRouteOptionalMenus() {
+        var contributor = ExtendedAEContributorBootstrap.selectForTesting(false);
+        var menus = new LinkedHashMap<String, Supplier<? extends MenuType<?>>>();
+        contributor.registerMenus(menus::put);
+        assertThat(menus).isEmpty();
+        assertThat(contributor.menuType(InputInterfaceKind.INSTANCE)).isNull();
+        assertThat(contributor.menuType(ExtendedOutputInterfaceKind.INSTANCE)).isNull();
     }
 
     @Test

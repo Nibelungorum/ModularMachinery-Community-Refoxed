@@ -3,8 +3,11 @@ package cn.howxu.mmcr.compat.extendedae;
 import appeng.menu.ISubMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -23,6 +26,13 @@ public interface ExtendedAEContributor {
     boolean isPort(String id);
 
     boolean openMenu(ServerPlayer player, Level level, BlockPos pos);
+
+    default void registerMenus(BiConsumer<String, Supplier<? extends MenuType<?>>> registrar) {
+    }
+
+    default @Nullable MenuType<?> menuType(IOPortKind kind) {
+        return null;
+    }
 
     /**
      * Routes an AE2 sub-menu return back to the matching ExtendedAE main menu.

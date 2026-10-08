@@ -16,6 +16,8 @@ import appeng.helpers.patternprovider.PatternProviderLogicHost;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
+import appeng.menu.MenuOpener;
+import appeng.menu.locator.MenuHostLocator;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -23,6 +25,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingM
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternLogicKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -38,7 +41,6 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -245,14 +247,13 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
+    public void openMenu(Player player, MenuHostLocator locator) {
+        MenuOpener.open(AE2MenuTypes.typeFor(kind), player, locator);
+    }
+
+    @Override
     public void returnToMainMenu(Player player, ISubMenu subMenu) {
-        ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.contributor();
-        if (contributor.available() && contributor.isPort(kind.id())
-                && player instanceof ServerPlayer serverPlayer) {
-            contributor.returnToMainMenu(serverPlayer, subMenu, kind);
-            return;
-        }
-        PatternProviderLogicHost.super.returnToMainMenu(player, subMenu);
+        MenuOpener.returnTo(AE2MenuTypes.typeFor(kind), player, subMenu.getLocator());
     }
 
     @Override

@@ -30,6 +30,19 @@ import appeng.crafting.execution.CraftingCpuHelper;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.PatternInterfaceMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
+import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
+import appeng.api.config.YesNo;
+import appeng.api.config.ShowPatternProviders;
+import appeng.api.parts.PartHelper;
+import appeng.api.inventories.InternalInventory;
+import appeng.core.definitions.AEParts;
+import appeng.menu.SlotSemantics;
+import appeng.menu.MenuOpener;
+import appeng.menu.locator.MenuLocators;
+import appeng.menu.implementations.PatternAccessTermMenu;
+import appeng.menu.implementations.PriorityMenu;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -166,6 +179,13 @@ public class AE2PatternInterfaceGameTest {
                     LockCraftingMode.LOCK_UNTIL_RESULT);
             helper.assertTrue(patternPort.getLogic().pushPattern(pattern, new KeyCounter[]{requestItems}),
                     "Native PatternProviderLogic accepts the encoded pattern through the MMCR crafting bridge");
+            PatternInterfaceMenu menu = new PatternInterfaceMenu(AE2MenuTypes.PATTERN, 0,
+                    makePlayerWithConnection(helper).getInventory(), patternPort);
+            menu.broadcastChanges();
+            helper.assertTrue(menu.getType() == AE2MenuTypes.PATTERN
+                            && menu.getCraftingLockedReason() == LockCraftingMode.LOCK_UNTIL_RESULT
+                            && new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L).equals(menu.getUnlockStack()),
+                    "Own pattern menu synchronizes the actual result lock and unlock resource");
         });
 
         helper.runAtTickTime(50, () -> {
@@ -175,6 +195,7 @@ public class AE2PatternInterfaceGameTest {
                     "Pattern-started MMCR recipe sends its output to ME storage");
             helper.assertTrue(patternPort.getLogic().getCraftingLockedReason() == LockCraftingMode.NONE,
                     "Pattern output returns through native logic and releases AE2's result lock");
+            assertMenuCraftingLock(helper, patternPort, LockCraftingMode.NONE);
             helper.succeed();
         });
     }
@@ -395,6 +416,11 @@ public class AE2PatternInterfaceGameTest {
                     List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
                     List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)));
             patternPort.getLogic().getPatternInv().setItemDirect(35, encodedPattern);
+            PatternInterfaceMenu menu = new PatternInterfaceMenu(ExtendedAEMenuTypes.PATTERN, 0,
+                    makePlayerWithConnection(helper).getInventory(), patternPort);
+            helper.assertTrue(menu.getType() == ExtendedAEMenuTypes.PATTERN
+                            && ItemStack.matches(menu.getSlots(SlotSemantics.ENCODED_PATTERN).get(35).getItem(), encodedPattern),
+                    "Own EAE pattern menu exposes the actual encoded pattern at slot 35");
             helper.assertTrue(patternPort.getLogic().getAvailablePatterns().size() == 1,
                     "ExtendedAE pattern in slot 35 is advertised");
             KeyCounter requestItems = new KeyCounter();
@@ -499,6 +525,7 @@ public class AE2PatternInterfaceGameTest {
 
             setUnlockEvent(host.getLogic(), "REDSTONE_PULSE");
             host.getLogic().updateRedstoneState();
+            assertMenuCraftingLock(helper, host, LockCraftingMode.LOCK_UNTIL_PULSE);
             helper.setBlock(REDSTONE_POS, Blocks.AIR.defaultBlockState());
         });
 
@@ -506,6 +533,7 @@ public class AE2PatternInterfaceGameTest {
             PatternInterfaceBlockEntity host = host(helper);
             helper.assertTrue("REDSTONE_POWER".equals(unlockEventName(host.getLogic())),
                     "Neighbor pulse loss advances the native craft lock to re-power waiting");
+            assertMenuCraftingLock(helper, host, LockCraftingMode.LOCK_UNTIL_PULSE);
             helper.setBlock(REDSTONE_POS, Blocks.REDSTONE_BLOCK.defaultBlockState());
         });
 
@@ -513,6 +541,7 @@ public class AE2PatternInterfaceGameTest {
             PatternInterfaceBlockEntity host = host(helper);
             helper.assertTrue(unlockEventName(host.getLogic()) == null,
                     "Neighbor pulse re-power unlocks the native craft lock");
+            assertMenuCraftingLock(helper, host, LockCraftingMode.NONE);
             helper.getLevel().destroyBlock(helper.absolutePos(ME_CHEST_POS), true);
             helper.getLevel().destroyBlock(helper.absolutePos(ENERGY_POS), true);
         });
@@ -543,6 +572,133 @@ public class AE2PatternInterfaceGameTest {
             //         "Native return inventory drain wakes linked output-capacity searches after its service tick");
             helper.succeed();
         });
+    }
+
+    private static void assertMenuCraftingLock(GameTestHelper helper, PatternInterfaceBlockEntity host,
+                                               LockCraftingMode expected) {
+        var menu = new PatternInterfaceMenu(AE2MenuTypes.PATTERN, 0,
+                makePlayerWithConnection(helper).getInventory(), host);
+        menu.broadcastChanges();
+        helper.assertTrue(menu.getCraftingLockedReason() == expected,
+                "Own menu inherits the real native craft lock transition: " + expected);
+    }
+
+    public void patternMenuStateAndTerminalVisibility(GameTestHelper helper) {
+        patternMenuStateAndTerminalVisibility(helper, false);
+    }
+
+    public void extendedPatternMenuStateAndTerminalVisibility(GameTestHelper helper) {
+        patternMenuStateAndTerminalVisibility(helper, true);
+    }
+
+    private static void patternMenuStateAndTerminalVisibility(GameTestHelper helper, boolean extended) {
+        String id = extended ? "eae_me_extended_pattern_interface" : "ae2_me_pattern_interface";
+        BlockPos energyPos = new BlockPos(0, 4, 0);
+        helper.setBlock(PORT_POS, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        var host = host(helper);
+        var player = makePlayerWithConnection(helper);
+        var locator = MenuLocators.forBlockEntity(host);
+        host.openMenu(player, locator);
+        var menu = (PatternInterfaceMenu) player.containerMenu;
+        var type = extended ? ExtendedAEMenuTypes.PATTERN : AE2MenuTypes.PATTERN;
+        helper.assertTrue(menu.getType() == type, "Pattern host opens its own profile menu");
+        host.getLogic().getReturnInv().setStack(0, new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 3L));
+        menu.quickMoveStack(player, menu.getSlots(SlotSemantics.STORAGE).getFirst().index);
+        helper.assertTrue(host.getLogic().getReturnInv().getStack(0) == null
+                        && player.getInventory().items.stream().filter(stack -> stack.is(Items.GOLD_INGOT))
+                        .mapToInt(ItemStack::getCount).sum() == 3,
+                "Own pattern menu preserves native return inventory extraction and resource conservation");
+        MenuOpener.open(PriorityMenu.TYPE, player, locator);
+        PriorityMenu priority = (PriorityMenu) player.containerMenu;
+        priority.setPriority(29);
+        host.returnToMainMenu(player, priority);
+        helper.assertTrue(host.getPriority() == 29 && player.containerMenu.getType() == type,
+                "Pattern priority page returns using its own profile and original locator");
+        var ownMenu = (PatternInterfaceMenu) player.containerMenu;
+        host.getConfigManager().putSetting(Settings.BLOCKING_MODE, YesNo.YES);
+        host.getConfigManager().putSetting(Settings.PATTERN_ACCESS_TERMINAL, YesNo.YES);
+        host.getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE, LockCraftingMode.LOCK_WHILE_HIGH);
+        helper.setBlock(REDSTONE_POS, Blocks.REDSTONE_BLOCK.defaultBlockState());
+        host.getLogic().updateRedstoneState();
+        ownMenu.broadcastChanges();
+        helper.assertTrue(ownMenu.getBlockingMode() == YesNo.YES && ownMenu.getShowInAccessTerminal() == YesNo.YES
+                        && ownMenu.getLockCraftingMode() == LockCraftingMode.LOCK_WHILE_HIGH
+                        && ownMenu.getCraftingLockedReason() == LockCraftingMode.LOCK_WHILE_HIGH,
+                "Inherited getters synchronize settings and actual powered craft-lock reason");
+        helper.setBlock(REDSTONE_POS, Blocks.AIR.defaultBlockState());
+        host.getLogic().updateRedstoneState();
+        ownMenu.broadcastChanges();
+        helper.assertTrue(ownMenu.getCraftingLockedReason() == LockCraftingMode.NONE,
+                "Removing real redstone unlocks the own menu state");
+        host.getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE, LockCraftingMode.LOCK_WHILE_LOW);
+        ownMenu.broadcastChanges();
+        helper.assertTrue(ownMenu.getCraftingLockedReason() == LockCraftingMode.LOCK_WHILE_LOW,
+                "Low-signal lock remains native and synchronized");
+
+        // Keep native nodes in this test's forced chunk, away from the next GameTest column at x + 6.
+        BlockPos terminalPos = new BlockPos(0, 2, 0);
+        var terminal = PartHelper.setPart(helper.getLevel(), helper.absolutePos(terminalPos), Direction.NORTH,
+                player, AEParts.PATTERN_ACCESS_TERMINAL.get());
+        helper.assertTrue(terminal != null, "Real pattern access terminal part is placed");
+        int patternSlot = extended ? 35 : 0;
+        ItemStack encoded = PatternDetailsHelper.encodeProcessingPattern(
+                List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
+                List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)));
+        host.getLogic().getPatternInv().setItemDirect(patternSlot, encoded);
+        AtomicReference<PatternAccessTermMenu> terminalMenu = new AtomicReference<>();
+        helper.startSequence().thenWaitUntil(() -> {
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
+            helper.assertTrue(!host.isRemoved() && helper.getLevel().getBlockEntity(host.getBlockPos()) == host,
+                    "Terminal fixture retains its original pattern provider");
+            helper.assertTrue(PartHelper.getPart(AEParts.PATTERN_ACCESS_TERMINAL.get(), helper.getLevel(),
+                            helper.absolutePos(terminalPos), Direction.NORTH) == terminal,
+                    "Terminal fixture retains its original native part");
+            helper.assertTrue(host.getMainNode().getNode() != null, "Terminal fixture pattern provider node initializes");
+            helper.assertTrue(energy.getMainNode().getNode() != null, "Terminal fixture energy node initializes");
+            helper.assertTrue(terminal.getGridNode() != null, "Native pattern access terminal node initializes");
+        }).thenExecute(() -> {
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
+            GridHelper.createConnection(host.getMainNode().getNode(), energy.getMainNode().getNode());
+            GridHelper.createConnection(host.getMainNode().getNode(), terminal.getGridNode());
+            terminal.getConfigManager().putSetting(Settings.TERMINAL_SHOW_PATTERN_PROVIDERS, ShowPatternProviders.VISIBLE);
+            terminalMenu.set(new PatternAccessTermMenu(1, player.getInventory(), terminal));
+        }).thenWaitUntil(() -> {
+            var accessMenu = terminalMenu.get();
+            accessMenu.broadcastChanges();
+            helper.assertTrue(terminalContainers(accessMenu).containsKey(host),
+                    "Live terminal menu tracks the visible MMCR pattern container");
+        }).thenExecute(() -> {
+            Object tracker = terminalContainers(terminalMenu.get()).get(host);
+            var serverInventory = (InternalInventory) field(tracker, "server");
+            helper.assertTrue(serverInventory == host.getLogic().getPatternInv()
+                            && ItemStack.matches(serverInventory.getStackInSlot(patternSlot), encoded),
+                    "Terminal tracker uses the real pattern inventory including extended slot 35");
+            host.getConfigManager().putSetting(Settings.PATTERN_ACCESS_TERMINAL, YesNo.NO);
+            ownMenu.broadcastChanges();
+            terminalMenu.get().broadcastChanges();
+            helper.assertTrue(ownMenu.getShowInAccessTerminal() == YesNo.NO
+                            && !terminalContainers(terminalMenu.get()).containsKey(host),
+                    "Hide setting removes the provider from actual terminal container data");
+            host.getConfigManager().putSetting(Settings.PATTERN_ACCESS_TERMINAL, YesNo.YES);
+            terminalMenu.get().broadcastChanges();
+            helper.assertTrue(terminalContainers(terminalMenu.get()).containsKey(host),
+                    "Showing the provider restores its live terminal container");
+        }).thenSucceed();
+    }
+
+    private static Map<?, ?> terminalContainers(PatternAccessTermMenu menu) {
+        return (Map<?, ?>) field(menu, "diList");
+    }
+
+    private static Object field(Object target, String name) {
+        try {
+            Field field = target.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            return field.get(target);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to inspect native terminal runtime state", exception);
+        }
     }
 
     private static void connectNetwork(GameTestHelper helper) {

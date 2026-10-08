@@ -11,9 +11,12 @@ import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
+import appeng.menu.MenuOpener;
+import appeng.menu.locator.MenuHostLocator;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -25,7 +28,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -41,7 +43,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
-        implements InterfaceLogicHost, IGridConnectedBlockEntity {
+        implements InterfaceLogicHost, IGridConnectedBlockEntity, InterfaceMenuPageHost {
     private static final IGridNodeListener<OutputInterfaceBaseBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
@@ -55,6 +57,7 @@ public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
             .setInWorldNode(true);
     protected final InterfaceLogic logic;
     private CapabilitySnapshot capabilitySnapshot;
+    private int interfaceMenuPage;
 
     protected OutputInterfaceBaseBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -101,14 +104,23 @@ public abstract class OutputInterfaceBaseBlockEntity extends IOPortBlockEntity
     }
 
     @Override
+    public void openMenu(Player player, MenuHostLocator locator) {
+        MenuOpener.open(AE2MenuTypes.typeFor(kind), player, locator);
+    }
+
+    @Override
     public void returnToMainMenu(Player player, ISubMenu subMenu) {
-        ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.contributor();
-        if (contributor.available() && contributor.isPort(kind.id())
-                && player instanceof ServerPlayer serverPlayer) {
-            contributor.returnToMainMenu(serverPlayer, subMenu, kind);
-            return;
-        }
-        InterfaceLogicHost.super.returnToMainMenu(player, subMenu);
+        MenuOpener.returnTo(AE2MenuTypes.typeFor(kind), player, subMenu.getLocator());
+    }
+
+    @Override
+    public int getInterfaceMenuPage() {
+        return interfaceMenuPage;
+    }
+
+    @Override
+    public void setInterfaceMenuPage(int page) {
+        interfaceMenuPage = Math.clamp(page, 0, 1);
     }
 
     @Override

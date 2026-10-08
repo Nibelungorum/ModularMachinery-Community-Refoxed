@@ -3,6 +3,7 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
@@ -83,6 +84,7 @@ public final class ModUIs {
         MekanismBridge.get().registerMenus((id, supplier) -> OPTIONAL_MENUS.put(id, registerOptional(id, supplier)));
         ArsNouveauBridge.get().registerMenus((id, supplier) -> OPTIONAL_MENUS.put(id, registerOptional(id, supplier)));
         PneumaticCraftBridge.get().registerMenus((id, supplier) -> OPTIONAL_MENUS.put(id, registerOptional(id, supplier)));
+        AE2Bridge.get().registerMenus((id, supplier) -> OPTIONAL_MENUS.put(id, registerOptional(id, supplier)));
         CHEMICAL_PORT = OPTIONAL_MENUS.get("chemical_port");
         HEAT_PORT = OPTIONAL_MENUS.get("heat_port");
         SOURCE_PORT = OPTIONAL_MENUS.get(ArsSourceIds.MENU);
