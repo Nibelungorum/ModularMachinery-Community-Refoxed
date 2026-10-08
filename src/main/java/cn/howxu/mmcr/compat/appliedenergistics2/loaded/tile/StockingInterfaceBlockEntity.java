@@ -21,11 +21,14 @@ import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.me.storage.NullInventory;
 import appeng.menu.ISubMenu;
+import appeng.menu.MenuOpener;
+import appeng.menu.locator.MenuHostLocator;
 import cn.howxu.mmcr.mixin.compat.appliedenergistics2.ConfigInventoryAccessor;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.NetworkResourceStorage;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
@@ -36,7 +39,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -59,7 +61,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
-        implements InterfaceLogicHost, IGridConnectedBlockEntity {
+        implements InterfaceLogicHost, IGridConnectedBlockEntity, InterfaceMenuPageHost {
     private static final IGridNodeListener<StockingInterfaceBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
@@ -103,6 +105,7 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     private IStackWatcher storageWatcher;
     private long storageMirrorRefreshes;
     private CapabilitySnapshot capabilitySnapshot;
+    private int interfaceMenuPage;
 
     public StockingInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -148,14 +151,23 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
+    public void openMenu(Player player, MenuHostLocator locator) {
+        MenuOpener.open(AE2MenuTypes.typeFor(kind), player, locator);
+    }
+
+    @Override
     public void returnToMainMenu(Player player, ISubMenu subMenu) {
-        ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.contributor();
-        if (contributor.available() && contributor.isPort(kind.id())
-                && player instanceof ServerPlayer serverPlayer) {
-            contributor.returnToMainMenu(serverPlayer, subMenu, kind);
-            return;
-        }
-        InterfaceLogicHost.super.returnToMainMenu(player, subMenu);
+        MenuOpener.returnTo(AE2MenuTypes.typeFor(kind), player, subMenu.getLocator());
+    }
+
+    @Override
+    public int getInterfaceMenuPage() {
+        return interfaceMenuPage;
+    }
+
+    @Override
+    public void setInterfaceMenuPage(int page) {
+        interfaceMenuPage = Math.clamp(page, 0, 1);
     }
 
     @Override

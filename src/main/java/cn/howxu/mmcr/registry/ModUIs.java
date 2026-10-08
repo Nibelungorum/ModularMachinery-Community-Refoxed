@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
@@ -75,6 +76,7 @@ public final class ModUIs {
 
     static {
         MekanismBridge.get().registerMenus((id, supplier) -> OPTIONAL_MENUS.put(id, registerOptional(id, supplier)));
+        AE2Bridge.get().registerMenus((id, supplier) -> OPTIONAL_MENUS.put(id, registerOptional(id, supplier)));
         CHEMICAL_PORT = OPTIONAL_MENUS.get("chemical_port");
         HEAT_PORT = OPTIONAL_MENUS.get("heat_port");
     }

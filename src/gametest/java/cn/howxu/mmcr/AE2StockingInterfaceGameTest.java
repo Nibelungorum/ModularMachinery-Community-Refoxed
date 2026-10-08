@@ -8,10 +8,17 @@ import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.storage.MEStorage;
 import appeng.menu.SlotSemantics;
-import appeng.menu.implementations.InterfaceMenu;
+import appeng.menu.AEBaseMenu;
+import appeng.helpers.externalstorage.GenericStackInv;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2InterfaceMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
+import appeng.helpers.InventoryAction;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.item.ItemStack;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.core.definitions.AEBlocks;
@@ -24,6 +31,9 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
+import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
+import com.glodblock.github.extendedae.client.ExSemantics;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -45,6 +55,8 @@ import com.mojang.authlib.GameProfile;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -137,7 +149,7 @@ public class AE2StockingInterfaceGameTest {
                             "mmcr-ae2-stocking-menu-test".getBytes(StandardCharsets.UTF_8)),
                             "mmcr-ae2-stocking-menu"),
                     ClientInformation.createDefault());
-            InterfaceMenu menu = new InterfaceMenu(InterfaceMenu.TYPE, 0,
+            AE2InterfaceMenu menu = new AE2InterfaceMenu(AE2MenuTypes.INTERFACE, 0,
                     menuPlayer.getInventory(), port);
             var displaySlot = menu.getSlots(SlotSemantics.STORAGE).getFirst();
             helper.assertTrue(!displaySlot.getItem().isEmpty(),
@@ -153,6 +165,33 @@ public class AE2StockingInterfaceGameTest {
                     "Stocking display fake stack cannot be picked up");
             helper.assertFalse(displaySlot.mayPlace(Items.IRON_INGOT.getDefaultInstance()),
                     "Stocking display fake stack cannot accept external insertion");
+            var mirrorBefore = port.getInterfaceLogic().getStorage().getStack(0);
+            var fluidMirrorBefore = port.getInterfaceLogic().getStorage().getStack(1);
+            menu.clicked(displaySlot.index, 0, ContainerInput.PICKUP, menuPlayer);
+            menu.quickMoveStack(menuPlayer, displaySlot.index);
+            helper.assertTrue(menu.getCarried().isEmpty(), "Stocking pickup and shift actions create no cursor resources");
+            helper.assertTrue(displaySlot.remove(1).isEmpty(), "Direct removal cannot materialize the network mirror");
+            var fluidSlot = menu.getSlots(SlotSemantics.STORAGE).get(1);
+            menu.setCarried(Items.BUCKET.getDefaultInstance());
+            menu.doAction(menuPlayer, InventoryAction.FILL_ITEM, fluidSlot.index, 0);
+            menu.doAction(menuPlayer, InventoryAction.FILL_ENTIRE_ITEM, fluidSlot.index, 0);
+            helper.assertTrue(ItemStack.matches(menu.getCarried(), Items.BUCKET.getDefaultInstance()),
+                    "Mirror cannot fill or duplicate a held bucket");
+            menu.setCarried(Items.WATER_BUCKET.getDefaultInstance());
+            menu.doAction(menuPlayer, InventoryAction.EMPTY_ITEM, fluidSlot.index, 0);
+            menu.doAction(menuPlayer, InventoryAction.EMPTY_ENTIRE_ITEM, fluidSlot.index, 0);
+            helper.assertTrue(ItemStack.matches(menu.getCarried(), Items.WATER_BUCKET.getDefaultInstance()),
+                    "Mirror cannot drain a held bucket");
+            helper.assertTrue(Objects.equals(mirrorBefore, port.getInterfaceLogic().getStorage().getStack(0))
+                            && Objects.equals(fluidMirrorBefore, port.getInterfaceLogic().getStorage().getStack(1))
+                            && menuPlayer.getInventory().getNonEquipmentItems().stream().allMatch(ItemStack::isEmpty),
+                    "GUI operations preserve the mirror and create no player resources");
+            helper.assertTrue(itemChest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), Long.MAX_VALUE,
+                            Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT
+                            && fluidChest.getInventory().extract(AEFluidKey.of(Fluids.WATER), Long.MAX_VALUE,
+                            Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT,
+                    "GUI operations leave real item and fluid network inventories unchanged");
+            menu.setCarried(ItemStack.EMPTY);
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
             helper.assertTrue(snapshot.capabilities().size() == 2,
@@ -296,6 +335,119 @@ public class AE2StockingInterfaceGameTest {
                     })
                     .thenSucceed();
         });
+    }
+
+    public void smallStockingMirrorCannotMaterializeNetworkItems(GameTestHelper helper) {
+        smallStockingMirrorCannotMaterializeNetworkItems(helper, "ae2_me_stocking_input_interface", 0);
+    }
+
+    public void extendedSmallStockingMirrorCannotMaterializeNetworkItems(GameTestHelper helper) {
+        smallStockingMirrorCannotMaterializeNetworkItems(helper, "eae_me_extended_stocking_input_interface", 35);
+    }
+
+    private static void smallStockingMirrorCannotMaterializeNetworkItems(GameTestHelper helper,
+                                                                        String blockId, int configSlot) {
+        BlockPos chestPos = new BlockPos(3, 0, 0);
+        BlockPos energyPos = new BlockPos(3, 0, 2);
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get(blockId).get().defaultBlockState());
+        helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        var port = helper.getBlockEntity(BlockPos.ZERO, StockingInterfaceBlockEntity.class);
+        var chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+        var energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+        chest.setCell(AEItems.ITEM_CELL_1K.stack());
+        port.getConfig().setStack(configSlot, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
+        List<IGridConnection> connections = new ArrayList<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(port.getMainNode().getNode() != null
+                                && chest.getMainNode().getNode() != null && energy.getMainNode().getNode() != null,
+                        "Small-mirror fixture waits for its real grid nodes"))
+                .thenExecute(() -> {
+                    connections.add(GridHelper.createConnection(port.getMainNode().getNode(), chest.getMainNode().getNode()));
+                    connections.add(GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode()));
+                })
+                .thenWaitUntil(() -> helper.assertTrue(port.getMainNode().isActive() && chest.getMainNode().isActive(),
+                        "Small-mirror network is powered and has channels before inserting resources"))
+                .thenExecute(() -> {
+                    helper.assertTrue(chest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT), 4L,
+                                    Actionable.MODULATE, IActionSource.empty()) == 4L,
+                            "Real network owns the four watched iron ingots");
+                    helper.assertTrue(chest.getInventory().insert(AEItemKey.of(Items.GOLD_INGOT), 9L,
+                                    Actionable.MODULATE, IActionSource.empty()) == 9L,
+                            "Real network also owns an unrelated key for the complete resource snapshot");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 4L)
+                                .equals(port.getStorage().getStack(configSlot)),
+                        "Watcher exposes the small real network amount as a mirror"))
+                .thenExecute(() -> {
+                    var player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
+                            new GameProfile(UUID.randomUUID(), "stocking-small-mirror"), ClientInformation.createDefault());
+                    player.getInventory().setItem(0, new ItemStack(Items.IRON_INGOT, 2));
+                    player.getInventory().setItem(1, new ItemStack(Items.DIAMOND, 3));
+                    AEBaseMenu menu;
+                    if (configSlot == 35) {
+                        var extended = new ExtendedInterfaceMenu(ExtendedAEMenuTypes.INTERFACE, 0,
+                                player.getInventory(), port);
+                        extended.setPage(1);
+                        menu = extended;
+                    } else {
+                        menu = new AE2InterfaceMenu(AE2MenuTypes.INTERFACE, 0, player.getInventory(), port);
+                    }
+                    var display = configSlot == 35 ? menu.getSlots(ExSemantics.EX_8).getLast()
+                            : menu.getSlots(SlotSemantics.STORAGE).getFirst();
+                    helper.assertTrue(display.isActive() && display.getItem().is(Items.IRON_INGOT)
+                                    && display.getItem().getCount() == 4
+                                    && GenericStack.unwrapItemStack(display.getItem()) == null,
+                            "The actual attached stocking slot displays a normal small ItemStack, not a protected wrapper");
+                    assertSmallMirrorUnchanged(helper, port, chest, menu, player,
+                            () -> menu.clicked(display.index, 0, ContainerInput.PICKUP, player));
+                    assertSmallMirrorUnchanged(helper, port, chest, menu, player,
+                            () -> menu.clicked(display.index, 0, ContainerInput.QUICK_MOVE, player));
+                    assertSmallMirrorUnchanged(helper, port, chest, menu, player,
+                            () -> helper.assertTrue(display.remove(1).isEmpty(),
+                                    "Direct remove cannot materialize even a single mirrored ingot"));
+                    connections.forEach(IGridConnection::destroy);
+                })
+                .thenSucceed();
+    }
+
+    private static void assertSmallMirrorUnchanged(GameTestHelper helper, StockingInterfaceBlockEntity port,
+                                                  MEChestBlockEntity chest, AEBaseMenu menu,
+                                                  ServerPlayer player, Runnable operation) {
+        var network = port.getMainNode().getGrid().getStorageService().getInventory();
+        var networkBefore = networkSnapshot(network);
+        var cellBefore = networkSnapshot(chest.getInventory());
+        var mirrored = inventorySnapshot(port.getStorage());
+        var configured = inventorySnapshot(port.getConfig());
+        var inventory = player.getInventory().getNonEquipmentItems().stream().map(ItemStack::copy).toList();
+        var carried = menu.getCarried().copy();
+        operation.run();
+        helper.assertTrue(networkBefore.equals(networkSnapshot(network))
+                        && cellBefore.equals(networkSnapshot(chest.getInventory()))
+                        && mirrored.equals(inventorySnapshot(port.getStorage()))
+                        && configured.equals(inventorySnapshot(port.getConfig())),
+                "Every small-mirror operation preserves grid/cell ownership, all mirror amounts and configuration");
+        for (int i = 0; i < inventory.size(); i++) {
+            helper.assertTrue(ItemStack.matches(inventory.get(i), player.getInventory().getItem(i)),
+                    "Small mirror creates no items and preserves pre-owned player resources at slot " + i);
+        }
+        helper.assertTrue(ItemStack.matches(carried, menu.getCarried()),
+                "Small mirror pickup, Shift and remove leave cursor resources unchanged");
+    }
+
+    private static Map<AEKey, Long> networkSnapshot(MEStorage storage) {
+        Map<AEKey, Long> amounts = new HashMap<>();
+        for (var entry : storage.getAvailableStacks()) {
+            if (entry.getLongValue() != 0L) amounts.put(entry.getKey(), entry.getLongValue());
+        }
+        return amounts;
+    }
+
+    private static List<GenericStack> inventorySnapshot(GenericStackInv inventory) {
+        List<GenericStack> stacks = new ArrayList<>();
+        for (int i = 0; i < inventory.size(); i++) stacks.add(inventory.getStack(i));
+        return stacks;
     }
 
     // This is a unstable gametest wich will be pushed by the game tick

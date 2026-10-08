@@ -9,8 +9,6 @@ import appeng.api.networking.security.IActionSource;
 import appeng.blockentity.networking.WirelessAccessPointBlockEntity;
 import appeng.items.tools.MemoryCardItem;
 import appeng.menu.MenuOpener;
-import appeng.menu.implementations.InterfaceMenu;
-import appeng.menu.implementations.PatternProviderMenu;
 import appeng.menu.locator.MenuLocators;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
@@ -20,6 +18,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.MemoryCardHost;
@@ -38,6 +37,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -45,6 +45,8 @@ import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -97,22 +99,15 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     @Override
     public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
         if (contributor.available() && contributor.openMenu(player, level, pos)) return true;
-        if (level.getBlockEntity(pos) instanceof InputInterfaceBlockEntity host) {
-            return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
-        }
-        if (level.getBlockEntity(pos) instanceof StockingInterfaceBlockEntity host) {
-            return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
-        }
-        if (level.getBlockEntity(pos) instanceof OutputInterfaceBlockEntity host) {
-            return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
-        }
-        if (level.getBlockEntity(pos) instanceof AsyncOutputInterfaceBlockEntity host) {
-            return MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(host));
-        }
-        if (level.getBlockEntity(pos) instanceof PatternInterfaceBlockEntity host) {
-            return MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(host));
-        }
-        return false;
+        if (!(level.getBlockEntity(pos) instanceof IOPortBlockEntity host)
+                || !isPort(host.kind().id())) return false;
+        return MenuOpener.open(AE2MenuTypes.typeFor(host.kind()), player, MenuLocators.forBlockEntity(host));
+    }
+
+    @Override
+    public void registerMenus(BiConsumer<String, Supplier<? extends MenuType<?>>> registrar) {
+        AE2MenuTypes.register(registrar);
+        contributor.registerMenus(registrar);
     }
 
     @Override

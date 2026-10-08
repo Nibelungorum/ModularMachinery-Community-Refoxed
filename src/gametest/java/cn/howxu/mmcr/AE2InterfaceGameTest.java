@@ -1,8 +1,17 @@
 package cn.howxu.mmcr;
 
 import appeng.api.AECapabilities;
+import appeng.api.behaviors.GenericSlotCapacities;
 import appeng.api.behaviors.GenericInternalInventory;
 import appeng.api.config.Actionable;
+import appeng.api.config.FuzzyMode;
+import appeng.api.config.LockCraftingMode;
+import appeng.api.config.Settings;
+import appeng.api.crafting.PatternDetailsHelper;
+import appeng.api.networking.ticking.IGridTickable;
+import appeng.blockentity.crafting.CraftingBlockEntity;
+import appeng.blockentity.crafting.PatternProviderBlockEntity;
+import appeng.blockentity.crafting.MolecularAssemblerBlockEntity;
 import appeng.api.ids.AEComponents;
 import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.GridHelper;
@@ -17,6 +26,19 @@ import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.menu.implementations.InterfaceMenu;
+import appeng.menu.implementations.PriorityMenu;
+import appeng.menu.implementations.SetStockAmountMenu;
+import appeng.menu.MenuOpener;
+import appeng.menu.SlotSemantics;
+import appeng.menu.implementations.UpgradeableMenu;
+import appeng.items.tools.NetworkToolItem;
+import appeng.menu.locator.MenuLocators;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2InterfaceMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
+import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
+import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
+import com.glodblock.github.extendedae.client.ExSemantics;
+import com.glodblock.github.extendedae.config.EAEConfig;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
@@ -41,6 +63,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import io.netty.channel.ChannelFutureListener;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.NonNullList;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -61,6 +84,11 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
@@ -210,16 +238,17 @@ public class AE2InterfaceGameTest {
             ServerPlayer player = makePlayer(helper);
             helper.assertFalse(bridge.openMenu(player, helper.getLevel(), new BlockPos(99, 99, 99)),
                     "AE2 bridge returns false for a non-AE2 input interface block");
-            helper.assertTrue(InterfaceMenu.TYPE != null,
-                    "AE2 InterfaceMenu.TYPE is registered");
-            InterfaceMenu interfaceMenu = new InterfaceMenu(InterfaceMenu.TYPE, 0,
+            InterfaceMenu interfaceMenu = new AE2InterfaceMenu(AE2MenuTypes.INTERFACE, 0,
                     player.getInventory(), entity);
-            helper.assertTrue(interfaceMenu instanceof InterfaceMenu,
-                    "AE2 InterfaceMenu is constructed via the AE2 factory bound to InterfaceMenu.TYPE");
+            helper.assertTrue(interfaceMenu.getType() == AE2MenuTypes.INTERFACE,
+                    "Input interface uses the registered MMCR menu type");
 
             ServerPlayer connectedPlayer = makePlayerWithConnection(helper);
             helper.assertTrue(bridge.openMenu(connectedPlayer, helper.getLevel(), portWorldPos),
                     "AE2 bridge forwards the AE2 input interface to MenuOpener.open");
+            helper.assertTrue(connectedPlayer.containerMenu instanceof AE2InterfaceMenu
+                            && connectedPlayer.containerMenu.getType() == AE2MenuTypes.INTERFACE,
+                    "Bridge opens the MMCR input menu through its actual factory");
             helper.assertTrue(entity.getInterfaceLogic().getUpgrades() != null,
                     "AE2 upgrade inventory is visible through host.getInterfaceLogic()");
             helper.assertTrue(entity.getInterfaceLogic().getUpgrades().isEmpty(),
@@ -507,6 +536,326 @@ public class AE2InterfaceGameTest {
                     "Output interfaces do not write memory-card data");
             helper.succeed();
         });
+    }
+
+    public void fuzzyCardRestocksDamagedItem(GameTestHelper helper) {
+        fuzzyCardRestocksDamagedItem(helper, "ae2_me_input_interface");
+    }
+
+    public void extendedFuzzyCardRestocksDamagedItem(GameTestHelper helper) {
+        fuzzyCardRestocksDamagedItem(helper, "eae_me_extended_input_interface");
+    }
+
+    private static void fuzzyCardRestocksDamagedItem(GameTestHelper helper, String id) {
+        BlockPos chestPos = new BlockPos(3, 0, 0);
+        BlockPos energyPos = new BlockPos(3, 0, 2);
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
+        helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        var host = helper.getBlockEntity(BlockPos.ZERO, InputInterfaceBlockEntity.class);
+        var chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+        var energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+        chest.setCell(AEItems.ITEM_CELL_1K.stack());
+        ServerPlayer player = makePlayerWithConnection(helper);
+        host.openMenu(player, MenuLocators.forBlockEntity(host));
+        var menu = (UpgradeableMenu<?>) player.containerMenu;
+        boolean extended = menu instanceof ExtendedInterfaceMenu;
+        if (extended) ((ExtendedInterfaceMenu) menu).setPage(1);
+        int slot = extended ? 35 : 0;
+        ItemStack requested = Items.IRON_SWORD.getDefaultInstance();
+        requested.setDamageValue(5);
+        ItemStack available = Items.IRON_SWORD.getDefaultInstance();
+        available.setDamageValue(20);
+        AEItemKey requestedKey = AEItemKey.of(requested);
+        AEItemKey availableKey = AEItemKey.of(available);
+        menu.setCarried(AEItems.FUZZY_CARD.stack());
+        Slot upgrade = menu.getSlots(SlotSemantics.UPGRADE).getFirst();
+        menu.clicked(upgrade.index, 0, ContainerInput.PICKUP, player);
+        helper.assertTrue(menu.getCarried().isEmpty() && host.getUpgrades().isInstalled(AEItems.FUZZY_CARD),
+                "Actual menu click installs the fuzzy card through native upgrade callbacks");
+        host.getConfigManager().putSetting(Settings.FUZZY_MODE, FuzzyMode.IGNORE_ALL);
+        menu.broadcastChanges();
+        helper.assertTrue(menu.getFuzzyMode() == FuzzyMode.IGNORE_ALL, "Own menu retains fuzzy setting synchronization");
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode() != null
+                        && chest.getMainNode().getNode() != null && energy.getMainNode().getNode() != null,
+                "Fuzzy stocking network nodes initialize"))
+                .thenExecute(() -> {
+                    GridHelper.createConnection(host.getMainNode().getNode(), chest.getMainNode().getNode());
+                    GridHelper.createConnection(host.getMainNode().getNode(), energy.getMainNode().getNode());
+                }).thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode().isActive(),
+                        "Input joins the powered network"))
+                .thenExecute(() -> {
+                    helper.assertTrue(chest.getInventory().insert(availableKey, 1L, Actionable.MODULATE, IActionSource.empty()) == 1L,
+                            "Network contains only the differently damaged sword");
+                    host.getConfig().setStack(slot, new GenericStack(requestedKey, 1L));
+                }).thenWaitUntil(() -> helper.assertTrue(new GenericStack(availableKey, 1L)
+                                .equals(host.getInterfaceLogic().getStorage().getStack(slot)),
+                        "Fuzzy card performs actual restocking with a non-exact key"))
+                .thenExecute(() -> {
+                    helper.assertTrue(chest.getInventory().extract(availableKey, Long.MAX_VALUE,
+                                    Actionable.SIMULATE, IActionSource.empty()) == 0L,
+                            "Fuzzy stocking consumes the real network resource exactly once");
+                    menu.clicked(upgrade.index, 0, ContainerInput.PICKUP, player);
+                    helper.assertTrue(menu.getCarried().is(AEItems.FUZZY_CARD.asItem())
+                                    && !host.getUpgrades().isInstalled(AEItems.FUZZY_CARD),
+                            "Removing the card uses the real upgrade slot callback");
+                    player.getInventory().add(menu.getCarried());
+                    menu.setCarried(ItemStack.EMPTY);
+                    Slot stored = extended ? menu.getSlots(ExSemantics.EX_8).getLast()
+                            : menu.getSlots(SlotSemantics.STORAGE).getFirst();
+                    menu.quickMoveStack(player, stored.index);
+                    ItemStack recovered = player.getInventory().getNonEquipmentItems().stream()
+                            .filter(stack -> availableKey.equals(AEItemKey.of(stack))).findFirst().orElseThrow();
+                    helper.assertTrue(recovered.getCount() == 1 && host.getInterfaceLogic().getStorage().getStack(slot) == null,
+                            "Actual extraction clears the fuzzy cache without losing the sword");
+                    helper.assertTrue(chest.getInventory().insert(AEItemKey.of(recovered), 1L,
+                                    Actionable.MODULATE, IActionSource.empty()) == 1L,
+                            "Recovered sword is returned to the network for the no-card control");
+                    recovered.shrink(1);
+                    host.getConfig().setStack(slot, null);
+                    host.getConfig().setStack(slot, new GenericStack(requestedKey, 1L));
+                    exerciseNativeStocking(host);
+                    helper.assertTrue(host.getInterfaceLogic().getStorage().getStack(slot) == null
+                                    && chest.getInventory().extract(availableKey, Long.MAX_VALUE,
+                                    Actionable.SIMULATE, IActionSource.empty()) == 1L,
+                            "Native exact-match stocking without a fuzzy card does not consume the mismatched sword");
+                }).thenSucceed();
+    }
+
+    public void craftingCardActuallyRestocksAndCancels(GameTestHelper helper) {
+        craftingCardActuallyRestocksAndCancels(helper, "ae2_me_input_interface");
+    }
+
+    public void extendedCraftingCardActuallyRestocksAndCancels(GameTestHelper helper) {
+        craftingCardActuallyRestocksAndCancels(helper, "eae_me_extended_input_interface");
+    }
+
+    private static void craftingCardActuallyRestocksAndCancels(GameTestHelper helper, String id) {
+        // Stay in the test origin's forced chunk and outside neighbouring tests' horizontal fixtures.
+        BlockPos providerPos = new BlockPos(0, 2, 0);
+        BlockPos assemblerPos = new BlockPos(0, 3, 0);
+        BlockPos chestPos = new BlockPos(0, 5, 0);
+        BlockPos energyPos = new BlockPos(0, 7, 0);
+        BlockPos cpuPos = new BlockPos(0, 9, 0);
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
+        helper.setBlock(providerPos, AEBlocks.PATTERN_PROVIDER.block().defaultBlockState());
+        helper.setBlock(assemblerPos, AEBlocks.MOLECULAR_ASSEMBLER.block().defaultBlockState());
+        helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        helper.setBlock(cpuPos, AEBlocks.CRAFTING_STORAGE_64K.block().defaultBlockState());
+        var host = helper.getBlockEntity(BlockPos.ZERO, InputInterfaceBlockEntity.class);
+        var provider = helper.getBlockEntity(providerPos, PatternProviderBlockEntity.class);
+        var assembler = helper.getBlockEntity(assemblerPos, MolecularAssemblerBlockEntity.class);
+        var chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
+        var energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
+        var cpu = helper.getBlockEntity(cpuPos, CraftingBlockEntity.class);
+        chest.setCell(AEItems.ITEM_CELL_1K.stack());
+        var ingredients = NonNullList.withSize(9, ItemStack.EMPTY);
+        ingredients.set(0, Items.IRON_INGOT.getDefaultInstance());
+        var input = CraftingInput.of(3, 3, ingredients);
+        var recipe = helper.getLevel().recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel()).orElseThrow();
+        provider.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeCraftingPattern(recipe,
+                ingredients.toArray(ItemStack[]::new), recipe.value().assemble(input), false, false));
+        ServerPlayer player = makePlayerWithConnection(helper);
+        host.openMenu(player, MenuLocators.forBlockEntity(host));
+        var menu = (UpgradeableMenu<?>) player.containerMenu;
+        int slot = menu instanceof ExtendedInterfaceMenu ? 35 : 0;
+        if (menu instanceof ExtendedInterfaceMenu extended) extended.setPage(1);
+        Slot upgrade = menu.getSlots(SlotSemantics.UPGRADE).getFirst();
+        player.getInventory().setItem(0, AEItems.CRAFTING_CARD.stack());
+        menu.quickMoveStack(player, menu.getSlots(SlotSemantics.PLAYER_HOTBAR).getFirst().index);
+        helper.assertTrue(host.getUpgrades().isInstalled(AEItems.CRAFTING_CARD) && player.getInventory().getItem(0).isEmpty(),
+                "Shift installation moves the actual crafting card into native upgrade inventory");
+        helper.startSequence().thenWaitUntil(() -> {
+                    for (BlockEntity entity : List.of(host, provider, assembler, chest, energy, cpu)) {
+                        helper.assertTrue(!entity.isRemoved()
+                                        && helper.getLevel().getBlockEntity(entity.getBlockPos()) == entity,
+                                "Crafting fixture retains its original block entity: " + entity.getBlockPos());
+                    }
+                    helper.assertTrue(host.getMainNode().getNode() != null, "Crafting input node initializes");
+                    helper.assertTrue(provider.getMainNode().getNode() != null, "Native crafting provider node initializes");
+                    helper.assertTrue(assembler.getMainNode().getNode() != null, "Native molecular assembler node initializes");
+                    helper.assertTrue(chest.getMainNode().getNode() != null, "Native crafting storage chest node initializes");
+                    helper.assertTrue(energy.getMainNode().getNode() != null, "Native crafting energy node initializes");
+                    helper.assertTrue(cpu.getMainNode().getNode() != null, "Native crafting CPU node initializes");
+                })
+                .thenExecute(() -> {
+                    var node = host.getMainNode().getNode();
+                    GridHelper.createConnection(node, provider.getMainNode().getNode());
+                    GridHelper.createConnection(node, assembler.getMainNode().getNode());
+                    GridHelper.createConnection(node, chest.getMainNode().getNode());
+                    GridHelper.createConnection(node, energy.getMainNode().getNode());
+                    GridHelper.createConnection(node, cpu.getMainNode().getNode());
+                    provider.getLogic().updatePatterns();
+                }).thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode().isActive()
+                                && cpu.getCluster() != null && cpu.getCluster().isActive()
+                                && host.getMainNode().getGrid().getCraftingService().isCraftable(AEItemKey.of(Items.IRON_NUGGET)),
+                        "Powered native CPU and assembler advertise the real nugget crafting recipe"))
+                .thenExecute(() -> {
+                    helper.assertTrue(chest.getInventory().extract(AEItemKey.of(Items.IRON_NUGGET), Long.MAX_VALUE,
+                                    Actionable.SIMULATE, IActionSource.empty()) == 0L,
+                            "Target material is absent before the card request");
+                    helper.assertTrue(chest.getInventory().insert(AEItemKey.of(Items.IRON_INGOT), 2L,
+                                    Actionable.MODULATE, IActionSource.empty()) == 2L, "Network accepts real crafting inputs");
+                    host.getConfig().setStack(slot, new GenericStack(AEItemKey.of(Items.IRON_NUGGET), 9L));
+                }).thenWaitUntil(() -> helper.assertTrue(new GenericStack(AEItemKey.of(Items.IRON_NUGGET), 9L)
+                                .equals(host.getInterfaceLogic().getStorage().getStack(slot)) && !cpu.getCluster().craftingLogic.hasJob(),
+                        "Missing stock triggers an actual CPU craft and its result fills the own interface cache"))
+                .thenExecute(() -> {
+                    helper.assertTrue(chest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), Long.MAX_VALUE,
+                                    Actionable.SIMULATE, IActionSource.empty()) == 1L,
+                            "One ingot was consumed to produce exactly nine cached nuggets");
+                    provider.getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE, LockCraftingMode.LOCK_WHILE_LOW);
+                    provider.getLogic().updateRedstoneState();
+                    Slot stored = slot == 35 ? menu.getSlots(ExSemantics.EX_8).getLast()
+                            : menu.getSlots(SlotSemantics.STORAGE).getFirst();
+                    menu.quickMoveStack(player, stored.index);
+                    helper.assertTrue(player.getInventory().getNonEquipmentItems().stream()
+                                    .filter(stack -> stack.is(Items.IRON_NUGGET)).mapToInt(ItemStack::getCount).sum() == 9,
+                            "The completed crafted stock is actually extracted into the player inventory");
+                }).thenWaitUntil(() -> helper.assertTrue(host.getInterfaceLogic().getRequestedJobs().stream()
+                                .anyMatch(link -> !link.isCanceled() && !link.isDone()),
+                        "A second shortage creates a real tracked job while native provider redstone-lock blocks execution"))
+                .thenExecute(() -> {
+                    var links = List.copyOf(host.getInterfaceLogic().getRequestedJobs());
+                    menu.clicked(upgrade.index, 0, ContainerInput.PICKUP, player);
+                    helper.assertTrue(menu.getCarried().is(AEItems.CRAFTING_CARD.asItem())
+                                    && !host.getUpgrades().isInstalled(AEItems.CRAFTING_CARD)
+                                    && links.stream().allMatch(link -> link.isCanceled() || link.isDone())
+                                    && host.getInterfaceLogic().getRequestedJobs().isEmpty(),
+                            "Actual card removal cancels the native tracker's pending crafting links");
+                    exerciseNativeStocking(host);
+                    helper.assertTrue(host.getInterfaceLogic().getStorage().getStack(slot) == null
+                                    && host.getInterfaceLogic().getRequestedJobs().isEmpty(),
+                            "Without the crafting card the missing stock cannot start another crafting job");
+                }).thenWaitUntil(() -> helper.assertTrue(!cpu.getCluster().craftingLogic.hasJob()
+                                && chest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), Long.MAX_VALUE,
+                                Actionable.SIMULATE, IActionSource.empty()) == 1L,
+                        "Cancelled native CPU releases its input back to the network without consuming another ingot"))
+                .thenSucceed();
+    }
+
+    private static void exerciseNativeStocking(InputInterfaceBlockEntity host) {
+        var node = host.getMainNode().getNode();
+        var ticker = node.getService(IGridTickable.class);
+        for (int i = 0; i < 16; i++) ticker.tickingRequest(node, 1);
+    }
+
+    public void inputUpgradeToolboxAndOversizeAmount(GameTestHelper helper) {
+        for (String id : List.of("ae2_me_input_interface", "eae_me_extended_input_interface", "eae_me_oversize_input_interface")) {
+            BlockPos pos = new BlockPos(id.contains("oversize") ? 4 : id.startsWith("eae") ? 2 : 0, 0, 0);
+            helper.setBlock(pos, ModBlocks.BLOCKS.get(id).get().defaultBlockState());
+            var host = helper.getBlockEntity(pos, InputInterfaceBlockEntity.class);
+            var upgrades = host.getUpgrades();
+            var configManager = host.getConfigManager();
+            ServerPlayer player = makePlayerWithConnection(helper);
+            player.getInventory().setItem(8, AEItems.NETWORK_TOOL.stack());
+            host.openMenu(player, MenuLocators.forBlockEntity(host));
+            var menu = (UpgradeableMenu<?>) player.containerMenu;
+            helper.assertTrue(menu.getToolbox().isPresent() && menu.getUpgrades() == upgrades,
+                    "Every input profile retains its native upgrade inventory and equipped toolbox");
+            Slot toolbox = menu.getSlots(SlotSemantics.TOOLBOX).getFirst();
+            menu.setCarried(AEItems.FUZZY_CARD.stack());
+            menu.clicked(toolbox.index, 0, ContainerInput.PICKUP, player);
+            helper.assertTrue(menu.getCarried().isEmpty() && toolbox.getItem().is(AEItems.FUZZY_CARD.asItem()),
+                    "Actual toolbox insertion stores the upgrade in the network tool");
+            menu.quickMoveStack(player, toolbox.index);
+            helper.assertTrue(upgrades.isInstalled(AEItems.FUZZY_CARD) && toolbox.getItem().isEmpty(),
+                    "Shift toolbox action installs the card through native callbacks");
+            Slot upgrade = menu.getSlots(SlotSemantics.UPGRADE).getFirst();
+            menu.quickMoveStack(player, upgrade.index);
+            helper.assertTrue(!upgrades.isInstalled(AEItems.FUZZY_CARD) && toolbox.getItem().is(AEItems.FUZZY_CARD.asItem()),
+                    "Shift removal returns the same card to toolbox storage");
+            menu.clicked(toolbox.index, 0, ContainerInput.PICKUP, player);
+            menu.clicked(upgrade.index, 0, ContainerInput.PICKUP, player);
+            menu.clicked(upgrade.index, 0, ContainerInput.PICKUP, player);
+            helper.assertTrue(menu.getCarried().is(AEItems.FUZZY_CARD.asItem()) && menu.getCarried().getCount() == 1
+                            && upgrades.isEmpty() && toolbox.getItem().isEmpty(),
+                    "Manual install/removal conserves the card and invokes the same native inventory");
+            helper.assertTrue(NetworkToolItem.getInventory(player.getInventory().getItem(8)).isEmpty(),
+                    "Toolbox state is persisted to the real tool stack");
+            int slot = menu instanceof ExtendedInterfaceMenu ? 35 : 0;
+            if (menu instanceof ExtendedInterfaceMenu extended) extended.setPage(1);
+            host.getConfig().setStack(slot, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
+            if (menu instanceof ExtendedInterfaceMenu extended) extended.openSetAmountMenu(slot);
+            else ((AE2InterfaceMenu) menu).openSetAmountMenu(slot);
+            var amount = (SetStockAmountMenu) player.containerMenu;
+            int requested = id.contains("oversize") ? 20_000 : 7;
+            AEItemKey key = AEItemKey.of(Items.IRON_INGOT);
+            long nativeLimit = Math.min(key.getMaxStackSize(),
+                    GenericSlotCapacities.getMap().getOrDefault(key.getType(), Long.MAX_VALUE));
+            if (id.contains("oversize")) nativeLimit *= EAEConfig.getOversizeMultiplier(key.getType());
+            long expected = Math.min(requested, nativeLimit);
+            helper.assertTrue(amount.getMaxAmount() == nativeLimit && expected > amount.getInitialAmount(),
+                    "Quantity page exposes the native profile limit and will change its initial request for " + id);
+            amount.confirm(requested);
+            helper.assertTrue(host.getConfig().getAmount(slot) == expected && host.getConfigManager() == configManager
+                            && host.getUpgrades() == upgrades && player.containerMenu.getType() == AE2MenuTypes.typeFor(host.kind()),
+                    "Quantity confirmation applies native clamping while preserving config manager, upgrades and own route for " + id);
+        }
+        helper.succeed();
+    }
+
+    public void amountAndPriorityReturnToOwnMenu(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_input_interface").get().defaultBlockState());
+        InputInterfaceBlockEntity host = helper.getBlockEntity(BlockPos.ZERO, InputInterfaceBlockEntity.class);
+        ServerPlayer player = makePlayerWithConnection(helper);
+        host.getConfig().setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
+        var locator = MenuLocators.forBlockEntity(host);
+        host.openMenu(player, locator);
+        helper.assertTrue(player.containerMenu instanceof AE2InterfaceMenu, "Host opens its own main menu");
+        ((AE2InterfaceMenu) player.containerMenu).openSetAmountMenu(0);
+        helper.assertTrue(player.containerMenu instanceof SetStockAmountMenu, "Real stock amount sub-menu opens");
+        ((SetStockAmountMenu) player.containerMenu).confirm(7);
+        helper.assertTrue(host.getConfig().getAmount(0) == 7L, "Confirm updates the host stock request");
+        helper.assertTrue(player.containerMenu instanceof AE2InterfaceMenu
+                        && player.containerMenu.getType() == AE2MenuTypes.INTERFACE,
+                "Confirm returns through the MMCR menu factory");
+        MenuOpener.open(PriorityMenu.TYPE, player, locator);
+        helper.assertTrue(player.containerMenu instanceof PriorityMenu, "Real priority sub-menu opens");
+        PriorityMenu priority = (PriorityMenu) player.containerMenu;
+        priority.setPriority(43);
+        host.returnToMainMenu(player, priority);
+        helper.assertTrue(host.getPriority() == 43 && player.containerMenu.getType() == AE2MenuTypes.INTERFACE,
+                "Priority update and locator-based return preserve the own menu route");
+        helper.succeed();
+    }
+
+    public void extendedAmountReturnRetainsTransientPage(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("eae_me_extended_input_interface").get().defaultBlockState());
+        InputInterfaceBlockEntity host = helper.getBlockEntity(BlockPos.ZERO, InputInterfaceBlockEntity.class);
+        ServerPlayer player = makePlayerWithConnection(helper);
+        host.getConfig().setStack(35, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
+        host.openMenu(player, MenuLocators.forBlockEntity(host));
+        ExtendedInterfaceMenu menu = (ExtendedInterfaceMenu) player.containerMenu;
+        menu.setPage(1);
+        menu.openSetAmountMenu(35);
+        helper.assertTrue(player.containerMenu instanceof SetStockAmountMenu, "Slot 35 amount sub-menu opens");
+        var amountMenu = (SetStockAmountMenu) player.containerMenu;
+        AEItemKey key = AEItemKey.of(Items.IRON_INGOT);
+        long nativeLimit = Math.min(key.getMaxStackSize(),
+                GenericSlotCapacities.getMap().getOrDefault(key.getType(), Long.MAX_VALUE));
+        long expected = Math.min(123L, nativeLimit);
+        helper.assertTrue(amountMenu.getMaxAmount() == nativeLimit && expected > amountMenu.getInitialAmount(),
+                "Extended quantity page retains native item limits and will change slot 35's request");
+        amountMenu.confirm(123);
+        menu = (ExtendedInterfaceMenu) player.containerMenu;
+        helper.assertTrue(menu.getType() == ExtendedAEMenuTypes.INTERFACE && menu.page == 1
+                        && menu.getConfigSlots().get(35).isActive()
+                        && new GenericStack(key, expected).equals(host.getConfig().getStack(35)),
+                "Amount confirmation clamps the request natively and returns to page 1 with slot 35 active");
+        player.closeContainer();
+        host.openMenu(player, MenuLocators.forBlockEntity(host));
+        helper.assertTrue(((ExtendedInterfaceMenu) player.containerMenu).page == 1,
+                "Reopening the same host retains the selected page");
+        player.closeContainer();
+        helper.setBlock(BlockPos.ZERO, Blocks.AIR.defaultBlockState());
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("eae_me_extended_input_interface").get().defaultBlockState());
+        InputInterfaceBlockEntity replacement = helper.getBlockEntity(BlockPos.ZERO, InputInterfaceBlockEntity.class);
+        replacement.openMenu(player, MenuLocators.forBlockEntity(replacement));
+        helper.assertTrue(replacement != host && ((ExtendedInterfaceMenu) player.containerMenu).page == 0,
+                "Replacing the host resets transient page state");
+        helper.succeed();
     }
 
     private static InteractionResult useMemoryCard(GameTestHelper helper, BlockPos pos,

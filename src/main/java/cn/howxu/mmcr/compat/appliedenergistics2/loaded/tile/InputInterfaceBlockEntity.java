@@ -13,10 +13,13 @@ import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
+import appeng.menu.MenuOpener;
+import appeng.menu.locator.MenuHostLocator;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -26,7 +29,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -48,7 +50,8 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class InputInterfaceBlockEntity extends IOPortBlockEntity
-        implements InterfaceLogicHost, IGridConnectedBlockEntity, MemoryCardHost, NetworkOwnedInputHost {
+        implements InterfaceLogicHost, IGridConnectedBlockEntity, MemoryCardHost, NetworkOwnedInputHost,
+        InterfaceMenuPageHost {
     private static final String NETWORK_OWNED_KEY = "network_owned";
     private static final String NETWORK_OWNED_SLOT_KEY = "slot";
     private static final IGridNodeListener<InputInterfaceBlockEntity> NODE_LISTENER =
@@ -68,6 +71,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     private final ResourceStorage<FluidResource> fluidStorage;
     private CapabilitySnapshot capabilitySnapshot;
     private boolean loadingProvenance;
+    private int interfaceMenuPage;
 
     public InputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -120,14 +124,23 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
+    public void openMenu(Player player, MenuHostLocator locator) {
+        MenuOpener.open(AE2MenuTypes.typeFor(kind), player, locator);
+    }
+
+    @Override
     public void returnToMainMenu(Player player, ISubMenu subMenu) {
-        ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.contributor();
-        if (contributor.available() && contributor.isPort(kind.id())
-                && player instanceof ServerPlayer serverPlayer) {
-            contributor.returnToMainMenu(serverPlayer, subMenu, kind);
-            return;
-        }
-        InterfaceLogicHost.super.returnToMainMenu(player, subMenu);
+        MenuOpener.returnTo(AE2MenuTypes.typeFor(kind), player, subMenu.getLocator());
+    }
+
+    @Override
+    public int getInterfaceMenuPage() {
+        return interfaceMenuPage;
+    }
+
+    @Override
+    public void setInterfaceMenuPage(int page) {
+        interfaceMenuPage = Math.clamp(page, 0, 1);
     }
 
     @Override
