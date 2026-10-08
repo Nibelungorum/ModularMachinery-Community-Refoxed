@@ -43,6 +43,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.Connection;
 import net.minecraft.network.PacketSendListener;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.level.ClientInformation;
@@ -108,6 +109,9 @@ public class InterfaceMenuGameTest {
             var priorityHost = (IPriorityHost) host;
             MenuOpener.open(PriorityMenu.TYPE, player, locator);
             PriorityMenu priority = (PriorityMenu) player.containerMenu;
+            helper.assertTrue(Component.translatable("container.mmcr." + route.blockId())
+                            .equals(priority.getHost().getMainMenuIcon().getHoverName()),
+                    "Priority back button names the MMCR interface for " + route.blockId());
             priority.setPriority(43);
             priorityHost.returnToMainMenu(player, priority);
             helper.assertTrue(player.containerMenu.getType() == type
@@ -537,6 +541,9 @@ public class InterfaceMenuGameTest {
         helper.assertTrue(player.containerMenu.getClass() == ContainerExInterface.class
                         && player.containerMenu.getType() == ContainerExInterface.TYPE,
                 "Native EAE interface keeps its native factory");
+        helper.assertTrue(host.getMainMenuIcon().getHoverName()
+                        .equals(new ItemStack(EAESingletons.EX_INTERFACE).getHoverName()),
+                "Native EAE back button keeps its original interface name");
         var menu = (ContainerExInterface) player.containerMenu;
         menu.setPage(1);
         menu.showPage(1);

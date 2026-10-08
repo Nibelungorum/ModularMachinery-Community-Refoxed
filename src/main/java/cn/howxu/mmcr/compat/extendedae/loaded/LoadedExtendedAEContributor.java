@@ -31,6 +31,8 @@ import java.util.ArrayList;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
@@ -85,13 +87,16 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
     @Override
     public @Nullable ItemStack mainMenuIcon(IOPortKind kind) {
         if (!KINDS.contains(kind)) return null;
+        ItemStack icon;
         if (isOversize(kind)) {
-            return new ItemStack(EAESingletons.OVERSIZE_INTERFACE);
+            icon = new ItemStack(EAESingletons.OVERSIZE_INTERFACE);
+        } else if (kind == ExtendedPatternInterfaceKind.INSTANCE) {
+            icon = new ItemStack(EAESingletons.EX_PATTERN_PROVIDER);
+        } else {
+            icon = new ItemStack(EAESingletons.EX_INTERFACE);
         }
-        if (kind == ExtendedPatternInterfaceKind.INSTANCE) {
-            return new ItemStack(EAESingletons.EX_PATTERN_PROVIDER);
-        }
-        return new ItemStack(EAESingletons.EX_INTERFACE);
+        icon.set(DataComponents.CUSTOM_NAME, Component.translatable("container.mmcr." + kind.id()));
+        return icon;
     }
 
     @Override
