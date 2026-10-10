@@ -1,0 +1,6 @@
+{
+  "name": "guide.mmcr_patchouli.category.network.name",
+  "description": "guide.mmcr_patchouli.category.network.description",
+  "icon": "mmcr:network_interface",
+  "sortnum": 60
+}

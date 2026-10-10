@@ -1,0 +1,19 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ae2.me_output.name",
+  "category": "mmcr:ae2",
+  "icon": "mmcr:basic_casing",
+  "flag": "mod:ae2",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:ae2_me_output_interface",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_output.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_output.p1"}
+    }
+  ]
+}

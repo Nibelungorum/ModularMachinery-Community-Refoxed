@@ -1,0 +1,25 @@
+{
+  "name": "guide.mmcr_patchouli.entry.mekanism.heat.name",
+  "category": "mmcr:mekanism",
+  "icon": "mmcr:basic_casing",
+  "flag": "mod:mekanism",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:heat_input_hatch",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.heat.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:heat_output_hatch",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.heat.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.heat.p2"}
+    }
+  ]
+}

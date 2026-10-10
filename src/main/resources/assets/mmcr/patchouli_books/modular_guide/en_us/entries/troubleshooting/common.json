@@ -1,0 +1,20 @@
+{
+  "name": "guide.mmcr_patchouli.entry.troubleshooting.common.name",
+  "category": "mmcr:troubleshooting",
+  "icon": "minecraft:comparator",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.troubleshooting.common.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.troubleshooting.common.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.troubleshooting.common.p2"}
+    }
+  ]
+}

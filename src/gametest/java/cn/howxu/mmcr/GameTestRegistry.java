@@ -19,6 +19,7 @@ import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.InterfaceMenuGameTest;
+import cn.howxu.mmcr.compat.patchouli.PatchouliGuideGameTest;
 import net.neoforged.fml.ModList;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -48,6 +49,8 @@ public final class GameTestRegistry {
     }
 
     public static void registerAll(RegisterGameTestsEvent event) {
+        register(event, "patchouli_guide_acquisition", 20,
+                PatchouliGuideGameTest::acquisitionMatchesOptionalInstallation);
         register(event, "registry_reflection_helper", 20, helper -> {
             boolean registered = helper.getLevel().registryAccess()
                     .lookupOrThrow(Registries.TEST_INSTANCE)

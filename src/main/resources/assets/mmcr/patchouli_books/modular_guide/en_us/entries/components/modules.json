@@ -1,0 +1,18 @@
+{
+  "name": "guide.mmcr_patchouli.entry.components.modules.name",
+  "category": "mmcr:components",
+  "icon": "mmcr:module_bridge",
+  "sortnum": 30,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:module_bridge",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.components.modules.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.components.modules.p1"}
+    }
+  ]
+}

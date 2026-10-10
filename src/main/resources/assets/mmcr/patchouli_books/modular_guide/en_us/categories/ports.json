@@ -1,0 +1,6 @@
+{
+  "name": "guide.mmcr_patchouli.category.ports.name",
+  "description": "guide.mmcr_patchouli.category.ports.description",
+  "icon": "mmcr:item_input_bus",
+  "sortnum": 20
+}

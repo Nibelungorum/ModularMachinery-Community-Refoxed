@@ -1,0 +1,24 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.items.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:item_input_bus",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:item_input_bus",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.items.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:item_output_bus",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.items.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.items.p2"}
+    }
+  ]
+}

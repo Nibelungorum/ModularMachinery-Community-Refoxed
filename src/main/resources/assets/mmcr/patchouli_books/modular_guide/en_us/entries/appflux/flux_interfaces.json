@@ -1,0 +1,23 @@
+{
+  "name": "guide.mmcr_patchouli.entry.appflux.flux_interfaces.name",
+  "category": "mmcr:appflux",
+  "icon": "mmcr:basic_casing",
+  "flag": "&mod:ae2,mod:appflux",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:appflux_me_flux_input_interface",
+      "title": "guide.mmcr_patchouli.entry.appflux.flux_interfaces.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.appflux.flux_interfaces.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:appflux_me_flux_output_interface",
+      "title": "guide.mmcr_patchouli.entry.appflux.flux_interfaces.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.appflux.flux_interfaces.p1"}
+    }
+  ]
+}

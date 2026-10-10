@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.datagen;
 
 import cn.howxu.mmcr.compat.mekanism.loaded.MekanismPortSizes;
+import cn.howxu.mmcr.compat.patchouli.PatchouliDataGen;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
@@ -55,6 +56,8 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('B', Tags.Items.DUSTS_REDSTONE)
                 .define('C', Tags.Items.DUSTS_GLOWSTONE)
                 .save(output);
+
+        PatchouliDataGen.generate(registries, output);
 
         shaped(ModBlocks.BASIC_CASING.get(), 2)
                 .pattern(" X ")

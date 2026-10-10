@@ -1,0 +1,26 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.combined.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:combined_input_basic",
+  "sortnum": 30,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:combined_input_basic",
+      "title": "guide.mmcr_patchouli.entry.ports.combined.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.combined.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:combined_output_basic",
+      "title": "guide.mmcr_patchouli.entry.ports.combined.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.combined.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.combined.p2"}
+    }
+  ]
+}

@@ -74,6 +74,13 @@ ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
+modId="patchouli"
+type="optional"
+versionRange="[26.1-94,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
 modId="athena"
 type="optional"
 versionRange="[4.7.3,)"

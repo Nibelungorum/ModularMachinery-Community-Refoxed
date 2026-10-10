@@ -1,0 +1,18 @@
+{
+  "name": "guide.mmcr_patchouli.entry.processing.thread_disperser.name",
+  "category": "mmcr:processing",
+  "icon": "mmcr:thread_disperser",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:thread_disperser",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.processing.thread_disperser.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.processing.thread_disperser.p1"}
+    }
+  ]
+}

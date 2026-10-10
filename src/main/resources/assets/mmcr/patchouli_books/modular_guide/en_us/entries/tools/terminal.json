@@ -1,0 +1,26 @@
+{
+  "name": "guide.mmcr_patchouli.entry.tools.terminal.name",
+  "category": "mmcr:tools",
+  "icon": "mmcr:terminal",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:terminal",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.tools.terminal.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.tools.terminal.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.tools.terminal.p2"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.tools.terminal.p3"}
+    }
+  ]
+}

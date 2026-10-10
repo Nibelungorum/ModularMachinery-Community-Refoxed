@@ -1,0 +1,6 @@
+{
+  "name": "guide.mmcr_patchouli.category.controllers.name",
+  "description": "guide.mmcr_patchouli.category.controllers.description",
+  "icon": "mmcr:textures/block/basic_controller.png",
+  "sortnum": 10
+}

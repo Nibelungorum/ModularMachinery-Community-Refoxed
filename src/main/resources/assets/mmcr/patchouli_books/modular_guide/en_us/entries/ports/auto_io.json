@@ -1,0 +1,20 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.auto_io.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:item_input_bus",
+  "sortnum": 40,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.auto_io.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.auto_io.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.auto_io.p2"}
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "guide.mmcr_patchouli.category.mekanism.name",
+  "description": "guide.mmcr_patchouli.category.mekanism.description",
+  "icon": "mmcr:basic_casing",
+  "sortnum": 100,
+  "flag": "mod:mekanism"
+}

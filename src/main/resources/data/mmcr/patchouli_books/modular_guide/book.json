@@ -1,0 +1,13 @@
+{
+  "name": "guide.mmcr_patchouli.name",
+  "landing_text": "guide.mmcr_patchouli.landing",
+  "version": "0",
+  "subtitle": "guide.mmcr_patchouli.subtitle",
+  "use_resource_pack": true,
+  "i18n": true,
+  "creative_tab": "mmcr:mmcr",
+  "model": "minecraft:enchanted_book",
+  "index_icon": "minecraft:enchanted_book",
+  "show_progress": false,
+  "show_toasts": false
+}
