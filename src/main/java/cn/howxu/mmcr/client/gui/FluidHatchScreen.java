@@ -44,6 +44,16 @@ public final class FluidHatchScreen extends AbstractPortScreen<FluidHatchMenu> {
     @Override protected Identifier texture(boolean autoIOPage) { return autoIOPage ? AUTO_IO_TEXTURE : TEXTURE; }
 
     @Override
+    protected int containerTankIndexAt(double relativeX, double relativeY) {
+        return singleTankIndexAt(relativeX, relativeY);
+    }
+
+    static int singleTankIndexAt(double x, double y) {
+        return x >= TANK_X && x < TANK_X + TANK_W
+                && y >= TANK_Y && y < TANK_Y + TANK_H ? 0 : -1;
+    }
+
+    @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         clearTooltipEntries();
         if (autoIOPage) return;

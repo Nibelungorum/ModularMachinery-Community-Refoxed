@@ -9,12 +9,16 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -84,6 +88,15 @@ public interface MekanismBridge {
      */
     default boolean isPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
         return false;
+    }
+
+    default ResourceHandler<FluidResource> manualFluidContainerHandler(ResourceHandler<FluidResource> handler) {
+        return handler;
+    }
+
+    default int transferChemicalContainer(ServerPlayer player, AbstractContainerMenu menu,
+                                          int tankIndex, TransactionContext transaction) {
+        return 0;
     }
 
     default boolean isPort(String id) {

@@ -77,6 +77,19 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
     }
 
     @Override
+    protected int containerTankIndexAt(double relativeX, double relativeY) {
+        return tankIndexAt(menu.fluidTankLayouts(), relativeX, relativeY);
+    }
+
+    static int tankIndexAt(List<CombinedPortMenu.FluidTankLayout> layouts, double x, double y) {
+        for (CombinedPortMenu.FluidTankLayout layout : layouts) {
+            if (x >= layout.x() && x < layout.x() + TANK_WIDTH
+                    && y >= layout.y() && y < layout.y() + TANK_HEIGHT) return layout.slot();
+        }
+        return -1;
+    }
+
+    @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         super.extractBackground(graphics, mouseX, mouseY, partialTicks);
         graphics.blit(RenderPipelines.GUI_TEXTURED, texture(autoIOPage), leftPos, topPos, 0, 0,

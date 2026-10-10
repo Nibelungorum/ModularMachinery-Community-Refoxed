@@ -30,6 +30,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
+import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
@@ -160,7 +161,7 @@ class ModEventRegistrationTest {
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                   PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
-                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
+                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
                    PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                    PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
@@ -181,6 +182,7 @@ class ModEventRegistrationTest {
                 PktSmartInterfaceUpdatePayload.TYPE,
                  PktAutoIOConfigPayload.TYPE,
                  PktEjectPortContentsPayload.TYPE,
+                 PktPortContainerTransferPayload.TYPE,
                    PktBlueprintStageUpdatePayload.TYPE,
                    PktRecipePoolSelectPayload.TYPE,
                    PktTerminalActionPayload.TYPE,
@@ -192,7 +194,7 @@ class ModEventRegistrationTest {
 
     @Test
     void production_payload_protocol_version_tracks_the_current_packet_layout() {
-        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("9");
+        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("10");
     }
 
     @Test

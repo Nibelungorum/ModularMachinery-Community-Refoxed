@@ -102,6 +102,16 @@ public final class GameTestRegistry {
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));
         register(event, "fluid_hatch_menu_storage", 100, helper -> new FluidHatchCapabilityGameTest().positionOnlyFluidHatchMenuResolvesStoredFluid(helper));
         register(event, "fluid_hatch_bucket_interaction", 100, helper -> new FluidHatchCapabilityGameTest().bucketInteractionRespectsHatchDirection(helper));
+        register(event, "port_container_bucket_direction", 20,
+                helper -> new PortContainerTransferGameTest().bucketsFollowPortDirection(helper));
+        register(event, "port_container_bucket_rollback", 20,
+                helper -> new PortContainerTransferGameTest().partialBucketsRollbackBothSides(helper));
+        register(event, "port_container_combined_second_tank", 20,
+                helper -> new PortContainerTransferGameTest().combinedSecondTankIsIndependent(helper));
+        register(event, "port_container_stacked_bucket_inventory", 20,
+                helper -> new PortContainerTransferGameTest().stackedBucketsRespectInventoryCapacity(helper));
+        register(event, "port_container_invalid_requests", 20,
+                helper -> new PortContainerTransferGameTest().invalidRequestsCannotMutateStorage(helper));
         register(event, "item_bus_capability", 100, ItemBusCapabilityGameTest::itemBusAcceptsItems);
         register(event, "item_bus_non_stackable_limit", 100,
                 ItemBusCapabilityGameTest::itemBusDoesNotStackNonStackableItems);
@@ -198,6 +208,12 @@ public final class GameTestRegistry {
         register(event, "module_connection_interface_conflict", 100, helper -> new ModuleConnectionGameTest().sharedInterfaceInvalidatesHost(helper));
         register(event, "mekanism_chemical_structure_constraints", 20,
                 helper -> new MekanismPortGameTest().chemicalStructureChecksCountsAndMinimumTiers(helper));
+        register(event, "port_container_mekanism_chemical_direction", 20,
+                helper -> new MekanismContainerTransferGameTest().chemicalTankFollowsPortDirection(helper));
+        register(event, "port_container_mekanism_fluid_partial", 20,
+                helper -> new MekanismContainerTransferGameTest().fluidTankTransfersOnlyAvailableCapacity(helper));
+        register(event, "port_container_mekanism_chemical_partial_mismatch", 20,
+                helper -> new MekanismContainerTransferGameTest().chemicalTankRetainsRemainderAndRejectsMismatch(helper));
         register(event, "mekanism_single_tier_structure_constraints", 20,
                 helper -> new MekanismPortGameTest().singleTierStructureChecksFamilyAndDirection(helper));
         register(event, "mekanism_single_tier_structure_counts", 20,

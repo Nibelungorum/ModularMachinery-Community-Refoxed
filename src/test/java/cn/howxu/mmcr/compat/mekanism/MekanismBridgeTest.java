@@ -1,10 +1,12 @@
 package cn.howxu.mmcr.compat.mekanism;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import java.util.Arrays;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +27,11 @@ class MekanismBridgeTest {
         assertThat(bridge.unavailableReason()).isEqualTo(MMCR.id("mekanism_unavailable"));
         assertThat(bridge.capabilityIdForMenu(null)).isNull();
         assertThat(bridge.isPortMenuAt(null, BlockPos.ZERO, null)).isFalse();
+        var storage = new LongFluidStorage(4_000, () -> {});
+        assertThat(bridge.manualFluidContainerHandler(storage)).isSameAs(storage);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(bridge.transferChemicalContainer(null, null, 0, transaction)).isZero();
+        }
         bridge.registerRecipeTypes(MMCR.id("mekanism_chemical"), MMCR.id("mekanism_heat_temperature"),
                 MMCR.id("mekanism_heat"));
     }

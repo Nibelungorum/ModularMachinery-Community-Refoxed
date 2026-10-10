@@ -15,6 +15,7 @@ import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
+import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.ChatFormatting;
@@ -23,6 +24,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -68,6 +70,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     protected static final int TEXT_VIEW_BOTTOM = 123;
 
     protected boolean autoIOPage;
+    private boolean containerTankClickConsumed;
+    private boolean suppressNextContainerDoubleClick;
     private Identifier selectedCapabilityId;
     private Button autoIOPageButton;
     private Button secondaryAutoIOPageButton;
@@ -104,6 +108,10 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
     protected abstract Identifier texture(boolean autoIOPage);
 
+    protected int containerTankIndexAt(double relativeX, double relativeY) {
+        return -1;
+    }
+
     @Override
     protected final void init() {
         super.init();
@@ -120,6 +128,41 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
         if (autoIOPage) return false;
         return super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (!autoIOPage && event.button() == 0 && !menu.getCarried().isEmpty()) {
+            int tankIndex = containerTankIndexAt(event.x() - leftPos, event.y() - topPos);
+            if (tankIndex >= 0) {
+                containerTankClickConsumed = true;
+                // MouseHandler records this press, but vanilla slot history was not updated.
+                suppressNextContainerDoubleClick = true;
+                ClientPacketDistributor.sendToServer(
+                        new PktPortContainerTransferPayload(menu.containerId, tankIndex));
+                return true;
+            }
+        }
+        if (suppressNextContainerDoubleClick) {
+            doubleClick = false;
+            suppressNextContainerDoubleClick = false;
+        }
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 0 && containerTankClickConsumed) {
+            containerTankClickConsumed = false;
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (event.button() == 0 && containerTankClickConsumed) return true;
+        return super.mouseDragged(event, dragX, dragY);
     }
 
     @Override

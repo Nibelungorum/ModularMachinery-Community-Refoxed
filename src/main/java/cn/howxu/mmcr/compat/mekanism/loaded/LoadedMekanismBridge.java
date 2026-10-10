@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.transfer.TransferContext;
+import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.api.capability.transfer.TransferPolicy;
 import cn.howxu.mmcr.api.capability.transfer.TransferResult;
 import cn.howxu.mmcr.api.capability.transfer.TransferStrategyRegistry;
@@ -44,6 +45,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismBridge.MenuRegistrar;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortDeclaration;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortType;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -55,6 +57,7 @@ import mekanism.api.chemical.ChemicalResource;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.Capabilities;
+import mekanism.common.capabilities.proxy.AutomatedResourceHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
@@ -64,6 +67,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -72,6 +76,8 @@ import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.network.IContainerFactory;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.ResourceHandlerUtil;
+import net.neoforged.neoforge.transfer.access.ItemAccess;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
@@ -221,6 +227,24 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             return matches(heat.pos(), heat.owner(), pos, port);
         }
         return false;
+    }
+
+    @Override
+    public ResourceHandler<FluidResource> manualFluidContainerHandler(ResourceHandler<FluidResource> handler) {
+        return AutomatedResourceHandler.manual(handler);
+    }
+
+    @Override
+    public int transferChemicalContainer(ServerPlayer player, AbstractContainerMenu menu,
+                                         int tankIndex, TransactionContext transaction) {
+        if (!(menu instanceof ChemicalPortMenu chemical) || tankIndex != 0) return 0;
+        ChemicalPortBlockEntity port = chemical.owner();
+        if (!PktPortContainerTransferPayload.validTarget(player, menu, port)) return 0;
+        ItemAccess access = ItemAccess.forPlayerCursor(player, menu);
+        ResourceHandler<ChemicalResource> container = AutomatedResourceHandler.manual(
+                access.getCapability(Capabilities.CHEMICAL.item()));
+        return ContainerResourceTransfer.transfer(port.ioType(), container,
+                port.chemicalHandler(null), transaction);
     }
 
     private static boolean matches(BlockPos menuPos, IOPortBlockEntity menuOwner,
