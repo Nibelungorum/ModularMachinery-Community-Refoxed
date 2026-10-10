@@ -10,8 +10,6 @@ import net.minecraft.client.gui.screens.inventory.MenuAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
 import java.util.function.BiFunction;
@@ -22,7 +20,6 @@ import java.util.function.Supplier;
  * retain the menu-owned session. Call registration only in the client screen window.
  * @author howxu <dev@howxu.cn>
  */
-@OnlyIn(Dist.CLIENT)
 public final class ControllerUiScreenRouter {
     private ControllerUiScreenRouter() {}
 

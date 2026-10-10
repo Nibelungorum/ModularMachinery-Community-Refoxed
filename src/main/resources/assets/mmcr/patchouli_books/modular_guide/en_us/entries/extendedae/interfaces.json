@@ -1,7 +1,7 @@
 {
   "name": "guide.mmcr_patchouli.entry.extendedae.interfaces.name",
   "category": "mmcr:extendedae",
-  "icon": "mmcr:basic_casing",
+  "icon": "mmcr:eae_me_extended_input_interface",
   "flag": "&mod:ae2,mod:extendedae",
   "sortnum": 0,
   "pages": [

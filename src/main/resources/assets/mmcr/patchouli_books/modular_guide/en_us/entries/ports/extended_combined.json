@@ -1,0 +1,54 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.extended_combined.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:extended_combined_input_advanced",
+  "sortnum": 35,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_combined_input_advanced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_combined.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_combined.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_combined_output_advanced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_combined.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_combined.p1"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_combined_input_reinforced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_combined.p2.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_combined.p2"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_combined_output_reinforced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_combined.p3.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_combined.p3"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_combined_input_ultimate",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_combined.p4.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_combined.p4"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_combined_output_ultimate",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_combined.p5.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_combined.p5"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_combined.p6"}
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "name": "guide.mmcr_patchouli.entry.mekanism.radioactivity.name",
   "category": "mmcr:mekanism",
-  "icon": "mmcr:basic_casing",
+  "icon": "mmcr:radioactive_chemical_input_hatch",
   "flag": "mod:mekanism",
   "sortnum": 10,
   "pages": [

@@ -1,13 +1,20 @@
 {
   "name": "guide.mmcr_patchouli.name",
   "landing_text": "guide.mmcr_patchouli.landing",
+  "book_texture": "patchouli:textures/gui/book_gray.png",
+  "text_color": "303840",
+  "header_color": "205C63",
+  "nameplate_color": "65CCD0",
+  "link_color": "247D88",
+  "link_hover_color": "39AAB6",
+  "progress_bar_color": "65CCD0",
   "version": "0",
   "subtitle": "guide.mmcr_patchouli.subtitle",
   "use_resource_pack": true,
   "i18n": true,
   "creative_tab": "mmcr:mmcr",
-  "model": "minecraft:enchanted_book",
-  "index_icon": "minecraft:enchanted_book",
+  "model": "mmcr:modular_guide",
+  "index_icon": "mmcr:textures/item/modular_guide.png",
   "show_progress": false,
   "show_toasts": false
 }

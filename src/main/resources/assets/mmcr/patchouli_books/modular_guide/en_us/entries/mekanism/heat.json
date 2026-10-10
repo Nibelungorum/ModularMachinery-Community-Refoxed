@@ -1,7 +1,7 @@
 {
   "name": "guide.mmcr_patchouli.entry.mekanism.heat.name",
   "category": "mmcr:mekanism",
-  "icon": "mmcr:basic_casing",
+  "icon": "mmcr:heat_input_hatch",
   "flag": "mod:mekanism",
   "sortnum": 20,
   "pages": [

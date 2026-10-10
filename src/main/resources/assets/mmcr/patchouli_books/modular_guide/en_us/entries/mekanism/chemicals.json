@@ -1,7 +1,7 @@
 {
   "name": "guide.mmcr_patchouli.entry.mekanism.chemicals.name",
   "category": "mmcr:mekanism",
-  "icon": "mmcr:basic_casing",
+  "icon": "mmcr:chemical_input_hatch_basic",
   "flag": "mod:mekanism",
   "sortnum": 0,
   "pages": [

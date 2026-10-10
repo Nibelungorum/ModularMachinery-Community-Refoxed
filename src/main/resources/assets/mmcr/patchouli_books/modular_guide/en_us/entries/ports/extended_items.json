@@ -1,0 +1,68 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.extended_items.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:extended_item_input_bus_basic",
+  "sortnum": 5,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_item_input_bus_basic",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_items.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_item_output_bus_basic",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_items.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p1"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_item_input_bus_advanced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_items.p2.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p2"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_item_output_bus_advanced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_items.p3.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p3"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_item_input_bus_reinforced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_items.p4.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p4"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_item_output_bus_reinforced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_items.p5.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p5"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_item_input_bus_ultimate",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_items.p6.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p6"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_item_output_bus_ultimate",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_items.p7.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p7"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_items.p8"}
+    }
+  ]
+}

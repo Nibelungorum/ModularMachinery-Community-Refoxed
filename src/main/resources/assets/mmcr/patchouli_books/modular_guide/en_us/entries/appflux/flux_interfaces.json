@@ -1,7 +1,7 @@
 {
   "name": "guide.mmcr_patchouli.entry.appflux.flux_interfaces.name",
   "category": "mmcr:appflux",
-  "icon": "mmcr:basic_casing",
+  "icon": "mmcr:appflux_me_flux_input_interface",
   "flag": "&mod:ae2,mod:appflux",
   "sortnum": 0,
   "pages": [

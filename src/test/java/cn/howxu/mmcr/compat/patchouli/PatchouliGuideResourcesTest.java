@@ -63,15 +63,21 @@ class PatchouliGuideResourcesTest {
         Map<String, JsonObject> entries = readObjects(BOOK.resolve("entries"));
         for (JsonObject value : categories.values()) {
             assertValidFlag(value);
-            if (!flag(value).isEmpty()) assertThat(value.get("icon").getAsString()).isEqualTo("mmcr:basic_casing");
+            if (!flag(value).isEmpty()) assertOptionalIconIsDeclared(value, entries);
         }
         for (var entry : entries.entrySet()) {
             JsonObject value = entry.getValue();
             assertValidFlag(value);
-            if (!flag(value).isEmpty()) assertThat(value.get("icon").getAsString()).isEqualTo("mmcr:basic_casing");
+            if (!flag(value).isEmpty()) assertOptionalIconIsDeclared(value, entries);
             if (value.get("category").getAsString().equals("mmcr:controllers")) {
                 assertThat(flag(value)).isEmpty();
-                assertThat(value.get("icon").getAsString()).startsWith("mmcr:textures/");
+                String icon = value.get("icon").getAsString();
+                if (icon.endsWith(".png")) {
+                    assertThat(icon).startsWith("mmcr:textures/");
+                    assertThat(RESOURCES.resolve("assets/mmcr").resolve(icon.substring("mmcr:".length()))).isRegularFile();
+                } else {
+                    assertThat(icon).isIn("mmcr:blueprint", "mmcr:terminal");
+                }
                 for (JsonElement page : value.getAsJsonArray("pages")) {
                     assertThat(flag(page.getAsJsonObject())).isEmpty();
                     assertThat(page.getAsJsonObject().get("type").getAsString()).isEqualTo("patchouli:text");
@@ -146,6 +152,24 @@ class PatchouliGuideResourcesTest {
                             .as("Visible link in %s to %s, installed mask %s", key, matcher.group(1), installed).isTrue();
                 }
             }
+        }
+    }
+
+    private static void assertOptionalIconIsDeclared(JsonObject value, Map<String, JsonObject> entries) {
+        String icon = value.get("icon").getAsString();
+        if (icon.endsWith(".png")) {
+            assertThat(icon).startsWith("mmcr:textures/");
+            assertThat(RESOURCES.resolve("assets/mmcr").resolve(icon.substring("mmcr:".length()))).isRegularFile();
+        } else {
+            assertThat(icon).startsWith("mmcr:");
+            assertThat(entries.values().stream()
+                    .filter(entry -> flag(entry).equals(flag(value)))
+                    .flatMap(entry -> entry.getAsJsonArray("pages").asList().stream())
+                    .map(JsonElement::getAsJsonObject)
+                    .filter(page -> page.has("item"))
+                    .map(page -> page.get("item").getAsString()))
+                    .as("Optional item icon must be shown in an entry with the same installation condition")
+                    .contains(icon);
         }
     }
 
