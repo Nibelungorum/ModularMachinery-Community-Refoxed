@@ -38,9 +38,11 @@ dependencies {
     // here's some test need, cause this is a pure client mod
     localRuntime "curse.maven:${athena_id}:${athena_version}"
 
-    // 
+    // patchouli
     localRuntime "maven.modrinth:${patchouli_id}:${patchouli_version}"
-    
+
+    // modern ui
+    compileOnly "maven.modrinth:${mui_id}:${mui_version}"
 
     // junit
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'

@@ -21,7 +21,7 @@ runs {
             // time in a bottle
             runtime("maven.modrinth:${tiab_id}:${tiab_version}")
             // modern ui
-            // runtime("maven.modrinth:${mui_id}:${mui_version}")
+            runtime("maven.modrinth:${mui_id}:${mui_version}")
             // JECharacters
             runtime("curse.maven:${jec_id}:${jec_version}")
             // CustomSkinLoader

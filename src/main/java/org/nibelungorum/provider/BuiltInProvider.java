@@ -26,5 +26,6 @@ public final class BuiltInProvider implements MachineDefinitionProvider {
         PURE_TICK_MACHINE.registerDefinitions(event);
         RECIPE_TICKER.registerDefinitions(event);
         JEIRecipeMachine.registerDefinitions(event);
+        MODERN_UI.registerDefinitions(event);
     }
 }
