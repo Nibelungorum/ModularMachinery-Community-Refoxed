@@ -13,8 +13,8 @@
   "use_resource_pack": true,
   "i18n": true,
   "creative_tab": "mmcr:mmcr",
-  "model": "minecraft:enchanted_book",
-  "index_icon": "minecraft:enchanted_book",
+  "model": "mmcr:modular_guide",
+  "index_icon": "mmcr:textures/item/modular_guide.png",
   "show_progress": false,
   "show_toasts": false
 }

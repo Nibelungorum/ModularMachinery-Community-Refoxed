@@ -71,7 +71,13 @@ class PatchouliGuideResourcesTest {
             if (!flag(value).isEmpty()) assertOptionalIconIsDeclared(value, entries);
             if (value.get("category").getAsString().equals("mmcr:controllers")) {
                 assertThat(flag(value)).isEmpty();
-                assertThat(value.get("icon").getAsString()).startsWith("mmcr:textures/");
+                String icon = value.get("icon").getAsString();
+                if (icon.endsWith(".png")) {
+                    assertThat(icon).startsWith("mmcr:textures/");
+                    assertThat(RESOURCES.resolve("assets/mmcr").resolve(icon.substring("mmcr:".length()))).isRegularFile();
+                } else {
+                    assertThat(icon).isIn("mmcr:blueprint", "mmcr:terminal");
+                }
                 for (JsonElement page : value.getAsJsonArray("pages")) {
                     assertThat(flag(page.getAsJsonObject())).isEmpty();
                     assertThat(page.getAsJsonObject().get("type").getAsString()).isEqualTo("patchouli:text");

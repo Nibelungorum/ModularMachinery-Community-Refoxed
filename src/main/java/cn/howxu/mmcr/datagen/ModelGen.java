@@ -12,12 +12,16 @@ import cn.howxu.mmcr.registry.PortKinds;
 import net.minecraft.client.data.models.BlockModelGenerators;
 import net.minecraft.client.data.models.ItemModelGenerators;
 import net.minecraft.client.data.models.ModelProvider;
+import net.minecraft.client.data.models.model.ItemModelUtils;
 import net.minecraft.client.data.models.model.ModelTemplates;
+import net.minecraft.client.data.models.model.TextureMapping;
 import net.minecraft.client.data.models.model.TexturedModel;
 import net.minecraft.client.data.models.model.TextureSlot;
 import net.minecraft.client.resources.model.sprite.Material;
+import net.minecraft.client.renderer.item.ClientItem;
 import net.minecraft.core.Holder;
 import net.minecraft.data.PackOutput;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
@@ -37,6 +41,10 @@ public final class ModelGen extends ModelProvider {
         registerModels((block, name) -> blockModels.createTrivialBlock(block.get(), TexturedModel.CUBE.updateTexture(
                         m -> m.put(TextureSlot.ALL, textureFor(name)))),
                 (item, name) -> itemModels.generateFlatItem(item.get(), ModelTemplates.FLAT_ITEM));
+        Identifier guideModel = ModelTemplates.FLAT_ITEM.create(MMCR.id("item/modular_guide"),
+                TextureMapping.layer0(new Material(MMCR.id("item/modular_guide"))), itemModels.modelOutput);
+        itemModels.itemModelOutput.register(MMCR.id("modular_guide"),
+                new ClientItem(ItemModelUtils.plainModel(guideModel), ClientItem.Properties.DEFAULT));
     }
 
     static List<GeneratedModel> collectRegisteredModels() {

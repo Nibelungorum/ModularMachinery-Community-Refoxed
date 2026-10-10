@@ -1,7 +1,7 @@
 {
   "name": "guide.mmcr_patchouli.entry.basics.acquisition.name",
   "category": "mmcr:basics",
-  "icon": "minecraft:enchanted_book",
+  "icon": "mmcr:textures/item/modular_guide.png",
   "sortnum": 10,
   "pages": [
     {
