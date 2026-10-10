@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -48,6 +49,7 @@ import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.PortKinds;
 
 import net.minecraft.core.Holder;
@@ -115,16 +117,17 @@ public final class TestBootstrap {
     }
 
     public static synchronized void bootstrap() throws Exception {
-        ensureFailureReasons();
         if (initialized) {
             if (MachineDefinitions.getRegistration(id("test_cube")) == null
                     || MachineRegistry.getCompiled(id("test_cube")) == null) {
                 restoreMachineDefinitions();
             }
+            ensureFailureReasons();
             bindAllVanillaItemComponents();
             return;
         }
 
+        ensureFailureReasons();
         Class<?> fmlLoaderCls = Class.forName("net.neoforged.fml.loading.FMLLoader");
         Class<?> distCls = Class.forName("net.neoforged.api.distmarker.Dist");
         Class<?> loadingModListCls = Class.forName("net.neoforged.fml.loading.LoadingModList");
@@ -149,7 +152,9 @@ public final class TestBootstrap {
         MachineDefinitions.beginRegistryPhase();
         Bootstrap.bootStrap();
         bindAllVanillaItemComponents();
+        // PortKinds defaults must observe the caller's bridge, never the temporary menu fixture.
         bindPortBlocks();
+        initializeTestMenus();
         for (ParallelTier tier : ParallelTier.values()) bindParallelController(tier);
         bindFactoryController();
         bindSmartInterface();
@@ -163,7 +168,22 @@ public final class TestBootstrap {
         bind(ModItems.BLUEPRINT, registerItem(ModItems.BLUEPRINT));
         registerTestEvents();
         registerRuntimeTestContent();
+        ensureFailureReasons();
         initialized = true;
+    }
+
+    private static void initializeTestMenus() throws Exception {
+        // Optional menu holders are static final: select the fixture before the first ModUIs access.
+        Field override = MekanismBridgeBootstrap.class.getDeclaredField("testingBridge");
+        override.setAccessible(true);
+        Object previous = override.get(null);
+        try {
+            MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(true));
+            Class.forName(ModUIs.class.getName(), true, ModUIs.class.getClassLoader());
+        } finally {
+            // Restore null too, without resetting the independently cached runtime bridge.
+            override.set(null, previous);
+        }
     }
 
     private static void ensureFailureReasons() {

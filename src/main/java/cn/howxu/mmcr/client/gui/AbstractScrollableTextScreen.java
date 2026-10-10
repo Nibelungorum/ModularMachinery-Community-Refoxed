@@ -25,6 +25,8 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
     }
 
     private int textScrollOffset;
+    private boolean frameActive;
+    private List<ControllerScreenTextComposer.VisualLine> frameLines;
 
     protected AbstractScrollableTextScreen(M menu, Inventory inventory,
                                            Component title, int imageWidth, int imageHeight) {
@@ -86,10 +88,27 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         return List.of();
     }
 
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+        frameLines = null;
+        frameActive = true;
+        try {
+            super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+        } finally {
+            frameActive = false;
+            frameLines = null;
+        }
+    }
+
     protected final List<ControllerScreenTextComposer.VisualLine> wrappedTextLines() {
         TextViewport viewport = scrollableTextViewport();
-        List<ControllerScreenTextComposer.VisualLine> lines = ControllerScreenTextComposer.wrap(
-                font, scrollableTextLines(), viewport.width());
+        List<ControllerScreenTextComposer.VisualLine> lines;
+        if (frameActive && frameLines != null) {
+            lines = frameLines;
+        } else {
+            lines = ControllerScreenTextComposer.wrap(font, scrollableTextLines(), viewport.width());
+            if (frameActive) frameLines = lines;
+        }
         textScrollOffset = clampScrollOffset(textScrollOffset, lines.size(), visibleLineCount(
                 viewport.height(), viewport.scale(), viewport.lineSpacing(), font.lineHeight));
         return lines;

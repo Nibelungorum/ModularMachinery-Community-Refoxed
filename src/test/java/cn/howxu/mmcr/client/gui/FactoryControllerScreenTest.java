@@ -11,6 +11,13 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot.Role;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.HeaderData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.LaneData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.RecipeData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.TextLineData;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -29,12 +36,15 @@ import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.client.gui.screens.Screen;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -100,7 +110,7 @@ class FactoryControllerScreenTest {
     @Test
     void factory_detail_lines_preserve_snapshot_order() {
         FactoryControllerMenu menu = menuWithDetailRows();
-        List<ControllerTextLine> detailLines = FactoryControllerScreen.detailLines(menu);
+        List<ControllerTextLine> detailLines = ControllerUiTextLines.details(menu.legacyUiSnapshot(), "base");
 
         assertThat(detailLines.getFirst().text()).isEqualTo(
                 Component.translatable("gui.mmcr.controller.status_label")
@@ -109,6 +119,8 @@ class FactoryControllerScreenTest {
         assertThat(detailLines.getFirst().color()).isEqualTo(0xFF55FF55);
 
         assertThat(detailLines.subList(1, detailLines.size())).containsExactly(
+                new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
+                        Component.literal("mmcr:factory_detail_pool")), MachineControllerScreen.STATUS_LABEL_COLOR),
                 new ControllerTextLine(MachineControllerScreen.levelLine(
                         detailLevel(0)), MachineControllerScreen.STATUS_LABEL_COLOR),
                 new ControllerTextLine(MachineControllerScreen.levelLine(
@@ -196,8 +208,86 @@ class FactoryControllerScreenTest {
     void factory_detail_line_count_is_independent_from_thread_scroll_range() {
         FactoryControllerMenu menu = menuWithDetailRows();
 
-        assertThat(FactoryControllerScreen.detailLines(menu)).hasSize(10);
+        assertThat(ControllerUiTextLines.details(menu.legacyUiSnapshot(), "base")).hasSize(11);
         assertThat(FactoryControllerScreen.clampScrollOffset(99, menu.threads().size())).isZero();
+    }
+
+    @Test
+    void default_factory_reads_owned_host_fields_and_global_then_selected_lane_then_recipe_lines() throws Exception {
+        var current = new AtomicReference<ControllerUiSnapshot>(uiSnapshot(Role.HOST,
+                List.of(uiLane("base", 0, true, "base text"), uiLane("stable", 7, false, "selected text"))));
+        FactoryControllerScreen screen = snapshotScreen(current::get);
+        screen.selectLane("stable");
+        List<ControllerTextLine> lines = screen.scrollableTextLines();
+        assertThat(lines).extracting(ControllerTextLine::text).contains(
+                Component.translatable("gui.mmcr.controller.installed_modules", Component.literal("5")));
+        assertThat(lines).extracting(ControllerTextLine::text).doesNotContain(Component.literal("base text"));
+        int global = lines.stream().map(ControllerTextLine::text).toList().indexOf(Component.literal("global"));
+        assertThat(lines.get(global + 1).text()).isEqualTo(Component.literal("selected text"));
+        assertThat(lines.get(global + 2).tooltip()).containsExactly(
+                Component.translatable("gui.mmcr.controller.recipe.energy_input_exact", "600"));
+        assertThat(FactoryControllerScreen.detailTitle(current.get().machineName(), 7).getString())
+                .isEqualTo("Owned factory #7");
+    }
+
+    @Test
+    void selection_survives_reindexing_and_deleted_lanes_fall_back_and_reset_detail_scroll() throws Exception {
+        LaneData base = uiLane("base", 0, true, "base text");
+        LaneData selected = uiLane("stable", 7, false, "selected text");
+        var current = new AtomicReference<ControllerUiSnapshot>(uiSnapshot(Role.MODULE, List.of(base, selected)));
+        FactoryControllerScreen screen = snapshotScreen(current::get);
+        screen.selectLane("stable");
+        Field offset = AbstractScrollableTextScreen.class.getDeclaredField("textScrollOffset");
+        offset.setAccessible(true);
+        offset.setInt(screen, 1);
+        current.set(uiSnapshot(Role.MODULE, List.of(uiLane("stable", 3, false, "reindexed"), base)));
+        screen.scrollableTextLines();
+        assertThat(screen.selectedLaneId()).isEqualTo("stable");
+        assertThat(offset.getInt(screen)).isEqualTo(1);
+        current.set(uiSnapshot(Role.MODULE, List.of(uiLane("first", 9, false, "first"), base)));
+        screen.scrollableTextLines();
+        assertThat(screen.selectedLaneId()).isEqualTo("base");
+        assertThat(offset.getInt(screen)).isZero();
+        offset.setInt(screen, 1);
+        current.set(uiSnapshot(Role.MODULE, List.of(uiLane("first", 9, false, "first"))));
+        screen.scrollableTextLines();
+        assertThat(screen.selectedLaneId()).isEqualTo("first");
+        assertThat(offset.getInt(screen)).isZero();
+        current.set(uiSnapshot(Role.MODULE, List.of()));
+        screen.scrollableTextLines();
+        assertThat(screen.selectedLaneId()).isNull();
+    }
+
+    @Test
+    void explicit_thread_change_resets_scroll_but_clicking_the_same_lane_does_not() throws Exception {
+        FactoryControllerScreen screen = snapshotScreen(() -> uiSnapshot(Role.NORMAL,
+                List.of(uiLane("base", 0, true, "base"), uiLane("other", 2, false, "other"))));
+        screen.selectLane("base");
+        Field offset = AbstractScrollableTextScreen.class.getDeclaredField("textScrollOffset");
+        offset.setAccessible(true);
+        offset.setInt(screen, 4);
+        screen.selectLane("base");
+        assertThat(offset.getInt(screen)).isEqualTo(4);
+        screen.selectLane("other");
+        assertThat(offset.getInt(screen)).isZero();
+    }
+
+    @Test
+    void legacy_menu_selection_also_tracks_lane_identity_across_reindexing() {
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        var first = new FactoryRuntime.ThreadSnapshot(7, "stable", false, false, false, "", 0, 0, 1,
+                (ExecutionStatus) null);
+        menu.applySnapshot(legacyThreads(List.of(FactoryRuntime.ThreadSnapshot.idleBase(), first)));
+        menu.selectThread(7);
+        var reindexed = new FactoryRuntime.ThreadSnapshot(3, "stable", false, false, false, "", 0, 0, 1,
+                (ExecutionStatus) null);
+        menu.applySnapshot(legacyThreads(List.of(reindexed, FactoryRuntime.ThreadSnapshot.idleBase())));
+        assertThat(menu.selectedThread().laneId()).isEqualTo("stable");
+        assertThat(menu.selectedThreadIndex()).isEqualTo(3);
+        menu.applySnapshot(legacyThreads(List.of(first, FactoryRuntime.ThreadSnapshot.idleBase())));
+        assertThat(menu.selectedThreadIndex()).isEqualTo(7);
+        menu.applySnapshot(legacyThreads(List.of(FactoryRuntime.ThreadSnapshot.idleBase())));
+        assertThat(menu.selectedThread().laneId()).isEqualTo("base");
     }
 
     @Test
@@ -272,18 +362,89 @@ class FactoryControllerScreenTest {
                 left + viewport.x(), top + viewport.y())).isFalse();
     }
 
+    @Test
+    void clicking_below_visible_threads_cannot_select_an_invisible_row() {
+        int left = 37;
+        int top = 19;
+        int below = top + FactoryControllerScreen.VISIBLE_THREADS
+                * (FactoryControllerScreen.THREAD_ROW_HEIGHT + FactoryControllerScreen.THREAD_ROW_GAP);
+
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 0, left + 1, below)).isEqualTo(-1);
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 2, left + 1, below)).isEqualTo(-1);
+    }
+
+    @Test
+    void scrolled_thread_hit_test_preserves_visible_bounds_gaps_and_lane_indices() {
+        int left = 37;
+        int top = 19;
+        int rowStride = FactoryControllerScreen.THREAD_ROW_HEIGHT + FactoryControllerScreen.THREAD_ROW_GAP;
+        List<FactoryRuntime.ThreadSnapshot> threads = List.of(
+                new FactoryRuntime.ThreadSnapshot(4, "lane-4", false, false, false, "", 0, 0, 1,
+                        (ExecutionStatus) null),
+                new FactoryRuntime.ThreadSnapshot(9, "lane-9", false, false, false, "", 0, 0, 1,
+                        (ExecutionStatus) null),
+                new FactoryRuntime.ThreadSnapshot(15, "lane-15", false, false, false, "", 0, 0, 1,
+                        (ExecutionStatus) null));
+
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 1, left + 1, top, threads)).isEqualTo(9);
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 1, left + 1,
+                top + rowStride, threads)).isEqualTo(15);
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 1, left + 1,
+                top + FactoryControllerScreen.THREAD_ROW_HEIGHT, threads)).isEqualTo(-1);
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 1, left + 1,
+                top + 2 * rowStride, threads)).isEqualTo(-1);
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 1, left + 1, top - 1)).isEqualTo(-1);
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 1,
+                left + FactoryControllerScreen.THREAD_ROW_WIDTH, top)).isEqualTo(-1);
+        assertThat(FactoryControllerScreen.threadIndexAt(left, top, 1, left + 1,
+                top + (FactoryControllerScreen.VISIBLE_THREADS - 1) * rowStride
+                        + FactoryControllerScreen.THREAD_ROW_HEIGHT - 1))
+                .isEqualTo(FactoryControllerScreen.VISIBLE_THREADS);
+    }
+
     private static FactoryControllerMenu menuWithDetailRows() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
          menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 3, 2, 8L, true,
                 List.of(new FactoryRuntime.ThreadSnapshot(0, "base", true, false, true, "mmcr:recipe", 20, 20,
                         4, failure(MMCR.id("selected_failure")))),
-                 "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(Identifier::toString).toList(), 0, 1));
+                 "Factory", 2, null, DETAIL_LEVEL_IDS.stream().map(Identifier::toString).toList(), 0, 1,
+                 "mmcr:factory_detail", "mmcr:factory_detail_pool"));
          return menu;
     }
 
     private static ExecutionStatus failure(Identifier id) {
         return ExecutionStatus.blocked(id, id, FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, id,
                 FailurePhase.RUNTIME, null, null, Map.of()));
+    }
+
+    private static LaneData uiLane(String id, int index, boolean base, String text) {
+        return new LaneData(id, index, base, false, true, MMCR.id("ui_recipe"), 10, 20, 4,
+                null, List.of(new TextLineData(MMCR.id("lane_text"), ControllerUiSnapshot.TextLine.Scope.OPERATION,
+                Component.literal(text))), new RecipeData(List.of(), 600, 0, 0, 20, 4));
+    }
+
+    private static FactorySnapshot legacyThreads(List<FactoryRuntime.ThreadSnapshot> threads) {
+        return new FactorySnapshot(true, false, List.of(), 2, 0, 1, false, threads, "Factory", 0,
+                null, List.of(), 0, 1);
+    }
+
+    private static ControllerUiSnapshotData uiSnapshot(Role role, List<LaneData> lanes) {
+        var opening = FactoryControllerMenu.clientOpen(1, new Inventory(null, null)).uiOpenData();
+        return new ControllerUiSnapshotData(opening.sessionId(), 1, true, opening.dimension(), opening.pos(),
+                new HeaderData(MMCR.id("owned_factory"), ControllerUiSnapshot.Kind.FACTORY, role,
+                        Component.literal("Owned factory"), true, true, false, 5, MMCR.id("host"), 0, 1,
+                        List.of(), 2, 8, 10, lanes.size(), List.of(MMCR.id("server_pool")), MMCR.id("server_pool"),
+                        null, false, Map.of(), List.of(new TextLineData(MMCR.id("global_text"),
+                        ControllerUiSnapshot.TextLine.Scope.CONTROLLER, Component.literal("global")))), lanes);
+    }
+
+    private static FactoryControllerScreen snapshotScreen(Supplier<ControllerUiSnapshot> snapshot) throws Exception {
+        var unsafe = unsafe();
+        FactoryControllerScreen screen = (FactoryControllerScreen) unsafe.allocateInstance(FactoryControllerScreen.class);
+        unsafe.putObject(screen, unsafe.objectFieldOffset(FactoryControllerScreen.class.getDeclaredField("snapshot")), snapshot);
+        unsafe.putObject(screen, unsafe.objectFieldOffset(Screen.class.getDeclaredField("font")),
+                ControllerScreenTextComposerTest.testFont());
+        return screen;
     }
 
     private static MachineLevel detailLevel(int index) {

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
@@ -255,7 +256,8 @@ public record PktMachineStatePayload(BlockPos pos, String recipeName, boolean fo
             if (player == null) return;
             var blockEntity = player.level().getBlockEntity(pos);
             boolean menuMatches = player.containerMenu instanceof MachineControllerMenu menu
-                    && menu.controllerPos().equals(pos);
+                    && menu.controllerPos().equals(pos)
+                    && !ControllerUiClientEvents.hasActiveSession(player.containerMenu);
             if (blockEntity instanceof MachineControllerBlockEntity controller) {
                 controller.applyClientState(recipeName, formed, active, foundLevelIds,
                         machineId.isEmpty() ? null : Identifier.parse(machineId), controllerRole, installedModuleCount,

@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.gui;
 
 import java.lang.reflect.Field;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests scrollable text screen behavior.
@@ -97,12 +99,41 @@ class ScrollableTextScreenTest {
         assertThat(screen.firstLine()).isZero();
     }
 
+    @Test
+    void render_frame_reuses_layout_for_counts_visible_rows_and_tooltip_then_refreshes_next_frame() throws Exception {
+        TestScreen screen = TestScreen.create();
+        screen.setLines(List.of(line("one"), line("two"), line("three")));
+        screen.extractRenderState(null, 0, 0, 0);
+        assertThat(screen.lineReads).isEqualTo(1);
+        assertThat(screen.frameLineCount).isEqualTo(3);
+        screen.setLines(List.of(line("next")));
+        screen.extractRenderState(null, 0, 0, 0);
+        assertThat(screen.lineReads).isEqualTo(2);
+        assertThat(screen.frameLineCount).isEqualTo(1);
+        screen.firstLine();
+        assertThat(screen.lineReads).isGreaterThan(2);
+    }
+
+    @Test
+    void failed_render_clears_frame_layout_before_outside_input_queries() throws Exception {
+        TestScreen screen = TestScreen.create();
+        screen.setLines(List.of(line("before"), line("second")));
+        screen.failRender = true;
+        assertThatThrownBy(() -> screen.extractRenderState(null, 0, 0, 0)).isInstanceOf(IllegalStateException.class);
+        screen.setLines(List.of(line("after")));
+        assertThat(screen.scrollableTextLineCount()).isEqualTo(1);
+        assertThat(screen.lineReads).isEqualTo(2);
+    }
+
     private static ControllerTextLine line(String text) {
         return new ControllerTextLine(Component.literal(text), 0xFFFFFFFF);
     }
 
     private static final class TestScreen extends AbstractScrollableTextScreen<AbstractContainerMenu> {
         private List<ControllerTextLine> lines;
+        private int lineReads;
+        private int frameLineCount;
+        private boolean failRender;
 
         private TestScreen() {
             super(null, null, Component.empty(), 176, 213);
@@ -137,8 +168,24 @@ class ScrollableTextScreenTest {
 
         @Override
         protected List<ControllerTextLine> scrollableTextLines() {
+            lineReads++;
             return lines;
         }
+
+        @Override
+        public void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+            frameLineCount = scrollableTextLineCount();
+            firstVisibleTextLine();
+            lastVisibleTextLineExclusive();
+            visibleTextRow(0);
+            wrappedTextLines();
+            renderScrollableTooltip(graphics, mouseX, mouseY, 0);
+            if (failRender) throw new IllegalStateException("render");
+        }
+
+        @Override public void extractCarriedItem(GuiGraphicsExtractor graphics, int x, int y) {}
+        @Override public void extractSnapbackItem(GuiGraphicsExtractor graphics) {}
+        @Override protected void extractTooltip(GuiGraphicsExtractor graphics, int x, int y) { wrappedTextLines(); }
 
         private static sun.misc.Unsafe unsafe() throws Exception {
             Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");

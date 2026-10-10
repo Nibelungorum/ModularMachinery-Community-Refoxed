@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
+import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -18,6 +20,7 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Screen for a machine controller menu.
@@ -33,15 +36,21 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
     private static final int FORMED_STATUS_COLOR = 0xFF55FF55;
     private static final int IDLE_STATUS_COLOR = 0xFFFFAA00;
-    private static final int PROGRESS_STATUS_COLOR = -1;
     private static final float DETAIL_SCALE = 0.85F;
     private static final int DETAIL_LINE_SPACING = 10;
     static final int RECIPE_POOL_BUTTON_X = 154;
     static final int RECIPE_POOL_BUTTON_Y = 9;
     private StyledButton recipePoolButton;
+    private final Supplier<ControllerUiSnapshot> snapshot;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
+        this(menu, inventory, title, ControllerUiClientEvents.sessionFor(menu, title)::snapshot);
+    }
+
+    MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title,
+                            Supplier<ControllerUiSnapshot> snapshot) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
+        this.snapshot = snapshot;
         titleLabelX += 3;
         titleLabelY += 5;
         inventoryLabelY = -1000;
@@ -52,9 +61,11 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         super.init();
         recipePoolButton = addRenderableWidget(new StyledButton(
                 leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
-                Component.literal("M"), button -> minecraft.setScreen(
-                        new RecipePoolScreen(this, menu.controllerPos(), menu.recipePoolIds(),
-                                menu.currentRecipePoolId()))));
+                Component.literal("M"), button -> {
+                    ControllerUiSnapshot value = snapshot.get();
+                    minecraft.setScreen(new RecipePoolScreen(this, value.controllerPos(), value.recipePoolIds(),
+                            value.currentRecipePoolId().orElse(null)));
+                }));
         recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
         updateRecipePoolButton();
     }
@@ -66,7 +77,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     private void updateRecipePoolButton() {
-        List<Identifier> recipePoolIds = menu.recipePoolIds();
+        List<Identifier> recipePoolIds = snapshot.get().recipePoolIds();
         if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
     }
 
@@ -79,7 +90,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
 
     @Override
     protected List<ControllerTextLine> scrollableTextLines() {
-        return controllerTextLines(menu);
+        return ControllerUiTextLines.create(snapshot.get(), "base");
     }
 
     @Override
@@ -93,16 +104,10 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         graphics.pose().pushMatrix();
         graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE);
-        graphics.text(font, title, (int) (titleLabelX / DETAIL_SCALE), (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
+        graphics.text(font, snapshot.get().machineName(), (int) (titleLabelX / DETAIL_SCALE),
+                (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
         renderScrollableText(graphics, (int) (titleLabelX / DETAIL_SCALE), mouseX, mouseY);
         graphics.pose().popMatrix();
-    }
-
-    @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        extractBackground(graphics, mouseX, mouseY, partialTicks);
-        super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-        extractTooltip(graphics, mouseX, mouseY);
     }
 
     private void renderScrollableText(GuiGraphicsExtractor graphics, int x, int mouseX, int mouseY) {
@@ -122,64 +127,32 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return (int) (localY / DETAIL_SCALE);
     }
 
-    static List<ControllerTextLine> controllerTextLines(MachineControllerMenu menu) {
-        List<ControllerTextLine> lines = new ArrayList<>(ControllerScreenTextComposer.merge(detailLines(menu),
-                ControllerScreenTextCache.linesAt(menu.controllerPos())));
-        lines.addAll(ControllerRecipeTextLines.create(menu.recipePresentation()));
-        return List.copyOf(lines);
+    static List<ControllerTextLine> controllerTextLines(ControllerUiSnapshot snapshot) {
+        return ControllerUiTextLines.create(snapshot, "base");
+    }
+
+    static List<ControllerTextLine> detailLines(ControllerUiSnapshot snapshot) {
+        return ControllerUiTextLines.details(snapshot, "base");
     }
 
     static List<ControllerTextLine> detailLines(MachineControllerMenu menu) {
-        boolean tickMachine = menu.isTickMachine();
-        List<ControllerTextLine> lines = new ArrayList<>();
-        lines.add(statusLine(menu.isFormed(), menu.hasActiveRecipe()));
-        Identifier recipePoolId = displayedRecipePoolId(menu.currentRecipePoolId(), menu.recipePoolIds());
-        if (menu.isFormed() && recipePoolId != null) {
-            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
-                    RecipePoolDisplayName.component(recipePoolId)), STATUS_LABEL_COLOR));
-        }
-        if (menu.isFormed() && menu.matchedStage() > 0 && menu.stageCount() > 1) {
-            lines.add(new ControllerTextLine(matchedStageLine(menu.matchedStage()), STATUS_LABEL_COLOR));
-        }
-        for (String levelId : menu.foundLevelIds()) {
-            MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
-            if (level == null) continue;
-            lines.add(new ControllerTextLine(levelLine(level), STATUS_LABEL_COLOR));
-        }
-        if (!tickMachine) {
-            String failure = menu.lastFailureMessage();
-            if (failure != null) {
-                lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.last_failure",
-                        Component.translatable(failure)), STATUS_LABEL_COLOR));
-            }
-        }
-        lines.addAll(moduleStatusLines(menu.isHostController(), menu.isModuleController(),
-                menu.installedModuleCount(), menu.connectedHostId()));
-        if (!tickMachine && menu.isFormed()) {
-            int parallelSlots = menu.parallelControllerCount();
-            if (parallelSlots > 0) {
-                lines.add(new ControllerTextLine(parallelSlotLine(parallelSlots), STATUS_LABEL_COLOR));
-            }
-            lines.add(new ControllerTextLine(parallelLine(menu.currentParallelism(), menu.maxParallelism()),
-                    STATUS_LABEL_COLOR));
-        }
-        int totalTick = menu.activeRecipeTotalTick();
-        if (!tickMachine && menu.hasActiveRecipe() && totalTick > 0) {
-            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.progress",
-                    progressPercent(menu.activeRecipeTick(), totalTick) + "%"), PROGRESS_STATUS_COLOR));
-        }
-        if (menu.isRedstonePaused()) {
-            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.redstone_stopped"),
-                    STATUS_LABEL_COLOR));
-        }
-        return lines;
+        return detailLines(menu.legacyUiSnapshot());
+    }
+
+    static List<ControllerTextLine> controllerTextLines(MachineControllerMenu menu) {
+        var snapshot = menu.legacyUiSnapshot();
+        var lines = new ArrayList<>(ControllerScreenTextComposer.merge(detailLines(snapshot),
+                ControllerScreenTextCache.linesAt(snapshot.controllerPos())));
+        ControllerUiTextLines.selectedLane(snapshot, "base").ifPresent(lane ->
+                lines.addAll(ControllerRecipeTextLines.createSnapshot(lane.recipe())));
+        return List.copyOf(lines);
     }
 
     static Identifier displayedRecipePoolId(Identifier current, List<Identifier> supported) {
         return current != null ? current : supported.isEmpty() ? null : supported.getFirst();
     }
 
-    private static ControllerTextLine statusLine(boolean formed, boolean active) {
+    static ControllerTextLine statusLine(boolean formed, boolean active) {
         return new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")
                 .append(Component.literal(" "))
                 .append(Component.translatable(controllerStatusKey(formed, active))),

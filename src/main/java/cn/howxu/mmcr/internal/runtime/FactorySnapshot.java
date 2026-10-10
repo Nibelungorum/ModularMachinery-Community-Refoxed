@@ -28,7 +28,19 @@ public record FactorySnapshot(
         String machineId,
         String recipePoolId,
         int controllerRole,
-        String connectedHostId) {
+        String connectedHostId,
+        int installedModuleCount) {
+
+    public FactorySnapshot(boolean formed, boolean active, List<CraftingStateSnapshot> lanes, int laneLimit,
+                           int activeLaneCount, long maxParallelism, boolean paused,
+                           List<FactoryRuntime.ThreadSnapshot> presentationLanes, String machineName,
+                           int parallelSlots, @Nullable ExecutionStatus failure, List<String> foundLevelIds,
+                           int matchedStage, int stageCount, String machineId, String recipePoolId,
+                           int controllerRole, String connectedHostId) {
+        this(formed, active, lanes, laneLimit, activeLaneCount, maxParallelism, paused, presentationLanes,
+                machineName, parallelSlots, failure, foundLevelIds, matchedStage, stageCount, machineId,
+                recipePoolId, controllerRole, connectedHostId, 0);
+    }
 
     public FactorySnapshot(boolean formed, boolean active, List<CraftingStateSnapshot> lanes, int laneLimit,
                            int activeLaneCount, long maxParallelism, boolean paused,
@@ -64,6 +76,7 @@ public record FactorySnapshot(
         if (matchedStage < 0) throw new IllegalArgumentException("matchedStage must not be negative");
         if (stageCount < 1) throw new IllegalArgumentException("stageCount must be positive");
         if (controllerRole < 0 || controllerRole > 2) throw new IllegalArgumentException("Invalid controller role");
+        if (installedModuleCount < 0) throw new IllegalArgumentException("installedModuleCount must not be negative");
     }
 
     public static FactorySnapshot empty() {

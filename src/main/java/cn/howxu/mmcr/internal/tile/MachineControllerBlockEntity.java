@@ -34,6 +34,7 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
+import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
@@ -459,6 +460,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public MachineBehaviorContext behaviorContext() {
         return runtime.behaviorContext();
+    }
+
+    /** A physical, unformed controller can expose UI protocols before structure binding.
+     * Its context has actual server/text identity and no linked storage or IO until configured.
+     */
+    public MachineBehaviorContext controllerUiBehaviorContext(ControllerRuntimeSnapshot state) {
+        if (state.structure().machine() != null || state.structure().configuredMachine() != null) {
+            return runtime.behaviorContext();
+        }
+        return new MachineBehaviorContext(this, (ServerLevel) level, getBlockPos(),
+                ((MachineControllerBlock) getBlockState().getBlock()).machineId(), level.getGameTime(), runtime.screenText());
     }
 
     public DataStorage dataStorageForNetwork() {
@@ -1375,7 +1387,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void sendFactoryControllerState(@Nullable ServerPlayer player) {
-        if (player != null) {
+        if (player != null && !hasActiveUiMenu(player)) {
             ControllerRuntimeSnapshot state = runtimeSnapshot();
             player.connection.send(new ClientboundCustomPayloadPacket(
                     new PktFactoryControllerStatePayload(getBlockPos(),
@@ -1386,7 +1398,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void sendControllerScreenText(ServerPlayer player) {
-        if (player == null) return;
+        if (player == null || hasActiveUiMenu(player)) return;
         ControllerScreenTextSnapshot snapshot = runtime.screenText().snapshot();
         player.connection.send(new ClientboundCustomPayloadPacket(new PktControllerScreenTextPayload(
                 getBlockPos(), snapshot.revision(), snapshot.lines())));
@@ -1398,6 +1410,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void sendFactoryControllerScreenText(ServerPlayer player) {
+        if (hasActiveUiMenu(player)) return;
         Map<String, ControllerScreenTextSnapshot> laneSnapshots = runtime.factoryRuntime().screenTextSnapshots();
         for (Map.Entry<String, ControllerScreenTextSnapshot> entry : laneSnapshots.entrySet()) {
             ControllerScreenTextSnapshot laneSnapshot = entry.getValue();
@@ -3673,6 +3686,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!SYNC_RUNTIME.factoryControllerPresent(runtimeState)) return;
         FactorySnapshot next = SYNC_RUNTIME.factoryState(runtimeState, currentRecipePoolId());
         for (ServerPlayer player : serverLevel.players()) {
+            if (hasActiveUiMenu(player)) continue;
             if (player.containerMenu instanceof FactoryControllerMenu menu
                     && menu.controllerPos().equals(getBlockPos())) {
                 menu.applySnapshot(next);
@@ -3687,6 +3701,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!(level instanceof ServerLevel serverLevel)) return;
         List<ServerPlayer> viewers = new ArrayList<>();
         for (ServerPlayer player : serverLevel.players()) {
+            if (hasActiveUiMenu(player)) continue;
             boolean ordinaryMenu = player.containerMenu instanceof MachineControllerMenu menu
                     && menu.controllerPos().equals(getBlockPos());
             boolean factoryMenu = player.containerMenu instanceof FactoryControllerMenu factory
@@ -3742,6 +3757,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
             else lastSentRecipeScreenTextRevisions.put(laneId, removedRecipeScreenTextRevisions.get(laneId));
         }
         sentLanes.forEach(removedRecipeScreenTextRevisions::remove);
+    }
+
+    private boolean hasActiveUiMenu(ServerPlayer player) {
+        return player.containerMenu instanceof ControllerUiMenu menu && menu.uiServerSession() != null
+                && menu.uiServerSession().owner() == this && menu.uiServerSession().active();
     }
 
     private void broadcastStateIfChanged() {

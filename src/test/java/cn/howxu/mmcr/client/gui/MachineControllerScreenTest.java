@@ -16,6 +16,12 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.HeaderData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.LaneData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.RecipeData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.TextLineData;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
@@ -32,6 +38,10 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+import net.minecraft.world.level.Level;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -177,6 +187,41 @@ class MachineControllerScreenTest {
     void pageScrollMovesByTheVisibleLineCount() {
         assertThat(AbstractScrollableTextScreen.scrollOffsetAfter(10, 30, 10, 1D, true)).isZero();
         assertThat(AbstractScrollableTextScreen.scrollOffsetAfter(0, 30, 10, -1D, true)).isEqualTo(10);
+    }
+
+    @Test
+    void default_screen_uses_session_kind_server_pool_and_snapshot_text_without_a_menu_or_live_owner() throws Exception {
+        var current = new AtomicReference<ControllerUiSnapshot>(uiSnapshot(ControllerUiSnapshot.Kind.NORMAL));
+        var unsafe = unsafe();
+        MachineControllerScreen screen = (MachineControllerScreen) unsafe.allocateInstance(MachineControllerScreen.class);
+        Supplier<ControllerUiSnapshot> supplier = current::get;
+        unsafe.putObject(screen, unsafe.objectFieldOffset(MachineControllerScreen.class.getDeclaredField("snapshot")), supplier);
+        ControllerScreenTextCache.replace(CONTROLLER_POS, 99, List.of(line("test:stale", "stale legacy")));
+        List<ControllerTextLine> normal = screen.scrollableTextLines();
+        assertThat(normal).extracting(ControllerTextLine::text).contains(
+                Component.translatable("gui.mmcr.controller.recipe_pool", Component.literal("mmcr:server_only_pool")),
+                MachineControllerScreen.parallelLine(6, 8), Component.translatable("gui.mmcr.controller.progress", "20%"),
+                Component.literal("global"), Component.literal("operation"));
+        assertThat(normal).extracting(ControllerTextLine::text).doesNotContain(Component.literal("stale legacy"));
+        assertThat(normal.getLast().tooltip()).containsExactly(
+                Component.translatable("gui.mmcr.controller.recipe.energy_input_exact", "600"));
+        current.set(uiSnapshot(ControllerUiSnapshot.Kind.TICK));
+        assertThat(screen.scrollableTextLines()).extracting(ControllerTextLine::text).containsExactly(
+                MachineControllerScreen.statusLine(true, true).text(),
+                Component.translatable("gui.mmcr.controller.recipe_pool", Component.literal("mmcr:server_only_pool")),
+                Component.literal("global"));
+    }
+
+    private static ControllerUiSnapshotData uiSnapshot(ControllerUiSnapshot.Kind kind) {
+        return new ControllerUiSnapshotData(UUID.randomUUID(), 1, true, Level.OVERWORLD, CONTROLLER_POS,
+                new HeaderData(MMCR.id("unknown_local_machine"), kind, ControllerUiSnapshot.Role.NORMAL,
+                        Component.literal("Owned name"), true, true, false, 0, null, 0, 1, List.of(), 2, 8, 0, 0,
+                        List.of(MMCR.id("server_only_pool")), MMCR.id("server_only_pool"), FAILURE, false, Map.of(),
+                        List.of(new TextLineData(MMCR.id("global"), ControllerUiSnapshot.TextLine.Scope.CONTROLLER,
+                                Component.literal("global")))), kind == ControllerUiSnapshot.Kind.TICK ? List.of()
+                : List.of(new LaneData("base", 0, true, false, true, MMCR.id("recipe"), 4, 20, 6, FAILURE,
+                List.of(new TextLineData(MMCR.id("operation"), ControllerUiSnapshot.TextLine.Scope.OPERATION,
+                        Component.literal("operation"))), new RecipeData(List.of(), 600, 0, 0, 20, 6))));
     }
 
     private static ControllerScreenTextSnapshot.Line line(String id, String text) {

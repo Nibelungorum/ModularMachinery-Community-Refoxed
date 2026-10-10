@@ -5,8 +5,8 @@ import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
-import net.minecraft.world.inventory.Slot;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.ToIntFunction;
 
 /** Shared synchronized controller fields and player inventory placement. */
@@ -56,14 +56,16 @@ final class ControllerMenuState {
     }
 
     static void addControllerPlayerSlots(AbstractMachineMenu menu, Inventory inventory, int x, int yOffset) {
+        BooleanSupplier visible = inventory.player != null && !inventory.player.level().isClientSide()
+                ? () -> true : ((ControllerUiMenu) menu)::playerInventoryVisible;
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                menu.addControllerSlot(new Slot(inventory, col + row * 9 + 9,
-                        x + col * 18, PLAYER_INVENTORY_Y + yOffset + row * 18));
+                menu.addControllerSlot(new ControllerPlayerSlot(inventory, col + row * 9 + 9,
+                        x + col * 18, PLAYER_INVENTORY_Y + yOffset + row * 18, visible));
             }
         }
         for (int col = 0; col < 9; col++) {
-            menu.addControllerSlot(new Slot(inventory, col, x + col * 18, HOTBAR_Y + yOffset));
+            menu.addControllerSlot(new ControllerPlayerSlot(inventory, col, x + col * 18, HOTBAR_Y + yOffset, visible));
         }
     }
 

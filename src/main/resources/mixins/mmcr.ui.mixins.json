@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.client.ui",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ContainerScreenInputMixin",
+    "LocalPlayerMenuLifecycleMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

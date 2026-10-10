@@ -1,13 +1,12 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.MachineLevel;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot.Lane;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
+import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
-import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
@@ -19,22 +18,16 @@ import net.minecraft.world.entity.player.Inventory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.text.NumberFormat;
+import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
- * MMCE-style two-column factory controller display backed only by synchronized menu data.
+ * MMCE-style two-column factory controller display backed by the owned session snapshot.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class FactoryControllerScreen extends AbstractScrollableTextScreen<FactoryControllerMenu> {
-    private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
-    private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
     private static final int CONTROLLER_TITLE_COLOR = ControllerTextLine.DEFAULT_COLOR;
-    private static final int STATUS_LABEL_COLOR = CONTROLLER_TITLE_COLOR;
-    private static final int FORMED_STATUS_COLOR = 0xFF55FF55;
-    private static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
-    private static final int IDLE_STATUS_COLOR = 0xFFFFAA00;
-    private static final int PROGRESS_STATUS_COLOR = -1;
     static final int IMAGE_WIDTH = 280;
     static final int IMAGE_HEIGHT = 216;
     static final int THREAD_ROW_X = 8;
@@ -71,9 +64,17 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private boolean draggingScrollbar;
     private int scrollbarDragOffsetY;
     private StyledButton recipePoolButton;
+    private final Supplier<ControllerUiSnapshot> snapshot;
+    private String selectedLaneId;
 
     public FactoryControllerScreen(FactoryControllerMenu menu, Inventory inventory, Component title) {
+        this(menu, inventory, title, ControllerUiClientEvents.sessionFor(menu, title)::snapshot);
+    }
+
+    FactoryControllerScreen(FactoryControllerMenu menu, Inventory inventory, Component title,
+                            Supplier<ControllerUiSnapshot> snapshot) {
         super(menu, inventory, title, IMAGE_WIDTH, IMAGE_HEIGHT);
+        this.snapshot = snapshot;
         titleLabelY = -1000;
         inventoryLabelY = -1000;
     }
@@ -83,9 +84,11 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         super.init();
         recipePoolButton = addRenderableWidget(new StyledButton(
                 leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
-                Component.literal("M"), button -> minecraft.setScreen(
-                        new RecipePoolScreen(this, menu.controllerPos(), menu.recipePoolIds(),
-                                menu.currentRecipePoolId()))));
+                Component.literal("M"), button -> {
+                    ControllerUiSnapshot value = snapshot.get();
+                    minecraft.setScreen(new RecipePoolScreen(this, value.controllerPos(), value.recipePoolIds(),
+                            value.currentRecipePoolId().orElse(null)));
+                }));
         recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
         updateRecipePoolButton();
     }
@@ -97,7 +100,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     private void updateRecipePoolButton() {
-        List<Identifier> recipePoolIds = menu.recipePoolIds();
+        List<Identifier> recipePoolIds = snapshot.get().recipePoolIds();
         if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
     }
 
@@ -110,8 +113,23 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
 
     @Override
     protected List<ControllerTextLine> scrollableTextLines() {
-        return controllerTextLines(menu);
+        ControllerUiSnapshot value = snapshot.get();
+        reconcileSelectedLane(value);
+        return ControllerUiTextLines.create(value, selectedLaneId);
     }
+
+    void reconcileSelectedLane(ControllerUiSnapshot value) {
+        String next = ControllerUiTextLines.selectedLane(value, selectedLaneId).map(Lane::id).orElse(null);
+        selectLane(next);
+    }
+
+    void selectLane(String laneId) {
+        if (Objects.equals(selectedLaneId, laneId)) return;
+        selectedLaneId = laneId;
+        resetTextScrollOffset();
+    }
+
+    String selectedLaneId() { return selectedLaneId; }
 
     public static int defaultSelectedThread() { return 0; }
 
@@ -120,7 +138,8 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         int localY = mouseY - top;
         int rowStride = THREAD_ROW_HEIGHT + THREAD_ROW_GAP;
         int row = localY / rowStride;
-        if (mouseY < top || row < 0 || localY % rowStride >= THREAD_ROW_HEIGHT) return -1;
+        if (mouseY < top || row < 0 || row >= VISIBLE_THREADS
+                || localY % rowStride >= THREAD_ROW_HEIGHT) return -1;
         return scroll + row;
     }
 
@@ -140,114 +159,24 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         return (int) Math.min(100L, (long) tick * 100L / totalTick);
     }
 
-    static long selectedParallelism(FactoryControllerMenu menu) {
-        return menu.currentParallelism();
-    }
-
-    private static Component levelLine(MachineLevel level) {
-        var type = MachineLevelRegistry.getType(level.typeId());
-        if (type == null || !(level.statePredicate() instanceof BlockPredicate.OfBlockState(
-                net.minecraft.world.level.block.state.BlockState state
-        ))) return Component.empty();
-        return Component.translatable("gui.mmcr.controller.level", type.displayName(), state.getBlock().getName());
-    }
-
-    private static String controllerStatusKey(boolean formed, boolean active) {
-        if (!formed) return "gui.mmcr.controller.unformed";
-        return active ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle";
-    }
-
-    private static int controllerStatusColor(boolean formed, boolean active) {
-        if (!formed) return UNFORMED_STATUS_COLOR;
-        return active ? FORMED_STATUS_COLOR : IDLE_STATUS_COLOR;
-    }
-
-    private static Component parallelSlotLine(int parallelSlots) {
-        return Component.translatable("gui.mmcr.controller.parallel_slots", Component.literal(NUMBER_FORMAT.format(parallelSlots)));
-    }
-
     static Component matchedStageLine(int matchedStage) {
-        return Component.translatable("gui.mmcr.controller.matched_stage",
-                Component.literal(NUMBER_FORMAT.format(matchedStage)));
-    }
-
-    private static Component parallelLine(long parallelism, long maxParallelism) {
-        return Component.translatable("gui.mmcr.controller.parallel", Component.literal(NUMBER_FORMAT.format(parallelism)),
-                Component.literal(NUMBER_FORMAT.format(maxParallelism)));
-    }
-
-    private static Component factoryThreadLine(int activeThreadCount, int threadCount) {
-        return Component.translatable("gui.mmcr.controller.threads", Component.literal(NUMBER_FORMAT.format(activeThreadCount)),
-                Component.literal(NUMBER_FORMAT.format(threadCount)));
-    }
-
-    static List<Component> levelLines(List<String> levelIds) {
-        List<Component> lines = new ArrayList<>();
-        for (String levelId : levelIds) {
-            MachineLevel level = MachineLevelRegistry.getLevel(Identifier.parse(levelId));
-            if (level != null) lines.add(levelLine(level));
-        }
-        return List.copyOf(lines);
+        return MachineControllerScreen.matchedStageLine(matchedStage);
     }
 
     static String selectedFailureUnloc(FactoryControllerMenu menu) {
-        FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
-        String threadFailure = SYNC_RUNTIME.failureMessage(menu.selectedFailure());
-        if (!threadFailure.isEmpty()) return threadFailure;
-        return selected.active() ? "" : menu.lastFailureUnloc();
+        return ControllerUiTextLines.selectedFailureKey(menu.legacyUiSnapshot(), menu.selectedThread().laneId());
     }
 
     static List<ControllerTextLine> controllerTextLines(FactoryControllerMenu menu) {
         List<ControllerTextLine> lines = new ArrayList<>(ControllerScreenTextComposer.merge(detailLines(menu),
                 ControllerScreenTextCache.linesAt(menu.controllerPos(), menu.selectedThread().laneId())));
-        FactoryRuntime.ThreadSnapshot thread = menu.selectedThread();
-        lines.addAll(ControllerRecipeTextLines.create(thread.presentation()));
+        ControllerUiTextLines.selectedLane(menu.legacyUiSnapshot(), menu.selectedThread().laneId()).ifPresent(lane ->
+                lines.addAll(ControllerRecipeTextLines.createSnapshot(lane.recipe())));
         return List.copyOf(lines);
     }
 
     static List<ControllerTextLine> detailLines(FactoryControllerMenu menu) {
-        List<ControllerTextLine> lines = new ArrayList<>();
-        FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
-        lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.status_label")
-                        .append(Component.literal(" "))
-                        .append(Component.translatable(controllerStatusKey(menu.isFormed(), selected.active()))),
-                controllerStatusColor(menu.isFormed(), selected.active())));
-        Identifier recipePoolId = MachineControllerScreen.displayedRecipePoolId(
-                menu.currentRecipePoolId(), menu.recipePoolIds());
-        if (menu.isFormed() && recipePoolId != null) {
-            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_pool",
-                    RecipePoolDisplayName.component(recipePoolId)), STATUS_LABEL_COLOR));
-        }
-        if (menu.isFormed() && menu.matchedStage() > 0 && menu.stageCount() > 1) {
-            lines.add(new ControllerTextLine(matchedStageLine(menu.matchedStage()), STATUS_LABEL_COLOR));
-        }
-        for (Component levelLine : levelLines(menu.foundLevelIds())) {
-            lines.add(new ControllerTextLine(levelLine, STATUS_LABEL_COLOR));
-        }
-        String failure = selectedFailureUnloc(menu);
-        if (!failure.isEmpty()) {
-            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.last_failure",
-                    Component.translatable(failure)), STATUS_LABEL_COLOR));
-        }
-        lines.addAll(MachineControllerScreen.moduleStatusLines(false, menu.isModuleController(),
-                0, menu.connectedHostId()));
-        if (menu.parallelSlots() > 0) {
-            lines.add(new ControllerTextLine(parallelSlotLine(menu.parallelSlots()), STATUS_LABEL_COLOR));
-        }
-        lines.add(new ControllerTextLine(parallelLine(selectedParallelism(menu), menu.maxParallelism()),
-                STATUS_LABEL_COLOR));
-        if (menu.isRedstonePaused()) {
-            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.redstone_stopped"),
-                    STATUS_LABEL_COLOR));
-        }
-        lines.add(new ControllerTextLine(factoryThreadLine(menu.activeThreadCount(), menu.threadCount()),
-                STATUS_LABEL_COLOR));
-        if (selected.totalTick() > 0) {
-            int percent = progressPercent(selected.tick(), selected.totalTick());
-            lines.add(new ControllerTextLine(Component.translatable("gui.mmcr.controller.progress", percent + "%"),
-                    PROGRESS_STATUS_COLOR));
-        }
-        return lines;
+        return ControllerUiTextLines.details(menu.legacyUiSnapshot(), menu.selectedThread().laneId());
     }
 
     static int elementTextureWidth() { return ELEMENT_TEXTURE_WIDTH; }
@@ -294,35 +223,37 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
-        scrollOffset = clampScrollOffset(scrollOffset, menu.threads().size());
-        int visibleThreadCount = visibleThreadCount(menu.threads().size());
+    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        ControllerUiSnapshot value = snapshot.get();
+        reconcileSelectedLane(value);
+        List<Lane> threads = value.lanes();
+        scrollOffset = clampScrollOffset(scrollOffset, threads.size());
+        int visibleThreadCount = visibleThreadCount(threads.size());
         boolean showOutputIcon = ClientConfig.showFactoryThreadOutputIcon();
         boolean showRecipeProgress = ClientConfig.showFactoryThreadRecipeProgress();
         for (int row = 0; row < visibleThreadCount; row++) {
             int index = scrollOffset + row;
-            if (index >= menu.threads().size()) break;
-            FactoryRuntime.ThreadSnapshot thread = menu.threads().get(index);
-            int y = topPos + THREAD_ROW_Y + row * (THREAD_ROW_HEIGHT + THREAD_ROW_GAP);
-            int elementX = leftPos + THREAD_ROW_X;
+            if (index >= threads.size()) break;
+            Lane thread = threads.get(index);
+            int y = THREAD_ROW_Y + row * (THREAD_ROW_HEIGHT + THREAD_ROW_GAP);
+            int elementX = THREAD_ROW_X;
             int progressOverlayX = progressOverlayX(elementX);
             int progressOverlayY = progressOverlayY(y);
-            Identifier elements = thread.index() == menu.selectedThread().index() ? SELECTED_ELEMENTS : ELEMENTS;
-            graphics.blit(RenderPipelines.GUI_TEXTURED, elements, leftPos + THREAD_ROW_X, threadElementY(y), 0, 0,
+            Identifier elements = thread.id().equals(selectedLaneId) ? SELECTED_ELEMENTS : ELEMENTS;
+            graphics.blit(RenderPipelines.GUI_TEXTURED, elements, THREAD_ROW_X, threadElementY(y), 0, 0,
                     THREAD_ROW_WIDTH, THREAD_ROW_HEIGHT, ELEMENT_TEXTURE_WIDTH, ELEMENT_TEXTURE_HEIGHT);
             int progress = progressWidth(thread.tick(), thread.totalTick());
             if (progress > 0) graphics.fill(progressOverlayX, progressOverlayY,
                     progressOverlayRight(elementX, progress), progressOverlayBottom(y), PROGRESS_THREAD_OVERLAY);
             renderThreadText(graphics, Component.translatable("gui.mmcr.factory.thread", thread.index()),
-                    leftPos + THREAD_ROW_X + 3, y + 3);
+                    THREAD_ROW_X + 3, y + 3);
             renderThreadText(graphics, Component.translatable(thread.active() ? "gui.mmcr.controller.running" : "gui.mmcr.controller.idle"),
-                    leftPos + THREAD_ROW_X + 3, y + 15);
+                    THREAD_ROW_X + 3, y + 15);
             if (thread.active() && (showOutputIcon || showRecipeProgress)) {
                 int iconX = elementX + THREAD_ROW_WIDTH - THREAD_OUTPUT_ICON_SIZE - THREAD_OUTPUT_ICON_PADDING;
                 int elementY = threadElementY(y);
                 if (showOutputIcon) {
-                    ControllerRecipeTextLines.firstRenderableOutputIcon(thread.presentation()).ifPresent(icon ->
+                    ControllerRecipeTextLines.firstSnapshotOutputIcon(thread.recipe()).ifPresent(icon ->
                             renderIcon(graphics, icon, iconX,
                                     elementY + THREAD_OUTPUT_ICON_PADDING, THREAD_OUTPUT_ICON_SIZE));
                 }
@@ -332,20 +263,20 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
                 }
             }
         }
-        if (shouldRenderScrollbar(menu.threads().size())) {
-            int scrollbarX = leftPos + SCROLLBAR_X;
-            int scrollbarY = topPos + scrollbarHandleY(scrollOffset, menu.threads().size());
+        if (shouldRenderScrollbar(threads.size())) {
+            int scrollbarX = SCROLLBAR_X;
+            int scrollbarY = scrollbarHandleY(scrollOffset, threads.size());
             graphics.blit(RenderPipelines.GUI_TEXTURED, SCROLLER, scrollbarX, scrollbarY, 0, 0,
                     SCROLLBAR_HANDLE_WIDTH, SCROLLBAR_HANDLE_HEIGHT, 32, 32);
         }
-        FactoryRuntime.ThreadSnapshot selected = menu.selectedThread();
-        int x = leftPos + DETAIL_X;
-        int y = topPos + 12;
+        Lane selected = ControllerUiTextLines.selectedLane(value, selectedLaneId).orElse(null);
+        int x = DETAIL_X;
+        int y = 12;
         graphics.pose().pushMatrix();
         graphics.pose().scale(DETAIL_TEXT_SCALE, DETAIL_TEXT_SCALE);
         x = (int) (x / DETAIL_TEXT_SCALE);
         y = (int) (y / DETAIL_TEXT_SCALE);
-        graphics.text(font, detailTitle(title, menu.machineName(), selected.index()), x, detailTitleY(y),
+        graphics.text(font, detailTitle(value.machineName(), selected == null ? 0 : selected.index()), x, detailTitleY(y),
                 CONTROLLER_TITLE_COLOR, false);
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
@@ -353,7 +284,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         int last = lastVisibleTextLineExclusive();
         for (int index = first; index < last; index++) {
             ControllerScreenTextComposer.VisualLine line = lines.get(index);
-            int textY = detailTextY(topPos, textLineY(visibleTextRow(index)));
+            int textY = detailTextY(textLineY(visibleTextRow(index)));
             renderVisualLine(graphics, line, x, textY);
         }
         renderScrollableTooltip(graphics, mouseX, mouseY, DETAIL_X);
@@ -363,6 +294,10 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static Component detailTitle(Component title, String machineName, int threadIndex) {
         Component name = machineName.isEmpty() ? title : Component.translatable(machineName);
         return Component.empty().append(name).append(" #" + threadIndex);
+    }
+
+    static Component detailTitle(Component machineName, int threadIndex) {
+        return Component.empty().append(machineName).append(" #" + threadIndex);
     }
 
     private void renderThreadText(GuiGraphicsExtractor graphics, Component text, int x, int y) {
@@ -385,18 +320,22 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        ControllerUiSnapshot value = snapshot.get();
+        reconcileSelectedLane(value);
+        List<Lane> threads = value.lanes();
+        scrollOffset = clampScrollOffset(scrollOffset, threads.size());
         if (event.button() == 0) {
             if (mouseOverScrollbar((int) event.x(), (int) event.y())) {
                 draggingScrollbar = true;
                 scrollbarDragOffsetY = Math.max(0, Math.min(SCROLLBAR_HANDLE_HEIGHT,
-                        (int) event.y() - topPos - scrollbarHandleY(scrollOffset, menu.threads().size())));
-                scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - topPos, menu.threads().size(), scrollbarDragOffsetY);
+                        (int) event.y() - topPos - scrollbarHandleY(scrollOffset, threads.size())));
+                scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - topPos, threads.size(), scrollbarDragOffsetY);
                 return true;
             }
             int threadIndex = threadIndexAt(leftPos + THREAD_ROW_X, topPos + THREAD_ROW_Y, scrollOffset,
-                    (int) event.x(), (int) event.y(), menu.threads());
-            if (threadIndex >= 0) {
-                menu.selectThread(threadIndex);
+                    (int) event.x(), (int) event.y());
+            if (threadIndex >= 0 && threadIndex < threads.size()) {
+                selectLane(threads.get(threadIndex).id());
                 return true;
             }
         }
@@ -415,7 +354,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
         if (draggingScrollbar) {
-            scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - topPos, menu.threads().size(), scrollbarDragOffsetY);
+            scrollOffset = scrollOffsetFromScrollbarY((int) event.y() - topPos, snapshot.get().lanes().size(), scrollbarDragOffsetY);
             return true;
         }
         return super.mouseDragged(event, deltaX, deltaY);
@@ -424,7 +363,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     @Override
     protected boolean handleAdditionalScroll(double mouseX, double mouseY, double deltaX, double deltaY) {
         if (!mouseOverThreadList((int) mouseX, (int) mouseY)) return false;
-        scrollOffset = clampScrollOffset(scrollOffset - (int) Math.signum(deltaY), menu.threads().size());
+        scrollOffset = clampScrollOffset(scrollOffset - (int) Math.signum(deltaY), snapshot.get().lanes().size());
         return true;
     }
 
@@ -433,7 +372,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     }
 
     private boolean mouseOverScrollbar(int mouseX, int mouseY) {
-        return isScrollbarInteractive(menu.threads().size())
+        return isScrollbarInteractive(snapshot.get().lanes().size())
                 && mouseX >= leftPos + SCROLLBAR_X
                 && mouseX < leftPos + SCROLLBAR_X + SCROLLBAR_HANDLE_WIDTH
                 && mouseY >= topPos + SCROLLBAR_Y

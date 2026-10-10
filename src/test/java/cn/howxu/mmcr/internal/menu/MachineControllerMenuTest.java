@@ -124,6 +124,22 @@ class MachineControllerMenuTest {
     }
 
     @Test
+    void metadata_client_menu_keeps_the_open_token_and_inventory_policy_local() {
+        var first = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        var second = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        var token = first.uiOpenData().sessionId();
+        var slots = List.copyOf(first.slots);
+        first.setPlayerInventoryVisible(false);
+        assertThat(first.uiOpenData().sessionId()).isEqualTo(token);
+        assertThat(first.uiServerSession()).isNull();
+        assertThat(first.slots).containsExactlyElementsOf(slots);
+        assertThat(first.slots).allMatch(slot -> !slot.isActive());
+        assertThat(second.playerInventoryVisible()).isTrue();
+        first.setPlayerInventoryVisible(true);
+        assertThat(first.slots).allMatch(slot -> slot.isActive());
+    }
+
+    @Test
     void module_menu_state_keeps_role_and_connected_host_identity_across_payload_updates() {
         MachineControllerMenu menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null),
                 menuBuffer(new BlockPos(7, 8, 9), MMCR.id("module"), MMCR.id("host"), 2, true, 1));
