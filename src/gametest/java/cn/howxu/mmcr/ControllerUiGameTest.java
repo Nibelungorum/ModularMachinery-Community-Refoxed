@@ -18,6 +18,7 @@ import cn.howxu.mmcr.internal.network.ui.PktControllerUiResponsePayload;
 import cn.howxu.mmcr.internal.network.ui.PktControllerUiCustomStatePayload;
 import cn.howxu.mmcr.internal.network.ui.PktControllerUiProgressPayload;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
@@ -605,12 +606,27 @@ public final class ControllerUiGameTest {
                         && session.laneExists(Optional.of(excessLane)),
                 "Still-active excess lane remains an authorized real request target after lowering capacity");
         var late = request(player, 5, SET_MODE.id(), 1, Optional.of(excessLane), new byte[]{2});
-        for (var active : factory.activeRuntimes()) {
-            active.tick();
-            active.finish();
-            helper.assertTrue(!active.active(), "Both real recipes finish before capacity trims their lanes");
+        int[] finishes = {0};
+        try {
+            var workMode = MachineControllerBlockEntity.class.getDeclaredField("activeWorkMode");
+            workMode.setAccessible(true);
+            var previousMode = workMode.get(fixture.owner);
+            try {
+                // Drive the real thread completion callbacks synchronously, without changing the global work mode.
+                workMode.set(fixture.owner, MachineWorkMode.SYNC);
+                int remainingWork = lowered.laneData().stream()
+                        .mapToInt(value -> value.totalTick() - value.tick()).max().orElseThrow() + 1;
+                for (int step = 1; factory.activeLaneCount() > 0 && step <= remainingWork; step++) {
+                    factory.tick(List.of(), 1, () -> finishes[0]++, helper.getLevel().getGameTime() + step);
+                }
+            } finally {
+                workMode.set(fixture.owner, previousMode);
+            }
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Could not configure the fixture's synchronous completion", exception);
         }
-        factory.tick(List.of(), 1, helper.getLevel().getGameTime() + 1);
+        helper.assertTrue(finishes[0] == recipes.size() && factory.activeLaneCount() == 0,
+                "The real factory scheduler completes both recipes and runs their finish callbacks");
         fixture.owner.onPatternStartCommitted();
         fullCount = packets(player, PktControllerUiSnapshotPayload.class).size();
         menu.broadcastChanges();
@@ -622,7 +638,13 @@ public final class ControllerUiGameTest {
                         && packets(player, PktControllerUiSnapshotPayload.class).size() == fullCount + 1
                         && packets(viewer, PktControllerUiSnapshotPayload.class).getLast().snapshotData().laneData()
                         .equals(completed.laneData()) && session.validate() && factoryMenu.uiServerSession().validate(),
-                "Completion trims the actual excess lane and sends the new lane shape to both valid menus");
+                "Completion trims the actual excess lane and sends the new lane shape to both valid menus"
+                        + " (runtime lanes=" + factory.laneCount() + ", active=" + factory.activeLaneCount()
+                        + ", ordinary lanes=" + completed.laneData().stream().map(value -> value.id()).toList()
+                        + ", ordinary full packets=" + packets(player, PktControllerUiSnapshotPayload.class).size()
+                        + ", previous full packets=" + fullCount + ", factory lanes="
+                        + packets(viewer, PktControllerUiSnapshotPayload.class).getLast().snapshotData().laneData()
+                        .stream().map(value -> value.id()).toList() + ")");
         handles = probe.handles;
         decodes = probe.decodes;
         long revision = fixture.revision();
