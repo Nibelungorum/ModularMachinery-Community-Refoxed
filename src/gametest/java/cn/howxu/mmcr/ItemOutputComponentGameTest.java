@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -23,15 +24,18 @@ import cn.howxu.mmcr.util.IOType;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
+import io.netty.buffer.Unpooled;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
@@ -59,6 +63,34 @@ public class ItemOutputComponentGameTest {
                 prepared.requirements().getFirst().requests().getFirst();
         ItemResource resource = NativeAsyncResourceValues.item(request.actions().getFirst().resource());
         assertComponents(helper, resource.toStack(1));
+        helper.succeed();
+    }
+
+    public void recipeSerializerPreservesEnchantmentComponents(GameTestHelper helper) {
+        ItemStack stack = output().stack(null);
+        ItemRequirement input = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND), 1,
+                stack, 1F, DataComponentPredicateSet.EMPTY, 1F);
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("recipe_serializer_components"),
+                MMCR.id("test_cube"), 20, List.of(input), List.of(new MachineOutput.ItemOutput(stack, 1F)),
+                List.of(), 0, 1, false, false, false, Set.of());
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(),
+                helper.getLevel().registryAccess());
+        try {
+            MachineRecipeSerializer.INSTANCE.streamCodec().encode(buf, recipe);
+            MachineRecipe decoded = MachineRecipeSerializer.INSTANCE.streamCodec().decode(buf);
+            helper.assertTrue(decoded.id().equals(recipe.id()) && decoded.recipePoolId().equals(recipe.recipePoolId()),
+                    "Recipe serialization must preserve recipe identity and pool");
+            ItemStack decodedInput = ((ItemRequirement) decoded.requirements().getFirst()).stack();
+            ItemStack decodedOutput = ((MachineOutput.ItemOutput) decoded.machineOutputs().getFirst()).stack();
+            assertComponents(helper, decodedInput);
+            assertComponents(helper, decodedOutput);
+            helper.assertTrue(ItemStack.isSameItemSameComponents(stack, decodedInput)
+                            && ItemStack.isSameItemSameComponents(stack, decodedOutput),
+                    "Recipe serialization must preserve registry-backed input and output components");
+            helper.assertTrue(!buf.isReadable(), "Recipe serializer must consume the entire network payload");
+        } finally {
+            buf.release();
+        }
         helper.succeed();
     }
 

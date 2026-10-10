@@ -65,6 +65,8 @@ public final class GameTestRegistry {
                 RuntimeContentSyncGameTest::finalDatapackSyncIncludesLateRecipes);
         register(event, "item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().outputResolvesPlainJsonEnchantments(helper));
+        register(event, "recipe_serializer_enchantment_components", 20,
+                helper -> new ItemOutputComponentGameTest().recipeSerializerPreservesEnchantmentComponents(helper));
         register(event, "async_item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().asyncOutputPreservesEnchantmentComponents(helper));
         register(event, "cached_item_output_enchantment_components", 20,
