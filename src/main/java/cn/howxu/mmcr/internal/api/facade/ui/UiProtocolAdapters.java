@@ -22,7 +22,7 @@ import java.util.Optional;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 /** Typed bridges for public descriptors, callbacks and the core registration lifecycle.
@@ -31,13 +31,13 @@ import net.minecraft.server.level.ServerPlayer;
 public final class UiProtocolAdapters {
     private UiProtocolAdapters() { }
 
-    public static <Q, R> UiRequestType<Q, R> requestType(Identifier id, int version,
+    public static <Q, R> UiRequestType<Q, R> requestType(ResourceLocation id, int version,
             StreamCodec<RegistryFriendlyByteBuf, Q> requestCodec,
             StreamCodec<RegistryFriendlyByteBuf, R> responseCodec) {
         return wrap(new RequestType<>(id, version, requestCodec, responseCodec));
     }
 
-    public static <T> UiStateType<T> stateType(Identifier id, int version,
+    public static <T> UiStateType<T> stateType(ResourceLocation id, int version,
             StreamCodec<RegistryFriendlyByteBuf, T> codec) {
         return wrap(new StateType<>(id, version, codec));
     }
@@ -66,7 +66,7 @@ public final class UiProtocolAdapters {
         return ((ResultAdapter<R>) Objects.requireNonNull(value, "value")).delegate;
     }
 
-    public static UiProtocolRegistrar registrar(Collection<Identifier> machineIds) {
+    public static UiProtocolRegistrar registrar(Collection<ResourceLocation> machineIds) {
         return new RegistrarAdapter(new UiProtocolRegistration(machineIds));
     }
     public static UiProtocolRegistration core(RegisterControllerUiProtocolsEvent event) {
@@ -89,7 +89,7 @@ public final class UiProtocolAdapters {
      * @author howxu <dev@howxu.cn>
      */
     private record RequestAdapter<Q, R>(RequestType<Q, R> delegate) implements UiRequestType<Q, R> {
-        @Override public Identifier id() { return delegate.id(); }
+        @Override public ResourceLocation id() { return delegate.id(); }
         @Override public int version() { return delegate.version(); }
     }
 
@@ -97,7 +97,7 @@ public final class UiProtocolAdapters {
      * @author howxu <dev@howxu.cn>
      */
     private record StateAdapter<T>(StateType<T> delegate) implements UiStateType<T> {
-        @Override public Identifier id() { return delegate.id(); }
+        @Override public ResourceLocation id() { return delegate.id(); }
         @Override public int version() { return delegate.version(); }
     }
 
@@ -123,14 +123,14 @@ public final class UiProtocolAdapters {
      * @author howxu <dev@howxu.cn>
      */
     private record RegistrarAdapter(UiProtocolRegistration delegate) implements UiProtocolRegistrar {
-        @Override public <Q, R> void request(Identifier machineId, UiRequestType<Q, R> type,
+        @Override public <Q, R> void request(ResourceLocation machineId, UiRequestType<Q, R> type,
                 UiRequestHandler<Q, R> handler) {
             Objects.requireNonNull(handler, "handler");
             registration(() -> delegate.request(machineId, unwrap(type),
                     (context, request) -> unwrap(handler.handle(wrap(context), request))));
         }
 
-        @Override public <T> void state(Identifier machineId, UiStateType<T> type, UiStateProvider<T> provider) {
+        @Override public <T> void state(ResourceLocation machineId, UiStateType<T> type, UiStateProvider<T> provider) {
             Objects.requireNonNull(provider, "provider");
             registration(() -> delegate.state(machineId, unwrap(type), new UiProtocolRegistration.Provider<>() {
                 @Override public long revision(ServerContext context) { return provider.revision(wrap(context)); }

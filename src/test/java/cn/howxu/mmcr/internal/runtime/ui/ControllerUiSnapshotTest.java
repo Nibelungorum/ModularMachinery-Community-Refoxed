@@ -40,7 +40,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -59,9 +59,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class ControllerUiSnapshotTest {
-    private static final Identifier MACHINE = id("ui_machine");
-    private static final Identifier RECIPE = id("ui_recipe");
-    private static final Identifier POOL = id("ui_pool");
+    private static final ResourceLocation MACHINE = id("ui_machine");
+    private static final ResourceLocation RECIPE = id("ui_recipe");
+    private static final ResourceLocation POOL = id("ui_pool");
     private static final UUID SESSION = UUID.randomUUID();
     private static final AtomicInteger ENCODINGS = new AtomicInteger();
     private static final OutputType<MutableOutput> OUTPUT_TYPE = new OutputType.Definition<>(id("ui_mutable_output"),
@@ -82,7 +82,7 @@ class ControllerUiSnapshotTest {
     void normal_capture_owns_server_pool_selection_storage_and_both_text_scopes() {
         MutableComponent global = Component.literal("global");
         MutableComponent operation = Component.literal("operation");
-        List<Identifier> pools = new ArrayList<>(List.of(POOL, id("other_pool")));
+        List<ResourceLocation> pools = new ArrayList<>(List.of(POOL, id("other_pool")));
         Map<String, ControllerScreenTextSnapshot> text = Map.of("", text(4, global),
                 "base", new ControllerScreenTextSnapshot(7, List.of(new ControllerScreenTextSnapshot.Line(
                         ControllerScreenTextScope.OPERATION, id("operation"), operation))));
@@ -321,7 +321,7 @@ class ControllerUiSnapshotTest {
                 !factory.presentationLanes().isEmpty(), 2, 8, 8, storage, presentation);
     }
 
-    private static CraftingStateSnapshot crafting(Identifier recipe, int tick) {
+    private static CraftingStateSnapshot crafting(ResourceLocation recipe, int tick) {
         return new CraftingStateSnapshot(recipe, CraftingStatus.working(), null, 1, 1, 1, tick, 20, 3, 8);
     }
 
@@ -348,7 +348,7 @@ class ControllerUiSnapshotTest {
                 ControllerScreenTextScope.CONTROLLER, id("line"), value)));
     }
 
-    private static Identifier id(String value) { return Identifier.fromNamespaceAndPath("mmcr", value); }
+    private static ResourceLocation id(String value) { return ResourceLocation.fromNamespaceAndPath("mmcr", value); }
 
     /** Intentionally mutable custom resource with an unsafe copier, to exercise frozen-byte ownership.
      * @author howxu <dev@howxu.cn> */

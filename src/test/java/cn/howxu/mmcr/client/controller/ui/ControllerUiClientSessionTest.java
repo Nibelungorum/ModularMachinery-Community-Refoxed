@@ -27,7 +27,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
@@ -57,14 +57,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Queued executors and pure-data codecs exercise the real client session without a world.
  * @author howxu <dev@howxu.cn> */
 class ControllerUiClientSessionTest {
-    private static final Identifier MACHINE = Identifier.parse("test:machine");
-    private static final Identifier RECIPE = Identifier.parse("test:recipe");
+    private static final ResourceLocation MACHINE = ResourceLocation.parse("test:machine");
+    private static final ResourceLocation RECIPE = ResourceLocation.parse("test:recipe");
     private static final StreamCodec<RegistryFriendlyByteBuf, ArrayList<Integer>> CODEC = StreamCodec.of(
             (buffer, value) -> buffer.writeVarInt(value.getFirst()),
             buffer -> new ArrayList<>(List.of(buffer.readVarInt())));
     private static final RequestType<ArrayList<Integer>, ArrayList<Integer>> REQUEST = new RequestType<>(
-            Identifier.parse("test:request"), 1, CODEC, CODEC);
-    private static final StateType<ArrayList<Integer>> STATE = new StateType<>(Identifier.parse("test:state"), 1, CODEC);
+            ResourceLocation.parse("test:request"), 1, CODEC, CODEC);
+    private static final StateType<ArrayList<Integer>> STATE = new StateType<>(ResourceLocation.parse("test:state"), 1, CODEC);
 
     @Test
     void opening_snapshot_preserves_all_kinds_roles_identity_and_owned_name_without_ready() {
@@ -160,7 +160,7 @@ class ControllerUiClientSessionTest {
         fixture.session.handle(new PktControllerUiProgressPayload(3, UUID.randomUUID(), 2, 1, progress(2)));
         fixture.session.handle(new PktControllerUiProgressPayload(3, fixture.session.id(), 100, 99, progress(2)));
         fixture.session.handle(new PktControllerUiProgressPayload(3, fixture.session.id(), 2, 1,
-                List.of(new LaneProgress("base", Identifier.parse("test:wrong"), 2, 10, 1))));
+                List.of(new LaneProgress("base", ResourceLocation.parse("test:wrong"), 2, 10, 1))));
         assertThat(fixture.session.snapshot()).isSameAs(baseline);
         fixture.session.handle(new PktControllerUiProgressPayload(3, fixture.session.id(), 3, 1, progress(3)));
         assertThat(fixture.session.snapshot().revision()).isEqualTo(3);
@@ -209,7 +209,7 @@ class ControllerUiClientSessionTest {
         var baseline = fixture.session.snapshot();
         var next = fixture.snapshot(2, ControllerUiSnapshot.Kind.NORMAL, ControllerUiSnapshot.Role.HOST, MACHINE);
         fixture.session.handle(new PktControllerUiSnapshotPayload(3, fixture.session.id(), 2, next));
-        next = fixture.snapshot(2, ControllerUiSnapshot.Kind.NORMAL, ControllerUiSnapshot.Role.NORMAL, Identifier.parse("test:other"));
+        next = fixture.snapshot(2, ControllerUiSnapshot.Kind.NORMAL, ControllerUiSnapshot.Role.NORMAL, ResourceLocation.parse("test:other"));
         fixture.session.handle(new PktControllerUiSnapshotPayload(3, fixture.session.id(), 2, next));
         next = fixture.snapshot(2);
         fixture.session.handle(new PktControllerUiSnapshotPayload(4, fixture.session.id(), 2, next));
@@ -566,7 +566,7 @@ class ControllerUiClientSessionTest {
         var fixture = new Fixture();
         assertThat(fixture.session.supports(REQUEST)).isTrue();
         assertThat(fixture.session.supports(STATE)).isTrue();
-        var missing = new RequestType<>(Identifier.parse("test:missing"), 1, CODEC, CODEC);
+        var missing = new RequestType<>(ResourceLocation.parse("test:missing"), 1, CODEC, CODEC);
         var wrongVersion = new RequestType<>(REQUEST.id(), 2, CODEC, CODEC);
         var differentCodec = StreamCodec.<RegistryFriendlyByteBuf, ArrayList<Integer>>of(
                 (buffer, value) -> buffer.writeVarInt(value.getFirst()), buffer -> body(buffer.readVarInt()));
@@ -629,7 +629,7 @@ class ControllerUiClientSessionTest {
         ControllerUiRegistration.Factory factory = context -> null;
         registry.register(MACHINE, factory);
         assertThatThrownBy(() -> registry.register(MACHINE, context -> null)).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> registry.register(Identifier.parse("test:unknown"), factory)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> registry.register(ResourceLocation.parse("test:unknown"), factory)).isInstanceOf(IllegalStateException.class);
         assertThat(registry.find(MACHINE)).containsSame(factory);
         registry.freeze();
         registry.freeze();
@@ -703,7 +703,7 @@ class ControllerUiClientSessionTest {
                     snapshot(revision, kind, menu.metadata.role(), MACHINE)));
         }
         private ControllerUiSnapshotData snapshot(long revision, ControllerUiSnapshot.Kind kind,
-                                                  ControllerUiSnapshot.Role role, Identifier machine) {
+                                                  ControllerUiSnapshot.Role role, ResourceLocation machine) {
             var header = new ControllerUiSnapshotData.HeaderData(machine, kind, role, title,
                     true, false, false, 2, null, 0, 1, List.of(), 0, 1, 0, 0, List.of(), null, null, false, Map.of(), List.of());
             var lanes = new ArrayList<ControllerUiSnapshotData.LaneData>();

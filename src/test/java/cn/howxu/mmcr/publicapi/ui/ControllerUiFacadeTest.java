@@ -20,7 +20,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -42,11 +42,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Public factory arguments and lifecycle use the same native menu and actual core session.
  * @author howxu <dev@howxu.cn> */
 class ControllerUiFacadeTest {
-    private static final Identifier MACHINE = Identifier.parse("example:controller");
+    private static final ResourceLocation MACHINE = ResourceLocation.parse("example:controller");
     private static final StreamCodec<RegistryFriendlyByteBuf, Integer> CODEC = StreamCodec.of(
             (buffer, value) -> buffer.writeVarInt(value), RegistryFriendlyByteBuf::readVarInt);
     private static final UiRequestType<Integer, Integer> REQUEST = UiRequestType.of(
-            Identifier.parse("example:set_mode"), 1, CODEC, CODEC);
+            ResourceLocation.parse("example:set_mode"), 1, CODEC, CODEC);
 
     @BeforeAll
     static void bootstrapNativeMenus() throws Exception { TestBootstrap.bootstrap(); }
@@ -54,7 +54,7 @@ class ControllerUiFacadeTest {
     @Test
     void factory_context_keeps_native_identity_and_owns_title_without_creating_another_session() {
         var fixture = new Fixture();
-        var inventory = new Inventory(null, null);
+        var inventory = new Inventory(null);
         var title = Component.translatable("gui.mmcr.ui.loading");
         var expected = title.copy();
         var coreContext = UiClientAdapters.context(fixture.menu, inventory, title, fixture.core);

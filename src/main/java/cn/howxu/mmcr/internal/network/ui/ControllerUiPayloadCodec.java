@@ -21,7 +21,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 
@@ -137,30 +137,30 @@ public final class ControllerUiPayloadCodec {
         }
     }
 
-    static void id(Identifier value) {
+    static void id(ResourceLocation value) {
         if (value == null || value.getNamespace().isBlank() || value.getPath().isBlank()
                 || value.toString().length() > ID_LIMIT) {
             throw new IllegalArgumentException("Invalid controller UI identifier");
         }
     }
 
-    static void writeId(RegistryFriendlyByteBuf buffer, Identifier value) {
+    static void writeId(RegistryFriendlyByteBuf buffer, ResourceLocation value) {
         id(value);
         buffer.writeUtf(value.toString(), ID_LIMIT);
     }
 
-    static Identifier readId(RegistryFriendlyByteBuf buffer) {
-        Identifier value = Identifier.parse(buffer.readUtf(ID_LIMIT));
+    static ResourceLocation readId(RegistryFriendlyByteBuf buffer) {
+        ResourceLocation value = ResourceLocation.parse(buffer.readUtf(ID_LIMIT));
         id(value);
         return value;
     }
 
-    static void writeNullableId(RegistryFriendlyByteBuf buffer, Identifier value) {
+    static void writeNullableId(RegistryFriendlyByteBuf buffer, ResourceLocation value) {
         buffer.writeBoolean(value != null);
         if (value != null) writeId(buffer, value);
     }
 
-    static Identifier readNullableId(RegistryFriendlyByteBuf buffer) {
+    static ResourceLocation readNullableId(RegistryFriendlyByteBuf buffer) {
         return buffer.readBoolean() ? readId(buffer) : null;
     }
 
@@ -208,7 +208,7 @@ public final class ControllerUiPayloadCodec {
         b.writeUUID(value.sessionId());
         b.writeLong(value.revision());
         b.writeBoolean(value.ready());
-        writeId(b, value.dimension().identifier());
+        writeId(b, value.dimension().location());
         b.writeBlockPos(value.controllerPos());
         HeaderData h = value.header();
         writeId(b, h.machineId());
@@ -266,20 +266,20 @@ public final class ControllerUiPayloadCodec {
         boolean ready = b.readBoolean();
         var dimension = ResourceKey.create(Registries.DIMENSION, readId(b));
         var pos = b.readBlockPos();
-        Identifier machineId = readId(b);
+        ResourceLocation machineId = readId(b);
         var kind = readEnum(b, ControllerUiSnapshot.Kind.values());
         var role = readEnum(b, ControllerUiSnapshot.Role.values());
         Component name = readComponent(b);
         boolean formed = b.readBoolean(), active = b.readBoolean(), paused = b.readBoolean();
         int modules = b.readVarInt();
-        Identifier host = readNullableId(b);
+        ResourceLocation host = readNullableId(b);
         int stage = b.readVarInt(), stages = b.readVarInt();
-        List<Identifier> levels = readIds(b);
+        List<ResourceLocation> levels = readIds(b);
         int slots = b.readVarInt();
         long parallelism = b.readLong();
         int threads = b.readVarInt(), activeThreads = b.readVarInt();
-        List<Identifier> pools = readIds(b);
-        Identifier pool = readNullableId(b);
+        List<ResourceLocation> pools = readIds(b);
+        ResourceLocation pool = readNullableId(b);
         var failure = FailureStatusCodec.read(b);
         boolean hasStorage = b.readBoolean();
         Map<String, DataValue> storage = new LinkedHashMap<>();
@@ -295,7 +295,7 @@ public final class ControllerUiPayloadCodec {
             String id = b.readUtf(ID_LIMIT);
             int index = b.readVarInt();
             boolean base = b.readBoolean(), core = b.readBoolean(), laneActive = b.readBoolean();
-            Identifier recipe = readNullableId(b);
+            ResourceLocation recipe = readNullableId(b);
             int tick = b.readVarInt(), total = b.readVarInt();
             long laneParallelism = b.readLong();
             var laneFailure = FailureStatusCodec.read(b);
@@ -309,15 +309,15 @@ public final class ControllerUiPayloadCodec {
         return new ControllerUiSnapshotData(sessionId, revision, ready, dimension, pos, header, lanes);
     }
 
-    private static void writeIds(RegistryFriendlyByteBuf b, List<Identifier> ids) {
+    private static void writeIds(RegistryFriendlyByteBuf b, List<ResourceLocation> ids) {
         checkCount(ids.size(), 1024);
         b.writeVarInt(ids.size());
         ids.forEach(id -> writeId(b, id));
     }
 
-    private static List<Identifier> readIds(RegistryFriendlyByteBuf b) {
+    private static List<ResourceLocation> readIds(RegistryFriendlyByteBuf b) {
         int size = count(b, 1024);
-        List<Identifier> ids = new ArrayList<>(size);
+        List<ResourceLocation> ids = new ArrayList<>(size);
         for (int i = 0; i < size; i++) ids.add(readId(b));
         return List.copyOf(ids);
     }
@@ -339,7 +339,7 @@ public final class ControllerUiPayloadCodec {
         List<TextLineData> lines = new ArrayList<>(size);
         var seen = new HashSet<String>();
         for (int i = 0; i < size; i++) {
-            Identifier id = readId(b);
+            ResourceLocation id = readId(b);
             var scope = readEnum(b, ControllerUiSnapshot.TextLine.Scope.values());
             if (!seen.add(scope + ":" + id)) throw new IllegalArgumentException("Duplicate UI text line");
             lines.add(new TextLineData(id, scope, readComponent(b)));

@@ -49,7 +49,7 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.commands.Commands;
@@ -201,7 +201,7 @@ class ModEventRegistrationTest {
 
     @Test
     void protocol_event_collection_returns_the_same_authoritative_core_and_closes_registration_window() {
-        Identifier machine = Identifier.parse("test:ui_machine"), message = Identifier.parse("test:ui_message");
+        ResourceLocation machine = ResourceLocation.parse("test:ui_machine"), message = ResourceLocation.parse("test:ui_message");
         StreamCodec<RegistryFriendlyByteBuf, Integer> codec = StreamCodec.of(
                 (buffer, value) -> buffer.writeVarInt(value), RegistryFriendlyByteBuf::readVarInt);
         var type = new UiProtocolRegistration.RequestType<>(message, 1, codec, codec);
@@ -220,7 +220,7 @@ class ModEventRegistrationTest {
 
     @Test
     void protocol_event_failure_still_freezes_the_retained_registrar() {
-        Identifier machine = Identifier.parse("test:ui_machine"), message = Identifier.parse("test:ui_message");
+        ResourceLocation machine = ResourceLocation.parse("test:ui_machine"), message = ResourceLocation.parse("test:ui_message");
         StreamCodec<RegistryFriendlyByteBuf, Integer> codec = StreamCodec.of(
                 (buffer, value) -> buffer.writeVarInt(value), RegistryFriendlyByteBuf::readVarInt);
         var type = new UiProtocolRegistration.RequestType<>(message, 1, codec, codec);

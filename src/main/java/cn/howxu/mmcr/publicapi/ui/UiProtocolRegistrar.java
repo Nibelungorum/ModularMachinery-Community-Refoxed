@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.publicapi.ui;
 
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.ApiStatus;
 
 /** MMCR-provided registration window, valid only during protocol event dispatch.
@@ -8,6 +8,6 @@ import org.jetbrains.annotations.ApiStatus;
  */
 @ApiStatus.NonExtendable
 public interface UiProtocolRegistrar {
-    <Q, R> void request(Identifier machineId, UiRequestType<Q, R> type, UiRequestHandler<Q, R> handler);
-    <T> void state(Identifier machineId, UiStateType<T> type, UiStateProvider<T> provider);
+    <Q, R> void request(ResourceLocation machineId, UiRequestType<Q, R> type, UiRequestHandler<Q, R> handler);
+    <T> void state(ResourceLocation machineId, UiStateType<T> type, UiStateProvider<T> provider);
 }

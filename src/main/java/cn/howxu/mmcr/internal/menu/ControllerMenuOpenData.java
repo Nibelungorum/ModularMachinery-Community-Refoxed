@@ -13,7 +13,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
@@ -28,8 +28,8 @@ import java.util.UUID;
  * @author howxu <dev@howxu.cn>
  */
 public record ControllerMenuOpenData(UUID sessionId, ResourceKey<Level> dimension, BlockPos pos,
-                                     Identifier machineId, Kind kind, Role role, boolean formed,
-                                     int installedModuleCount, Optional<Identifier> connectedHostId,
+                                     ResourceLocation machineId, Kind kind, Role role, boolean formed,
+                                     int installedModuleCount, Optional<ResourceLocation> connectedHostId,
                                      List<Capability> capabilities) {
     private static final int MAX_CAPABILITIES = 64;
 
@@ -50,7 +50,7 @@ public record ControllerMenuOpenData(UUID sessionId, ResourceKey<Level> dimensio
     /** Capability IDs and versions, without author callbacks or codecs.
      * @author howxu <dev@howxu.cn>
      */
-    public record Capability(Identifier id, int version, boolean state) {
+    public record Capability(ResourceLocation id, int version, boolean state) {
         public Capability {
             Objects.requireNonNull(id, "id");
             if (version <= 0) throw new IllegalArgumentException("version must be positive");
@@ -61,7 +61,7 @@ public record ControllerMenuOpenData(UUID sessionId, ResourceKey<Level> dimensio
                                                   @Nullable Level level, Kind fallbackKind) {
         if (owner == null) return legacy(level, BlockPos.ZERO, null, null, 0, false, 0, fallbackKind);
         ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
-        Identifier id = machineId(owner, runtime);
+        ResourceLocation id = machineId(owner, runtime);
         Machine machine = runtime.structure().machine() == null
                 ? runtime.structure().configuredMachine() : runtime.structure().machine();
         if (machine == null) machine = MachineRegistry.getMachine(id);
@@ -80,7 +80,7 @@ public record ControllerMenuOpenData(UUID sessionId, ResourceKey<Level> dimensio
     }
 
     /** Resolve formed identity first; unformed controllers retain their configured or physical identity. */
-    public static Identifier machineId(MachineControllerBlockEntity owner, ControllerRuntimeSnapshot runtime) {
+    public static ResourceLocation machineId(MachineControllerBlockEntity owner, ControllerRuntimeSnapshot runtime) {
         Machine machine = runtime.structure().formed() ? runtime.structure().machine() : null;
         if (machine != null) return machine.registryName();
         machine = runtime.structure().configuredMachine();
@@ -88,8 +88,8 @@ public record ControllerMenuOpenData(UUID sessionId, ResourceKey<Level> dimensio
         return ((MachineControllerBlock) owner.getBlockState().getBlock()).machineId();
     }
 
-    static ControllerMenuOpenData legacy(@Nullable Level level, BlockPos pos, @Nullable Identifier machineId,
-                                          @Nullable Identifier connectedHostId, int role, boolean formed,
+    static ControllerMenuOpenData legacy(@Nullable Level level, BlockPos pos, @Nullable ResourceLocation machineId,
+                                          @Nullable ResourceLocation connectedHostId, int role, boolean formed,
                                           int modules, Kind kind) {
         return new ControllerMenuOpenData(UUID.randomUUID(), level == null ? Level.OVERWORLD : level.dimension(),
                 pos, machineId == null ? MMCR.id("unknown") : machineId, kind, role(role), formed,
@@ -105,18 +105,18 @@ public record ControllerMenuOpenData(UUID sessionId, ResourceKey<Level> dimensio
 
     public static void write(FriendlyByteBuf buffer, ControllerMenuOpenData value) {
         buffer.writeUUID(value.sessionId());
-        Identifier.STREAM_CODEC.encode(buffer, value.dimension().identifier());
+        ResourceLocation.STREAM_CODEC.encode(buffer, value.dimension().location());
         buffer.writeBlockPos(value.pos());
-        Identifier.STREAM_CODEC.encode(buffer, value.machineId());
+        ResourceLocation.STREAM_CODEC.encode(buffer, value.machineId());
         buffer.writeEnum(value.kind());
         buffer.writeEnum(value.role());
         buffer.writeBoolean(value.formed());
         buffer.writeVarInt(value.installedModuleCount());
         buffer.writeBoolean(value.connectedHostId().isPresent());
-        value.connectedHostId().ifPresent(id -> Identifier.STREAM_CODEC.encode(buffer, id));
+        value.connectedHostId().ifPresent(id -> ResourceLocation.STREAM_CODEC.encode(buffer, id));
         buffer.writeVarInt(value.capabilities().size());
         for (Capability capability : value.capabilities()) {
-            Identifier.STREAM_CODEC.encode(buffer, capability.id());
+            ResourceLocation.STREAM_CODEC.encode(buffer, capability.id());
             buffer.writeVarInt(capability.version());
             buffer.writeBoolean(capability.state());
         }
@@ -124,20 +124,20 @@ public record ControllerMenuOpenData(UUID sessionId, ResourceKey<Level> dimensio
 
     public static ControllerMenuOpenData read(FriendlyByteBuf buffer) {
         UUID sessionId = buffer.readUUID();
-        ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, Identifier.STREAM_CODEC.decode(buffer));
+        ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, ResourceLocation.STREAM_CODEC.decode(buffer));
         BlockPos pos = buffer.readBlockPos();
-        Identifier machineId = Identifier.STREAM_CODEC.decode(buffer);
+        ResourceLocation machineId = ResourceLocation.STREAM_CODEC.decode(buffer);
         Kind kind = buffer.readEnum(Kind.class);
         Role role = buffer.readEnum(Role.class);
         boolean formed = buffer.readBoolean();
         int modules = buffer.readVarInt();
-        Optional<Identifier> host = buffer.readBoolean()
-                ? Optional.of(Identifier.STREAM_CODEC.decode(buffer)) : Optional.empty();
+        Optional<ResourceLocation> host = buffer.readBoolean()
+                ? Optional.of(ResourceLocation.STREAM_CODEC.decode(buffer)) : Optional.empty();
         int count = buffer.readVarInt();
         if (count < 0 || count > MAX_CAPABILITIES) throw new IllegalArgumentException("Invalid capability count");
         var capabilities = new ArrayList<Capability>(count);
         for (int i = 0; i < count; i++) {
-            capabilities.add(new Capability(Identifier.STREAM_CODEC.decode(buffer), buffer.readVarInt(), buffer.readBoolean()));
+            capabilities.add(new Capability(ResourceLocation.STREAM_CODEC.decode(buffer), buffer.readVarInt(), buffer.readBoolean()));
         }
         return new ControllerMenuOpenData(sessionId, dimension, pos, machineId, kind, role, formed, modules, host, capabilities);
     }

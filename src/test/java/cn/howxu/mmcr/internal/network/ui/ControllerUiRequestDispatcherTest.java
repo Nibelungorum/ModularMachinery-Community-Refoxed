@@ -7,7 +7,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -22,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class ControllerUiRequestDispatcherTest {
-    private static final Identifier MACHINE = Identifier.parse("test:machine");
-    private static final Identifier MESSAGE = Identifier.parse("test:message");
+    private static final ResourceLocation MACHINE = ResourceLocation.parse("test:machine");
+    private static final ResourceLocation MESSAGE = ResourceLocation.parse("test:message");
     private static final UUID SESSION = UUID.randomUUID();
 
     @BeforeAll
@@ -33,9 +33,9 @@ class ControllerUiRequestDispatcherTest {
     void unknown_message_wrong_machine_version_and_lane_do_not_call_author_decoder_or_context_or_handler() {
         AtomicInteger decoded = new AtomicInteger(), handled = new AtomicInteger(), contexts = new AtomicInteger();
         var protocols = protocols(decoded, handled);
-        assertThat(dispatch(protocols, MACHINE, request(Identifier.parse("test:unknown"), 1, new byte[]{7}), true, contexts).status())
+        assertThat(dispatch(protocols, MACHINE, request(ResourceLocation.parse("test:unknown"), 1, new byte[]{7}), true, contexts).status())
                 .isEqualTo(Status.UNSUPPORTED);
-        assertThat(dispatch(protocols, Identifier.parse("test:other"), request(MESSAGE, 1, new byte[]{7}), true, contexts).status())
+        assertThat(dispatch(protocols, ResourceLocation.parse("test:other"), request(MESSAGE, 1, new byte[]{7}), true, contexts).status())
                 .isEqualTo(Status.UNSUPPORTED);
         assertThat(dispatch(protocols, MACHINE, request(MESSAGE, 2, new byte[]{7}), true, contexts).status())
                 .isEqualTo(Status.VERSION_MISMATCH);
@@ -131,11 +131,11 @@ class ControllerUiRequestDispatcherTest {
         });
     }
 
-    private static PktControllerUiRequestPayload request(Identifier id, int version, byte[] bytes) {
+    private static PktControllerUiRequestPayload request(ResourceLocation id, int version, byte[] bytes) {
         return new PktControllerUiRequestPayload(3, SESSION, 1, id, version, Optional.of("base"), bytes);
     }
 
-    private static PktControllerUiResponsePayload dispatch(UiProtocolRegistration protocols, Identifier machineId,
+    private static PktControllerUiResponsePayload dispatch(UiProtocolRegistration protocols, ResourceLocation machineId,
             PktControllerUiRequestPayload request, boolean laneExists, AtomicInteger contexts) {
         return ControllerUiRequestDispatcher.dispatchRegistered(protocols, machineId, request, () -> laneExists,
                 () -> { contexts.incrementAndGet(); return null; }, RegistryAccess.EMPTY);

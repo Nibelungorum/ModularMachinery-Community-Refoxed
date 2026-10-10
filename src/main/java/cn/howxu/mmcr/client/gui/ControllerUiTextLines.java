@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot.Role;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -47,7 +47,7 @@ final class ControllerUiTextLines {
         boolean active = factory ? lane != null && lane.active() : snapshot.active();
         List<ControllerTextLine> lines = new ArrayList<>();
         lines.add(MachineControllerScreen.statusLine(snapshot.formed(), active));
-        Identifier pool = MachineControllerScreen.displayedRecipePoolId(
+        ResourceLocation pool = MachineControllerScreen.displayedRecipePoolId(
                 snapshot.currentRecipePoolId().orElse(null), snapshot.recipePoolIds());
         if (snapshot.formed() && pool != null) {
             lines.add(label(Component.translatable("gui.mmcr.controller.recipe_pool",
@@ -56,7 +56,7 @@ final class ControllerUiTextLines {
         if (snapshot.formed() && snapshot.matchedStage() > 0 && snapshot.stageCount() > 1) {
             lines.add(label(MachineControllerScreen.matchedStageLine(snapshot.matchedStage())));
         }
-        for (Identifier id : snapshot.foundLevelIds()) {
+        for (ResourceLocation id : snapshot.foundLevelIds()) {
             MachineLevel level = MachineLevelRegistry.getLevel(id);
             if (level != null) lines.add(label(MachineControllerScreen.levelLine(level)));
         }

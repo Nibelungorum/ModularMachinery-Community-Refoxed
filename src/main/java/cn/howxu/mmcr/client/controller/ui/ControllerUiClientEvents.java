@@ -19,7 +19,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -62,7 +62,7 @@ public final class ControllerUiClientEvents {
         if (OBSERVED_MENU.get() != current) observeMenu(current, SESSIONS, OBSERVED_MENU);
         return SESSIONS.computeIfAbsent(menu, bound -> new ControllerUiClientSession(bound, controller.uiOpenData(), title,
                 minecraft.player.level().registryAccess(), ControllerUiServerSession.currentProtocols(), minecraft,
-                System::nanoTime, ClientPacketDistributor::sendToServer, minecraft::isSameThread,
+                System::nanoTime, packet -> PacketDistributor.sendToServer(packet), minecraft::isSameThread,
                 () -> minecraft.player == null ? null : minecraft.player.containerMenu,
                 () -> { if (minecraft.player != null && minecraft.player.containerMenu == bound) minecraft.player.closeContainer(); },
                 OBSERVED_MENU::get));

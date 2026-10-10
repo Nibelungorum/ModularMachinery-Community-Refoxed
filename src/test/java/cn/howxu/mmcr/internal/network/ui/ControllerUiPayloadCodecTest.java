@@ -26,7 +26,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.BeforeAll;
@@ -279,7 +279,7 @@ class ControllerUiPayloadCodecTest {
         return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
     }
 
-    private static Identifier id(String path) { return Identifier.parse("test:" + path); }
+    private static ResourceLocation id(String path) { return ResourceLocation.parse("test:" + path); }
 
     /** Mutable addon value with deliberately aliasing copy; wire/cache must still own its bytes.
      * @author howxu <dev@howxu.cn>

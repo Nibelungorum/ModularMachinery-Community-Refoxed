@@ -32,7 +32,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
@@ -53,8 +53,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class ControllerUiServerSessionTest {
-    private static final Identifier A = Identifier.parse("test:server_ui_a");
-    private static final Identifier B = Identifier.parse("test:server_ui_b");
+    private static final ResourceLocation A = ResourceLocation.parse("test:server_ui_a");
+    private static final ResourceLocation B = ResourceLocation.parse("test:server_ui_b");
     private static ServerPlayer player;
 
     @BeforeAll
@@ -218,7 +218,7 @@ class ControllerUiServerSessionTest {
         assertThat(changedInEncoder.capture(changedInEncoder.registration(ignored -> {}, ignored -> {}))).containsExactly(7);
     }
 
-    private static Machine machine(Identifier id) {
+    private static Machine machine(ResourceLocation id) {
         return new DynamicMachine(id, "Server UI", new BlockArray(Map.of()));
     }
 

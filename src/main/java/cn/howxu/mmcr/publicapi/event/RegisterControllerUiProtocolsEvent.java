@@ -3,7 +3,7 @@ package cn.howxu.mmcr.publicapi.event;
 import cn.howxu.mmcr.internal.api.facade.ui.UiProtocolAdapters;
 import cn.howxu.mmcr.publicapi.ui.UiProtocolRegistrar;
 import java.util.Collection;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 import net.neoforged.fml.event.IModBusEvent;
 
@@ -14,7 +14,7 @@ import net.neoforged.fml.event.IModBusEvent;
 public final class RegisterControllerUiProtocolsEvent extends Event implements IModBusEvent {
     private final UiProtocolRegistrar registrar;
 
-    public RegisterControllerUiProtocolsEvent(Collection<Identifier> machineIds) {
+    public RegisterControllerUiProtocolsEvent(Collection<ResourceLocation> machineIds) {
         this.registrar = UiProtocolAdapters.registrar(machineIds);
     }
 

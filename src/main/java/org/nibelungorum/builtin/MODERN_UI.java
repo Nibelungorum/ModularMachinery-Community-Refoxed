@@ -16,7 +16,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -32,8 +32,8 @@ import static cn.howxu.mmcr.publicapi.structure.BlockConditions.block;
 @EventBusSubscriber
 public class MODERN_UI {
 
-    public static final Identifier MACHINE_ID = id("modern_ui");
-    public static final Identifier VALUE_LINE = id("modern_ui_value");
+    public static final ResourceLocation MACHINE_ID = id("modern_ui");
+    public static final ResourceLocation VALUE_LINE = id("modern_ui_value");
     public static final String VALUE_KEY = "value";
     public static final UiRequestType<SetValue, SetValue> SET_VALUE = UiRequestType.of(
             id("modern_ui_set_value"), 1, SetValue.CODEC, SetValue.CODEC);
@@ -64,7 +64,7 @@ public class MODERN_UI {
                     .machine(MACHINE_ID)
                     .recipePool(id("alloy_furnace"))
                     .displayNameKey("machine.mmcr_test.modern_ui")
-                    .appearance(appearance -> appearance.machineBasicBlock(Identifier.parse("minecraft:bricks")))
+                    .appearance(appearance -> appearance.machineBasicBlock(ResourceLocation.parse("minecraft:bricks")))
                     .recipeBehavior(behavior -> behavior.postServerTick(context -> {
                         var storage = context.dataStorage();
                         if (storage == null) {

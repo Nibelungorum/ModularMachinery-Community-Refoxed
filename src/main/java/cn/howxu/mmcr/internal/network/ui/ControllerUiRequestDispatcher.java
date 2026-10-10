@@ -10,7 +10,7 @@ import cn.howxu.mmcr.internal.runtime.ui.ControllerUiServerSession;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
@@ -49,7 +49,7 @@ public final class ControllerUiRequestDispatcher {
     }
 
     /** Resolves the already authorized session's typed definition before decoding any body. */
-    static PktControllerUiResponsePayload dispatchRegistered(UiProtocolRegistration protocols, Identifier machineId,
+    static PktControllerUiResponsePayload dispatchRegistered(UiProtocolRegistration protocols, ResourceLocation machineId,
             PktControllerUiRequestPayload request, Supplier<Boolean> laneExists,
             Supplier<ServerContext> context, RegistryAccess registries) {
         var registration = protocols.request(machineId, request.messageId());
@@ -60,7 +60,7 @@ public final class ControllerUiRequestDispatcher {
     }
 
     private static <Q, R> PktControllerUiResponsePayload dispatchTyped(RequestRegistration<Q, R> registration,
-            Identifier machineId, PktControllerUiRequestPayload request, Supplier<ServerContext> context,
+            ResourceLocation machineId, PktControllerUiRequestPayload request, Supplier<ServerContext> context,
             RegistryAccess registries) {
         Q value;
         try {

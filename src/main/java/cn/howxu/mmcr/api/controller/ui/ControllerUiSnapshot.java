@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.data.view.DataValue;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.ApiStatus;
@@ -28,7 +28,7 @@ public interface ControllerUiSnapshot {
     boolean ready();
     ResourceKey<Level> dimension();
     BlockPos controllerPos();
-    Identifier machineId();
+    ResourceLocation machineId();
     Kind kind();
     Role role();
     Component machineName();
@@ -36,16 +36,16 @@ public interface ControllerUiSnapshot {
     boolean active();
     boolean redstonePaused();
     int installedModuleCount();
-    Optional<Identifier> connectedHostId();
+    Optional<ResourceLocation> connectedHostId();
     int matchedStage();
     int stageCount();
-    List<Identifier> foundLevelIds();
+    List<ResourceLocation> foundLevelIds();
     int parallelSlots();
     long maxParallelism();
     int threadLimit();
     int activeThreadCount();
-    List<Identifier> recipePoolIds();
-    Optional<Identifier> currentRecipePoolId();
+    List<ResourceLocation> recipePoolIds();
+    Optional<ResourceLocation> currentRecipePoolId();
     Optional<ExecutionStatus> failure();
     boolean hasDataStorage();
     Map<String, DataValue> dataStorageValues();
@@ -61,7 +61,7 @@ public interface ControllerUiSnapshot {
         boolean base();
         boolean core();
         boolean active();
-        Optional<Identifier> recipeId();
+        Optional<ResourceLocation> recipeId();
         int tick();
         int totalTick();
         long parallelism();
@@ -95,7 +95,7 @@ public interface ControllerUiSnapshot {
     @ApiStatus.NonExtendable
     interface TextLine {
         enum Scope { CONTROLLER, OPERATION }
-        Identifier id();
+        ResourceLocation id();
         Scope scope();
         Component text();
     }

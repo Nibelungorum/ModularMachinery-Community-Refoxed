@@ -121,7 +121,7 @@ class MachineControllerBlockTest {
     void unformed_controller_metadata_uses_physical_identity_without_a_runtime_machine() {
         var id = MMCR.id("test_cube");
         var controller = RuntimeTestFixtures.controllerEntity(id, new BlockPos(2, 4, 6));
-        var menu = (ControllerUiMenu) MachineControllerBlock.createMenu(4, new Inventory(null, null), null, controller);
+        var menu = (ControllerUiMenu) MachineControllerBlock.createMenu(4, new Inventory(null), null, controller);
         assertThat(menu.uiOpenData().machineId()).isEqualTo(id);
         assertThat(menu.uiOpenData().pos()).isEqualTo(controller.getBlockPos());
         assertThat(menu.uiOpenData().formed()).isFalse();
@@ -136,12 +136,12 @@ class MachineControllerBlockTest {
         var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         try {
             ControllerMenuOpenData.write(buffer, data);
-            var ordinary = MachineControllerMenu.clientOpen(4, new Inventory(null, null), buffer);
+            var ordinary = MachineControllerMenu.clientOpen(4, new Inventory(null), buffer);
             assertThat(ordinary.uiOpenData()).isEqualTo(data);
             assertThat(ordinary.uiServerSession()).isNull();
             assertThat(buffer.isReadable()).isFalse();
             buffer.readerIndex(0);
-            var factory = FactoryControllerMenu.clientOpen(4, new Inventory(null, null), buffer);
+            var factory = FactoryControllerMenu.clientOpen(4, new Inventory(null), buffer);
             assertThat(factory.uiOpenData()).isEqualTo(data);
             assertThat(factory.machineId()).isEqualTo(data.machineId());
             assertThat(factory.isModuleController()).isTrue();
@@ -171,7 +171,7 @@ class MachineControllerBlockTest {
             controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
                     null, scheduler, scheduler.getBlockPos(), scheduler.getBlockPos(), (String) null)));
             RuntimeTestFixtures.republish(controller);
-            var menu = MachineControllerBlock.createMenu(1, new Inventory(null, null), null, controller);
+            var menu = MachineControllerBlock.createMenu(1, new Inventory(null), null, controller);
             assertThat(menu).isInstanceOf(FactoryControllerMenu.class);
             var data = ((ControllerUiMenu) menu).uiOpenData();
             assertThat(data.kind()).isEqualTo(Kind.FACTORY);

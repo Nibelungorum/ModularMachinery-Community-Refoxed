@@ -4,6 +4,8 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
 import java.util.List;
 import java.lang.reflect.AnnotatedArrayType;
 import java.lang.reflect.AnnotatedParameterizedType;
@@ -95,15 +97,22 @@ class PublicApiBoundaryTest {
 
     private static Method laneMethod(Class<?> result, boolean isStatic, Class<?>... parameters) throws Exception {
         // Real reflection signatures with the exact owner, including invalid alternatives to the API property.
-        ClassDesc[] args = new ClassDesc[parameters.length];
-        for (int i = 0; i < parameters.length; i++) args[i] = ClassDesc.ofDescriptor(parameters[i].descriptorString());
-        MethodTypeDesc descriptor = MethodTypeDesc.of(ClassDesc.ofDescriptor(result.descriptorString()), args);
-        byte[] bytes = ClassFile.of().build(ClassDesc.of(CORE_LANE_OWNER), builder -> builder
-                .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_ABSTRACT)
-                .withMethod("core", descriptor, ClassFile.ACC_PUBLIC | (isStatic ? ClassFile.ACC_STATIC : ClassFile.ACC_ABSTRACT),
-                        method -> {
-                            if (isStatic) method.withCode(code -> code.aconst_null().athrow());
-                        }));
+        Type[] args = new Type[parameters.length];
+        for (int i = 0; i < parameters.length; i++) args[i] = Type.getType(parameters[i]);
+        var writer = new ClassWriter(0);
+        writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT,
+                CORE_LANE_OWNER.replace('.', '/'), null, "java/lang/Object", null);
+        var method = writer.visitMethod(Opcodes.ACC_PUBLIC | (isStatic ? Opcodes.ACC_STATIC : Opcodes.ACC_ABSTRACT),
+                "core", Type.getMethodDescriptor(Type.getType(result), args), null, null);
+        if (isStatic) {
+            method.visitCode();
+            method.visitInsn(Opcodes.ACONST_NULL);
+            method.visitInsn(Opcodes.ATHROW);
+            method.visitMaxs(1, 0);
+        }
+        method.visitEnd();
+        writer.visitEnd();
+        byte[] bytes = writer.toByteArray();
         return new ClassLoader(PublicApiBoundaryTest.class.getClassLoader()) {
             Class<?> define() { return defineClass(CORE_LANE_OWNER, bytes, 0, bytes.length); }
         }.define().getDeclaredMethod("core", parameters);

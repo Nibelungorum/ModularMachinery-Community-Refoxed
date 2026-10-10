@@ -126,8 +126,8 @@ class MachineControllerMenuTest {
 
     @Test
     void metadata_client_menu_keeps_the_open_token_and_inventory_policy_local() {
-        var first = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
-        var second = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        var first = MachineControllerMenu.clientOpen(1, new Inventory(null));
+        var second = MachineControllerMenu.clientOpen(1, new Inventory(null));
         var token = first.uiOpenData().sessionId();
         var slots = List.copyOf(first.slots);
         first.setPlayerInventoryVisible(false);

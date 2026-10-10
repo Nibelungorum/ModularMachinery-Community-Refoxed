@@ -6,7 +6,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,10 +16,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class UiProtocolRegistrationTest {
-    private static final Identifier FIRST = Identifier.parse("test:first");
-    private static final Identifier SECOND = Identifier.parse("test:second");
-    private static final Identifier REQUEST = Identifier.parse("test:request");
-    private static final Identifier STATE = Identifier.parse("test:state");
+    private static final ResourceLocation FIRST = ResourceLocation.parse("test:first");
+    private static final ResourceLocation SECOND = ResourceLocation.parse("test:second");
+    private static final ResourceLocation REQUEST = ResourceLocation.parse("test:request");
+    private static final ResourceLocation STATE = ResourceLocation.parse("test:state");
     private static final StreamCodec<RegistryFriendlyByteBuf, Integer> CODEC = integerCodec();
 
     @Test
@@ -59,8 +59,8 @@ class UiProtocolRegistrationTest {
         assertThat(registry.state(SECOND, STATE).orElseThrow().provider().snapshot(null)).isEqualTo(1);
         assertThat(registry.state(FIRST, REQUEST)).isEmpty();
         assertThat(registry.request(FIRST, STATE)).isEmpty();
-        assertThat(registry.request(Identifier.parse("test:unknown"), REQUEST)).isEmpty();
-        assertThat(registry.state(Identifier.parse("test:unknown"), STATE)).isEmpty();
+        assertThat(registry.request(ResourceLocation.parse("test:unknown"), REQUEST)).isEmpty();
+        assertThat(registry.state(ResourceLocation.parse("test:unknown"), STATE)).isEmpty();
     }
 
     @Test
@@ -134,7 +134,7 @@ class UiProtocolRegistrationTest {
     void protocol_limit_counts_requests_and_states_per_machine_without_partial_registration() {
         var registry = new UiProtocolRegistration(List.of(FIRST, SECOND));
         for (int i = 0; i < 64; i++) {
-            var id = Identifier.parse("test:message_" + i);
+            var id = ResourceLocation.parse("test:message_" + i);
             if (i % 2 == 0) {
                 registry.request(FIRST, new UiProtocolRegistration.RequestType<>(id, 1, CODEC, CODEC),
                         (context, value) -> UiProtocolRegistration.Result.success(value));

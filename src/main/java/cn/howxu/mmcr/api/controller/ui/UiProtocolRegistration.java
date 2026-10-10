@@ -13,7 +13,7 @@ import java.util.Set;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 /** Authoritative, typed controller UI protocol registration window.
@@ -21,19 +21,19 @@ import net.minecraft.server.level.ServerPlayer;
  */
 public final class UiProtocolRegistration {
     private static final int MAX_PROTOCOLS_PER_MACHINE = 64;
-    private final Set<Identifier> machineIds;
+    private final Set<ResourceLocation> machineIds;
     private final Map<Key, RequestRegistration<?, ?>> requests = new LinkedHashMap<>();
     private final Map<Key, StateRegistration<?>> states = new LinkedHashMap<>();
-    private final Map<Identifier, RequestType<?, ?>> requestTypes = new LinkedHashMap<>();
-    private final Map<Identifier, StateType<?>> stateTypes = new LinkedHashMap<>();
-    private final Map<Identifier, List<Capability>> capabilities = new LinkedHashMap<>();
+    private final Map<ResourceLocation, RequestType<?, ?>> requestTypes = new LinkedHashMap<>();
+    private final Map<ResourceLocation, StateType<?>> stateTypes = new LinkedHashMap<>();
+    private final Map<ResourceLocation, List<Capability>> capabilities = new LinkedHashMap<>();
     private boolean frozen;
 
-    public UiProtocolRegistration(Collection<Identifier> machineIds) {
+    public UiProtocolRegistration(Collection<ResourceLocation> machineIds) {
         this.machineIds = Set.copyOf(Objects.requireNonNull(machineIds, "machineIds"));
     }
 
-    public <Q, R> void request(Identifier machineId, RequestType<Q, R> type, Handler<Q, R> handler) {
+    public <Q, R> void request(ResourceLocation machineId, RequestType<Q, R> type, Handler<Q, R> handler) {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(handler, "handler");
         requireRegistration(machineId, type.id(), type.version());
@@ -49,7 +49,7 @@ public final class UiProtocolRegistration {
                 .add(new Capability(type.id(), type.version(), false));
     }
 
-    public <T> void state(Identifier machineId, StateType<T> type, Provider<T> provider) {
+    public <T> void state(ResourceLocation machineId, StateType<T> type, Provider<T> provider) {
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(provider, "provider");
         requireRegistration(machineId, type.id(), type.version());
@@ -64,16 +64,16 @@ public final class UiProtocolRegistration {
                 .add(new Capability(type.id(), type.version(), true));
     }
 
-    public Optional<RequestRegistration<?, ?>> request(Identifier machineId, Identifier id) {
+    public Optional<RequestRegistration<?, ?>> request(ResourceLocation machineId, ResourceLocation id) {
         return Optional.ofNullable(requests.get(new Key(machineId, id)));
     }
 
-    public Optional<StateRegistration<?>> state(Identifier machineId, Identifier id) {
+    public Optional<StateRegistration<?>> state(ResourceLocation machineId, ResourceLocation id) {
         return Optional.ofNullable(states.get(new Key(machineId, id)));
     }
 
     /** Immutable, registration-ordered protocol metadata for a menu's capability handshake. */
-    public List<Capability> capabilities(Identifier machineId) {
+    public List<Capability> capabilities(ResourceLocation machineId) {
         Objects.requireNonNull(machineId, "machineId");
         return List.copyOf(capabilities.getOrDefault(machineId, List.of()));
     }
@@ -84,7 +84,7 @@ public final class UiProtocolRegistration {
         frozen = true;
     }
 
-    private void requireRegistration(Identifier machineId, Identifier messageId, int version) {
+    private void requireRegistration(ResourceLocation machineId, ResourceLocation messageId, int version) {
         if (frozen) throw new IllegalStateException("Controller UI registration is frozen");
         Objects.requireNonNull(machineId, "machineId");
         Objects.requireNonNull(messageId, "messageId");
@@ -99,7 +99,7 @@ public final class UiProtocolRegistration {
         }
     }
 
-    private static void requireType(Identifier id, int version) {
+    private static void requireType(ResourceLocation id, int version) {
         Objects.requireNonNull(id, "id");
         if (version <= 0) throw new IllegalArgumentException("version must be positive");
     }
@@ -107,7 +107,7 @@ public final class UiProtocolRegistration {
     /** A machine-local message key shared by requests and states.
      * @author howxu <dev@howxu.cn>
      */
-    private record Key(Identifier machineId, Identifier id) {
+    private record Key(ResourceLocation machineId, ResourceLocation id) {
         private Key {
             Objects.requireNonNull(machineId, "machineId");
             Objects.requireNonNull(id, "id");
@@ -117,7 +117,7 @@ public final class UiProtocolRegistration {
     /** Typed request and response codecs; reuse the same codecs across machines.
      * @author howxu <dev@howxu.cn>
      */
-    public record RequestType<Q, R>(Identifier id, int version,
+    public record RequestType<Q, R>(ResourceLocation id, int version,
                                     StreamCodec<RegistryFriendlyByteBuf, Q> requestCodec,
                                     StreamCodec<RegistryFriendlyByteBuf, R> responseCodec) {
         public RequestType {
@@ -130,7 +130,7 @@ public final class UiProtocolRegistration {
     /** Typed latest-value state codec.
      * @author howxu <dev@howxu.cn>
      */
-    public record StateType<T>(Identifier id, int version, StreamCodec<RegistryFriendlyByteBuf, T> codec) {
+    public record StateType<T>(ResourceLocation id, int version, StreamCodec<RegistryFriendlyByteBuf, T> codec) {
         public StateType {
             requireType(id, version);
             Objects.requireNonNull(codec, "codec");
@@ -160,7 +160,7 @@ public final class UiProtocolRegistration {
     /** Immutable metadata, without callbacks or codecs, advertised when a menu opens.
      * @author howxu <dev@howxu.cn>
      */
-    public record Capability(Identifier id, int version, boolean state) { }
+    public record Capability(ResourceLocation id, int version, boolean state) { }
 
     /** Transport and handler outcomes share the same status vocabulary.
      * @author howxu <dev@howxu.cn>

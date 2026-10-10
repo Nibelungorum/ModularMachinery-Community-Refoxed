@@ -661,7 +661,7 @@ class FactoryRuntimeTest {
         var opening = new ControllerMenuOpenData(UUID.randomUUID(), Level.OVERWORLD, controller.getBlockPos(),
                 MMCR.id("test_cube"), ControllerUiSnapshot.Kind.FACTORY, ControllerUiSnapshot.Role.NORMAL,
                 false, 0, Optional.empty(), List.of());
-        var menu = new FactoryControllerMenu(3, new Inventory(null, null), opening);
+        var menu = new FactoryControllerMenu(3, new Inventory(null), opening);
         var protocols = new UiProtocolRegistration(List.of(opening.machineId()));
         protocols.freeze();
         var client = new ControllerUiClientSession(menu, opening, Component.translatable("machine.mmcr.test_cube"),

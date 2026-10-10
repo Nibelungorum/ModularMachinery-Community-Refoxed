@@ -7,7 +7,7 @@ import cn.howxu.mmcr.internal.network.ui.ControllerUiPayloadCodec;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PendingUiRequestsTest {
     private static final StreamCodec<RegistryFriendlyByteBuf, Integer> CODEC = StreamCodec.of(
             (buffer, value) -> buffer.writeVarInt(value), RegistryFriendlyByteBuf::readVarInt);
-    private static final RequestType<Integer, Integer> TYPE = new RequestType<>(Identifier.parse("test:request"), 1, CODEC, CODEC);
+    private static final RequestType<Integer, Integer> TYPE = new RequestType<>(ResourceLocation.parse("test:request"), 1, CODEC, CODEC);
 
     @Test
     void timeout_at_deadline_ignores_late_response_and_uses_wrapping_monotonic_time() {

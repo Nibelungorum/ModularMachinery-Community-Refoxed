@@ -3,7 +3,7 @@ package cn.howxu.mmcr.publicapi.event;
 import cn.howxu.mmcr.internal.api.facade.client.UiClientAdapters;
 import cn.howxu.mmcr.publicapi.client.ui.ControllerUiFactory;
 import cn.howxu.mmcr.publicapi.registration.RegistrationException;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Public registration delegates to the frozen authoritative client collector.
  * @author howxu <dev@howxu.cn> */
 class ControllerUiRegistrationTest {
-    private static final Identifier MACHINE = Identifier.parse("test:machine");
-    private static final Identifier OTHER = Identifier.parse("test:other");
+    private static final ResourceLocation MACHINE = ResourceLocation.parse("test:machine");
+    private static final ResourceLocation OTHER = ResourceLocation.parse("test:other");
 
     @Test
     void accepts_known_ids_without_executing_factory_and_copies_known_machine_ids() {

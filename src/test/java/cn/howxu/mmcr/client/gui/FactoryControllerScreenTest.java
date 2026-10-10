@@ -274,7 +274,7 @@ class FactoryControllerScreenTest {
 
     @Test
     void legacy_menu_selection_also_tracks_lane_identity_across_reindexing() {
-        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         var first = new FactoryRuntime.ThreadSnapshot(7, "stable", false, false, false, "", 0, 0, 1,
                 (ExecutionStatus) null);
         menu.applySnapshot(legacyThreads(List.of(FactoryRuntime.ThreadSnapshot.idleBase(), first)));
@@ -429,7 +429,7 @@ class FactoryControllerScreenTest {
     }
 
     private static ControllerUiSnapshotData uiSnapshot(Role role, List<LaneData> lanes) {
-        var opening = FactoryControllerMenu.clientOpen(1, new Inventory(null, null)).uiOpenData();
+        var opening = FactoryControllerMenu.clientOpen(1, new Inventory(null)).uiOpenData();
         return new ControllerUiSnapshotData(opening.sessionId(), 1, true, opening.dimension(), opening.pos(),
                 new HeaderData(MMCR.id("owned_factory"), ControllerUiSnapshot.Kind.FACTORY, role,
                         Component.literal("Owned factory"), true, true, false, 5, MMCR.id("host"), 0, 1,

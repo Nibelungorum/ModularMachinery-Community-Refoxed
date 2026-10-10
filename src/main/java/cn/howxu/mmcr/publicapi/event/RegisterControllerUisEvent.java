@@ -3,7 +3,7 @@ package cn.howxu.mmcr.publicapi.event;
 import cn.howxu.mmcr.internal.api.facade.client.UiClientAdapters;
 import cn.howxu.mmcr.publicapi.client.ui.ControllerUiFactory;
 import java.util.Collection;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 import net.neoforged.fml.event.IModBusEvent;
 import org.jetbrains.annotations.ApiStatus;
@@ -18,14 +18,14 @@ import org.jetbrains.annotations.ApiStatus;
 public final class RegisterControllerUisEvent extends Event implements IModBusEvent {
     private final Registrar registrar;
 
-    public RegisterControllerUisEvent(Collection<Identifier> machineIds) {
+    public RegisterControllerUisEvent(Collection<ResourceLocation> machineIds) {
         registrar = UiClientAdapters.registration(machineIds);
     }
 
     public Registrar registrar() { return registrar; }
 
     /** Rejects unknown IDs, duplicates and registrations after the callback window closes. */
-    public void register(Identifier machineId, ControllerUiFactory factory) {
+    public void register(ResourceLocation machineId, ControllerUiFactory factory) {
         registrar.register(machineId, factory);
     }
 
@@ -35,6 +35,6 @@ public final class RegisterControllerUisEvent extends Event implements IModBusEv
      */
     @ApiStatus.NonExtendable
     public interface Registrar {
-        void register(Identifier machineId, ControllerUiFactory factory);
+        void register(ResourceLocation machineId, ControllerUiFactory factory);
     }
 }

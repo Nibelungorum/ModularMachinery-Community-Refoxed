@@ -26,7 +26,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.jetbrains.annotations.Nullable;
 
@@ -81,7 +81,7 @@ public final class ControllerUiServerSession {
     private final RequestWindow requests = new RequestWindow();
     private @Nullable ControllerUiSnapshotData sentSnapshot;
     private long fullBaselineRevision;
-    private final Map<Identifier, ProviderState> providerStates = new LinkedHashMap<>();
+    private final Map<ResourceLocation, ProviderState> providerStates = new LinkedHashMap<>();
 
     /** Construction binds identities but does not capture, activate, or send a baseline. */
     public ControllerUiServerSession(AbstractContainerMenu menu, MachineControllerBlockEntity owner, ServerPlayer player) {
@@ -149,7 +149,7 @@ public final class ControllerUiServerSession {
 
     private <T> void broadcastState(StateRegistration<T> registration) {
         if (!validate()) return;
-        Identifier id = registration.type().id();
+        ResourceLocation id = registration.type().id();
         ProviderState state = providerStates.computeIfAbsent(id, ignored -> new ProviderState());
         byte[] bytes = state.capture(registration, this::providerContext, level.registryAccess(),
                 (providerRevision, exception) -> logProviderFailure(id, providerRevision, exception));
@@ -175,7 +175,7 @@ public final class ControllerUiServerSession {
                 runtime);
     }
 
-    private void logProviderFailure(Identifier id, @Nullable Long providerRevision, Exception exception) {
+    private void logProviderFailure(ResourceLocation id, @Nullable Long providerRevision, Exception exception) {
         MMCR.LOG.error("Controller UI state failed machine={} state={} session={} revision={}",
                 openData.machineId(), id, openData.sessionId(), providerRevision, exception);
     }
@@ -286,20 +286,20 @@ public final class ControllerUiServerSession {
                 && menu.stillValid(player);
     }
 
-    private Identifier physicalMachineId() {
+    private ResourceLocation physicalMachineId() {
         return ((MachineControllerBlock) owner.getBlockState().getBlock()).machineId();
     }
 
     /** Normalize only the initial null configuration to its physical machine, never to a stale matched machine.
      * @author howxu <dev@howxu.cn>
      */
-    record MachineBinding(Identifier configuredId, Identifier physicalId) {
-        static MachineBinding bind(StructureSnapshot structure, Identifier physicalId) {
+    record MachineBinding(ResourceLocation configuredId, ResourceLocation physicalId) {
+        static MachineBinding bind(StructureSnapshot structure, ResourceLocation physicalId) {
             return new MachineBinding(structure.configuredMachine() == null ? physicalId
                     : structure.configuredMachine().registryName(), physicalId);
         }
 
-        boolean matches(StructureSnapshot structure, Identifier physicalId) {
+        boolean matches(StructureSnapshot structure, ResourceLocation physicalId) {
             return equals(bind(structure, physicalId));
         }
     }

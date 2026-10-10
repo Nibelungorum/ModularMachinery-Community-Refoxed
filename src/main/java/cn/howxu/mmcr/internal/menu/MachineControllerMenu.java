@@ -21,7 +21,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
@@ -57,8 +57,8 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
     private final DataSlot moduleConnected;
     private final DataSlot controllerRole;
     private int clientControllerRole;
-    private @Nullable Identifier clientMachineId;
-    private @Nullable Identifier clientConnectedHostId;
+    private @Nullable ResourceLocation clientMachineId;
+    private @Nullable ResourceLocation clientConnectedHostId;
     private @Nullable PktMachineStatePayload clientSnapshot;
     private @Nullable PktMachineStatePayload lastSentSnapshot;
     private final ControllerMenuOpenData uiOpenData;
@@ -117,12 +117,12 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         this.clientControllerRole = controllerRoleSyncValue(owner);
         this.clientMachineId = machineIdFor(owner);
         this.clientConnectedHostId = owner == null ? null
-                : machineState(owner).connectedHostId().isEmpty() ? null : Identifier.parse(machineState(owner).connectedHostId());
+                : machineState(owner).connectedHostId().isEmpty() ? null : ResourceLocation.parse(machineState(owner).connectedHostId());
         addControllerPlayerSlots(playerInv);
     }
 
-    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos, @Nullable Identifier machineId,
-                                 @Nullable Identifier connectedHostId, int controllerRole, boolean formed, int installedModuleCount) {
+    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos, @Nullable ResourceLocation machineId,
+                                 @Nullable ResourceLocation connectedHostId, int controllerRole, boolean formed, int installedModuleCount) {
         this(containerId, playerInv, ControllerMenuOpenData.legacy(
                 playerInv.player == null ? null : playerInv.player.level(), pos, machineId, connectedHostId,
                 controllerRole, formed, installedModuleCount, Kind.NORMAL));
@@ -178,8 +178,8 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         return new MachineControllerMenu(containerId, playerInv, ControllerMenuOpenData.read(buf));
     }
 
-    public static void writeClientOpenData(RegistryFriendlyByteBuf buf, BlockPos pos, @Nullable Identifier machineId,
-                                           @Nullable Identifier connectedHostId, int controllerRole, boolean formed,
+    public static void writeClientOpenData(RegistryFriendlyByteBuf buf, BlockPos pos, @Nullable ResourceLocation machineId,
+                                           @Nullable ResourceLocation connectedHostId, int controllerRole, boolean formed,
                                            int installedModuleCount) {
         ControllerMenuOpenData.write(buf, ControllerMenuOpenData.legacy(null, pos, machineId, connectedHostId,
                 controllerRole, formed, installedModuleCount, Kind.NORMAL));
@@ -195,7 +195,7 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
      */
     public ControllerUiSnapshotData legacyUiSnapshot() {
         PktMachineStatePayload value = clientSnapshot;
-        Identifier id = value == null ? uiOpenData.machineId() : identifierOrNull(value.machineId());
+        ResourceLocation id = value == null ? uiOpenData.machineId() : identifierOrNull(value.machineId());
         if (id == null) id = uiOpenData.machineId();
         Machine machine = MachineRegistry.getMachine(id);
         Kind kind = machine != null && machine.behavior() instanceof TickBehavior ? Kind.TICK : uiOpenData.kind();
@@ -207,7 +207,7 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
                 value == null ? uiOpenData.connectedHostId().orElse(null)
                         : value.moduleConnected() ? identifierOrNull(value.connectedHostId()) : null,
                 value == null ? 0 : value.matchedStage(), value == null ? 1 : value.stageCount(),
-                value == null ? List.of() : value.foundLevelIds().stream().map(Identifier::parse).toList(),
+                value == null ? List.of() : value.foundLevelIds().stream().map(ResourceLocation::parse).toList(),
                 value == null ? 0 : value.parallelControllerCount(), value == null ? 1 : value.maxParallelism(),
                 0, 0, MachineRegistry.recipePoolsForMachine(id), value == null ? null : identifierOrNull(value.recipePoolId()),
                 value == null ? null : value.failure(), false, Map.of(), List.of());
@@ -238,24 +238,24 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         return be instanceof MachineControllerBlockEntity controller ? controller : null;
     }
 
-    public @Nullable Identifier machineId() {
+    public @Nullable ResourceLocation machineId() {
         if (clientSnapshot != null) return identifierOrNull(clientSnapshot.machineId());
         MachineStateSnapshot state = localState();
         return state == null ? clientMachineId : state.machineId().isEmpty()
                 ? uiOpenData.machineId() : identifierOrNull(state.machineId());
     }
 
-    public @Nullable Identifier currentRecipePoolId() {
+    public @Nullable ResourceLocation currentRecipePoolId() {
         if (clientSnapshot != null) return identifierOrNull(clientSnapshot.recipePoolId());
         return owner == null ? null : owner.currentRecipePoolId();
     }
 
-    public List<Identifier> recipePoolIds() {
+    public List<ResourceLocation> recipePoolIds() {
         return MachineRegistry.recipePoolsForMachine(machineId());
     }
 
     public boolean isTickMachine() {
-        Identifier machineId = machineId();
+        ResourceLocation machineId = machineId();
         if (machineId == null) return false;
         Machine machine = MachineRegistry.getMachine(machineId);
         return machine != null && machine.behavior() instanceof TickBehavior;
@@ -290,9 +290,9 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         return state == null ? activeTotalTick.get() : state.totalTick();
     }
 
-    public @Nullable Identifier activeRecipeId() {
+    public @Nullable ResourceLocation activeRecipeId() {
         String recipeId = clientSnapshot != null ? clientSnapshot.recipeName() : "";
-        return recipeId.isEmpty() ? null : Identifier.tryParse(recipeId);
+        return recipeId.isEmpty() ? null : ResourceLocation.tryParse(recipeId);
     }
 
     public ControllerRecipePresentation recipePresentation() {
@@ -361,7 +361,7 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         return state == null ? installedModuleCount.get() : state.installedModuleCount();
     }
 
-    public Optional<Identifier> connectedHostId() {
+    public Optional<ResourceLocation> connectedHostId() {
         if (clientSnapshot != null) return Optional.ofNullable(identifierOrNull(clientSnapshot.connectedHostId()));
         MachineStateSnapshot state = localState();
         if (state == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
@@ -447,7 +447,7 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         return controller == null ? 0 : SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).controllerRole();
     }
 
-    private static @Nullable Identifier machineIdFor(@Nullable MachineControllerBlockEntity controller) {
+    private static @Nullable ResourceLocation machineIdFor(@Nullable MachineControllerBlockEntity controller) {
         return controller == null ? null : identifierOrNull(SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).machineId());
     }
 
@@ -466,8 +466,8 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         return SYNC_RUNTIME.machineState(controller.runtimeSnapshot(), controller.currentRecipePoolId());
     }
 
-    private static @Nullable Identifier identifierOrNull(String value) {
-        return value == null || value.isEmpty() ? null : Identifier.parse(value);
+    private static @Nullable ResourceLocation identifierOrNull(String value) {
+        return value == null || value.isEmpty() ? null : ResourceLocation.parse(value);
     }
 
     @Override

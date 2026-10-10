@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -37,7 +38,7 @@ class ControllerUiSlotVisibilityTest {
 
     @Test
     void both_menus_hide_inventory_and_hotbar_without_rebuilding_or_mutating_slots() {
-        Inventory inventory = new Inventory(null, null);
+        Inventory inventory = new Inventory(null);
         for (AbstractContainerMenu menu : List.of(MachineControllerMenu.clientOpen(1, inventory),
                 FactoryControllerMenu.clientOpen(2, inventory))) {
             List<Slot> original = List.copyOf(menu.slots);
@@ -64,7 +65,7 @@ class ControllerUiSlotVisibilityTest {
 
     @Test
     void reset_runs_once_only_for_a_bound_screen_on_a_visible_to_hidden_transition() throws Exception {
-        var menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        var menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
         TestScreen screen = TestScreen.create(menu);
         var visibility = new ControllerUiSlotVisibility(menu, menu.uiOpenData().sessionId(), () -> true,
                 () -> true, () -> menu, () -> screen);
@@ -75,7 +76,7 @@ class ControllerUiSlotVisibilityTest {
         visibility.setPlayerInventoryVisible(false);
         assertThat(screen.resets).isEqualTo(2);
 
-        var other = MachineControllerMenu.clientOpen(2, new Inventory(null, null));
+        var other = MachineControllerMenu.clientOpen(2, new Inventory(null));
         var unrelated = new ControllerUiSlotVisibility(other, other.uiOpenData().sessionId(), () -> true,
                 () -> true, () -> other, () -> screen);
         unrelated.setPlayerInventoryVisible(false);
@@ -84,8 +85,8 @@ class ControllerUiSlotVisibilityTest {
 
     @Test
     void closed_replaced_and_wrong_token_updates_are_ignored_and_both_methods_require_main_thread() {
-        var menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
-        var replacement = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        var menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
+        var replacement = MachineControllerMenu.clientOpen(1, new Inventory(null));
         var current = new AtomicReference<AbstractContainerMenu>(menu);
         var open = new AtomicBoolean(true);
         var visibility = visibility(menu, current, open);
@@ -108,8 +109,8 @@ class ControllerUiSlotVisibilityTest {
 
     @Test
     void synchronous_factory_can_hide_before_installation_but_deferred_or_repeated_initialization_cannot() {
-        var preceding = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
-        var menu = MachineControllerMenu.clientOpen(2, new Inventory(null, null));
+        var preceding = MachineControllerMenu.clientOpen(1, new Inventory(null));
+        var menu = MachineControllerMenu.clientOpen(2, new Inventory(null));
         var current = new AtomicReference<AbstractContainerMenu>(preceding);
         var open = new AtomicBoolean(true);
         var visibility = visibility(menu, current, open);
@@ -135,7 +136,7 @@ class ControllerUiSlotVisibilityTest {
 
     @Test
     void construction_scope_is_consumed_even_if_factory_throws() {
-        var menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        var menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
         var current = new AtomicReference<AbstractContainerMenu>();
         var visibility = visibility(menu, current, new AtomicBoolean(true));
         assertThatThrownBy(() -> visibility.duringScreenConstruction(() -> {
@@ -148,7 +149,7 @@ class ControllerUiSlotVisibilityTest {
 
     @Test
     void bound_menu_visibility_can_change_without_a_current_client_screen() {
-        var menu = MachineControllerMenu.clientOpen(1, new Inventory(null, null));
+        var menu = MachineControllerMenu.clientOpen(1, new Inventory(null));
         var visibility = new ControllerUiSlotVisibility(menu, menu.uiOpenData().sessionId(), () -> true,
                 () -> true, () -> menu);
         visibility.setPlayerInventoryVisible(false);
@@ -182,6 +183,7 @@ class ControllerUiSlotVisibilityTest {
             implements ContainerScreenInputControl {
         private int resets;
         private TestScreen() { super(null, null, Component.empty()); }
+        @Override protected void renderBg(GuiGraphics graphics, float partialTicks, int x, int y) {}
         @Override public void resetControllerSlotInput() { resets++; }
         private static TestScreen create(MachineControllerMenu menu) throws Exception {
             Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");

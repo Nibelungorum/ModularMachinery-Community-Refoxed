@@ -23,7 +23,6 @@ import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.internal.autoio.AutoIoHandler;
 import cn.howxu.mmcr.internal.autoio.AutoIoResult;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
-import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
@@ -58,7 +57,14 @@ import mekanism.api.chemical.IChemicalHandler;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.Capabilities;
-import mekanism.common.capabilities.proxy.AutomatedResourceHandler;
+import mekanism.api.chemical.IMekanismChemicalHandler;
+import mekanism.api.chemical.ChemicalUtils;
+import mekanism.api.fluid.IMekanismFluidHandler;
+import mekanism.api.fluid.ExtendedFluidHandlerUtils;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.capability.IFluidHandlerItem;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
@@ -256,21 +262,95 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
-    public ResourceHandler<FluidResource> manualFluidContainerHandler(ResourceHandler<FluidResource> handler) {
-        return AutomatedResourceHandler.manual(handler);
+    public IFluidHandlerItem manualFluidContainerHandler(IFluidHandlerItem handler) {
+        if (!(handler instanceof IMekanismFluidHandler mekanism)) return handler;
+        return new IFluidHandlerItem() {
+            public ItemStack getContainer() { return handler.getContainer(); }
+            public int getTanks() { return handler.getTanks(); }
+            public FluidStack getFluidInTank(int tank) { return handler.getFluidInTank(tank); }
+            public int getTankCapacity(int tank) { return handler.getTankCapacity(tank); }
+            public boolean isFluidValid(int tank, FluidStack stack) { return handler.isFluidValid(tank, stack); }
+            public int fill(FluidStack stack, FluidAction action) {
+                return stack.getAmount() - ExtendedFluidHandlerUtils.insert(stack, null, mekanism::getFluidTanks,
+                        action.simulate() ? Action.SIMULATE : Action.EXECUTE, AutomationType.MANUAL).getAmount();
+            }
+            public FluidStack drain(FluidStack stack, FluidAction action) {
+                return ExtendedFluidHandlerUtils.extract(stack, null, mekanism::getFluidTanks,
+                        action.simulate() ? Action.SIMULATE : Action.EXECUTE, AutomationType.MANUAL);
+            }
+            public FluidStack drain(int amount, FluidAction action) {
+                return ExtendedFluidHandlerUtils.extract(amount, null, mekanism::getFluidTanks,
+                        action.simulate() ? Action.SIMULATE : Action.EXECUTE, AutomationType.MANUAL);
+            }
+        };
     }
 
     @Override
     public int transferChemicalContainer(ServerPlayer player, AbstractContainerMenu menu,
-                                         int tankIndex, TransactionContext transaction) {
+                                         int tankIndex) {
         if (!(menu instanceof ChemicalPortMenu chemical) || tankIndex != 0) return 0;
         ChemicalPortBlockEntity port = chemical.owner();
         if (!PktPortContainerTransferPayload.validTarget(player, menu, port)) return 0;
-        ItemAccess access = ItemAccess.forPlayerCursor(player, menu);
-        ResourceHandler<ChemicalResource> container = AutomatedResourceHandler.manual(
-                access.getCapability(Capabilities.CHEMICAL.item()));
-        return ContainerResourceTransfer.transfer(port.ioType(), container,
-                port.chemicalHandler(null), transaction);
+        ItemStack carried = menu.getCarried();
+        ItemStack changed = carried.copyWithCount(1);
+        IChemicalHandler container = changed.getCapability(Capabilities.CHEMICAL.item());
+        if (container == null) return 0;
+        IChemicalTank tank = port.chemicalTank();
+        ChemicalStack resource;
+        if (port.ioType() == IOType.INPUT) {
+            resource = drainChemicalContainer(container, tank);
+        } else {
+            resource = tank.extract(Integer.MAX_VALUE, Action.SIMULATE, AutomationType.MANUAL);
+            long accepted = resource.getAmount() - insertContainerChemical(container, resource, Action.EXECUTE).getAmount();
+            if (accepted == 0) return 0;
+            resource = resource.copyWithAmount(accepted);
+        }
+        if (resource.isEmpty()) return 0;
+        long total = resource.getAmount() * carried.getCount();
+        if (total > Integer.MAX_VALUE) return 0;
+        resource = resource.copyWithAmount(total);
+        long available = port.ioType() == IOType.INPUT
+                ? total - tank.insert(resource, Action.SIMULATE, AutomationType.MANUAL).getAmount()
+                : tank.extract(total, Action.SIMULATE, AutomationType.MANUAL).getAmount();
+        if (available != total) return 0;
+        long moved = port.ioType() == IOType.INPUT
+                ? resource.getAmount() - tank.insert(resource, Action.EXECUTE, AutomationType.MANUAL).getAmount()
+                : tank.extract(resource.getAmount(), Action.EXECUTE, AutomationType.MANUAL).getAmount();
+        if (!changed.isEmpty()) changed.setCount(changed.getCount() * carried.getCount());
+        int cursorCount = Math.min(changed.getCount(), changed.getMaxStackSize());
+        menu.setCarried(changed.copyWithCount(cursorCount));
+        if (changed.getCount() > cursorCount) {
+            ItemHandlerHelper.giveItemToPlayer(player, changed.copyWithCount(changed.getCount() - cursorCount));
+        }
+        return (int) moved;
+    }
+
+    static ChemicalStack drainChemicalContainer(IChemicalHandler container, IChemicalTank tank) {
+        ChemicalStack resource = ChemicalStack.EMPTY;
+        for (int index = 0; index < container.getChemicalTanks(); index++) {
+            ChemicalStack candidate = container.getChemicalInTank(index);
+            if (candidate.isEmpty() || !resource.isEmpty() && !ChemicalStack.isSameChemical(resource, candidate)) continue;
+            candidate = candidate.copyWithAmount(Integer.MAX_VALUE);
+            long remaining = candidate.getAmount() - tank.insert(candidate, Action.SIMULATE, AutomationType.MANUAL).getAmount()
+                    - resource.getAmount();
+            if (remaining <= 0) continue;
+            ChemicalStack extracted = extractContainerChemical(container, candidate.copyWithAmount(remaining), Action.EXECUTE);
+            if (extracted.isEmpty()) continue;
+            resource = resource.isEmpty() ? extracted : resource.copyWithAmount(resource.getAmount() + extracted.getAmount());
+        }
+        return resource;
+    }
+
+    private static ChemicalStack extractContainerChemical(IChemicalHandler handler, ChemicalStack stack, Action action) {
+        return handler instanceof IMekanismChemicalHandler mekanism
+                ? ChemicalUtils.extract(stack, null, mekanism::getChemicalTanks, action, AutomationType.MANUAL)
+                : handler.extractChemical(stack, action);
+    }
+
+    private static ChemicalStack insertContainerChemical(IChemicalHandler handler, ChemicalStack stack, Action action) {
+        return handler instanceof IMekanismChemicalHandler mekanism
+                ? ChemicalUtils.insert(stack, null, mekanism::getChemicalTanks, action, AutomationType.MANUAL)
+                : handler.insertChemical(stack, action);
     }
 
     private static boolean matches(BlockPos menuPos, IOPortBlockEntity menuOwner,

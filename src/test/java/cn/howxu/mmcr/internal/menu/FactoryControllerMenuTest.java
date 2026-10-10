@@ -90,7 +90,7 @@ class FactoryControllerMenuTest {
 
     @Test
     void inventory_policy_preserves_local_lane_selection_and_slot_identity() {
-        var menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        var menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(snapshot(0, 1));
         menu.selectThread(1);
         var slots = List.copyOf(menu.slots);

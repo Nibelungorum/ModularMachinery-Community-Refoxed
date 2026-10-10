@@ -16,9 +16,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.fluids.capability.IFluidHandlerItem;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -90,12 +88,12 @@ public interface MekanismBridge {
         return false;
     }
 
-    default ResourceHandler<FluidResource> manualFluidContainerHandler(ResourceHandler<FluidResource> handler) {
+    default IFluidHandlerItem manualFluidContainerHandler(IFluidHandlerItem handler) {
         return handler;
     }
 
     default int transferChemicalContainer(ServerPlayer player, AbstractContainerMenu menu,
-                                          int tankIndex, TransactionContext transaction) {
+                                          int tankIndex) {
         return 0;
     }
 

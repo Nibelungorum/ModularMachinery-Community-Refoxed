@@ -20,7 +20,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
@@ -68,8 +68,8 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
     /** One-shot capture. Repeated server captures should use a session-owned {@link CaptureCache}. */
     public static ControllerUiSnapshotData capture(UUID sessionId, long revision, ResourceKey<Level> dimension,
                                                    BlockPos controllerPos, ControllerRuntimeSnapshot runtime,
-                                                   @Nullable Identifier recipePoolId, boolean hasDataStorage,
-                                                   List<Identifier> recipePools,
+                                                   @Nullable ResourceLocation recipePoolId, boolean hasDataStorage,
+                                                   List<ResourceLocation> recipePools,
                                                    Map<String, ControllerScreenTextSnapshot> laneText) {
         return new CaptureCache().capture(sessionId, revision, dimension, controllerPos, runtime,
                 recipePoolId, hasDataStorage, recipePools, laneText);
@@ -113,7 +113,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
         return new ControllerUiSnapshotData(sessionId, revision, ready, dimension, controllerPos, header, lanes);
     }
 
-    public Identifier machineId() { return header.machineId(); }
+    public ResourceLocation machineId() { return header.machineId(); }
     public Kind kind() { return header.kind(); }
     public Role role() { return header.role(); }
     public Component machineName() { return header.machineName(); }
@@ -121,16 +121,16 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
     public boolean active() { return header.active(); }
     public boolean redstonePaused() { return header.redstonePaused(); }
     public int installedModuleCount() { return header.installedModuleCount(); }
-    public Optional<Identifier> connectedHostId() { return Optional.ofNullable(header.connectedHost()); }
+    public Optional<ResourceLocation> connectedHostId() { return Optional.ofNullable(header.connectedHost()); }
     public int matchedStage() { return header.matchedStage(); }
     public int stageCount() { return header.stageCount(); }
-    public List<Identifier> foundLevelIds() { return header.foundLevelIds(); }
+    public List<ResourceLocation> foundLevelIds() { return header.foundLevelIds(); }
     public int parallelSlots() { return header.parallelSlots(); }
     public long maxParallelism() { return header.maxParallelism(); }
     public int threadLimit() { return header.threadLimit(); }
     public int activeThreadCount() { return header.activeThreadCount(); }
-    public List<Identifier> recipePoolIds() { return header.recipePoolIds(); }
-    public Optional<Identifier> currentRecipePoolId() { return Optional.ofNullable(header.currentRecipePool()); }
+    public List<ResourceLocation> recipePoolIds() { return header.recipePoolIds(); }
+    public Optional<ResourceLocation> currentRecipePoolId() { return Optional.ofNullable(header.currentRecipePool()); }
     public Optional<ExecutionStatus> failure() { return Optional.ofNullable(header.runtimeFailure()); }
     public boolean hasDataStorage() { return header.hasDataStorage(); }
     public Map<String, DataValue> dataStorageValues() { return header.dataStorageValues(); }
@@ -139,12 +139,12 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
 
     /** Owned controller fields, all of which belong to the full snapshot shape.
      * @author howxu <dev@howxu.cn> */
-    public record HeaderData(Identifier machineId, Kind kind, Role role, Component machineName,
+    public record HeaderData(ResourceLocation machineId, Kind kind, Role role, Component machineName,
                              boolean formed, boolean active, boolean redstonePaused, int installedModuleCount,
-                             @Nullable Identifier connectedHost, int matchedStage, int stageCount,
-                             List<Identifier> foundLevelIds, int parallelSlots, long maxParallelism,
-                             int threadLimit, int activeThreadCount, List<Identifier> recipePoolIds,
-                             @Nullable Identifier currentRecipePool, @Nullable ExecutionStatus runtimeFailure,
+                             @Nullable ResourceLocation connectedHost, int matchedStage, int stageCount,
+                             List<ResourceLocation> foundLevelIds, int parallelSlots, long maxParallelism,
+                             int threadLimit, int activeThreadCount, List<ResourceLocation> recipePoolIds,
+                             @Nullable ResourceLocation currentRecipePool, @Nullable ExecutionStatus runtimeFailure,
                              boolean hasDataStorage, Map<String, DataValue> dataStorageValues,
                              List<TextLineData> textLines) {
         public HeaderData {
@@ -168,7 +168,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
     /** Owned static lane fields and the independently replaceable progress tick.
      * @author howxu <dev@howxu.cn> */
     public record LaneData(String id, int index, boolean base, boolean core, boolean active,
-                           @Nullable Identifier currentRecipe, int tick, int totalTick, long parallelism,
+                           @Nullable ResourceLocation currentRecipe, int tick, int totalTick, long parallelism,
                            @Nullable ExecutionStatus runtimeFailure, List<TextLineData> textLines,
                            RecipeData recipe) implements Lane {
         public LaneData {
@@ -177,7 +177,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
             textLines = List.copyOf(textLines);
             Objects.requireNonNull(recipe, "recipe");
         }
-        public Optional<Identifier> recipeId() { return Optional.ofNullable(currentRecipe); }
+        public Optional<ResourceLocation> recipeId() { return Optional.ofNullable(currentRecipe); }
         public Optional<ExecutionStatus> failure() { return Optional.ofNullable(runtimeFailure); }
         public List<TextLine> lines() { return copyLines(textLines); }
         private LaneData withTick(int tick) {
@@ -220,7 +220,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
         private final long amount;
         private final byte[] frozenResource;
         private final RecipeSyncCodec<MachineOutput> codec;
-        private final Identifier kindId;
+        private final ResourceLocation kindId;
         private final RegistryAccess registries;
 
         public OutputData(MachineOutput resource, long amount) {
@@ -276,7 +276,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
 
     /** Component ownership is enforced both on construction and on every read.
      * @author howxu <dev@howxu.cn> */
-    public record TextLineData(Identifier id, TextLine.Scope scope, Component text) implements TextLine {
+    public record TextLineData(ResourceLocation id, TextLine.Scope scope, Component text) implements TextLine {
         public TextLineData {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(scope, "scope");
@@ -288,7 +288,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
 
     /** Delta fields validated before any lane is replaced.
      * @author howxu <dev@howxu.cn> */
-    public record LaneProgress(String laneId, @Nullable Identifier recipeId, int tick, int totalTick, long parallelism) {
+    public record LaneProgress(String laneId, @Nullable ResourceLocation recipeId, int tick, int totalTick, long parallelism) {
         public LaneProgress {
             if (laneId == null || laneId.isBlank()) throw new IllegalArgumentException("Invalid progress lane ID");
             validateProgress(tick, totalTick, parallelism);
@@ -333,8 +333,8 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
 
         public ControllerUiSnapshotData capture(UUID sessionId, long revision, ResourceKey<Level> dimension,
                                                 BlockPos controllerPos, ControllerRuntimeSnapshot runtime,
-                                                @Nullable Identifier recipePoolId, boolean hasDataStorage,
-                                                List<Identifier> recipePools,
+                                                @Nullable ResourceLocation recipePoolId, boolean hasDataStorage,
+                                                List<ResourceLocation> recipePools,
                                                 Map<String, ControllerScreenTextSnapshot> laneText) {
             Objects.requireNonNull(runtime, "runtime");
             if (!sessionId.equals(session)) {
@@ -343,9 +343,9 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
             }
             Machine machine = runtime.structure().machine() == null
                     ? runtime.structure().configuredMachine() : runtime.structure().machine();
-            Identifier machineId = runtime.machineId().isEmpty()
+            ResourceLocation machineId = runtime.machineId().isEmpty()
                     ? Objects.requireNonNull(machine, "Configured machine identity").registryName()
-                    : Identifier.parse(runtime.machineId());
+                    : ResourceLocation.parse(runtime.machineId());
             Kind kind = machine != null && machine.behavior() instanceof TickBehavior ? Kind.TICK
                     : runtime.factoryControllerPresent() ? Kind.FACTORY : Kind.NORMAL;
             Role role = switch (runtime.controllerRole()) {
@@ -359,7 +359,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
             List<LaneData> data = new ArrayList<>();
             if (kind == Kind.FACTORY) {
                 for (var lane : runtime.factory().presentationLanes()) {
-                    Identifier recipeId = lane.recipeId().isEmpty() ? null : Identifier.parse(lane.recipeId());
+                    ResourceLocation recipeId = lane.recipeId().isEmpty() ? null : ResourceLocation.parse(lane.recipeId());
                     LaneProjection projection = laneProjection(lane.laneId(), recipeId, lane.presentation(),
                             laneText.get(lane.laneId()));
                     currentLanes.put(lane.laneId(), projection);
@@ -399,7 +399,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
                 header = new HeaderData(machineId, kind, role, name, runtime.structure().formed(), active,
                         paused, runtime.installedModuleCount(), runtime.moduleConnectionStatus().connectedHostId(),
                         runtime.structure().matchedStage(), machine == null ? 1 : Math.max(1, machine.structureStages().size()),
-                        runtime.foundLevelIds().stream().map(Identifier::parse).toList(), runtime.parallelControllerCount(),
+                        runtime.foundLevelIds().stream().map(ResourceLocation::parse).toList(), runtime.parallelControllerCount(),
                         runtime.maxParallelism(), threadLimit, activeThreads, recipePools, recipePoolId, failure,
                         hasDataStorage, storageValues, globalText.lines);
                 headerKey = nextKey;
@@ -407,7 +407,7 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
             return new ControllerUiSnapshotData(sessionId, revision, true, dimension, controllerPos, header, data);
         }
 
-        private LaneProjection laneProjection(String id, @Nullable Identifier recipeId,
+        private LaneProjection laneProjection(String id, @Nullable ResourceLocation recipeId,
                                               ControllerRecipePresentation presentation,
                                               @Nullable ControllerScreenTextSnapshot text) {
             LaneProjection previous = lanes.get(id);
@@ -447,15 +447,15 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
 
     /** Only the current runtime presentation identity is retained for a lane.
      * @author howxu <dev@howxu.cn> */
-    private record LaneProjection(@Nullable Identifier recipeId, ControllerRecipePresentation source,
+    private record LaneProjection(@Nullable ResourceLocation recipeId, ControllerRecipePresentation source,
                                     RecipeData recipe, TextProjection text) {}
 
     /** Current static inputs allow progress captures to skip component copying and stage projection entirely.
      * @author howxu <dev@howxu.cn> */
-    private record HeaderKey(StructureSnapshot structure, Identifier machineId, String machineName, Kind kind, Role role,
+    private record HeaderKey(StructureSnapshot structure, ResourceLocation machineId, String machineName, Kind kind, Role role,
                               boolean active, boolean paused, int modules, ModuleConnectionStatus connection,
                               List<String> levels, int parallelSlots, long maxParallelism, int threadLimit,
-                              int activeThreads, List<Identifier> pools, @Nullable Identifier pool,
+                              int activeThreads, List<ResourceLocation> pools, @Nullable ResourceLocation pool,
                               @Nullable ExecutionStatus failure, boolean hasStorage,
                               Map<String, DataValue> storage, List<TextLineData> lines) {}
 }

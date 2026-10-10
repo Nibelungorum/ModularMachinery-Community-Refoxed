@@ -23,14 +23,10 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.ModList;
-import net.neoforged.fml.common.EventBusSubscriber;
 import org.nibelungorum.builtin.MODERN_UI;
 
 import java.util.Optional;
@@ -39,16 +35,12 @@ import java.util.concurrent.Executor;
 /** Complete Modern UI replacement for the development storage demo.
  * @author howxu <dev@howxu.cn>
  */
-@EventBusSubscriber(value = Dist.CLIENT)
 public final class ModernUiControllerUi {
     private ModernUiControllerUi() {
     }
 
-    @SubscribeEvent
     public static void register(RegisterControllerUisEvent event) {
-        if (ModList.get().isLoaded("modernui")) {
-            event.register(MODERN_UI.MACHINE_ID, ModernUiControllerUi::create);
-        }
+        event.register(MODERN_UI.MACHINE_ID, ModernUiControllerUi::create);
     }
 
     private static Screen create(ControllerUiOpenContext context) {
@@ -69,7 +61,7 @@ public final class ModernUiControllerUi {
         }
 
         @Override
-        protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
         }
 
         @Override

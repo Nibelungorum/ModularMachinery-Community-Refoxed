@@ -3,7 +3,7 @@ package cn.howxu.mmcr.publicapi.ui;
 import cn.howxu.mmcr.internal.api.facade.ui.UiProtocolAdapters;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.ApiStatus;
 
 /** MMCR-produced typed request descriptor; codecs encode pure protocol data.
@@ -11,12 +11,12 @@ import org.jetbrains.annotations.ApiStatus;
  */
 @ApiStatus.NonExtendable
 public interface UiRequestType<Q, R> {
-    static <Q, R> UiRequestType<Q, R> of(Identifier id, int version,
+    static <Q, R> UiRequestType<Q, R> of(ResourceLocation id, int version,
             StreamCodec<RegistryFriendlyByteBuf, Q> requestCodec,
             StreamCodec<RegistryFriendlyByteBuf, R> responseCodec) {
         return UiProtocolAdapters.requestType(id, version, requestCodec, responseCodec);
     }
 
-    Identifier id();
+    ResourceLocation id();
     int version();
 }

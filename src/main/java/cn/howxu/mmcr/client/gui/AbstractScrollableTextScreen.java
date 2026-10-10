@@ -94,15 +94,19 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
         frameLines = null;
         frameActive = true;
         try {
-            super.extractRenderState(graphics, mouseX, mouseY, partialTicks);
+            renderFrame(graphics, mouseX, mouseY, partialTicks);
         } finally {
             frameActive = false;
             frameLines = null;
         }
+    }
+
+    protected void renderFrame(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
+        super.render(graphics, mouseX, mouseY, partialTicks);
     }
 
     protected final List<ControllerScreenTextComposer.VisualLine> wrappedTextLines() {

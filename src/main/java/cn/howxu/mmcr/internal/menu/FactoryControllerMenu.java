@@ -14,7 +14,7 @@ import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.core.BlockPos;
@@ -111,19 +111,19 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
 
     /** Compatibility projection of stored legacy values, with no block-entity lookup. */
     public ControllerUiSnapshotData legacyUiSnapshot() {
-        Identifier id = machineId();
+        ResourceLocation id = machineId();
         int role = snapshot.machineId().isEmpty() ? uiOpenData.role().ordinal() : snapshot.controllerRole();
         HeaderData header = new HeaderData(id, Kind.FACTORY, Role.values()[role],
                 snapshot.machineName().isEmpty() ? Component.literal(id.toString()) : Component.translatable(snapshot.machineName()),
                 snapshot.formed() || uiOpenData.formed(), snapshot.activeLaneCount() > 0, snapshot.paused(), snapshot.machineId().isEmpty()
                 ? uiOpenData.installedModuleCount() : snapshot.installedModuleCount(), connectedHostId().orElse(null),
-                snapshot.matchedStage(), snapshot.stageCount(), snapshot.foundLevelIds().stream().map(Identifier::parse).toList(),
+                snapshot.matchedStage(), snapshot.stageCount(), snapshot.foundLevelIds().stream().map(ResourceLocation::parse).toList(),
                 snapshot.parallelSlots(), snapshot.maxParallelism(), snapshot.laneLimit(), snapshot.activeLaneCount(),
                 recipePoolIds(), currentRecipePoolId(), snapshot.failure(), false, Map.of(), List.of());
         List<LaneData> lanes = snapshot.presentationLanes().stream().map(thread -> {
             var recipe = thread.presentation();
             return new LaneData(thread.laneId(), thread.index(), thread.baseThread(), thread.coreThread(), thread.active(),
-                    thread.recipeId().isEmpty() ? null : Identifier.parse(thread.recipeId()), thread.tick(), thread.totalTick(),
+                    thread.recipeId().isEmpty() ? null : ResourceLocation.parse(thread.recipeId()), thread.tick(), thread.totalTick(),
                     thread.parallelism(), thread.failure(), List.of(), new RecipeData(recipe.outputs().stream()
                     .map(output -> new OutputData(output.output(), output.amount())).toList(), recipe.energyInputPerTick(),
                     recipe.energyOutputPerTick(), recipe.heatOutputPerTick(), recipe.durationTicks(), recipe.parallelism()));
@@ -154,19 +154,19 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
     }
     public long maxParallelism() { return snapshot.maxParallelism(); }
     public String machineName() { return snapshot.machineName(); }
-    public @Nullable Identifier machineId() {
-        return snapshot.machineId().isEmpty() ? uiOpenData.machineId() : Identifier.tryParse(snapshot.machineId());
+    public @Nullable ResourceLocation machineId() {
+        return snapshot.machineId().isEmpty() ? uiOpenData.machineId() : ResourceLocation.tryParse(snapshot.machineId());
     }
-    public @Nullable Identifier currentRecipePoolId() {
-        return snapshot.recipePoolId().isEmpty() ? null : Identifier.tryParse(snapshot.recipePoolId());
+    public @Nullable ResourceLocation currentRecipePoolId() {
+        return snapshot.recipePoolId().isEmpty() ? null : ResourceLocation.tryParse(snapshot.recipePoolId());
     }
-    public List<Identifier> recipePoolIds() { return MachineRegistry.recipePoolsForMachine(machineId()); }
+    public List<ResourceLocation> recipePoolIds() { return MachineRegistry.recipePoolsForMachine(machineId()); }
     public boolean isModuleController() { return snapshot.machineId().isEmpty()
             ? uiOpenData.role().ordinal() == 2 : snapshot.controllerRole() == 2; }
-    public Optional<Identifier> connectedHostId() {
+    public Optional<ResourceLocation> connectedHostId() {
         return snapshot.machineId().isEmpty() ? uiOpenData.connectedHostId()
                 : Optional.ofNullable(snapshot.connectedHostId().isEmpty()
-                ? null : Identifier.tryParse(snapshot.connectedHostId()));
+                ? null : ResourceLocation.tryParse(snapshot.connectedHostId()));
     }
     public int parallelSlots() { return snapshot.parallelSlots(); }
     public int matchedStage() { return snapshot.matchedStage(); }

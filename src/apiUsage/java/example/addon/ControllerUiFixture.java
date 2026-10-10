@@ -12,7 +12,7 @@ import cn.howxu.mmcr.publicapi.ui.UiResult;
 import cn.howxu.mmcr.publicapi.ui.UiServerContext;
 import cn.howxu.mmcr.publicapi.ui.UiStateProvider;
 import cn.howxu.mmcr.publicapi.ui.UiStateType;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.MenuAccess;
@@ -20,17 +20,17 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 
 /** API-JAR-only addon example; the addon registers its machine and attaches these two listeners.
  * @author howxu <dev@howxu.cn> */
 public final class ControllerUiFixture {
-    public static final Identifier MACHINE_ID = Identifier.parse("example:controller");
+    public static final ResourceLocation MACHINE_ID = ResourceLocation.parse("example:controller");
     public static final UiRequestType<SetMode, SetMode> SET_MODE = UiRequestType.of(
-            Identifier.parse("example:set_mode"), 1, SetMode.CODEC, SetMode.CODEC);
+            ResourceLocation.parse("example:set_mode"), 1, SetMode.CODEC, SetMode.CODEC);
     public static final UiStateType<ModeState> MODE_STATE = UiStateType.of(
-            Identifier.parse("example:mode_state"), 1, ModeState.CODEC);
+            ResourceLocation.parse("example:mode_state"), 1, ModeState.CODEC);
 
     private ControllerUiFixture() {}
 
@@ -148,11 +148,11 @@ public final class ControllerUiFixture {
             });
         }
 
-        @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-            super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-            graphics.text(font, machineName, 16, 16, 0xFFFFFFFF);
-            graphics.text(font, mode, 16, 32, 0xFFFFFFFF);
-            graphics.text(font, feedback, 16, 48, 0xFFFFFFFF);
+        @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            super.render(graphics, mouseX, mouseY, partialTick);
+            graphics.drawString(font, machineName, 16, 16, 0xFFFFFFFF);
+            graphics.drawString(font, mode, 16, 32, 0xFFFFFFFF);
+            graphics.drawString(font, feedback, 16, 48, 0xFFFFFFFF);
         }
 
         @Override public boolean isPauseScreen() { return false; }

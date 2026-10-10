@@ -44,7 +44,7 @@ public final class TestBootstrapMenuFixture {
                         .stream().map(MekanismBridge.PortDeclaration::id).toList());
         bind(ModUIs.MACHINE_CONTROLLER, new MenuType<>(MachineControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
         bind(ModUIs.FACTORY_CONTROLLER, new MenuType<>(FactoryControllerMenu::clientOpen, FeatureFlags.VANILLA_SET));
-        Inventory controllerInventory = new Inventory(null, null);
+        Inventory controllerInventory = new Inventory(null);
         assertThat(new MachineControllerMenu(1, controllerInventory).uiOpenData()).isNotNull();
         assertThat(FactoryControllerMenu.clientOpen(2, controllerInventory).uiOpenData()).isNotNull();
 
@@ -57,7 +57,7 @@ public final class TestBootstrapMenuFixture {
         Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
         unsafeField.setAccessible(true);
         ServerPlayer player = (ServerPlayer) ((Unsafe) unsafeField.get(null)).allocateInstance(ServerPlayer.class);
-        Inventory inventory = new Inventory(player, null);
+        Inventory inventory = new Inventory(player);
         ChemicalPortMenu chemical = new ChemicalPortMenu(3, inventory, BlockPos.ZERO);
         HeatPortMenu heat = new HeatPortMenu(4, inventory, BlockPos.ZERO);
         assertThat(MekanismBridge.get().capabilityIdForMenu(chemical)).isEqualTo(MekanismRecipeTypes.CHEMICAL);

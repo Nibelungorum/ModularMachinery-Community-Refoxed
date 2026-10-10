@@ -27,7 +27,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlags;
@@ -58,11 +58,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Executes native ScreenConstructor.create without a running client or a ready snapshot.
  * @author howxu <dev@howxu.cn> */
 class ControllerUiScreenRouterTest {
-    private static final Identifier MACHINE = Identifier.parse("test:machine");
-    private static final Identifier OTHER = Identifier.parse("test:other");
+    private static final ResourceLocation MACHINE = ResourceLocation.parse("test:machine");
+    private static final ResourceLocation OTHER = ResourceLocation.parse("test:other");
     private static final StreamCodec<RegistryFriendlyByteBuf, Integer> CODEC = StreamCodec.of(
             (buffer, value) -> buffer.writeVarInt(value), buffer -> buffer.readVarInt());
-    private static final RequestType<Integer, Integer> REQUEST = new RequestType<>(Identifier.parse("test:request"), 1, CODEC, CODEC);
+    private static final RequestType<Integer, Integer> REQUEST = new RequestType<>(ResourceLocation.parse("test:request"), 1, CODEC, CODEC);
 
     @BeforeAll
     static void bootstrap() throws Exception { TestBootstrap.bootstrap(); }
@@ -287,7 +287,7 @@ class ControllerUiScreenRouterTest {
      * @author howxu <dev@howxu.cn> */
     private static final class Fixture {
         private final RegisterControllerUisEvent registrations = new RegisterControllerUisEvent(List.of(MACHINE, OTHER));
-        private final Inventory inventory = new Inventory(null, null);
+        private final Inventory inventory = new Inventory(null);
         private final Component title = Component.translatable("test:opening_title");
         private final TestMenu menu;
         private final AtomicReference<AbstractContainerMenu> current = new AtomicReference<>();
@@ -408,7 +408,7 @@ class ControllerUiScreenRouterTest {
      * @author howxu <dev@howxu.cn> */
     private static final class FrameworkScreen extends Screen implements MenuAccess<AbstractContainerMenu> {
         private final AbstractContainerMenu menu;
-        private FrameworkScreen(AbstractContainerMenu menu) { super(null, null, Component.empty()); this.menu = menu; }
+        private FrameworkScreen(AbstractContainerMenu menu) { super(Component.empty()); this.menu = menu; }
         @Override public AbstractContainerMenu getMenu() { return menu; }
     }
 
@@ -418,7 +418,7 @@ class ControllerUiScreenRouterTest {
         private final TestMenu menu;
         private final Inventory inventory;
         private DefaultScreen(TestMenu menu, Inventory inventory, Component title) {
-            super(null, null, title);
+            super(title);
             this.menu = menu;
             this.inventory = inventory;
         }
@@ -428,6 +428,6 @@ class ControllerUiScreenRouterTest {
     /** Invalid author return with no menu access.
      * @author howxu <dev@howxu.cn> */
     private static final class PlainScreen extends Screen {
-        private PlainScreen() { super(null, null, Component.empty()); }
+        private PlainScreen() { super(Component.empty()); }
     }
 }

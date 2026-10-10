@@ -878,7 +878,7 @@ class MachineControllerBlockEntityTest {
         setField(Level.class, level, "registryAccess",
                 RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         ServerPlayer ordinary = player(level, controller.getBlockPos());
-        MachineControllerMenu ordinaryMenu = new MachineControllerMenu(1, new Inventory(ordinary, null), controller);
+        MachineControllerMenu ordinaryMenu = new MachineControllerMenu(1, new Inventory(ordinary), controller);
         assertOpeningSnapshot(ordinary, ordinaryMenu, "open", null);
 
         MachineControllerBlockEntity factoryController = factoryTextController(MMCR.id("controller_text_factory_open"));
@@ -893,7 +893,7 @@ class MachineControllerBlockEntityTest {
         setField(Level.class, factoryLevel, "registryAccess",
                 RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         ServerPlayer factory = player(factoryLevel, factoryController.getBlockPos());
-        FactoryControllerMenu factoryMenu = new FactoryControllerMenu(2, new Inventory(factory, null), factoryController);
+        FactoryControllerMenu factoryMenu = new FactoryControllerMenu(2, new Inventory(factory), factoryController);
         assertOpeningSnapshot(factory, factoryMenu, "factory open", "factory lane open");
         factoryController.sendFactoryControllerState(factory);
         factoryController.sendControllerScreenText(factory);

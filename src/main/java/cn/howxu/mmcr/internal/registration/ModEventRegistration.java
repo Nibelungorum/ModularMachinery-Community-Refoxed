@@ -52,7 +52,7 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTab;
@@ -163,7 +163,7 @@ public final class ModEventRegistration {
         registerPayloads(event.registrar(PAYLOAD_PROTOCOL_VERSION));
     }
 
-    static UiProtocolRegistration collectUiProtocols(Collection<Identifier> machineIds,
+    static UiProtocolRegistration collectUiProtocols(Collection<ResourceLocation> machineIds,
                                                      Consumer<RegisterControllerUiProtocolsEvent> postEvent) {
         var event = new RegisterControllerUiProtocolsEvent(machineIds);
         try {

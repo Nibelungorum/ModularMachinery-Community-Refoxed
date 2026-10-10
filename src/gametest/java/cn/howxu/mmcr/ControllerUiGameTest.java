@@ -42,7 +42,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.Entity;
@@ -67,7 +67,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestException;
+import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.network.Connection;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -89,7 +89,7 @@ import java.util.UUID;
  * @author howxu <dev@howxu.cn>
  */
 public final class ControllerUiGameTest {
-    static final Identifier MACHINE_ID = MMCR.id("controller_ui_storage_fixture");
+    static final ResourceLocation MACHINE_ID = MMCR.id("controller_ui_storage_fixture");
     private static final Map<ServerPlayer, Probe> PROBES = new IdentityHashMap<>();
     private static final Map<Integer, Probe> VIEWERS = new HashMap<>();
     private static final ThreadLocal<Probe> DECODING = new ThreadLocal<>();
@@ -344,7 +344,7 @@ public final class ControllerUiGameTest {
             stranger.containerMenu = stranger.inventoryMenu;
             helper.assertTrue(probe.decodes == 0 && PROBES.get(stranger).decodes == 0 && fixture.revision() == 0,
                     "Wrong actual player and container ID are rejected before decoding");
-            rejectRegistered(helper, fixture, player, 1, Identifier.parse("example:unknown"), 1, Optional.empty(),
+            rejectRegistered(helper, fixture, player, 1, ResourceLocation.parse("example:unknown"), 1, Optional.empty(),
                     new byte[]{2}, Status.UNSUPPORTED);
             rejectRegistered(helper, fixture, player, 2, SET_MODE.id(), 2, Optional.empty(), new byte[]{2}, Status.VERSION_MISMATCH);
             rejectRegistered(helper, fixture, player, 3, SET_MODE.id(), 1, Optional.of("removed"), new byte[]{2}, Status.INVALID_REQUEST);
@@ -421,7 +421,7 @@ public final class ControllerUiGameTest {
     }
 
     private static void rejectRegistered(GameTestHelper helper, Fixture fixture, ServerPlayer player, long id,
-                                         Identifier message, int version, Optional<String> lane, byte[] bytes, Status status) {
+                                         ResourceLocation message, int version, Optional<String> lane, byte[] bytes, Status status) {
         Probe probe = PROBES.get(player);
         int decodes = probe.decodes;
         int handles = probe.handles;
@@ -657,8 +657,8 @@ public final class ControllerUiGameTest {
 
     public static void slotVisibility(GameTestHelper helper) {
         var player = player(helper);
-        var ordinary = new MachineControllerMenu(41, new Inventory(null, null));
-        var factory = FactoryControllerMenu.clientOpen(42, new Inventory(null, null));
+        var ordinary = new MachineControllerMenu(41, new Inventory(null));
+        var factory = FactoryControllerMenu.clientOpen(42, new Inventory(null));
         for (var menu : List.of(ordinary, factory)) {
             var ui = (ControllerUiMenu) menu;
             var slots = List.copyOf(menu.slots);
@@ -706,7 +706,7 @@ public final class ControllerUiGameTest {
     public static void snapshotOwnership(GameTestHelper helper) {
         try {
             verifySnapshotOwnership(helper);
-        } catch (GameTestException failure) {
+        } catch (GameTestAssertException failure) {
             throw failure;
         } catch (RuntimeException failure) {
             MMCR.LOG.error("Controller UI snapshot ownership fixture failed", failure);
@@ -721,7 +721,7 @@ public final class ControllerUiGameTest {
             helper.setBlock(relative.offset(x, y, z), ModBlocks.CASING.get().defaultBlockState());
         }
         helper.setBlock(relative, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
-        var owner = helper.getBlockEntity(relative, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity owner = helper.getBlockEntity(relative);
         owner.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
         owner.serverTick();
         helper.assertTrue(owner.structureSnapshot().formed(), "Ownership fixture forms the real test cube");
@@ -898,9 +898,9 @@ public final class ControllerUiGameTest {
                 .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH));
         helper.setBlock(relative.west(), ModBlocks.DATA_STORAGE.get().defaultBlockState());
         helper.setBlock(relative.east(), ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-        var owner = helper.getBlockEntity(relative, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity owner = helper.getBlockEntity(relative);
         owner.setMachine(MachineRegistry.getMachine(MACHINE_ID));
-        var storage = helper.getBlockEntity(relative.west(), DataStorageBlockEntity.class);
+        DataStorageBlockEntity storage = helper.getBlockEntity(relative.west());
         storage.storage().set("mode", DataValue.of(0));
         storage.storage().set("mode_revision", DataValue.of(0L));
         var machine = MachineRegistry.getMachine(MACHINE_ID);
@@ -974,7 +974,7 @@ public final class ControllerUiGameTest {
         return ControllerUiPayloadCodec.decodeExact(ModeState.CODEC, packet.body(), player.level().registryAccess(),
                 ControllerUiPayloadCodec.STATE_LIMIT);
     }
-    private static PktControllerUiRequestPayload request(ServerPlayer player, long id, Identifier message,
+    private static PktControllerUiRequestPayload request(ServerPlayer player, long id, ResourceLocation message,
                                                         int version, Optional<String> lane, byte[] body) {
         return new PktControllerUiRequestPayload(player.containerMenu.containerId, ui(player).uiOpenData().sessionId(),
                 id, message, version, lane, body);
@@ -1119,7 +1119,7 @@ public final class ControllerUiGameTest {
                 "Menu stillValid is enforced before capturing a snapshot");
         helper.setBlock(relativePos, ModBlocks.controllerFor(MMCR.id("data_storage_tick")).get().defaultBlockState());
         helper.setBlock(relativePos.west(), ModBlocks.DATA_STORAGE.get().defaultBlockState());
-        var tickOwner = helper.getBlockEntity(relativePos, MachineControllerBlockEntity.class);
+        MachineControllerBlockEntity tickOwner = helper.getBlockEntity(relativePos);
         tickOwner.setMachine(MachineRegistry.getMachine(MMCR.id("data_storage_tick")));
         tickOwner.serverTick();
         helper.assertTrue(tickOwner.structureSnapshot().formed(), "TICK fixture forms the working controller/storage pattern");

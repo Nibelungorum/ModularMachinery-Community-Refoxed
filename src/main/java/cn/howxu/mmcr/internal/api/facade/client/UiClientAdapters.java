@@ -17,7 +17,7 @@ import cn.howxu.mmcr.publicapi.ui.UiResult;
 import cn.howxu.mmcr.publicapi.ui.UiStateType;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 
@@ -34,7 +34,7 @@ import java.util.function.Consumer;
 public final class UiClientAdapters {
     private UiClientAdapters() {}
 
-    public static RegisterControllerUisEvent.Registrar registration(Collection<Identifier> machineIds) {
+    public static RegisterControllerUisEvent.Registrar registration(Collection<ResourceLocation> machineIds) {
         return new RegistrationAdapter(new ControllerUiRegistration(machineIds));
     }
 
@@ -64,7 +64,7 @@ public final class UiClientAdapters {
     /** Authoritative collector forwarding with public registration failures.
      * @author howxu <dev@howxu.cn> */
     private record RegistrationAdapter(ControllerUiRegistration delegate) implements RegisterControllerUisEvent.Registrar {
-        @Override public void register(Identifier machineId, ControllerUiFactory factory) {
+        @Override public void register(ResourceLocation machineId, ControllerUiFactory factory) {
             try { delegate.register(machineId, unwrap(factory)); }
             catch (IllegalStateException exception) {
                 throw new RegistrationException(exception.getMessage(), exception);

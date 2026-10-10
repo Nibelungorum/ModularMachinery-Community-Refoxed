@@ -10,7 +10,7 @@ import cn.howxu.mmcr.publicapi.runtime.RuntimeFailure;
 import cn.howxu.mmcr.publicapi.ui.ControllerUiSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 
@@ -44,7 +44,7 @@ public final class UiSnapshotAdapters {
         public boolean ready() { return delegate.ready(); }
         public ResourceKey<Level> dimension() { return delegate.dimension(); }
         public BlockPos controllerPos() { return delegate.controllerPos(); }
-        public Identifier machineId() { return delegate.machineId(); }
+        public ResourceLocation machineId() { return delegate.machineId(); }
         public Kind kind() {
             return switch (delegate.kind()) { case NORMAL -> Kind.NORMAL; case TICK -> Kind.TICK; case FACTORY -> Kind.FACTORY; };
         }
@@ -56,16 +56,16 @@ public final class UiSnapshotAdapters {
         public boolean active() { return delegate.active(); }
         public boolean redstonePaused() { return delegate.redstonePaused(); }
         public int installedModuleCount() { return delegate.installedModuleCount(); }
-        public Optional<Identifier> connectedHostId() { return delegate.connectedHostId(); }
+        public Optional<ResourceLocation> connectedHostId() { return delegate.connectedHostId(); }
         public int matchedStage() { return delegate.matchedStage(); }
         public int stageCount() { return delegate.stageCount(); }
-        public List<Identifier> foundLevelIds() { return delegate.foundLevelIds(); }
+        public List<ResourceLocation> foundLevelIds() { return delegate.foundLevelIds(); }
         public int parallelSlots() { return delegate.parallelSlots(); }
         public long maxParallelism() { return delegate.maxParallelism(); }
         public int threadLimit() { return delegate.threadLimit(); }
         public int activeThreadCount() { return delegate.activeThreadCount(); }
-        public List<Identifier> recipePoolIds() { return delegate.recipePoolIds(); }
-        public Optional<Identifier> currentRecipePoolId() { return delegate.currentRecipePoolId(); }
+        public List<ResourceLocation> recipePoolIds() { return delegate.recipePoolIds(); }
+        public Optional<ResourceLocation> currentRecipePoolId() { return delegate.currentRecipePoolId(); }
         public Optional<RuntimeFailure> failure() { return delegate.failure().map(IoAdapters::wrap); }
         public boolean hasDataStorage() { return delegate.hasDataStorage(); }
         public Map<String, DataKey> dataStorageValues() { return StorageAdapters.values(delegate.dataStorageValues()); }
@@ -82,7 +82,7 @@ public final class UiSnapshotAdapters {
         public boolean base() { return delegate.base(); }
         public boolean core() { return delegate.core(); }
         public boolean active() { return delegate.active(); }
-        public Optional<Identifier> recipeId() { return delegate.recipeId(); }
+        public Optional<ResourceLocation> recipeId() { return delegate.recipeId(); }
         public int tick() { return delegate.tick(); }
         public int totalTick() { return delegate.totalTick(); }
         public long parallelism() { return delegate.parallelism(); }
@@ -123,7 +123,7 @@ public final class UiSnapshotAdapters {
      * @author howxu <dev@howxu.cn> */
     private record TextAdapter(cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot.TextLine delegate)
             implements ControllerUiSnapshot.TextLine {
-        public Identifier id() { return delegate.id(); }
+        public ResourceLocation id() { return delegate.id(); }
         public Scope scope() {
             return switch (delegate.scope()) { case CONTROLLER -> Scope.CONTROLLER; case OPERATION -> Scope.OPERATION; };
         }

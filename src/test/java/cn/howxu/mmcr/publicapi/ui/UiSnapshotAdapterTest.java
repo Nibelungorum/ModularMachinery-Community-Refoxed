@@ -23,7 +23,7 @@ import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -40,9 +40,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class UiSnapshotAdapterTest {
-    private static final Identifier MACHINE = id("facade_machine");
-    private static final Identifier RECIPE = id("facade_recipe");
-    private static final Identifier POOL = id("facade_pool");
+    private static final ResourceLocation MACHINE = id("facade_machine");
+    private static final ResourceLocation RECIPE = id("facade_recipe");
+    private static final ResourceLocation POOL = id("facade_pool");
     private static final OutputType<MutableOutput> OUTPUT_TYPE = new OutputType.Definition<>(id("facade_output"),
             Codec.LONG.xmap(MutableOutput::new, value -> value.amount).fieldOf("amount"),
             (value, chance) -> value, (value, modifiers) -> value, value -> value,
@@ -178,7 +178,7 @@ class UiSnapshotAdapterTest {
         return new ControllerUiSnapshotData(UUID.randomUUID(), 1, true, Level.OVERWORLD, new BlockPos(1, 2, 3), header, List.of(lane));
     }
 
-    private static Identifier id(String value) { return Identifier.fromNamespaceAndPath("mmcr", value); }
+    private static ResourceLocation id(String value) { return ResourceLocation.fromNamespaceAndPath("mmcr", value); }
 
     /** Mutable custom output validates that the facade never exposes the retained core value.
      * @author howxu <dev@howxu.cn> */

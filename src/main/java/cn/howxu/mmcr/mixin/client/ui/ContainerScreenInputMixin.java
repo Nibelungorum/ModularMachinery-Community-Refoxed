@@ -3,10 +3,8 @@ package cn.howxu.mmcr.mixin.client.ui;
 import cn.howxu.mmcr.client.controller.ui.ContainerScreenInputControl;
 import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Final;
@@ -18,7 +16,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.lang.reflect.Field;
 import java.util.Set;
 
 /** Keeps vanilla slot interaction out of hidden controller inventories.
@@ -37,18 +34,8 @@ public abstract class ContainerScreenInputMixin implements ContainerScreenInputC
     @Shadow private boolean doubleclick;
     @Shadow private ItemStack lastQuickMoved;
     @Shadow private boolean skipNextRelease;
-    @Unique private static final Field mmcr$snapbackField = mmcr$findSnapbackField();
-
-    @Unique
-    private static Field mmcr$findSnapbackField() {
-        try {
-            Field field = AbstractContainerScreen.class.getDeclaredField("snapbackData");
-            field.setAccessible(true);
-            return field;
-        } catch (ReflectiveOperationException exception) {
-            throw new ExceptionInInitializerError(exception);
-        }
-    }
+    @Shadow private ItemStack snapbackItem;
+    @Shadow private Slot snapbackEnd;
 
     @Override
     public void resetControllerSlotInput() {
@@ -64,11 +51,8 @@ public abstract class ContainerScreenInputMixin implements ContainerScreenInputC
         doubleclick = false;
         lastQuickMoved = ItemStack.EMPTY;
         skipNextRelease = true;
-        try {
-            mmcr$snapbackField.set(this, null);
-        } catch (IllegalAccessException exception) {
-            throw new IllegalStateException("Cannot clear controller screen snapback animation", exception);
-        }
+        snapbackItem = ItemStack.EMPTY;
+        snapbackEnd = null;
     }
 
     @Unique
@@ -82,37 +66,32 @@ public abstract class ContainerScreenInputMixin implements ContainerScreenInputC
     }
 
     @Inject(method = "keyPressed", at = @At("HEAD"))
-    private void mmcr$key(KeyEvent event, CallbackInfoReturnable<Boolean> callback) {
+    private void mmcr$key(int key, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> callback) {
         mmcr$clearHiddenHover();
     }
 
     @Inject(method = "mouseClicked", at = @At("HEAD"))
-    private void mmcr$click(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> callback) {
+    private void mmcr$click(double x, double y, int button, CallbackInfoReturnable<Boolean> callback) {
         mmcr$clearHiddenHover();
     }
 
     @Inject(method = "mouseDragged", at = @At("HEAD"))
-    private void mmcr$drag(MouseButtonEvent event, double dx, double dy, CallbackInfoReturnable<Boolean> callback) {
+    private void mmcr$drag(double x, double y, int button, double dx, double dy, CallbackInfoReturnable<Boolean> callback) {
         mmcr$clearHiddenHover();
     }
 
     @Inject(method = "mouseReleased", at = @At("HEAD"))
-    private void mmcr$release(MouseButtonEvent event, CallbackInfoReturnable<Boolean> callback) {
-        mmcr$clearHiddenHover();
-    }
-
-    @Inject(method = "mouseScrolled", at = @At("HEAD"))
-    private void mmcr$scroll(double x, double y, double dx, double dy, CallbackInfoReturnable<Boolean> callback) {
+    private void mmcr$release(double x, double y, int button, CallbackInfoReturnable<Boolean> callback) {
         mmcr$clearHiddenHover();
     }
 
     @Inject(method = "slotClicked", at = @At("HEAD"), cancellable = true)
-    private void mmcr$slotClick(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo callback) {
+    private void mmcr$slotClick(Slot slot, int slotId, int button, ClickType input, CallbackInfo callback) {
         if (mmcr$hidden()) callback.cancel();
     }
 
     @Inject(method = "hasClickedOutside", at = @At("HEAD"), cancellable = true)
-    private void mmcr$outside(double x, double y, int left, int top, CallbackInfoReturnable<Boolean> callback) {
+    private void mmcr$outside(double x, double y, int left, int top, int button, CallbackInfoReturnable<Boolean> callback) {
         if (mmcr$hidden()) callback.setReturnValue(false);
     }
 }

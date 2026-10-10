@@ -20,7 +20,7 @@ import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 
 import java.util.ArrayDeque;
@@ -58,7 +58,7 @@ public final class ControllerUiClientSession implements ControllerUiRegistration
     private final PendingUiRequests pending;
     private final ControllerUiSlotVisibility slots;
     private final AtomicReference<ControllerUiSnapshotData> snapshot;
-    private final Map<Identifier, FrozenState> states = new ConcurrentHashMap<>();
+    private final Map<ResourceLocation, FrozenState> states = new ConcurrentHashMap<>();
     private final List<Delivery<ControllerUiSnapshot>> snapshotListeners = new ArrayList<>();
     private final List<StateListener<?>> stateListeners = new ArrayList<>();
     private final List<Delivery<Boolean>> closeListeners = new ArrayList<>();
@@ -128,7 +128,7 @@ public final class ControllerUiClientSession implements ControllerUiRegistration
                         && registration.type().codec() == type.codec()).orElse(false);
     }
 
-    private boolean advertised(Identifier id, int version, boolean state) {
+    private boolean advertised(ResourceLocation id, int version, boolean state) {
         return opening.capabilities().stream().anyMatch(value -> value.id().equals(id)
                 && value.version() == version && value.state() == state);
     }
@@ -399,7 +399,7 @@ public final class ControllerUiClientSession implements ControllerUiRegistration
         private final StateType<T> type;
         private final Delivery<T> delivery;
         private StateListener(StateType<T> type, Delivery<T> delivery) { this.type = type; this.delivery = delivery; }
-        private void publish(Identifier id, FrozenState state) {
+        private void publish(ResourceLocation id, FrozenState state) {
             if (!type.id().equals(id) || state.version != type.version() || delivery.cancelled() || !open) return;
             try {
                 delivery.offer(state.revision, decode(type, state));

@@ -13,7 +13,7 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.event.IModBusEvent;
 import org.junit.jupiter.api.Test;
 
@@ -24,9 +24,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class UiProtocolAdapterTest {
-    private static final Identifier MACHINE = Identifier.parse("test:machine");
-    private static final Identifier REQUEST = Identifier.parse("test:request");
-    private static final Identifier STATE = Identifier.parse("test:state");
+    private static final ResourceLocation MACHINE = ResourceLocation.parse("test:machine");
+    private static final ResourceLocation REQUEST = ResourceLocation.parse("test:request");
+    private static final ResourceLocation STATE = ResourceLocation.parse("test:state");
     private static final StreamCodec<RegistryFriendlyByteBuf, Integer> CODEC = StreamCodec.of(
             (buffer, value) -> buffer.writeVarInt(value), RegistryFriendlyByteBuf::readVarInt);
 
@@ -76,10 +76,10 @@ class UiProtocolAdapterTest {
         MutableComponent argument = Component.translatable("test.argument");
         MutableComponent hover = Component.translatable("test.hover");
         MutableComponent reason = Component.translatable("test.rejected", argument).append(sibling)
-                .withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(hover)));
+                .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover)));
         Component expected = Component.translatable("test.rejected", Component.translatable("test.argument"))
                 .append(Component.translatable("test.sibling"))
-                .withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(Component.translatable("test.hover"))));
+                .withStyle(style -> style.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("test.hover"))));
         UiResult<Integer> rejected = UiResult.reject(reason);
         sibling.append(" input mutation");
         argument.append(" input mutation");
@@ -90,7 +90,7 @@ class UiProtocolAdapterTest {
         Component second = rejected.message().orElseThrow();
         ((MutableComponent) first.getSiblings().getFirst()).append(" reader mutation");
         ((MutableComponent) ((TranslatableContents) first.getContents()).getArgs()[0]).append(" reader mutation");
-        ((MutableComponent) ((HoverEvent.ShowText) first.getStyle().getHoverEvent()).value()).append(" reader mutation");
+        ((MutableComponent) first.getStyle().getHoverEvent().getValue(HoverEvent.Action.SHOW_TEXT)).append(" reader mutation");
         assertThat(second).isEqualTo(expected);
         assertThat(rejected.message()).contains(expected);
         assertThat(UiProtocolAdapters.unwrap(rejected).message()).contains(expected);
@@ -165,7 +165,7 @@ class UiProtocolAdapterTest {
         assertThatThrownBy(() -> event.registrar().request(MACHINE, request,
                 (context, value) -> UiResult.success(-1)))
                 .isInstanceOf(RegistrationException.class).hasMessageContaining("Duplicate");
-        assertThatThrownBy(() -> event.registrar().request(Identifier.parse("test:unknown"), request,
+        assertThatThrownBy(() -> event.registrar().request(ResourceLocation.parse("test:unknown"), request,
                 (context, value) -> UiResult.success(value)))
                 .isInstanceOf(RegistrationException.class).hasMessageContaining("Unknown machine");
         assertThat(UiProtocolAdapters.core(event).request(MACHINE, REQUEST)).containsSame(entry);

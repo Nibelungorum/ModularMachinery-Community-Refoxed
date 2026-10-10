@@ -9,11 +9,10 @@ import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
 import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.text.NumberFormat;
@@ -30,7 +29,7 @@ import java.util.function.Supplier;
 public final class MachineControllerScreen extends AbstractScrollableTextScreen<MachineControllerMenu> {
     private static final int IMAGE_WIDTH = 176;
     private static final int IMAGE_HEIGHT = 213;
-    private static final Identifier BACKGROUND = MMCR.id("textures/gui/guicontroller_large.png");
+    private static final ResourceLocation BACKGROUND = MMCR.id("textures/gui/guicontroller_large.png");
     private static final NumberFormat NUMBER_FORMAT = NumberFormat.getIntegerInstance();
     static final int STATUS_LABEL_COLOR = ControllerTextLine.DEFAULT_COLOR;
     static final int UNFORMED_STATUS_COLOR = 0xFFFF5555;
@@ -77,7 +76,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     private void updateRecipePoolButton() {
-        List<Identifier> recipePoolIds = snapshot.get().recipePoolIds();
+        List<ResourceLocation> recipePoolIds = snapshot.get().recipePoolIds();
         if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
     }
 
@@ -94,23 +93,22 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        super.extractBackground(graphics, mouseX, mouseY, partialTicks);
-        graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, leftPos, topPos, 0, 0,
+    protected void renderBg(GuiGraphics graphics, float partialTicks, int mouseX, int mouseY) {
+        graphics.blit(BACKGROUND, leftPos, topPos, 0, 0,
                 IMAGE_WIDTH, IMAGE_HEIGHT, 256, 256);
     }
 
     @Override
-    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE);
-        graphics.text(font, snapshot.get().machineName(), (int) (titleLabelX / DETAIL_SCALE),
+    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
+        graphics.pose().pushPose();
+        graphics.pose().scale(DETAIL_SCALE, DETAIL_SCALE, 1F);
+        graphics.drawString(font, snapshot.get().machineName(), (int) (titleLabelX / DETAIL_SCALE),
                 (int) (titleLabelY / DETAIL_SCALE), STATUS_LABEL_COLOR, false);
         renderScrollableText(graphics, (int) (titleLabelX / DETAIL_SCALE), mouseX, mouseY);
-        graphics.pose().popMatrix();
+        graphics.pose().popPose();
     }
 
-    private void renderScrollableText(GuiGraphicsExtractor graphics, int x, int mouseX, int mouseY) {
+    private void renderScrollableText(GuiGraphics graphics, int x, int mouseX, int mouseY) {
         List<ControllerScreenTextComposer.VisualLine> lines = wrappedTextLines();
         clampTextScrollOffset();
         int first = firstVisibleTextLine();
@@ -120,6 +118,12 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
             int textY = detailTextY(textLineY(visibleTextRow(index)));
             renderVisualLine(graphics, line, x, textY);
         }
+    }
+
+    @Override
+    protected void renderFrame(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
+        super.renderFrame(graphics, mouseX, mouseY, partialTicks);
+        renderTooltip(graphics, mouseX, mouseY);
         renderScrollableTooltip(graphics, mouseX, mouseY, titleLabelX);
     }
 
@@ -148,7 +152,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return List.copyOf(lines);
     }
 
-    static Identifier displayedRecipePoolId(Identifier current, List<Identifier> supported) {
+    static ResourceLocation displayedRecipePoolId(ResourceLocation current, List<ResourceLocation> supported) {
         return current != null ? current : supported.isEmpty() ? null : supported.getFirst();
     }
 
@@ -185,14 +189,14 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         return Math.clamp((int) ((long) tick * 100 / totalTick), 0, 100);
     }
 
-    static List<ControllerTextLine> moduleStatusLines(boolean hostController, boolean moduleController, int installedModuleCount, Optional<Identifier> connectedHostId) {
+    static List<ControllerTextLine> moduleStatusLines(boolean hostController, boolean moduleController, int installedModuleCount, Optional<ResourceLocation> connectedHostId) {
         if (hostController) return List.of(new ControllerTextLine(Component.translatable("gui.mmcr.controller.installed_modules", Component.literal(NUMBER_FORMAT.format(installedModuleCount))), STATUS_LABEL_COLOR));
         if (!moduleController) return List.of();
         Component host = connectedHostId.isEmpty() ? Component.translatable("gui.mmcr.controller.module_unconnected") : Component.translatable("gui.mmcr.controller.module_connected", hostName(connectedHostId.get()));
         return List.of(new ControllerTextLine(host, connectedHostId.isPresent() ? STATUS_LABEL_COLOR : UNFORMED_STATUS_COLOR));
     }
 
-    private static Component hostName(Identifier id) {
+    private static Component hostName(ResourceLocation id) {
         var machine = MachineRegistry.getMachine(id);
         return machine == null ? Component.literal(id.toString()) : machine.displayName();
     }

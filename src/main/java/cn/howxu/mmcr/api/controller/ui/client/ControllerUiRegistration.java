@@ -6,7 +6,7 @@ import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration.Result;
 import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration.StateType;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 
@@ -25,15 +25,15 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class ControllerUiRegistration {
-    private final Set<Identifier> machineIds;
-    private final Map<Identifier, Factory> factories = new LinkedHashMap<>();
+    private final Set<ResourceLocation> machineIds;
+    private final Map<ResourceLocation, Factory> factories = new LinkedHashMap<>();
     private boolean frozen;
 
-    public ControllerUiRegistration(Collection<Identifier> machineIds) {
+    public ControllerUiRegistration(Collection<ResourceLocation> machineIds) {
         this.machineIds = Set.copyOf(machineIds);
     }
 
-    public void register(Identifier machineId, Factory factory) {
+    public void register(ResourceLocation machineId, Factory factory) {
         Objects.requireNonNull(machineId, "machineId");
         Objects.requireNonNull(factory, "factory");
         if (frozen) throw new IllegalStateException("Controller UI registration is frozen");
@@ -44,7 +44,7 @@ public final class ControllerUiRegistration {
     }
 
     public void freeze() { frozen = true; }
-    public Optional<Factory> find(Identifier machineId) {
+    public Optional<Factory> find(ResourceLocation machineId) {
         return Optional.ofNullable(factories.get(Objects.requireNonNull(machineId, "machineId")));
     }
 
