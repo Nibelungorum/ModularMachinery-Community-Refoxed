@@ -3,6 +3,9 @@ package cn.howxu.mmcr;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterControllerUiProtocolsEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import cn.howxu.mmcr.internal.api.facade.registration.RegistrationAdapters;
 import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
 import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
@@ -44,6 +47,7 @@ import java.util.function.Consumer;
 
 import java.util.List;
 
+@EventBusSubscriber(modid = MMCR.MODID)
 public final class GameTestRegistry {
     private GameTestRegistry() {
     }
@@ -51,6 +55,13 @@ public final class GameTestRegistry {
     public static void registerAll(RegisterGameTestsEvent event) {
         register(event, "patchouli_guide_acquisition", 20,
                 PatchouliGuideGameTest::acquisitionMatchesOptionalInstallation);
+        register(event, "controller_ui_menu_lifecycle", 20,
+                helper -> new ControllerUiGameTest().openMetadataAndLifecycle(helper));
+        register(event, "controller_ui_request_storage", 100, ControllerUiGameTest::requestStorage);
+        register(event, "controller_ui_reopen_stale_request", 100, ControllerUiGameTest::reopenStaleRequest);
+        register(event, "controller_ui_lane_removed", 100, ControllerUiGameTest::laneRemoved);
+        register(event, "controller_ui_slot_visibility", 20, ControllerUiGameTest::slotVisibility);
+        register(event, "controller_ui_snapshot_ownership", 20, ControllerUiGameTest::snapshotOwnership);
         register(event, "registry_reflection_helper", 20, helper -> {
             boolean registered = helper.getLevel().registryAccess()
                     .lookupOrThrow(Registries.TEST_INSTANCE)
@@ -337,6 +348,10 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
+        event.registerMachine(MachineBuilder.machine(ControllerUiGameTest.MACHINE_ID)
+                .displayNameKey("gui.mmcr.ui.test_machine")
+                .allowMultithreading()
+                .factory(factory -> factory.hasFactory(true).threadLimit(4)).build());
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
             Identifier id = MMCR.id(name);
@@ -384,6 +399,12 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(StructureRegistration event) {
+        event.registerStructure(ControllerUiGameTest.MACHINE_ID, structure -> structure.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("SCF")
+                        .where('S', BlockPredicate.deferredBlock(() -> ModBlocks.DATA_STORAGE.get()))
+                        .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(ControllerUiGameTest.MACHINE_ID).get()))
+                        .where('F', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("factory_controller").get()))
+                        .controller('C'))));
         Identifier upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
         event.registerModifier(upgradeBusBlockModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
@@ -524,6 +545,11 @@ public final class GameTestRegistry {
 
     public static void registerRecipes(RegisterMachineRecipesEvent event) {
         registerRecipes(RegistrationAdapters.core(event));
+    }
+
+    @SubscribeEvent
+    public static void registerControllerUiProtocols(RegisterControllerUiProtocolsEvent event) {
+        ControllerUiGameTest.registerProtocols(event);
     }
 
     public static void registerRecipes(MachineRecipeRegistration event) {

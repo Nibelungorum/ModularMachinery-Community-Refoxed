@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.config.CommonConfig;
@@ -68,6 +69,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         buf.writeUtf(state.recipePoolId(), maxStringLength());
         buf.writeVarInt(state.controllerRole());
         buf.writeUtf(state.connectedHostId(), maxStringLength());
+        buf.writeVarInt(state.installedModuleCount());
     }
 
     private static PktFactoryControllerStatePayload read(RegistryFriendlyByteBuf buf) {
@@ -106,7 +108,7 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
         FactorySnapshot snapshot = new FactorySnapshot(formed, active, lanes, laneLimit,
                 activeLaneCount, maxParallelism, paused, threads, machineName, parallelSlots, failure, foundLevelIds,
                 buf.readVarInt(), buf.readVarInt(), buf.readUtf(maxStringLength()), buf.readUtf(maxStringLength()),
-                buf.readVarInt(), buf.readUtf(maxStringLength()));
+                buf.readVarInt(), buf.readUtf(maxStringLength()), buf.readVarInt());
         validateSnapshot(snapshot);
         return new PktFactoryControllerStatePayload(pos, snapshot);
     }
@@ -238,7 +240,8 @@ public record PktFactoryControllerStatePayload(BlockPos controllerPos, FactorySn
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
             if (context.player().containerMenu instanceof FactoryControllerMenu menu
-                    && menu.controllerPos().equals(controllerPos)) {
+                    && menu.controllerPos().equals(controllerPos)
+                    && !ControllerUiClientEvents.hasActiveSession(context.player().containerMenu)) {
                 menu.applySnapshot(snapshot);
             }
         });

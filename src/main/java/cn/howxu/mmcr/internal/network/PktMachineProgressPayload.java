@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -49,7 +50,8 @@ public record PktMachineProgressPayload(BlockPos pos, String recipeName, int tic
             if (player.level().getBlockEntity(pos) instanceof MachineControllerBlockEntity controller) {
                 controller.applyClientProgress(recipeName, tick, totalTick);
             }
-            if (player.containerMenu instanceof MachineControllerMenu menu && menu.controllerPos().equals(pos)) {
+            if (player.containerMenu instanceof MachineControllerMenu menu && menu.controllerPos().equals(pos)
+                    && !ControllerUiClientEvents.hasActiveSession(player.containerMenu)) {
                 menu.applyClientProgress(recipeName, tick, totalTick);
             }
         });

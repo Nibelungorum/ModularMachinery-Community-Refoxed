@@ -5,16 +5,18 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.menu.ControllerMenuOpenData;
+import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
-import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.ItemStack;
@@ -170,10 +172,21 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
-        return new SimpleMenuProvider(
-                (containerId, playerInv, player) -> createMenu(containerId, playerInv, player,
-                        level.getBlockEntity(pos) instanceof MachineControllerBlockEntity mc ? mc : null),
-                titleFor(machineId));
+        return new MenuProvider() {
+            @Override
+            public Component getDisplayName() { return titleFor(machineId); }
+
+            @Override
+            public @Nullable AbstractContainerMenu createMenu(int containerId, Inventory inventory, Player player) {
+                if (!(level.getBlockEntity(pos) instanceof MachineControllerBlockEntity controller)) return null;
+                return MachineControllerBlock.createMenu(containerId, inventory, player, controller);
+            }
+
+            @Override
+            public void writeClientSideData(AbstractContainerMenu menu, RegistryFriendlyByteBuf buffer) {
+                ControllerMenuOpenData.write(buffer, ((ControllerUiMenu) menu).uiOpenData());
+            }
+        };
     }
 
     static AbstractContainerMenu createMenu(int containerId, Inventory playerInventory,
@@ -181,9 +194,6 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         if (controller != null && controller.hasFactoryController()) {
             return new FactoryControllerMenu(containerId, playerInventory, controller,
                     player instanceof ServerPlayer serverPlayer ? serverPlayer : null);
-        }
-        if (controller != null && player instanceof ServerPlayer serverPlayer) {
-            controller.sendMachineControllerState(serverPlayer);
         }
         return new MachineControllerMenu(containerId, playerInventory, controller);
     }
@@ -212,16 +222,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
-            if (provider != null) player.openMenu(provider, buffer -> {
-                MachineControllerBlockEntity controller = level.getBlockEntity(pos) instanceof MachineControllerBlockEntity mc ? mc : null;
-                var runtime = controller == null ? null : controller.runtimeSnapshot();
-                MachineControllerMenu.writeClientOpenData(buffer, pos, controller == null ? machineId : controller.machineId(),
-                        runtime == null || !runtime.moduleConnectionStatus().connected()
-                                ? null : runtime.moduleConnectionStatus().connectedHostId(),
-                        MachineControllerMenu.controllerRoleSyncValue(controller),
-                        runtime != null && runtime.structure().formed(),
-                        runtime == null ? 0 : runtime.installedModuleCount());
-            });
+            if (provider != null) player.openMenu(provider);
         }
         return InteractionResult.SUCCESS;
     }

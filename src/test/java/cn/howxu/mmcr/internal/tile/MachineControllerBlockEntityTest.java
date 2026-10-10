@@ -56,12 +56,15 @@ import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.ControllerUiEvents;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
@@ -88,6 +91,8 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -125,6 +130,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
@@ -776,6 +782,37 @@ class MachineControllerBlockEntityTest {
         runtimeOf(controller).screenText().append(ControllerScreenTextScope.CONTROLLER,
                 MMCR.id("open_line"), Component.literal("open"));
         ServerLevel level = (ServerLevel) controller.getLevel();
+        setField(Level.class, level, "registryAccess",
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        ServerPlayer ordinary = player(level, controller.getBlockPos());
+        MachineControllerMenu ordinaryMenu = new MachineControllerMenu(1, new Inventory(ordinary, null), controller);
+        assertOpeningSnapshot(ordinary, ordinaryMenu, "open", null);
+
+        MachineControllerBlockEntity factoryController = factoryTextController(MMCR.id("controller_text_factory_open"));
+        MachineControllerRuntime factoryRuntime = runtimeOf(factoryController);
+        factoryRuntime.factoryRuntime().ensureBaseLane(factoryController);
+        factoryRuntime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("factory_open_line"), Component.literal("factory open"));
+        factoryRuntime.recipeScreenText("base").append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("factory_open_lane"), Component.literal("factory lane open"));
+        RuntimeTestFixtures.republish(factoryController);
+        ServerLevel factoryLevel = (ServerLevel) factoryController.getLevel();
+        setField(Level.class, factoryLevel, "registryAccess",
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        ServerPlayer factory = player(factoryLevel, factoryController.getBlockPos());
+        FactoryControllerMenu factoryMenu = new FactoryControllerMenu(2, new Inventory(factory, null), factoryController);
+        assertOpeningSnapshot(factory, factoryMenu, "factory open", "factory lane open");
+        factoryController.sendFactoryControllerState(factory);
+        factoryController.sendControllerScreenText(factory);
+        assertThat(((TestConnection) factory.connection).packets).hasSize(1);
+    }
+
+    @Test
+    void explicit_legacy_senders_keep_text_compatibility_without_factory_constructor_packets() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("controller_text_legacy_open"));
+        runtimeOf(controller).screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("legacy_open_line"), Component.literal("open"));
+        ServerLevel level = (ServerLevel) controller.getLevel();
 
         ServerPlayer ordinary = player(level, controller.getBlockPos());
         controller.sendControllerScreenText(ordinary);
@@ -788,10 +825,52 @@ class MachineControllerBlockEntityTest {
                 MMCR.id("factory_open_line"), Component.literal("factory open"));
         ServerPlayer factory = player((ServerLevel) factoryController.getLevel(), factoryController.getBlockPos());
         new FactoryControllerMenu(2, new Inventory(null, null), factoryController, factory);
+        assertThat(((TestConnection) factory.connection).packets).isEmpty();
+        factoryController.sendFactoryControllerState(factory);
         assertThat(textPackets(factory)).singleElement()
                 .satisfies(packet -> assertThat(packet.controllerPos()).isEqualTo(factoryController.getBlockPos()))
                 .satisfies(packet -> assertThat(packet.lines()).singleElement()
                         .satisfies(line -> assertThat(line.text().getString()).isEqualTo("factory open")));
+    }
+
+    private static void assertOpeningSnapshot(ServerPlayer player, AbstractContainerMenu menu,
+                                              String globalText, String laneText) {
+        ControllerUiMenu uiMenu = (ControllerUiMenu) menu;
+        assertThat(uiMenu.uiServerSession()).isNotNull();
+        assertThat(uiMenu.uiServerSession().active()).isFalse();
+        uiMenu.uiServerSession().broadcastChanges();
+        assertThat(((TestConnection) player.connection).packets).isEmpty();
+
+        player.containerMenu = menu;
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, menu));
+
+        assertThat(uiMenu.uiServerSession().active()).isTrue();
+        assertThat(((TestConnection) player.connection).packets).singleElement().satisfies(packet -> {
+            assertThat(packet).isInstanceOf(ClientboundCustomPayloadPacket.class);
+            assertThat(((ClientboundCustomPayloadPacket) packet).payload())
+                    .isInstanceOfSatisfying(PktControllerUiSnapshotPayload.class, baseline -> {
+                        assertThat(baseline.containerId()).isEqualTo(menu.containerId);
+                        assertThat(baseline.sessionId()).isEqualTo(uiMenu.uiOpenData().sessionId());
+                        assertThat(baseline.revision()).isPositive();
+                        var snapshot = baseline.snapshotData();
+                        assertThat(snapshot.ready()).isTrue();
+                        assertThat(snapshot.dimension()).isEqualTo(uiMenu.uiOpenData().dimension());
+                        assertThat(snapshot.controllerPos()).isEqualTo(uiMenu.uiOpenData().pos());
+                        assertThat(snapshot.machineId()).isEqualTo(uiMenu.uiOpenData().machineId());
+                        assertThat(snapshot.kind()).isEqualTo(uiMenu.uiOpenData().kind());
+                        assertThat(snapshot.lines()).singleElement()
+                                .satisfies(line -> assertThat(line.text().getString()).isEqualTo(globalText));
+                        if (laneText != null) {
+                            assertThat(snapshot.laneData()).filteredOn(lane -> lane.id().equals("base"))
+                                    .singleElement().satisfies(lane -> assertThat(lane.lines()).singleElement()
+                                            .satisfies(line -> assertThat(line.text().getString()).isEqualTo(laneText)));
+                        }
+                    });
+        });
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, menu));
+        uiMenu.uiServerSession().broadcastChanges();
+        assertThat(((TestConnection) player.connection).packets).hasSize(1);
+        assertThat(textPackets(player)).isEmpty();
     }
 
     @Test

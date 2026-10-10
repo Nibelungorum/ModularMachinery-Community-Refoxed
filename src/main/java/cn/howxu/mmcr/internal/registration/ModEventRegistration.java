@@ -1,6 +1,15 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration;
+import cn.howxu.mmcr.internal.api.facade.ui.UiProtocolAdapters;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiServerSession;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiProgressPayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiRequestPayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiResponsePayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiCustomStatePayload;
+import cn.howxu.mmcr.publicapi.event.RegisterControllerUiProtocolsEvent;
 import cn.howxu.mmcr.config.ClientConfig;
 import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.config.ServerConfig;
@@ -42,12 +51,14 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import cn.howxu.mmcr.registry.ModUIs;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTab;
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModLoader;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
@@ -70,13 +81,14 @@ import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
+import java.util.Collection;
 import java.util.function.Consumer;
 
 /** Owns NeoForge mod and game event wiring for MMCR.
  * @author howxu <dev@howxu.cn>
  */
 public final class ModEventRegistration {
-    static final String PAYLOAD_PROTOCOL_VERSION = "8";
+    static final String PAYLOAD_PROTOCOL_VERSION = "9";
 
     private ModEventRegistration() {
     }
@@ -145,6 +157,23 @@ public final class ModEventRegistration {
         ExportCommand.register(event.getDispatcher());
     }
 
+    private static void registerPayloads(RegisterPayloadHandlersEvent event) {
+        UiProtocolRegistration protocols = collectUiProtocols(ModBlockEntities.controllerMachineIds(), ModLoader::postEvent);
+        ControllerUiServerSession.installProtocols(protocols);
+        registerPayloads(event.registrar(PAYLOAD_PROTOCOL_VERSION));
+    }
+
+    static UiProtocolRegistration collectUiProtocols(Collection<Identifier> machineIds,
+                                                     Consumer<RegisterControllerUiProtocolsEvent> postEvent) {
+        var event = new RegisterControllerUiProtocolsEvent(machineIds);
+        try {
+            postEvent.accept(event);
+        } finally {
+            UiProtocolAdapters.freeze(event);
+        }
+        return UiProtocolAdapters.core(event);
+    }
+
     static void registerPayloads(PayloadRegistrar registrar) {
         registrar.playToClient(
                         PktMachineStatePayload.TYPE, PktMachineStatePayload.STREAM_CODEC, PktMachineStatePayload::handle)
@@ -185,7 +214,17 @@ public final class ModEventRegistration {
                   .playToServer(PktRecipePoolSelectPayload.TYPE, PktRecipePoolSelectPayload.STREAM_CODEC,
                          PktRecipePoolSelectPayload::handle)
                  .playToServer(PktTerminalActionPayload.TYPE, PktTerminalActionPayload.STREAM_CODEC,
-                         PktTerminalActionPayload::handle);
+                         PktTerminalActionPayload::handle)
+                .playToClient(PktControllerUiSnapshotPayload.TYPE, PktControllerUiSnapshotPayload.STREAM_CODEC,
+                        PktControllerUiSnapshotPayload::handle)
+                .playToClient(PktControllerUiProgressPayload.TYPE, PktControllerUiProgressPayload.STREAM_CODEC,
+                        PktControllerUiProgressPayload::handle)
+                .playToClient(PktControllerUiResponsePayload.TYPE, PktControllerUiResponsePayload.STREAM_CODEC,
+                        PktControllerUiResponsePayload::handle)
+                .playToClient(PktControllerUiCustomStatePayload.TYPE, PktControllerUiCustomStatePayload.STREAM_CODEC,
+                        PktControllerUiCustomStatePayload::handle)
+                .playToServer(PktControllerUiRequestPayload.TYPE, PktControllerUiRequestPayload.STREAM_CODEC,
+                        PktControllerUiRequestPayload::handle);
     }
 
     private static void onDefaultDataComponentsBound(DefaultDataComponentsBoundEvent event) {
@@ -234,7 +273,7 @@ public final class ModEventRegistration {
         static EventHandlers production() {
             return new EventHandlers(
                     ModCapabilities::register,
-                    event -> registerPayloads(event.registrar(PAYLOAD_PROTOCOL_VERSION)),
+                    ModEventRegistration::registerPayloads,
                     GameTestRegistration::registerTests,
                     StructureDirtyEvents::onBlockPlaced,
                     StructureDirtyEvents::onBlocksPlaced,

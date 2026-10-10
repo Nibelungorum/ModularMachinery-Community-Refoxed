@@ -20,6 +20,9 @@ Special thanks:
 config="mixins/mmcr.mixins.json"
 
 [[mixins]]
+config="mixins/mmcr.ui.mixins.json"
+
+[[mixins]]
 config="mixins/extras/mmcr.jei.mixins.json"
 requiredMods=["jei"]
 
