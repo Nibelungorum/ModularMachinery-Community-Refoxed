@@ -1,6 +1,14 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
+import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration;
+import cn.howxu.mmcr.client.controller.ui.ControllerUiClientSession;
+import cn.howxu.mmcr.internal.menu.ControllerMenuOpenData;
+import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
+import cn.howxu.mmcr.internal.network.ui.ControllerUiPayloadCodec;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.config.ServerConfig;
@@ -57,6 +65,10 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.level.Level;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -80,6 +92,8 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.AbstractList;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -644,6 +658,18 @@ class FactoryRuntimeTest {
         Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot> cache = laneThreadSnapshots(runtime);
         FactoryRecipeThread removedLane = cache.keySet().stream()
                 .filter(lane -> lane.runtime() == removed).findFirst().orElseThrow();
+        var opening = new ControllerMenuOpenData(UUID.randomUUID(), Level.OVERWORLD, controller.getBlockPos(),
+                MMCR.id("test_cube"), ControllerUiSnapshot.Kind.FACTORY, ControllerUiSnapshot.Role.NORMAL,
+                false, 0, Optional.empty(), List.of());
+        var menu = new FactoryControllerMenu(3, new Inventory(null, null), opening);
+        var protocols = new UiProtocolRegistration(List.of(opening.machineId()));
+        protocols.freeze();
+        var client = new ControllerUiClientSession(menu, opening, Component.translatable("machine.mmcr.test_cube"),
+                RegistryAccess.EMPTY, protocols, Runnable::run, System::nanoTime,
+                packet -> { throw new AssertionError("Unexpected client request"); }, () -> true, () -> menu,
+                () -> { throw new AssertionError("Valid factory data must not close the menu"); });
+        var capture = new ControllerUiSnapshotData.CaptureCache();
+        var before = publishFactoryUi(controller, runtime, capture, menu, client, 1);
 
         runtime.setLaneLimit(1);
 
@@ -651,13 +677,63 @@ class FactoryRuntimeTest {
         assertThat(runtime.contains(removed)).isTrue();
         assertThat(removed.active()).isTrue();
         assertThat(cache).containsKey(removedLane);
+        var lowered = publishFactoryUi(controller, runtime, capture, menu, client, 2);
+        assertThat(lowered.sameShape(before)).isFalse();
+        assertThat(client.snapshot().threadLimit()).isEqualTo(runtime.laneLimit()).isEqualTo(1);
+        assertThat(client.snapshot().activeThreadCount()).isEqualTo(runtime.activeLaneCount()).isEqualTo(2);
+        assertThat(client.snapshot().lanes()).extracting(ControllerUiSnapshot.Lane::id)
+                .containsExactlyElementsOf(before.lanes().stream().map(ControllerUiSnapshot.Lane::id).toList());
+        assertThat(client.snapshot().lanes()).allSatisfy(lane -> {
+            var actual = runtime.snapshot().presentationLanes().stream()
+                    .filter(value -> value.laneId().equals(lane.id())).findFirst().orElseThrow();
+            assertThat(lane.active()).isTrue();
+            assertThat(lane.recipeId()).contains(recipe.id());
+            assertThat(lane.tick()).isEqualTo(actual.tick());
+            assertThat(lane.totalTick()).isEqualTo(actual.totalTick());
+            assertThat(lane.recipe().durationTicks()).isEqualTo(actual.presentation().durationTicks());
+            assertThat(lane.parallelism()).isEqualTo(actual.parallelism());
+        });
 
         runtime.tick(List.of(recipe), 1, 1L);
+        var progressed = publishFactoryUi(controller, runtime, capture, menu, client, 3);
+        assertThat(progressed.sameShape(lowered)).isTrue();
+        assertThat(client.snapshot().lanes()).allSatisfy(lane -> assertThat(lane.tick()).isEqualTo(1));
         runtime.tick(List.of(recipe), 1, 2L);
 
         assertThat(runtime.laneCount()).isEqualTo(1);
         assertThat(runtime.contains(removed)).isFalse();
         assertThat(cache).doesNotContainKey(removedLane);
+        var completed = publishFactoryUi(controller, runtime, capture, menu, client, 4);
+        assertThat(completed.sameShape(progressed)).isFalse();
+        assertThat(client.snapshot().lanes()).extracting(ControllerUiSnapshot.Lane::id)
+                .containsExactly("base").doesNotContain(removedLane.laneId());
+        assertThat(client.snapshot().activeThreadCount()).isEqualTo(runtime.activeLaneCount());
+        assertThat(client.isOpen()).isTrue();
+    }
+
+    private static ControllerUiSnapshotData publishFactoryUi(MachineControllerBlockEntity controller, FactoryRuntime runtime,
+                                                             ControllerUiSnapshotData.CaptureCache cache,
+                                                             FactoryControllerMenu menu, ControllerUiClientSession client,
+                                                             long revision) {
+        var source = controller.runtimeSnapshot();
+        var aggregate = new ControllerRuntimeSnapshot(source.structure(), source.capabilityVersion(), source.modifierVersion(),
+                source.stateVersion(), source.foundModifiers(), source.foundLevels(), source.linkedPortPositions(),
+                source.moduleConnectionStatus(), source.installedModuleCount(), source.crafting(), runtime.snapshot(),
+                source.componentPresentations(), source.capabilityPresentations(), source.foundLevelIds(), source.machineId(),
+                source.machineName(), source.controllerRole(), true, true, source.parallelControllerCount(),
+                source.maxParallelControllerCount(), source.maxParallelism());
+        var opening = menu.uiOpenData();
+        var snapshot = cache.capture(opening.sessionId(), revision, opening.dimension(), opening.pos(), aggregate,
+                null, false, List.of(), Map.of());
+        var packet = new PktControllerUiSnapshotPayload(menu.containerId, opening.sessionId(), revision, snapshot);
+        var wire = ControllerUiPayloadCodec.encodeBounded(PktControllerUiSnapshotPayload.STREAM_CODEC, packet,
+                RegistryAccess.EMPTY, ControllerUiPayloadCodec.SNAPSHOT_LIMIT);
+        var decoded = ControllerUiPayloadCodec.decodeExact(PktControllerUiSnapshotPayload.STREAM_CODEC, wire,
+                RegistryAccess.EMPTY, ControllerUiPayloadCodec.SNAPSHOT_LIMIT);
+        assertThat(decoded.snapshotData()).isEqualTo(snapshot);
+        client.handle(decoded);
+        assertThat(client.snapshot().revision()).isEqualTo(revision);
+        return decoded.snapshotData();
     }
 
     @Test

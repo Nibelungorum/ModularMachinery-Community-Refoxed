@@ -1,0 +1,20 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ae2.me_async_output.name",
+  "category": "mmcr:ae2",
+  "icon": "mmcr:ae2_me_async_output_interface",
+  "flag": "mod:ae2",
+  "sortnum": 30,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:ae2_me_async_output_interface",
+      "title": "guide.mmcr_patchouli.entry.ae2.me_async_output.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_async_output.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_async_output.p1"}
+    }
+  ]
+}

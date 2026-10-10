@@ -1,0 +1,27 @@
+{
+  "name": "guide.mmcr_patchouli.entry.mekanism.radioactivity.name",
+  "category": "mmcr:mekanism",
+  "icon": "mmcr:radioactive_chemical_input_hatch",
+  "flag": "mod:mekanism",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:radioactive_chemical_input_hatch",
+      "title": "guide.mmcr_patchouli.entry.mekanism.radioactivity.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.radioactivity.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:radioactive_chemical_output_hatch",
+      "title": "guide.mmcr_patchouli.entry.mekanism.radioactivity.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.radioactivity.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.radioactivity.p2"}
+    }
+  ]
+}

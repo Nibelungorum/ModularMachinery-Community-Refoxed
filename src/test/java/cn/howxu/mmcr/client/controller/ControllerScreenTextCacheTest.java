@@ -74,6 +74,29 @@ class ControllerScreenTextCacheTest {
     }
 
     @Test
+    void clearing_a_removed_controller_accepts_restarted_revisions_at_the_same_position() {
+        ControllerScreenTextSnapshot.Line previous = line("test:previous", "previous controller");
+        ControllerScreenTextSnapshot.Line previousLane = line("test:previous_lane", "previous lane");
+        ControllerScreenTextSnapshot.Line replacement = line("test:replacement", "replacement controller");
+        ControllerScreenTextSnapshot.Line replacementLane = line("test:replacement_lane", "replacement lane");
+        ControllerScreenTextSnapshot.Line other = line("test:other", "other controller");
+
+        assertThat(ControllerScreenTextCache.replace(POS, 100L, List.of(previous))).isTrue();
+        assertThat(ControllerScreenTextCache.replace(POS, "lane-0", 100L, List.of(previousLane))).isTrue();
+        ControllerScreenTextCache.replace(SECOND_POS, 100L, List.of(other));
+
+        ControllerScreenTextCache.clear(POS);
+
+        assertThat(ControllerScreenTextCache.linesAt(POS, "lane-0")).isEmpty();
+        assertThat(ControllerScreenTextCache.linesAt(SECOND_POS)).containsExactly(other);
+        assertThat(ControllerScreenTextCache.replace(POS, 1L, List.of(replacement))).isTrue();
+        assertThat(ControllerScreenTextCache.replace(POS, "lane-0", 1L, List.of(replacementLane))).isTrue();
+        assertThat(ControllerScreenTextCache.linesAt(POS)).containsExactly(replacement);
+        assertThat(ControllerScreenTextCache.linesAt(POS, "lane-0"))
+                .containsExactly(replacement, replacementLane);
+    }
+
+    @Test
     void clear_all_discards_snapshots_and_resets_revision_gate() {
         ControllerScreenTextSnapshot.Line first = line("test:first", "first");
         ControllerScreenTextSnapshot.Line second = line("test:second", "second");

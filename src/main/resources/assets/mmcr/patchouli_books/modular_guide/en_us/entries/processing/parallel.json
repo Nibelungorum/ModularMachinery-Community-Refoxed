@@ -1,0 +1,19 @@
+{
+  "name": "guide.mmcr_patchouli.entry.processing.parallel.name",
+  "category": "mmcr:processing",
+  "icon": "mmcr:parallel_controller_normal",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:parallel_controller_normal",
+      "title": "guide.mmcr_patchouli.entry.processing.parallel.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.processing.parallel.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.processing.parallel.p1"}
+    }
+  ]
+}

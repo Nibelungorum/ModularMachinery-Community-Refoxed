@@ -13,6 +13,10 @@ import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.menu.ControllerMenuOpenData;
+import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot.Kind;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot.Role;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -22,6 +26,10 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.world.level.Level;
+import io.netty.buffer.Unpooled;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -31,8 +39,11 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -102,6 +113,71 @@ class MachineControllerBlockTest {
 
         assertThat(menu).isInstanceOf(MachineControllerMenu.class);
         assertThat(menu).isNotInstanceOf(FactoryControllerMenu.class);
+        assertThat(((ControllerUiMenu) menu).uiOpenData().kind()).isEqualTo(Kind.TICK);
+        assertThat(((ControllerUiMenu) menu).uiOpenData().machineId()).isEqualTo(machineId);
+    }
+
+    @Test
+    void unformed_controller_metadata_uses_physical_identity_without_a_runtime_machine() {
+        var id = MMCR.id("test_cube");
+        var controller = RuntimeTestFixtures.controllerEntity(id, new BlockPos(2, 4, 6));
+        var menu = (ControllerUiMenu) MachineControllerBlock.createMenu(4, new Inventory(null, null), null, controller);
+        assertThat(menu.uiOpenData().machineId()).isEqualTo(id);
+        assertThat(menu.uiOpenData().pos()).isEqualTo(controller.getBlockPos());
+        assertThat(menu.uiOpenData().formed()).isFalse();
+        assertThat(menu.uiServerSession()).isNull();
+    }
+
+    @Test
+    void both_client_readers_preserve_the_same_complete_open_data() {
+        var data = new ControllerMenuOpenData(UUID.randomUUID(), Level.NETHER, new BlockPos(2, 4, 6),
+                MMCR.id("test_cube"), Kind.FACTORY, Role.MODULE, true, 3, Optional.of(MMCR.id("host")),
+                List.of(new ControllerMenuOpenData.Capability(MMCR.id("state"), 2, true)));
+        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            ControllerMenuOpenData.write(buffer, data);
+            var ordinary = MachineControllerMenu.clientOpen(4, new Inventory(null, null), buffer);
+            assertThat(ordinary.uiOpenData()).isEqualTo(data);
+            assertThat(ordinary.uiServerSession()).isNull();
+            assertThat(buffer.isReadable()).isFalse();
+            buffer.readerIndex(0);
+            var factory = FactoryControllerMenu.clientOpen(4, new Inventory(null, null), buffer);
+            assertThat(factory.uiOpenData()).isEqualTo(data);
+            assertThat(factory.machineId()).isEqualTo(data.machineId());
+            assertThat(factory.isModuleController()).isTrue();
+            assertThat(factory.connectedHostId()).isEqualTo(data.connectedHostId());
+            assertThat(factory.uiServerSession()).isNull();
+            assertThat(buffer.isReadable()).isFalse();
+            factory.setPlayerInventoryVisible(false);
+            assertThat(factory.playerInventoryVisible()).isFalse();
+            assertThat(ordinary.playerInventoryVisible()).isTrue();
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void factory_menu_metadata_preserves_the_configured_controller_role() {
+        for (MachineRole role : MachineRole.values()) {
+            var machineId = MMCR.id("factory_metadata_" + role.name().toLowerCase(Locale.ROOT));
+            var machine = new DynamicMachine(machineId, "machine.mmcr.test_cube", new BlockArray(Map.of()),
+                    MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(),
+                    PortRequirementSpec.none(), PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 1,
+                    List.of(), role, Set.of(), List.of(), RecipeFailureActions.getDefaultAction());
+            var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+            var scheduler = new FactorySchedulerBlockEntity(new BlockPos(1, 0, 0),
+                    ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+            controller.setMachine(machine);
+            controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                    null, scheduler, scheduler.getBlockPos(), scheduler.getBlockPos(), (String) null)));
+            RuntimeTestFixtures.republish(controller);
+            var menu = MachineControllerBlock.createMenu(1, new Inventory(null, null), null, controller);
+            assertThat(menu).isInstanceOf(FactoryControllerMenu.class);
+            var data = ((ControllerUiMenu) menu).uiOpenData();
+            assertThat(data.kind()).isEqualTo(Kind.FACTORY);
+            assertThat(data.machineId()).isEqualTo(machineId);
+            assertThat(data.role()).isEqualTo(Role.valueOf(role.name()));
+        }
     }
 
     private static void bind(Object deferredHolder, MenuType<?> menuType) throws Exception {

@@ -15,6 +15,7 @@ import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
+import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.ChatFormatting;
@@ -69,6 +70,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     protected static final int TEXT_VIEW_BOTTOM = 123;
 
     protected boolean autoIOPage;
+    private boolean containerTankClickConsumed;
     private ResourceLocation selectedCapabilityId;
     private Button autoIOPageButton;
     private Button secondaryAutoIOPageButton;
@@ -105,6 +107,10 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
     protected abstract ResourceLocation texture(boolean autoIOPage);
 
+    protected int containerTankIndexAt(double relativeX, double relativeY) {
+        return -1;
+    }
+
     @Override
     protected final void init() {
         super.init();
@@ -121,6 +127,35 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
         if (autoIOPage) return false;
         return super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!autoIOPage && button == 0 && !menu.getCarried().isEmpty()) {
+            int tankIndex = containerTankIndexAt(mouseX - leftPos, mouseY - topPos);
+            if (tankIndex >= 0) {
+                containerTankClickConsumed = true;
+                PacketDistributor.sendToServer(
+                        new PktPortContainerTransferPayload(menu.containerId, tankIndex));
+                return true;
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && containerTankClickConsumed) {
+            containerTankClickConsumed = false;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (button == 0 && containerTankClickConsumed) return true;
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override

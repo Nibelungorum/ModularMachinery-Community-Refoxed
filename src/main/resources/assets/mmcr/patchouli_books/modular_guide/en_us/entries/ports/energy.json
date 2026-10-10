@@ -1,0 +1,26 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.energy.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:energy_input_hatch",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:energy_input_hatch",
+      "title": "guide.mmcr_patchouli.entry.ports.energy.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.energy.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:energy_output_hatch",
+      "title": "guide.mmcr_patchouli.entry.ports.energy.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.energy.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.energy.p2"}
+    }
+  ]
+}

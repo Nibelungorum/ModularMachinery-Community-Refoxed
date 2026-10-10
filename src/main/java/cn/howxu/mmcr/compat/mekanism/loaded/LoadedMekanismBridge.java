@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.internal.autoio.AutoIoHandler;
 import cn.howxu.mmcr.internal.autoio.AutoIoResult;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
+import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
@@ -43,6 +44,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismBridge.MenuRegistrar;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortDeclaration;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortType;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
@@ -56,6 +58,7 @@ import mekanism.api.chemical.IChemicalHandler;
 import mekanism.api.chemical.IChemicalTank;
 import mekanism.api.heat.IHeatHandler;
 import mekanism.common.capabilities.Capabilities;
+import mekanism.common.capabilities.proxy.AutomatedResourceHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
@@ -65,6 +68,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -249,6 +253,24 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             return matches(heat.pos(), heat.owner(), pos, port);
         }
         return false;
+    }
+
+    @Override
+    public ResourceHandler<FluidResource> manualFluidContainerHandler(ResourceHandler<FluidResource> handler) {
+        return AutomatedResourceHandler.manual(handler);
+    }
+
+    @Override
+    public int transferChemicalContainer(ServerPlayer player, AbstractContainerMenu menu,
+                                         int tankIndex, TransactionContext transaction) {
+        if (!(menu instanceof ChemicalPortMenu chemical) || tankIndex != 0) return 0;
+        ChemicalPortBlockEntity port = chemical.owner();
+        if (!PktPortContainerTransferPayload.validTarget(player, menu, port)) return 0;
+        ItemAccess access = ItemAccess.forPlayerCursor(player, menu);
+        ResourceHandler<ChemicalResource> container = AutomatedResourceHandler.manual(
+                access.getCapability(Capabilities.CHEMICAL.item()));
+        return ContainerResourceTransfer.transfer(port.ioType(), container,
+                port.chemicalHandler(null), transaction);
     }
 
     private static boolean matches(BlockPos menuPos, IOPortBlockEntity menuOwner,

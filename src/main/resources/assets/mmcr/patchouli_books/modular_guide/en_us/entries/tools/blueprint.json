@@ -1,0 +1,22 @@
+{
+  "name": "guide.mmcr_patchouli.entry.tools.blueprint.name",
+  "category": "mmcr:tools",
+  "icon": "mmcr:blueprint",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:blueprint",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.tools.blueprint.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.tools.blueprint.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.tools.blueprint.p2"}
+    }
+  ]
+}

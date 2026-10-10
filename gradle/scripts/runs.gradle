@@ -17,7 +17,7 @@ dependencies {
     // time in a bottle
     clientMods("maven.modrinth:${tiab_id}:${tiab_version}")
     // modern ui
-    // clientMods("maven.modrinth:${mui_id}:${mui_version}")
+    clientMods("maven.modrinth:${mui_id}:${mui_version}")
     // JECharacters
     clientMods("curse.maven:${jec_id}:${jec_version}")
     // AE2 x JEI integration

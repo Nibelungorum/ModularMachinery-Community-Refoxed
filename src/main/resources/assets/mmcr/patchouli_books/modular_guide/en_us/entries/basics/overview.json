@@ -1,0 +1,16 @@
+{
+  "name": "guide.mmcr_patchouli.entry.basics.overview.name",
+  "category": "mmcr:basics",
+  "icon": "mmcr:modularium",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.basics.overview.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.basics.overview.p1"}
+    }
+  ]
+}

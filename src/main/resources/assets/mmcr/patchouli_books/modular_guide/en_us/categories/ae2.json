@@ -1,0 +1,7 @@
+{
+  "name": "guide.mmcr_patchouli.category.ae2.name",
+  "description": "guide.mmcr_patchouli.category.ae2.description",
+  "icon": "mmcr:ae2_me_pattern_interface",
+  "sortnum": 70,
+  "flag": "mod:ae2"
+}

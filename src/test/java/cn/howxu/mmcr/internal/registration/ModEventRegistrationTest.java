@@ -1,6 +1,14 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration;
+import cn.howxu.mmcr.internal.api.facade.ui.UiProtocolAdapters;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiProgressPayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiRequestPayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiResponsePayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiCustomStatePayload;
+import cn.howxu.mmcr.publicapi.event.RegisterControllerUiProtocolsEvent;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -22,6 +30,7 @@ import cn.howxu.mmcr.internal.network.PktMultiblockDetectorUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockMismatchHighlightPayload;
 import cn.howxu.mmcr.internal.network.PktMultiblockPreviewPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
+import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
@@ -40,6 +49,7 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.resources.Identifier;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.commands.Commands;
@@ -73,9 +83,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Verifies the mod event wiring through injectable listener and payload registrars.
  * @author howxu <dev@howxu.cn>
@@ -151,7 +163,9 @@ class ModEventRegistrationTest {
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                   PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
-                  PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND);
+                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
+                   PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
+                   PacketFlow.SERVERBOUND);
         assertThat(registrar.types).containsExactly(
                 PktMachineStatePayload.TYPE,
                 PktMachineProgressPayload.TYPE,
@@ -170,15 +184,53 @@ class ModEventRegistrationTest {
                 PktSmartInterfaceUpdatePayload.TYPE,
                  PktAutoIOConfigPayload.TYPE,
                  PktEjectPortContentsPayload.TYPE,
+                 PktPortContainerTransferPayload.TYPE,
                    PktBlueprintStageUpdatePayload.TYPE,
                    PktRecipePoolSelectPayload.TYPE,
-                  PktTerminalActionPayload.TYPE);
+                   PktTerminalActionPayload.TYPE,
+                   PktControllerUiSnapshotPayload.TYPE, PktControllerUiProgressPayload.TYPE,
+                   PktControllerUiResponsePayload.TYPE, PktControllerUiCustomStatePayload.TYPE,
+                   PktControllerUiRequestPayload.TYPE);
         assertThat(registrar.handlers).containsOnly(true);
     }
 
     @Test
     void production_payload_protocol_version_tracks_the_current_packet_layout() {
-        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("8");
+        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("10");
+    }
+
+    @Test
+    void protocol_event_collection_returns_the_same_authoritative_core_and_closes_registration_window() {
+        Identifier machine = Identifier.parse("test:ui_machine"), message = Identifier.parse("test:ui_message");
+        StreamCodec<RegistryFriendlyByteBuf, Integer> codec = StreamCodec.of(
+                (buffer, value) -> buffer.writeVarInt(value), RegistryFriendlyByteBuf::readVarInt);
+        var type = new UiProtocolRegistration.RequestType<>(message, 1, codec, codec);
+        AtomicReference<RegisterControllerUiProtocolsEvent> observed = new AtomicReference<>();
+        var protocols = ModEventRegistration.collectUiProtocols(List.of(machine), event -> {
+            observed.set(event);
+            event.registrar().request(machine, UiProtocolAdapters.wrap(type),
+                    (context, value) -> UiProtocolAdapters.wrap(UiProtocolRegistration.Result.success(value + 1)));
+        });
+        assertThat(protocols).isSameAs(UiProtocolAdapters.core(observed.get()));
+        assertThat(protocols.request(machine, message)).isPresent();
+        assertThat(protocols.capabilities(machine)).containsExactly(new UiProtocolRegistration.Capability(message, 1, false));
+        assertThatThrownBy(() -> protocols.request(machine, type, (context, value) -> UiProtocolRegistration.Result.success(value)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void protocol_event_failure_still_freezes_the_retained_registrar() {
+        Identifier machine = Identifier.parse("test:ui_machine"), message = Identifier.parse("test:ui_message");
+        StreamCodec<RegistryFriendlyByteBuf, Integer> codec = StreamCodec.of(
+                (buffer, value) -> buffer.writeVarInt(value), RegistryFriendlyByteBuf::readVarInt);
+        var type = new UiProtocolRegistration.RequestType<>(message, 1, codec, codec);
+        AtomicReference<RegisterControllerUiProtocolsEvent> observed = new AtomicReference<>();
+        assertThatThrownBy(() -> ModEventRegistration.collectUiProtocols(List.of(machine), event -> {
+            observed.set(event);
+            throw new IllegalStateException("listener failure");
+        })).isInstanceOf(IllegalStateException.class).hasMessage("listener failure");
+        assertThatThrownBy(() -> UiProtocolAdapters.core(observed.get()).request(machine, type,
+                (context, value) -> UiProtocolRegistration.Result.success(value))).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

@@ -10,7 +10,9 @@ import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
-import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
+import cn.howxu.mmcr.internal.event.ControllerUiEvents;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -31,8 +33,6 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 
 import java.util.ArrayList;
@@ -87,11 +87,16 @@ public class MultiFactoryControllerGameTest {
         helper.assertTrue(factoryComponentCount(controller) == 2, "reformed structure should reacquire both capacities");
 
         ServerPlayer ordinary = observer(helper, "mmcr-multi-factory-ordinary");
-        MachineControllerMenu ordinaryMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
+        BlockPos absolutePos = controller.getBlockPos();
+        ordinary.setPos(absolutePos.getX() + 0.5, absolutePos.getY() + 0.5, absolutePos.getZ() + 0.5);
+        MachineControllerMenu ordinaryMenu = new MachineControllerMenu(1, ordinary.getInventory(), controller);
         ordinary.containerMenu = ordinaryMenu;
         ServerPlayer factory = observer(helper, "mmcr-multi-factory-factory");
-        FactoryControllerMenu factoryMenu = new FactoryControllerMenu(2, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller, factory);
+        factory.setPos(absolutePos.getX() + 0.5, absolutePos.getY() + 0.5, absolutePos.getZ() + 0.5);
+        FactoryControllerMenu factoryMenu = new FactoryControllerMenu(2, factory.getInventory(), controller, factory);
         factory.containerMenu = factoryMenu;
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(ordinary, ordinaryMenu));
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(factory, factoryMenu));
         helper.getLevel().players().addAll(List.of(ordinary, factory));
         helper.assertTrue(ordinary.containerMenu == ordinaryMenu && factory.containerMenu == factoryMenu,
                 "ordinary and factory controller menus are active on their players");
@@ -99,39 +104,59 @@ public class MultiFactoryControllerGameTest {
         runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
                 MMCR.id("factory_status"), Component.literal("factory ready"));
         controller.serverTick();
+        ordinaryMenu.broadcastChanges();
+        factoryMenu.broadcastChanges();
         ControllerScreenTextSnapshot first = screenTextSnapshot(controller);
         helper.assertTrue(ordinaryMenu.controllerPos().equals(controller.getBlockPos())
                         && factoryMenu.controllerPos().equals(controller.getBlockPos())
                         && first.lines().size() == 1
                         && first.lines().getFirst().text().getString().equals("factory ready"),
                 "factory menu uses the controller external snapshot");
-        helper.assertTrue(lastScreenTextPacket(ordinary).lines().size() == 1
-                        && lastScreenTextPacket(factory).lines().size() == 1,
+        helper.assertTrue(lastUiPacket(ordinary).snapshotData().lines().size() == 1
+                        && lastUiPacket(factory).snapshotData().lines().size() == 1
+                        && lastUiPacket(factory).snapshotData().laneData().size()
+                        == controller.runtimeSnapshot().factory().presentationLanes().size(),
                 "ordinary and factory active menus receive the controller text snapshot");
 
         runtime(controller).runtimeContext().screenText().append(ControllerScreenTextScope.CONTROLLER,
                 MMCR.id("factory_status"), Component.literal("factory updated"));
-        int ordinaryPackets = screenTextPackets(ordinary);
-        int factoryPackets = screenTextPackets(factory);
+        int ordinaryPackets = uiPackets(ordinary);
+        int factoryPackets = uiPackets(factory);
         controller.serverTick();
+        ordinaryMenu.broadcastChanges();
+        factoryMenu.broadcastChanges();
         ControllerScreenTextSnapshot updated = screenTextSnapshot(controller);
         helper.assertTrue(updated.lines().size() == 1
                         && updated.lines().getFirst().text().getString().equals("factory updated"),
                 "factory runtime propagates a keyed text update");
-        helper.assertTrue(screenTextPackets(ordinary) == ordinaryPackets + 1
-                        && screenTextPackets(factory) == factoryPackets + 1,
+        helper.assertTrue(uiPackets(ordinary) == ordinaryPackets + 1
+                        && uiPackets(factory) == factoryPackets + 1
+                        && lastUiPacket(ordinary).snapshotData().lines().getFirst().text().getString().equals("factory updated")
+                        && lastUiPacket(factory).snapshotData().lines().getFirst().text().getString().equals("factory updated"),
                 "ordinary and factory active menus receive the updated snapshot");
 
-        ordinaryPackets = screenTextPackets(ordinary);
-        factoryPackets = screenTextPackets(factory);
+        ordinaryPackets = uiPackets(ordinary);
+        factoryPackets = uiPackets(factory);
         controller.invalidateFormedStructure();
+        ordinaryMenu.broadcastChanges();
+        factoryMenu.broadcastChanges();
         helper.assertTrue(screenTextSnapshot(controller).lines().isEmpty()
-                        && screenTextPackets(ordinary) == ordinaryPackets + 1
-                        && screenTextPackets(factory) == factoryPackets + 2
-                        && lastScreenTextPacket(ordinary).lines().isEmpty()
-                        && lastScreenTextPacket(factory).lines().isEmpty(),
-                "factory controller reset clears and synchronizes external text");
+                        && uiPackets(ordinary) == ordinaryPackets
+                        && ordinary.containerMenu == ordinary.inventoryMenu
+                        && !ordinaryMenu.uiServerSession().active()
+                        && uiPackets(factory) == factoryPackets
+                        && factory.containerMenu == factory.inventoryMenu
+                        && !factoryMenu.uiServerSession().active(),
+                "Reset clears runtime text and closes both formed menus before sending any stale baseline");
+        MachineControllerMenu resetMenu = new MachineControllerMenu(3, ordinary.getInventory(), controller);
+        ordinary.containerMenu = resetMenu;
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(ordinary, resetMenu));
+        helper.assertTrue(resetMenu.uiServerSession().validate() && uiPackets(ordinary) == ordinaryPackets + 1
+                        && !lastUiPacket(ordinary).snapshotData().formed()
+                        && lastUiPacket(ordinary).snapshotData().lines().isEmpty(),
+                "A new legitimate unformed menu receives the cleared text baseline");
         helper.getLevel().players().removeAll(List.of(ordinary, factory));
+        ordinary.closeContainer();
         helper.succeed();
     }
 
@@ -168,22 +193,22 @@ public class MultiFactoryControllerGameTest {
         return player;
     }
 
-    private static int screenTextPackets(ServerPlayer player) {
+    private static int uiPackets(ServerPlayer player) {
         return (int) ((RecordingConnection) player.connection).packets.stream()
                 .filter(packet -> packet instanceof ClientboundCustomPayloadPacket(
                         net.minecraft.network.protocol.common.custom.CustomPacketPayload payload
                 )
-                        && payload instanceof PktControllerScreenTextPayload)
+                        && payload instanceof PktControllerUiSnapshotPayload)
                 .count();
     }
 
-    private static PktControllerScreenTextPayload lastScreenTextPacket(ServerPlayer player) {
+    private static PktControllerUiSnapshotPayload lastUiPacket(ServerPlayer player) {
         return ((RecordingConnection) player.connection).packets.stream()
                 .filter(packet -> packet instanceof ClientboundCustomPayloadPacket(
                         net.minecraft.network.protocol.common.custom.CustomPacketPayload payload
                 )
-                        && payload instanceof PktControllerScreenTextPayload)
-                .map(packet -> (PktControllerScreenTextPayload) ((ClientboundCustomPayloadPacket) packet).payload())
+                        && payload instanceof PktControllerUiSnapshotPayload)
+                .map(packet -> (PktControllerUiSnapshotPayload) ((ClientboundCustomPayloadPacket) packet).payload())
                 .reduce((first, second) -> second)
                 .orElseThrow();
     }

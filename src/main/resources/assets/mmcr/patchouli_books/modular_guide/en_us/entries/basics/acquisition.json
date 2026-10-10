@@ -1,0 +1,23 @@
+{
+  "name": "guide.mmcr_patchouli.entry.basics.acquisition.name",
+  "category": "mmcr:basics",
+  "icon": "mmcr:textures/item/modular_guide.png",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:crafting",
+      "recipe": "mmcr:modular_guide",
+      "text": {"translate": "guide.mmcr_patchouli.entry.basics.acquisition.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:modularium",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.basics.acquisition.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.basics.acquisition.p2"}
+    }
+  ]
+}

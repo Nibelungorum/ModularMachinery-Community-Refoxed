@@ -1,0 +1,19 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ae2.terminal_storage.name",
+  "category": "mmcr:ae2",
+  "icon": "mmcr:ae2_me_pattern_interface",
+  "flag": "mod:ae2",
+  "sortnum": 50,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:terminal",
+      "link_recipe": false,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.terminal_storage.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.terminal_storage.p1"}
+    }
+  ]
+}

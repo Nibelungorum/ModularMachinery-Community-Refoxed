@@ -3,6 +3,14 @@ package cn.howxu.mmcr.internal.menu;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.definition.TickBehavior;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot.Kind;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot.Role;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.HeaderData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.LaneData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.RecipeData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.OutputData;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiServerSession;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
@@ -13,12 +21,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -26,8 +33,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
+import net.minecraft.network.chat.Component;
 
-public class MachineControllerMenu extends AbstractMachineMenu {
+public class MachineControllerMenu extends AbstractMachineMenu implements ControllerUiMenu {
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     private final MachineControllerBlockEntity owner;
@@ -48,10 +57,13 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     private final DataSlot moduleConnected;
     private final DataSlot controllerRole;
     private int clientControllerRole;
-    private @Nullable ResourceLocation clientMachineId;
-    private @Nullable ResourceLocation clientConnectedHostId;
+    private @Nullable Identifier clientMachineId;
+    private @Nullable Identifier clientConnectedHostId;
     private @Nullable PktMachineStatePayload clientSnapshot;
     private @Nullable PktMachineStatePayload lastSentSnapshot;
+    private final ControllerMenuOpenData uiOpenData;
+    private final @Nullable ControllerUiServerSession uiServerSession;
+    private boolean playerInventoryVisible = true;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -59,6 +71,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.serverPlayer = playerInv.player instanceof ServerPlayer player ? player : null;
         this.level = playerInv.player == null ? null : playerInv.player.level();
         this.pos = owner == null ? BlockPos.ZERO : owner.getBlockPos();
+        this.uiOpenData = ControllerMenuOpenData.forOwner(owner, level, Kind.NORMAL);
+        this.uiServerSession = owner != null && owner.getLevel() != null && serverPlayer != null
+                ? new ControllerUiServerSession(this, owner, serverPlayer) : null;
         wasFormedDuringSession = owner != null && machineState(owner).formed();
         this.formed = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
             @Override public int get() { return machineState(owner).formed() ? 1 : 0; }
@@ -102,17 +117,25 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.clientControllerRole = controllerRoleSyncValue(owner);
         this.clientMachineId = machineIdFor(owner);
         this.clientConnectedHostId = owner == null ? null
-                : machineState(owner).connectedHostId().isEmpty() ? null : ResourceLocation.parse(machineState(owner).connectedHostId());
+                : machineState(owner).connectedHostId().isEmpty() ? null : Identifier.parse(machineState(owner).connectedHostId());
         addControllerPlayerSlots(playerInv);
     }
 
-    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos, @Nullable ResourceLocation machineId,
-                                 @Nullable ResourceLocation connectedHostId, int controllerRole, boolean formed, int installedModuleCount) {
+    public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos, @Nullable Identifier machineId,
+                                 @Nullable Identifier connectedHostId, int controllerRole, boolean formed, int installedModuleCount) {
+        this(containerId, playerInv, ControllerMenuOpenData.legacy(
+                playerInv.player == null ? null : playerInv.player.level(), pos, machineId, connectedHostId,
+                controllerRole, formed, installedModuleCount, Kind.NORMAL));
+    }
+
+    public MachineControllerMenu(int containerId, Inventory playerInv, ControllerMenuOpenData openData) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
         this.owner = null;
         this.serverPlayer = null;
         this.level = playerInv.player == null ? null : playerInv.player.level();
-        this.pos = pos;
+        this.uiOpenData = openData;
+        this.uiServerSession = null;
+        this.pos = openData.pos();
         this.formed = addDataSlot(DataSlot.standalone());
         this.active = addDataSlot(DataSlot.standalone());
         this.activeTick = addDataSlot(DataSlot.standalone());
@@ -125,13 +148,13 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         this.installedModuleCount = addDataSlot(DataSlot.standalone());
         this.moduleConnected = addDataSlot(DataSlot.standalone());
         this.controllerRole = addDataSlot(DataSlot.standalone());
-        this.clientControllerRole = controllerRole;
-        this.clientMachineId = machineId;
-        this.clientConnectedHostId = connectedHostId;
-        this.formed.set(formed ? 1 : 0);
-        this.installedModuleCount.set(Math.max(0, installedModuleCount));
-        this.moduleConnected.set(connectedHostId == null ? 0 : 1);
-        this.controllerRole.set(controllerRole);
+        this.clientControllerRole = openData.role().ordinal();
+        this.clientMachineId = openData.machineId();
+        this.clientConnectedHostId = openData.connectedHostId().orElse(null);
+        this.formed.set(openData.formed() ? 1 : 0);
+        this.installedModuleCount.set(openData.installedModuleCount());
+        this.moduleConnected.set(openData.connectedHostId().isPresent() ? 1 : 0);
+        this.controllerRole.set(openData.role().ordinal());
         addControllerPlayerSlots(playerInv);
     }
 
@@ -140,14 +163,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     private void addControllerPlayerSlots(Inventory playerInv) {
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, 131 + row * 18));
-            }
-        }
-        for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(playerInv, col, 8 + col * 18, 189));
-        }
+        ControllerMenuState.addControllerPlayerSlots(this, playerInv);
     }
 
     public MachineControllerMenu(int containerId, Inventory playerInv) {
@@ -159,24 +175,56 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     }
 
     public static MachineControllerMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buf) {
-        BlockPos pos = buf.readBlockPos();
-        ResourceLocation machineId = readOptionalResourceLocation(buf);
-        ResourceLocation connectedHostId = readOptionalResourceLocation(buf);
-        int controllerRole = buf.readVarInt();
-        boolean formed = buf.readBoolean();
-        int installedModuleCount = buf.readVarInt();
-        return new MachineControllerMenu(containerId, playerInv, pos, machineId, connectedHostId, controllerRole, formed, installedModuleCount);
+        return new MachineControllerMenu(containerId, playerInv, ControllerMenuOpenData.read(buf));
     }
 
-    public static void writeClientOpenData(RegistryFriendlyByteBuf buf, BlockPos pos, @Nullable ResourceLocation machineId,
-                                           @Nullable ResourceLocation connectedHostId, int controllerRole, boolean formed,
+    public static void writeClientOpenData(RegistryFriendlyByteBuf buf, BlockPos pos, @Nullable Identifier machineId,
+                                           @Nullable Identifier connectedHostId, int controllerRole, boolean formed,
                                            int installedModuleCount) {
-        buf.writeBlockPos(pos);
-        writeOptionalResourceLocation(buf, machineId);
-        writeOptionalResourceLocation(buf, connectedHostId);
-        buf.writeVarInt(controllerRole);
-        buf.writeBoolean(formed);
-        buf.writeVarInt(Math.max(0, installedModuleCount));
+        ControllerMenuOpenData.write(buf, ControllerMenuOpenData.legacy(null, pos, machineId, connectedHostId,
+                controllerRole, formed, installedModuleCount, Kind.NORMAL));
+    }
+
+    @Override public ControllerMenuOpenData uiOpenData() { return uiOpenData; }
+    @Override public @Nullable ControllerUiServerSession uiServerSession() { return uiServerSession; }
+    @Override public boolean playerInventoryVisible() { return playerInventoryVisible; }
+    @Override public void setPlayerInventoryVisible(boolean visible) { playerInventoryVisible = visible; }
+
+    /** Compatibility projection for no-buffer callers. Never resolves a live block entity.
+     * Session-backed screens read the session instead.
+     */
+    public ControllerUiSnapshotData legacyUiSnapshot() {
+        PktMachineStatePayload value = clientSnapshot;
+        Identifier id = value == null ? uiOpenData.machineId() : identifierOrNull(value.machineId());
+        if (id == null) id = uiOpenData.machineId();
+        Machine machine = MachineRegistry.getMachine(id);
+        Kind kind = machine != null && machine.behavior() instanceof TickBehavior ? Kind.TICK : uiOpenData.kind();
+        int role = value == null ? uiOpenData.role().ordinal() : value.controllerRole();
+        HeaderData header = new HeaderData(id, kind, Role.values()[role],
+                machine == null ? Component.literal(id.toString()) : machine.displayName(),
+                value == null ? uiOpenData.formed() : value.formed(), value != null && value.active(),
+                value != null && value.redstonePaused(), value == null ? uiOpenData.installedModuleCount() : value.installedModuleCount(),
+                value == null ? uiOpenData.connectedHostId().orElse(null)
+                        : value.moduleConnected() ? identifierOrNull(value.connectedHostId()) : null,
+                value == null ? 0 : value.matchedStage(), value == null ? 1 : value.stageCount(),
+                value == null ? List.of() : value.foundLevelIds().stream().map(Identifier::parse).toList(),
+                value == null ? 0 : value.parallelControllerCount(), value == null ? 1 : value.maxParallelism(),
+                0, 0, MachineRegistry.recipePoolsForMachine(id), value == null ? null : identifierOrNull(value.recipePoolId()),
+                value == null ? null : value.failure(), false, Map.of(), List.of());
+        ControllerRecipePresentation recipe = value == null ? ControllerRecipePresentation.empty() : value.recipePresentation();
+        List<LaneData> lanes = kind == Kind.TICK ? List.of() : List.of(new LaneData("base", 0, true, false,
+                value != null && value.active(), value == null ? null : identifierOrNull(value.recipeName()),
+                value == null ? 0 : value.tick(), value == null ? 0 : value.totalTick(), value == null ? 0 : value.parallelism(),
+                value == null ? null : value.failure(), List.of(), new RecipeData(recipe.outputs().stream()
+                .map(output -> new OutputData(output.output(), output.amount())).toList(), recipe.energyInputPerTick(),
+                recipe.energyOutputPerTick(), recipe.heatOutputPerTick(), recipe.durationTicks(), recipe.parallelism())));
+        return new ControllerUiSnapshotData(uiOpenData.sessionId(), 0, value != null, uiOpenData.dimension(), pos, header, lanes);
+    }
+
+    @Override
+    public void removed(Player player) {
+        if (player instanceof ServerPlayer && uiServerSession != null) uiServerSession.close();
+        super.removed(player);
     }
 
     public MachineControllerBlockEntity owner() {
@@ -190,23 +238,24 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return be instanceof MachineControllerBlockEntity controller ? controller : null;
     }
 
-    public @Nullable ResourceLocation machineId() {
+    public @Nullable Identifier machineId() {
         if (clientSnapshot != null) return identifierOrNull(clientSnapshot.machineId());
         MachineStateSnapshot state = localState();
-        return state == null ? clientMachineId : identifierOrNull(state.machineId());
+        return state == null ? clientMachineId : state.machineId().isEmpty()
+                ? uiOpenData.machineId() : identifierOrNull(state.machineId());
     }
 
-    public @Nullable ResourceLocation currentRecipePoolId() {
+    public @Nullable Identifier currentRecipePoolId() {
         if (clientSnapshot != null) return identifierOrNull(clientSnapshot.recipePoolId());
         return owner == null ? null : owner.currentRecipePoolId();
     }
 
-    public List<ResourceLocation> recipePoolIds() {
+    public List<Identifier> recipePoolIds() {
         return MachineRegistry.recipePoolsForMachine(machineId());
     }
 
     public boolean isTickMachine() {
-        ResourceLocation machineId = machineId();
+        Identifier machineId = machineId();
         if (machineId == null) return false;
         Machine machine = MachineRegistry.getMachine(machineId);
         return machine != null && machine.behavior() instanceof TickBehavior;
@@ -241,9 +290,9 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return state == null ? activeTotalTick.get() : state.totalTick();
     }
 
-    public @Nullable ResourceLocation activeRecipeId() {
+    public @Nullable Identifier activeRecipeId() {
         String recipeId = clientSnapshot != null ? clientSnapshot.recipeName() : "";
-        return recipeId.isEmpty() ? null : ResourceLocation.tryParse(recipeId);
+        return recipeId.isEmpty() ? null : Identifier.tryParse(recipeId);
     }
 
     public ControllerRecipePresentation recipePresentation() {
@@ -312,7 +361,7 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return state == null ? installedModuleCount.get() : state.installedModuleCount();
     }
 
-    public Optional<ResourceLocation> connectedHostId() {
+    public Optional<Identifier> connectedHostId() {
         if (clientSnapshot != null) return Optional.ofNullable(identifierOrNull(clientSnapshot.connectedHostId()));
         MachineStateSnapshot state = localState();
         if (state == null) return moduleConnected.get() == 0 ? Optional.empty() : Optional.ofNullable(clientConnectedHostId);
@@ -334,6 +383,10 @@ public class MachineControllerMenu extends AbstractMachineMenu {
     @Override
     public void broadcastChanges() {
         super.broadcastChanges();
+        if (uiServerSession != null) {
+            uiServerSession.broadcastChanges();
+            return;
+        }
         if (owner == null || serverPlayer == null) return;
         PktMachineStatePayload next = PktMachineStatePayload.from(pos, owner.runtimeSnapshot(),
                 owner.currentRecipePoolId());
@@ -394,17 +447,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return controller == null ? 0 : SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).controllerRole();
     }
 
-    private static @Nullable ResourceLocation machineIdFor(@Nullable MachineControllerBlockEntity controller) {
+    private static @Nullable Identifier machineIdFor(@Nullable MachineControllerBlockEntity controller) {
         return controller == null ? null : identifierOrNull(SYNC_RUNTIME.machineState(controller.runtimeSnapshot()).machineId());
-    }
-
-    private static void writeOptionalResourceLocation(RegistryFriendlyByteBuf buf, @Nullable ResourceLocation id) {
-        buf.writeBoolean(id != null);
-        if (id != null) ResourceLocation.STREAM_CODEC.encode(buf, id);
-    }
-
-    private static @Nullable ResourceLocation readOptionalResourceLocation(FriendlyByteBuf buf) {
-        return buf.readBoolean() ? ResourceLocation.STREAM_CODEC.decode(buf) : null;
     }
 
     private @Nullable MachineStateSnapshot localState() {
@@ -422,8 +466,8 @@ public class MachineControllerMenu extends AbstractMachineMenu {
         return SYNC_RUNTIME.machineState(controller.runtimeSnapshot(), controller.currentRecipePoolId());
     }
 
-    private static @Nullable ResourceLocation identifierOrNull(String value) {
-        return value == null || value.isEmpty() ? null : ResourceLocation.parse(value);
+    private static @Nullable Identifier identifierOrNull(String value) {
+        return value == null || value.isEmpty() ? null : Identifier.parse(value);
     }
 
     @Override

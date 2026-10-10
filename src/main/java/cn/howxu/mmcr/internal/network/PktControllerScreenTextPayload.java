@@ -3,6 +3,8 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
+import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
+import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
 import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
@@ -57,7 +59,13 @@ public record PktControllerScreenTextPayload(BlockPos controllerPos, String lane
     }
 
     public void handle(IPayloadContext context) {
-        context.enqueueWork(() -> ControllerScreenTextCache.replace(controllerPos, laneId, revision, lines));
+        context.enqueueWork(() -> {
+            var player = context.player();
+            if (player != null && player.containerMenu instanceof ControllerUiMenu menu
+                    && menu.uiOpenData().pos().equals(controllerPos)
+                    && ControllerUiClientEvents.hasActiveSession(player.containerMenu)) return;
+            ControllerScreenTextCache.replace(controllerPos, laneId, revision, lines);
+        });
     }
 
     private static void write(RegistryFriendlyByteBuf buffer, PktControllerScreenTextPayload payload) {

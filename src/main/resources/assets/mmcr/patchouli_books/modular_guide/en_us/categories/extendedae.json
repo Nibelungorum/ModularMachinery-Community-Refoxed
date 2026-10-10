@@ -1,0 +1,7 @@
+{
+  "name": "guide.mmcr_patchouli.category.extendedae.name",
+  "description": "guide.mmcr_patchouli.category.extendedae.description",
+  "icon": "mmcr:eae_me_extended_stocking_input_interface",
+  "sortnum": 80,
+  "flag": "&mod:ae2,mod:extendedae"
+}

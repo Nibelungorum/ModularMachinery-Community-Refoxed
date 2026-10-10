@@ -19,6 +19,9 @@ Special thanks:
 '''
 
 [[mixins]]
+config="mixins/mmcr.ui.mixins.json"
+
+[[mixins]]
 config="mixins/extras/mmcr.jei.mixins.json"
 requiredMods=["jei"]
 
@@ -88,6 +91,13 @@ side="BOTH"
 modId="mekanism"
 type="optional"
 versionRange="[10.7.18,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="patchouli"
+type="optional"
+versionRange="[1.21.1-92,)"
 ordering="AFTER"
 side="BOTH"
 

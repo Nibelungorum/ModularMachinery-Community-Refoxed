@@ -26,6 +26,10 @@ import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
+import cn.howxu.mmcr.internal.event.ControllerUiEvents;
+import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
@@ -95,20 +99,15 @@ public final class DataStorageGameTest {
                     "Tick behavior writes at a 20-tick period, actual=" + ticks);
             PktControllerScreenTextPayload textPayload = lastScreenTextPacket(observer);
             helper.assertTrue(textPayload != null && hasDynamicText(textPayload.lines()),
-                    "Pure-tick callback text is sent in the server payload");
-            ControllerScreenTextCache.replace(textPayload.controllerPos(), textPayload.revision(), textPayload.lines());
-            ControllerScreenTextCache.clear(controllerPos);
-            MachineControllerMenu reopenedMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
+                    "A legacy test-only menu without a new session still receives callback text");
+            observer.setPos(controllerPos.getX() + 0.5, controllerPos.getY() + 0.5, controllerPos.getZ() + 0.5);
+            MachineControllerMenu reopenedMenu = new MachineControllerMenu(1, observer.getInventory(), controller);
             observer.containerMenu = reopenedMenu;
-            controller.sendControllerScreenText(observer);
-            PktControllerScreenTextPayload reopenedTextPayload = lastScreenTextPacket(observer);
-            helper.assertTrue(reopenedTextPayload != null && hasDynamicText(reopenedTextPayload.lines()),
-                    "Reopened controller receives the current dynamic text payload");
-            helper.assertTrue(ControllerScreenTextCache.replace(reopenedTextPayload.controllerPos(),
-                            reopenedTextPayload.revision(), reopenedTextPayload.lines()),
-                    "Reopened controller payload replaces the cache snapshot");
-            helper.assertTrue(hasDynamicText(ControllerScreenTextCache.linesAt(reopenedMenu.controllerPos())),
-                    "Reopened controller cache exposes the dynamic text");
+            ControllerUiEvents.opened(new PlayerContainerEvent.Open(observer, reopenedMenu));
+            var reopenedSnapshot = uiPackets(observer).getLast().snapshotData();
+            helper.assertTrue(hasUiDynamicText(reopenedSnapshot) && reopenedSnapshot.hasDataStorage()
+                            && reopenedSnapshot.dataStorageValues().get("ticks").longValue() == ticks,
+                    "Reopened actual session receives current text and bound storage in its full snapshot");
             helper.assertTrue(controller.runtimeSnapshot().crafting().status().getStatus()
                             == CraftingStatus.Status.IDLE,
                     "Pure-tick controller does not start recipe crafting");
@@ -137,12 +136,18 @@ public final class DataStorageGameTest {
                     controller.runtimeSnapshot(), controller.currentRecipePoolId());
             PktMachineStatePayload expectedNeighborBaseline = PktMachineStatePayload.from(neighborPos,
                     neighbor.runtimeSnapshot(), neighbor.currentRecipePoolId());
+            observer.closeContainer();
+            int uiBaselines = uiPackets(observer).size();
             MachineControllerMenu serverMenu = new MachineControllerMenu(2, observer.getInventory(), controller);
+            observer.containerMenu = serverMenu;
+            ControllerUiEvents.opened(new PlayerContainerEvent.Open(observer, serverMenu));
             serverMenu.broadcastChanges();
-            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 1,
-                    "Initial menu broadcast sends a full baseline even for an unchanged idle recipe state");
+            helper.assertTrue(uiPackets(observer).size() == uiBaselines + 1
+                            && hasUiDynamicText(uiPackets(observer).getLast().snapshotData())
+                            && machineStatePackets(observer, controllerPos).size() == baselineCount,
+                    "Open sends one new UI baseline; an active session does not duplicate the old menu baseline");
             serverMenu.broadcastChanges();
-            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 1,
+            helper.assertTrue(uiPackets(observer).size() == uiBaselines + 1,
                     "Unchanged menu state does not resend the full presentation");
             var chunkPos = new ChunkPos(controllerPos);
             var chunk = helper.getLevel().getChunkSource().getChunkNow(chunkPos.x, chunkPos.z);
@@ -150,7 +155,7 @@ public final class DataStorageGameTest {
             helper.assertTrue(chunkPos.equals(new ChunkPos(neighborPos)),
                     "Both fixture controllers share the sent chunk");
             ControllerSyncEvents.onChunkSent(new ChunkWatchEvent.Sent(observer, chunk, helper.getLevel()));
-            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 2,
+            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 1,
                     "Chunk Sent sends a complete baseline after the chunk payload");
             helper.assertTrue(machineStatePackets(observer, neighborPos).size() == neighborBaselineCount + 1,
                     "Chunk Sent also sends exactly one baseline for the neighboring controller");
@@ -159,7 +164,7 @@ public final class DataStorageGameTest {
                     "Chunk Sent preserves both controllers' complete baseline contents");
             ControllerSyncEvents.onChunkUnWatch(new ChunkWatchEvent.UnWatch(observer, chunkPos, helper.getLevel()));
             ControllerSyncEvents.onChunkSent(new ChunkWatchEvent.Sent(observer, chunk, helper.getLevel()));
-            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 3,
+            helper.assertTrue(machineStatePackets(observer, controllerPos).size() == baselineCount + 2,
                     "Chunk reentry sends a fresh full baseline without requiring state changes");
             helper.assertTrue(machineStatePackets(observer, neighborPos).size() == neighborBaselineCount + 2,
                     "Chunk reentry also sends exactly one fresh baseline for the neighboring controller");
@@ -167,6 +172,7 @@ public final class DataStorageGameTest {
                             && machineStatePackets(observer, neighborPos).getLast().equals(expectedNeighborBaseline),
                     "Chunk reentry preserves both unchanged complete baselines");
             helper.getLevel().players().remove(observer);
+            observer.closeContainer();
             ControllerScreenTextCache.clear(controllerPos);
             helper.succeed();
         });
@@ -327,6 +333,18 @@ public final class DataStorageGameTest {
                 .map(packet -> (PktControllerScreenTextPayload) ((ClientboundCustomPayloadPacket) packet).payload())
                 .reduce((first, second) -> second)
                 .orElse(null);
+    }
+
+    private static boolean hasUiDynamicText(ControllerUiSnapshotData snapshot) {
+        return snapshot.lines().stream().anyMatch(line -> line.id().equals(MMCR.id("data_storage_tick_status"))
+                && line.text().getString().startsWith("ticks="));
+    }
+
+    private static List<PktControllerUiSnapshotPayload> uiPackets(ServerPlayer player) {
+        return ((RecordingConnection) player.connection).packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
+                        && custom.payload() instanceof PktControllerUiSnapshotPayload)
+                .map(packet -> (PktControllerUiSnapshotPayload) ((ClientboundCustomPayloadPacket) packet).payload()).toList();
     }
 
     private static List<PktMachineStatePayload> machineStatePackets(ServerPlayer player, BlockPos controllerPos) {

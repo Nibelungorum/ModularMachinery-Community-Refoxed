@@ -42,6 +42,8 @@ public final class ModelGen extends BlockStateProvider {
                     }
                 }, (item, name) -> itemModels().basicItem(item.get()));
         itemModels().withExistingParent("basic_casing", MMCR.id("block/basic_casing"));
+        itemModels().withExistingParent("modular_guide", ResourceLocation.withDefaultNamespace("item/generated"))
+                .texture("layer0", MMCR.id("item/modular_guide"));
     }
 
     static List<GeneratedModel> collectRegisteredModels() {

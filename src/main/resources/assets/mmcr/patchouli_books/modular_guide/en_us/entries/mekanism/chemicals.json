@@ -1,0 +1,27 @@
+{
+  "name": "guide.mmcr_patchouli.entry.mekanism.chemicals.name",
+  "category": "mmcr:mekanism",
+  "icon": "mmcr:chemical_input_hatch_basic",
+  "flag": "mod:mekanism",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:chemical_input_hatch_basic",
+      "title": "guide.mmcr_patchouli.entry.mekanism.chemicals.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.chemicals.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:chemical_output_hatch_basic",
+      "title": "guide.mmcr_patchouli.entry.mekanism.chemicals.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.chemicals.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.chemicals.p2"}
+    }
+  ]
+}

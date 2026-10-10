@@ -89,6 +89,23 @@ class FactoryControllerMenuTest {
     }
 
     @Test
+    void inventory_policy_preserves_local_lane_selection_and_slot_identity() {
+        var menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
+        menu.applySnapshot(snapshot(0, 1));
+        menu.selectThread(1);
+        var slots = List.copyOf(menu.slots);
+        var opening = menu.uiOpenData();
+        menu.setPlayerInventoryVisible(false);
+        assertThat(menu.selectedThreadIndex()).isEqualTo(1);
+        assertThat(menu.uiOpenData()).isSameAs(opening);
+        assertThat(menu.uiServerSession()).isNull();
+        assertThat(menu.slots).containsExactlyElementsOf(slots).allMatch(slot -> !slot.isActive());
+        menu.setPlayerInventoryVisible(true);
+        assertThat(menu.selectedThreadIndex()).isEqualTo(1);
+        assertThat(menu.slots).allMatch(slot -> slot.isActive());
+    }
+
+    @Test
     void matched_stage_accessor_reads_from_snapshot() {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null));
         menu.applySnapshot(new FactorySnapshot(true, true, List.of(), 2, 2, 24L, false,

@@ -1,7 +1,9 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.publicapi.event.RegisterControllerRenderersEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterControllerUisEvent;
 import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
+import cn.howxu.mmcr.internal.api.facade.client.UiClientAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
@@ -26,6 +28,7 @@ import cn.howxu.mmcr.client.gui.UpgradeBusScreen;
 import cn.howxu.mmcr.client.controller.ControllerModelInvalidator;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
+import cn.howxu.mmcr.client.controller.ui.ControllerUiScreenRouter;
 import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.ControllerIdleEasterEggManager;
 import cn.howxu.mmcr.client.model.MachineAppearanceCache;
@@ -77,7 +80,10 @@ public class Client {
     private final MachineSoundManager machineSoundManager = new MachineSoundManager(loadedSoundControllers);
 
     public Client(IEventBus modBus, ModContainer modContainer) {
-        MachineControllerBlockEntity.setClientLifecycleListeners(loadedSoundControllers::loaded, loadedSoundControllers::removed);
+        MachineControllerBlockEntity.setClientLifecycleListeners(loadedSoundControllers::loaded, controller -> {
+            loadedSoundControllers.removed(controller);
+            ControllerScreenTextCache.clear(controller.getBlockPos());
+        });
         modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         modBus.addListener(Client::registerMenuScreens);
         modBus.addListener(Client::registerModelLoaders);
@@ -136,12 +142,20 @@ public class Client {
     }
 
     private static void registerMenuScreens(RegisterMenuScreensEvent event) {
+        RegisterControllerUisEvent registrations = new RegisterControllerUisEvent(ModBlockEntities.controllerMachineIds());
+        try {
+            ModLoader.postEvent(registrations);
+        } finally {
+            UiClientAdapters.freeze(registrations);
+        }
         event.register(ModUIs.ITEM_BUS.get(), ItemBusScreen::new);
         event.register(ModUIs.FLUID_HATCH.get(), FluidHatchScreen::new);
         event.register(ModUIs.ENERGY_HATCH.get(), EnergyHatchScreen::new);
-        event.register(ModUIs.MACHINE_CONTROLLER.get(), MachineControllerScreen::new);
+        ControllerUiScreenRouter.register(event, ModUIs.MACHINE_CONTROLLER.get(),
+                UiClientAdapters.core(registrations), MachineControllerScreen::new);
         event.register(ModUIs.FACTORY_SCHEDULER.get(), FactorySchedulerScreen::new);
-        event.register(ModUIs.FACTORY_CONTROLLER.get(), FactoryControllerScreen::new);
+        ControllerUiScreenRouter.register(event, ModUIs.FACTORY_CONTROLLER.get(),
+                UiClientAdapters.core(registrations), FactoryControllerScreen::new);
         event.register(ModUIs.SMART_INTERFACE.get(), SmartInterfaceScreen::new);
         event.register(ModUIs.EXTENDED_ITEM.get(), ExtendedItemScreen::new);
         event.register(ModUIs.EXTENDED_FLUID.get(), ExtendedFluidScreen::new);

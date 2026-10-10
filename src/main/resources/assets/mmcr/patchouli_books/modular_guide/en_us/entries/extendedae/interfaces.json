@@ -1,0 +1,55 @@
+{
+  "name": "guide.mmcr_patchouli.entry.extendedae.interfaces.name",
+  "category": "mmcr:extendedae",
+  "icon": "mmcr:eae_me_extended_input_interface",
+  "flag": "&mod:ae2,mod:extendedae",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:eae_me_extended_input_interface",
+      "title": "guide.mmcr_patchouli.entry.extendedae.interfaces.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.extendedae.interfaces.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:eae_me_extended_stocking_input_interface",
+      "title": "guide.mmcr_patchouli.entry.extendedae.interfaces.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.extendedae.interfaces.p1"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:eae_me_extended_output_interface",
+      "title": "guide.mmcr_patchouli.entry.extendedae.interfaces.p2.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.extendedae.interfaces.p2"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:eae_me_oversize_input_interface",
+      "title": "guide.mmcr_patchouli.entry.extendedae.interfaces.p3.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.extendedae.interfaces.p3"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:eae_me_oversize_output_interface",
+      "title": "guide.mmcr_patchouli.entry.extendedae.interfaces.p4.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.extendedae.interfaces.p4"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:eae_me_extended_pattern_interface",
+      "title": "guide.mmcr_patchouli.entry.extendedae.interfaces.p5.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.extendedae.interfaces.p5"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.extendedae.interfaces.p6"}
+    }
+  ]
+}

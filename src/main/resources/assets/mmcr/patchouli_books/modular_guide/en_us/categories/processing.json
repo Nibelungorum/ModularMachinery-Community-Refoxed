@@ -1,0 +1,6 @@
+{
+  "name": "guide.mmcr_patchouli.category.processing.name",
+  "description": "guide.mmcr_patchouli.category.processing.description",
+  "icon": "mmcr:parallel_controller_normal",
+  "sortnum": 30
+}

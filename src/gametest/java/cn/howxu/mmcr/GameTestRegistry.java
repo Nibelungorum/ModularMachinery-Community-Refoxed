@@ -20,6 +20,9 @@ import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticTransportGameTest;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterControllerUiProtocolsEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import cn.howxu.mmcr.internal.api.facade.registration.RegistrationAdapters;
 import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
 import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
@@ -41,6 +44,7 @@ import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.InterfaceMenuGameTest;
+import cn.howxu.mmcr.compat.patchouli.PatchouliGuideGameTest;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.registries.Registries;
@@ -62,6 +66,7 @@ import java.util.function.Consumer;
 
 import java.util.List;
 
+@EventBusSubscriber(modid = MMCR.MODID)
 public final class GameTestRegistry {
     private GameTestRegistry() {
     }
@@ -73,6 +78,15 @@ public final class GameTestRegistry {
     @GameTestGenerator
     public static Collection<TestFunction> generateTests() {
         List<TestFunction> event = new ArrayList<>();
+        register(event, "patchouli_guide_acquisition", 20,
+                PatchouliGuideGameTest::acquisitionMatchesOptionalInstallation);
+        register(event, "controller_ui_menu_lifecycle", 20,
+                helper -> new ControllerUiGameTest().openMetadataAndLifecycle(helper));
+        register(event, "controller_ui_request_storage", 100, ControllerUiGameTest::requestStorage);
+        register(event, "controller_ui_reopen_stale_request", 100, ControllerUiGameTest::reopenStaleRequest);
+        register(event, "controller_ui_lane_removed", 100, ControllerUiGameTest::laneRemoved);
+        register(event, "controller_ui_slot_visibility", 20, ControllerUiGameTest::slotVisibility);
+        register(event, "controller_ui_snapshot_ownership", 20, ControllerUiGameTest::snapshotOwnership);
         register(event, "registry_reflection_helper", 20, helper -> {
             boolean registered = net.minecraft.gametest.framework.GameTestRegistry
                     .findTestFunction(MMCR.id("registry_reflection_helper").toString())
@@ -92,6 +106,8 @@ public final class GameTestRegistry {
                 helper -> new ExampleScriptGameTest().structureBlocksResolve(helper));
         register(event, "item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().outputResolvesPlainJsonEnchantments(helper));
+        register(event, "recipe_serializer_enchantment_components", 20,
+                helper -> new ItemOutputComponentGameTest().recipeSerializerPreservesEnchantmentComponents(helper));
         register(event, "async_item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().asyncOutputPreservesEnchantmentComponents(helper));
         register(event, "cached_item_output_enchantment_components", 20,
@@ -122,6 +138,16 @@ public final class GameTestRegistry {
         register(event, "fluid_hatch_capability", 100, helper -> new FluidHatchCapabilityGameTest().fluidHatchStoresWater(helper));
         register(event, "fluid_hatch_menu_storage", 100, helper -> new FluidHatchCapabilityGameTest().positionOnlyFluidHatchMenuResolvesStoredFluid(helper));
         register(event, "fluid_hatch_bucket_interaction", 100, helper -> new FluidHatchCapabilityGameTest().bucketInteractionRespectsHatchDirection(helper));
+        register(event, "port_container_bucket_direction", 20,
+                helper -> new PortContainerTransferGameTest().bucketsFollowPortDirection(helper));
+        register(event, "port_container_bucket_rollback", 20,
+                helper -> new PortContainerTransferGameTest().partialBucketsRollbackBothSides(helper));
+        register(event, "port_container_combined_second_tank", 20,
+                helper -> new PortContainerTransferGameTest().combinedSecondTankIsIndependent(helper));
+        register(event, "port_container_stacked_bucket_inventory", 20,
+                helper -> new PortContainerTransferGameTest().stackedBucketsRespectInventoryCapacity(helper));
+        register(event, "port_container_invalid_requests", 20,
+                helper -> new PortContainerTransferGameTest().invalidRequestsCannotMutateStorage(helper));
         register(event, "item_bus_capability", 100, ItemBusCapabilityGameTest::itemBusAcceptsItems);
         register(event, "item_bus_non_stackable_limit", 100,
                 ItemBusCapabilityGameTest::itemBusDoesNotStackNonStackableItems);
@@ -274,6 +300,12 @@ public final class GameTestRegistry {
                             "botania_mana_input_pool", "botania_mana_output_pool",
                             PortTiers.builder().anyManaInput().anyManaOutput().build()));
         }
+        register(event, "port_container_mekanism_chemical_direction", 20,
+                helper -> new MekanismContainerTransferGameTest().chemicalTankFollowsPortDirection(helper));
+        register(event, "port_container_mekanism_fluid_partial", 20,
+                helper -> new MekanismContainerTransferGameTest().fluidTankTransfersOnlyAvailableCapacity(helper));
+        register(event, "port_container_mekanism_chemical_partial_mismatch", 20,
+                helper -> new MekanismContainerTransferGameTest().chemicalTankRetainsRemainderAndRejectsMismatch(helper));
         register(event, "mekanism_normal_chemical_radioactive_rejection", 100,
                 helper -> new MekanismPortGameTest().normalChemicalPortRejectsRadioactiveAndAcceptsNonRadioactive(helper));
         register(event, "mekanism_radioactive_chemical_only_accepts_radioactive", 100,
@@ -568,6 +600,10 @@ public final class GameTestRegistry {
                     .appearance(appearance -> appearance.machineBasicBlock("minecraft:gold_block"))
                     .maxParallelism(2).parallelizable(true).build());
         }
+        event.registerMachine(MachineBuilder.machine(ControllerUiGameTest.MACHINE_ID)
+                .displayNameKey("gui.mmcr.ui.test_machine")
+                .allowMultithreading()
+                .factory(factory -> factory.hasFactory(true).threadLimit(4)).build());
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
             ResourceLocation id = MMCR.id(name);
@@ -652,6 +688,12 @@ public final class GameTestRegistry {
                 BlockPredicate.blockState(Blocks.IRON_BLOCK.defaultBlockState()),
                 DisplayStack.of(new ItemStack(Items.IRON_BLOCK)),
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false)));
+        event.registerStructure(ControllerUiGameTest.MACHINE_ID, structure -> structure.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("SCF")
+                        .where('S', BlockPredicate.deferredBlock(() -> ModBlocks.DATA_STORAGE.get()))
+                        .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(ControllerUiGameTest.MACHINE_ID).get()))
+                        .where('F', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("factory_controller").get()))
+                        .controller('C'))));
         ResourceLocation upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
         event.registerModifier(upgradeBusBlockModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
@@ -793,6 +835,11 @@ public final class GameTestRegistry {
     public static void registerRecipes(RegisterMachineRecipesEvent event) {
         registerRecipes(RegistrationAdapters.core(event));
         if (ModList.get().isLoaded("botania")) BotaniaManaRecipeGameTest.registerRecipes(event);
+    }
+
+    @SubscribeEvent
+    public static void registerControllerUiProtocols(RegisterControllerUiProtocolsEvent event) {
+        ControllerUiGameTest.registerProtocols(event);
     }
 
     public static void registerRecipes(MachineRecipeRegistration event) {

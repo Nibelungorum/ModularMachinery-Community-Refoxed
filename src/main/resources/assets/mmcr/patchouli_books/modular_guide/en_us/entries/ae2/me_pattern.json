@@ -1,0 +1,23 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ae2.me_pattern.name",
+  "category": "mmcr:ae2",
+  "icon": "mmcr:textures/block/appliedenergistics2/ae2_pattern_interface.png",
+  "flag": "mod:ae2",
+  "sortnum": 40,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:ae2_me_pattern_interface",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_pattern.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_pattern.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_pattern.p2"}
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
+import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
@@ -31,6 +32,21 @@ final class ControllerRecipeTextLines {
     private static final int OUTPUT_INDENT = 4;
 
     private ControllerRecipeTextLines() {
+    }
+
+    static List<ControllerTextLine> createSnapshot(ControllerUiSnapshot.RecipePresentation presentation) {
+        return create(snapshotPresentation(presentation));
+    }
+
+    static Optional<ControllerTextLine.Icon> firstSnapshotOutputIcon(ControllerUiSnapshot.RecipePresentation presentation) {
+        return firstRenderableOutputIcon(snapshotPresentation(presentation));
+    }
+
+    private static ControllerRecipePresentation snapshotPresentation(ControllerUiSnapshot.RecipePresentation presentation) {
+        return new ControllerRecipePresentation(presentation.outputs().stream()
+                .map(output -> new MachineOutputAmount(output.resource(), output.amount())).toList(),
+                presentation.energyInputPerTick(), presentation.energyOutputPerTick(), presentation.heatOutputPerTick(),
+                presentation.durationTicks(), presentation.parallelism());
     }
 
     static List<ControllerTextLine> create(ControllerRecipePresentation presentation) {

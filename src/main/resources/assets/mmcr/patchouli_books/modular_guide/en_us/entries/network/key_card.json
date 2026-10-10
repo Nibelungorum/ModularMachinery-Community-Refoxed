@@ -1,0 +1,18 @@
+{
+  "name": "guide.mmcr_patchouli.entry.network.key_card.name",
+  "category": "mmcr:network",
+  "icon": "mmcr:key_card",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:key_card",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.network.key_card.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.network.key_card.p1"}
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "guide.mmcr_patchouli.entry.basics.casing.name",
+  "category": "mmcr:basics",
+  "icon": "mmcr:basic_casing",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:basic_casing",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.basics.casing.p0"}
+    }
+  ]
+}

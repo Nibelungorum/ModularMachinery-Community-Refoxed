@@ -22,7 +22,7 @@ sourceSets {
     gametest {
         java.srcDirs = ['src/gametest/java']
         resources.srcDirs = ['src/gametest/resources']
-        compileClasspath += sourceSets.main.output
+        compileClasspath = sourceSets.main.compileClasspath + compileClasspath + sourceSets.main.output
         runtimeClasspath += output + sourceSets.main.output
     }
 }

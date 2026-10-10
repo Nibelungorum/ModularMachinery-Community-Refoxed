@@ -1,0 +1,26 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.fluids.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:fluid_input_hatch",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:fluid_input_hatch",
+      "title": "guide.mmcr_patchouli.entry.ports.fluids.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.fluids.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:fluid_output_hatch",
+      "title": "guide.mmcr_patchouli.entry.ports.fluids.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.fluids.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.fluids.p2"}
+    }
+  ]
+}

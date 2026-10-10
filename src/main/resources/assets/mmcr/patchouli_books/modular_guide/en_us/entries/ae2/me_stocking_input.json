@@ -1,0 +1,20 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ae2.me_stocking_input.name",
+  "category": "mmcr:ae2",
+  "icon": "mmcr:ae2_me_stocking_input_interface",
+  "flag": "mod:ae2",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:ae2_me_stocking_input_interface",
+      "title": "guide.mmcr_patchouli.entry.ae2.me_stocking_input.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_stocking_input.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ae2.me_stocking_input.p1"}
+    }
+  ]
+}

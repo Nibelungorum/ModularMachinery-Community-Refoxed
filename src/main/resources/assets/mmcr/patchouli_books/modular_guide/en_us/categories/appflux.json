@@ -1,0 +1,7 @@
+{
+  "name": "guide.mmcr_patchouli.category.appflux.name",
+  "description": "guide.mmcr_patchouli.category.appflux.description",
+  "icon": "mmcr:appflux_me_flux_input_interface",
+  "sortnum": 90,
+  "flag": "&mod:ae2,mod:appflux"
+}

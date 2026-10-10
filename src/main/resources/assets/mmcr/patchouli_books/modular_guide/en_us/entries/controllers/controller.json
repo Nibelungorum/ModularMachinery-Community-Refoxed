@@ -1,0 +1,20 @@
+{
+  "name": "guide.mmcr_patchouli.entry.controllers.controller.name",
+  "category": "mmcr:controllers",
+  "icon": "mmcr:textures/block/basic_controller.png",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.controllers.controller.p0"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.controllers.controller.p1"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.controllers.controller.p2"}
+    }
+  ]
+}

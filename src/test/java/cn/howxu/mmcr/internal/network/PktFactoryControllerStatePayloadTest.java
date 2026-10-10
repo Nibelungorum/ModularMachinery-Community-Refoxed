@@ -44,6 +44,40 @@ class PktFactoryControllerStatePayloadTest {
     }
 
     @Test
+    void host_module_count_and_role_round_trip_with_legacy_constructor_compatibility() {
+        FactorySnapshot old = snapshot(1);
+        FactorySnapshot host = new FactorySnapshot(old.formed(), old.active(), old.lanes(), old.laneLimit(),
+                old.activeLaneCount(), old.maxParallelism(), old.paused(), old.presentationLanes(), old.machineName(),
+                old.parallelSlots(), old.failure(), old.foundLevelIds(), old.matchedStage(), old.stageCount(),
+                "mmcr:host", "mmcr:pool", 1, "", 7);
+        RegistryFriendlyByteBuf buffer = buffer();
+        try {
+            PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer,
+                    new PktFactoryControllerStatePayload(BlockPos.ZERO, host));
+            assertThat(PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer).snapshot()).isEqualTo(host);
+            assertThat(buffer.readableBytes()).isZero();
+            assertThat(old.installedModuleCount()).isZero();
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void decoder_rejects_negative_installed_module_count() {
+        RegistryFriendlyByteBuf buffer = buffer();
+        try {
+            PktFactoryControllerStatePayload.STREAM_CODEC.encode(buffer,
+                    new PktFactoryControllerStatePayload(BlockPos.ZERO, snapshot(1)));
+            buffer.writerIndex(buffer.writerIndex() - 1);
+            buffer.writeVarInt(-1);
+            assertThatThrownBy(() -> PktFactoryControllerStatePayload.STREAM_CODEC.decode(buffer))
+                    .isInstanceOf(IllegalArgumentException.class);
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
     void supported_thread_counts_round_trip_without_truncation() {
         for (int count : List.of(1, 65, 128)) {
             FactorySnapshot snapshot = snapshot(count);
@@ -262,6 +296,9 @@ class PktFactoryControllerStatePayloadTest {
         buffer.writeVarInt(1);
         buffer.writeUtf("");
         buffer.writeUtf("");
+        buffer.writeVarInt(0);
+        buffer.writeUtf("");
+        buffer.writeVarInt(0);
     }
 
     private static void writeFactoryHeader(RegistryFriendlyByteBuf buffer, int laneLimit, int activeLaneCount,
