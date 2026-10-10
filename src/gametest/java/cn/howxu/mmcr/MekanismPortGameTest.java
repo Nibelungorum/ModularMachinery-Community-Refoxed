@@ -4,12 +4,24 @@ import appeng.core.definitions.AEItems;
 import com.mojang.authlib.GameProfile;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import com.mojang.serialization.JsonOps;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
@@ -73,6 +85,136 @@ import java.util.UUID;
  * @author howxu <dev@howxu.cn>
  */
 public class MekanismPortGameTest {
+
+    public void chemicalStructureChecksCountsAndMinimumTiers(GameTestHelper helper) {
+        var machine = portConstraintMachine("chemical_structure_constraints",
+                PortRequirementSpec.builder().range("chemical_input_hatch", 1, 1)
+                        .range("chemical_output_hatch", 1, 1).build(),
+                PortTierRequirementSpec.builder().minChemicalInput(PortTiers.ChemicalTier.ADVANCED)
+                        .minChemicalOutput(PortTiers.ChemicalTier.ELITE).build());
+        var controller = portConstraintController(helper, machine);
+        BlockPos inputPos = new BlockPos(0, 1, 1);
+        BlockPos outputPos = new BlockPos(2, 1, 1);
+        BlockPos extraPos = new BlockPos(1, 1, 2);
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("chemical_output_hatch_elite").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "A basic input cannot satisfy an advanced requirement");
+        helper.assertValueEqual("chemical_input_hatch>=advanced",
+                controller.currentRuntimeSnapshot().structure().lastFormationFailure().portId(), "Input tier failure identifies its family and grade");
+
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("chemical_input_hatch_advanced").get().defaultBlockState());
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("chemical_output_hatch_basic").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "A basic output cannot satisfy an elite requirement");
+        helper.assertValueEqual("chemical_output_hatch>=elite",
+                controller.currentRuntimeSnapshot().structure().lastFormationFailure().portId(), "Output tier failure identifies its family and grade");
+
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("chemical_output_hatch_elite").get().defaultBlockState());
+        helper.assertTrue(formPortStructure(controller, machine), "Exact input and output tiers form the compiled structure");
+        helper.assertTrue(controller.currentRuntimeSnapshot().structure().formed(), "Successful validation publishes a formed structure");
+        controller.invalidateFormedStructure();
+
+        helper.setBlock(inputPos, ModBlocks.BLOCKS.get("chemical_input_hatch_ultimate").get().defaultBlockState());
+        helper.setBlock(outputPos, ModBlocks.BLOCKS.get("chemical_output_hatch_ultimate").get().defaultBlockState());
+        helper.assertTrue(formPortStructure(controller, machine), "Higher chemical grades satisfy the minimums");
+        controller.invalidateFormedStructure();
+
+        helper.setBlock(extraPos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "Different input grades count toward the same family maximum");
+        helper.assertValueEqual(PortRequirementSpec.FailureReason.TOO_MANY,
+                controller.currentRuntimeSnapshot().structure().lastFormationFailure().reason(), "An extra chemical input reports the count maximum");
+        helper.setBlock(extraPos, ModBlocks.CASING.get().defaultBlockState());
+        helper.setBlock(inputPos, ModBlocks.CASING.get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "The required chemical input count cannot be satisfied by casing");
+        helper.assertValueEqual("chemical_input_hatch",
+                controller.currentRuntimeSnapshot().structure().lastFormationFailure().portId(), "Missing input reports the count family alias");
+        helper.succeed();
+    }
+
+    public void singleTierStructureChecksFamilyAndDirection(GameTestHelper helper) {
+        var machine = portConstraintMachine("single_tier_structure_constraints", PortRequirementSpec.none(),
+                PortTierRequirementSpec.builder().anyRadioactiveChemicalInput().anyHeatOutput().build());
+        var controller = portConstraintController(helper, machine);
+        BlockPos chemicalPos = new BlockPos(0, 1, 1);
+        BlockPos heatPos = new BlockPos(2, 1, 1);
+        helper.assertFalse(formPortStructure(controller, machine), "Single-tier requirements reject missing ports");
+        helper.setBlock(chemicalPos, ModBlocks.BLOCKS.get("chemical_input_hatch_ultimate").get().defaultBlockState());
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "A normal chemical input cannot satisfy the radioactive family");
+        helper.setBlock(chemicalPos, ModBlocks.BLOCKS.get("radioactive_chemical_output_hatch").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "A radioactive output cannot satisfy an input requirement");
+        helper.setBlock(chemicalPos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "A heat input cannot satisfy a heat output requirement");
+        helper.assertValueEqual("heat_output_hatch", controller.currentRuntimeSnapshot().structure().lastFormationFailure().portId(),
+                "Single-tier failure reports the port family without a fabricated grade");
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.assertTrue(formPortStructure(controller, machine), "Matching radioactive and heat directions form the structure");
+        controller.invalidateFormedStructure();
+        helper.succeed();
+    }
+
+    public void singleTierStructureChecksCounts(GameTestHelper helper) {
+        var machine = portConstraintMachine("single_tier_structure_counts",
+                PortRequirementSpec.builder().range("radioactive_chemical_input_hatch", 1, 1)
+                        .range("heat_output_hatch", 1, 1).build(), PortTierRequirementSpec.none());
+        var controller = portConstraintController(helper, machine);
+        BlockPos chemicalPos = new BlockPos(0, 1, 1);
+        BlockPos heatPos = new BlockPos(2, 1, 1);
+        BlockPos extraPos = new BlockPos(1, 1, 2);
+        helper.assertFalse(formPortStructure(controller, machine), "Missing single-tier ports fail the count minimums");
+        helper.setBlock(chemicalPos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_input_hatch").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "A heat input cannot satisfy the heat output count");
+        helper.setBlock(heatPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.assertTrue(formPortStructure(controller, machine), "The radioactive and heat ports each contribute exactly one count");
+        controller.invalidateFormedStructure();
+
+        helper.setBlock(extraPos, ModBlocks.BLOCKS.get("radioactive_chemical_input_hatch").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "An additional radioactive input exceeds its family maximum");
+        helper.assertValueEqual(PortRequirementSpec.FailureReason.TOO_MANY,
+                controller.currentRuntimeSnapshot().structure().lastFormationFailure().reason(), "Radioactive count is bounded");
+        helper.setBlock(extraPos, ModBlocks.BLOCKS.get("heat_output_hatch").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "An additional heat output exceeds its family maximum");
+        helper.assertValueEqual(PortRequirementSpec.FailureReason.TOO_MANY,
+                controller.currentRuntimeSnapshot().structure().lastFormationFailure().reason(), "Heat count is bounded");
+        helper.setBlock(extraPos, ModBlocks.CASING.get().defaultBlockState());
+        helper.setBlock(chemicalPos, ModBlocks.BLOCKS.get("chemical_input_hatch_ultimate").get().defaultBlockState());
+        helper.assertFalse(formPortStructure(controller, machine), "A normal chemical port cannot satisfy the radioactive count");
+        helper.succeed();
+    }
+
+    private static DynamicMachine portConstraintMachine(String name, PortRequirementSpec counts, PortTierRequirementSpec tiers) {
+        Identifier id = MMCR.id(name);
+        return new DynamicMachine(id, "machine.mmcr_test." + name,
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any(),
+                        new BlockPos(-1, 0, 0), new BlockPredicate.Any(), new BlockPos(0, 0, 1), new BlockPredicate.Any())),
+                MachineControllerSpec.defaultsFor(id), MachineAppearanceSpec.defaults(), counts, tiers,
+                List.of(), Map.of(), 1, false, false, 1);
+    }
+
+    private static MachineControllerBlockEntity portConstraintController(GameTestHelper helper, Machine machine) {
+        if (!MachineRegistry.containsStatic(machine.registryName())) MachineRegistry.register(machine);
+        helper.assertFalse(MachineRegistry.getCompiledStages(machine.registryName()).isEmpty(), "Port constraints use a compiled structure");
+        helper.setBlock(new BlockPos(0, 1, 1), ModBlocks.CASING.get().defaultBlockState());
+        helper.setBlock(new BlockPos(2, 1, 1), ModBlocks.CASING.get().defaultBlockState());
+        helper.setBlock(new BlockPos(1, 1, 2), ModBlocks.CASING.get().defaultBlockState());
+        BlockPos controllerPos = new BlockPos(1, 1, 1);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        var controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(machine);
+        return controller;
+    }
+
+    private static boolean formPortStructure(MachineControllerBlockEntity controller, Machine machine) {
+        try {
+            Method form = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", Machine.class, Direction.class);
+            form.setAccessible(true);
+            return (boolean) form.invoke(controller, machine, Direction.SOUTH);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to validate port-constrained structure", exception);
+        }
+    }
 
     public void normalChemicalPortRejectsRadioactiveAndAcceptsNonRadioactive(GameTestHelper helper) {
         BlockPos pos = new BlockPos(0, 1, 0);

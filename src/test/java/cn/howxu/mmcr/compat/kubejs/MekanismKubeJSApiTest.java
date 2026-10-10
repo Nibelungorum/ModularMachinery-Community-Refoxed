@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.MachineRecipeDefinition;
@@ -22,6 +24,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeDeclarations;
 import dev.latvian.mods.rhino.ContextFactory;
 import dev.latvian.mods.rhino.ScriptableObject;
+import dev.latvian.mods.rhino.type.TypeInfo;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -62,6 +65,71 @@ class MekanismKubeJSApiTest {
         MekanismBridgeBootstrap.resetForTesting();
         MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(false));
         MekanismRecipeTypes.register();
+    }
+
+    @Test
+    void rhino_port_tier_factories_are_available_on_api_and_all_structure_builders_without_mekanism() {
+        var expected = List.of(
+                PortTierRequirementSpec.builder().minChemicalInput(PortTiers.ChemicalTier.ADVANCED).build(),
+                PortTierRequirementSpec.builder().minChemicalOutput(PortTiers.ChemicalTier.ELITE).build(),
+                PortTierRequirementSpec.builder().anyRadioactiveChemicalInput().build(),
+                PortTierRequirementSpec.builder().anyRadioactiveChemicalOutput().build(),
+                PortTierRequirementSpec.builder().anyHeatInput().build(),
+                PortTierRequirementSpec.builder().anyHeatOutput().build());
+        for (var factory : List.of(new KubeJSApi(), new MachineBuilderJS("mmcr:port_tier_factories"),
+                new MachineStructureBuilderJS("mmcr:port_tier_factories"),
+                new MachineStructureStageBuilderJS("mmcr:port_tier_factories"))) {
+            var context = new ContextFactory().enter();
+            var scope = context.initStandardObjects();
+            ScriptableObject.putProperty(scope, "factory", factory, context);
+            context.evaluateString(scope, """
+                    var r0 = factory.chemicalInputTier('advanced');
+                    var r1 = factory.chemicalOutputTier('elite');
+                    var r2 = factory.radioactiveChemicalInputTier();
+                    var r3 = factory.radioactiveChemicalOutputTier();
+                    var r4 = factory.heatInputTier();
+                    var r5 = factory.heatOutputTier();
+                    """, "mekanism-port-tier-factories", 1, null);
+            for (int i = 0; i < expected.size(); i++) {
+                var actual = context.jsToJava(ScriptableObject.getProperty(scope, "r" + i, context),
+                        TypeInfo.of(PortTierRequirementSpec.class));
+                assertThat(actual).as("%s factory %s", factory.getClass().getSimpleName(), i).isEqualTo(expected.get(i));
+            }
+        }
+    }
+
+    @Test
+    void rhino_port_strings_retain_mixed_constraints_in_a_structure_stage() {
+        var structure = new MachineStructureBuilderJS("mmcr:mixed_port_constraints");
+        var api = new KubeJSApi();
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "structure", structure, context);
+        context.evaluateString(scope, """
+                structure.mainStructure(function(stage) {
+                    stage.pattern('X').set('X', 'minecraft:iron_block');
+                    stage.portRequirements(api.portRequirements({chemical_input_hatch: [1, 2], heat_output_hatch: 1}));
+                    stage.portTierRequirements(api.portTierRequirements([
+                        'item_input_bus>=small', 'chemical_input_hatch>=advanced',
+                        'chemical_output_hatch>=ultimate', 'radioactive_chemical_input_hatch',
+                        'radioactive_chemical_output_hatch', 'heat_input_hatch', 'heat_output_hatch'
+                    ]));
+                });
+                """, "mekanism-port-tier-strings", 1, null);
+        var declaration = structure.createObject().declarations().getFirst();
+        assertThat(declaration.portTierRequirements().requirements())
+                .extracting(PortTierRequirementSpec.Requirement::id).containsExactly(
+                        "item_input_bus>=small", "chemical_input_hatch>=advanced", "chemical_output_hatch>=ultimate",
+                        "radioactive_chemical_input_hatch", "radioactive_chemical_output_hatch",
+                        "heat_input_hatch", "heat_output_hatch");
+        assertThat(declaration.portRequirements()).isEqualTo(api.portRequirements(
+                Map.of("chemical_input_hatch", List.of(1, 2), "heat_output_hatch", 1)));
+        for (String invalid : List.of("chemical_input_hatch>=normal", "chemical_input_hatch>=",
+                "heat_input_hatch>=ultimate", "radioactive_chemical_input_hatch>=elite",
+                "chemical_input_hatch", "chemical_input_bus>=basic", "chemical_input_hatch>=basic>=elite")) {
+            assertThatIllegalArgumentException().as(invalid).isThrownBy(() -> api.portTierRequirements(List.of(invalid)));
+        }
     }
 
     @Test

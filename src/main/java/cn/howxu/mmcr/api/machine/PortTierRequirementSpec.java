@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -41,6 +42,9 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
                             case ITEM -> PortCategory.ITEM;
                             case FLUID -> PortCategory.FLUID;
                             case ENERGY -> PortCategory.ENERGY;
+                            case CHEMICAL -> PortCategory.CHEMICAL;
+                            case RADIOACTIVE_CHEMICAL -> PortCategory.RADIOACTIVE_CHEMICAL;
+                            case HEAT -> PortCategory.HEAT;
                         }, requirement.ioType(), requirement.minTier(), requirement.minTierId()))
                 .toList());
     }
@@ -75,7 +79,10 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
     public enum PortCategory {
         ITEM,
         FLUID,
-        ENERGY
+        ENERGY,
+        CHEMICAL,
+        RADIOACTIVE_CHEMICAL,
+        HEAT
     }
 
     public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
@@ -84,9 +91,19 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (minTier < 0) throw new IllegalArgumentException("minTier must be >= 0");
             if (minTierId == null || minTierId.isBlank()) throw new IllegalArgumentException("minTierId blank");
+            PortTiers.PortCategory declarationCategory = switch (category) {
+                case CHEMICAL -> PortTiers.PortCategory.CHEMICAL;
+                case RADIOACTIVE_CHEMICAL -> PortTiers.PortCategory.RADIOACTIVE_CHEMICAL;
+                case HEAT -> PortTiers.PortCategory.HEAT;
+                default -> null;
+            };
+            if (declarationCategory != null) {
+                new PortTiers.Requirement(declarationCategory, ioType, minTier, minTierId);
+            }
         }
 
         public String id() {
+            if (category == PortCategory.RADIOACTIVE_CHEMICAL || category == PortCategory.HEAT) return baseId();
             return baseId() + ">=" + minTierId;
         }
 
@@ -95,6 +112,9 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
                 case ITEM -> ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus";
                 case FLUID -> ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch";
                 case ENERGY -> ioType == IOType.INPUT ? "energy_input_hatch" : "energy_output_hatch";
+                case CHEMICAL -> ioType == IOType.INPUT ? "chemical_input_hatch" : "chemical_output_hatch";
+                case RADIOACTIVE_CHEMICAL -> ioType == IOType.INPUT ? "radioactive_chemical_input_hatch" : "radioactive_chemical_output_hatch";
+                case HEAT -> ioType == IOType.INPUT ? "heat_input_hatch" : "heat_output_hatch";
             };
         }
 
@@ -116,6 +136,9 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
                 case ITEM -> PortFamilyIds.ITEM;
                 case FLUID -> PortFamilyIds.FLUID;
                 case ENERGY -> PortFamilyIds.ENERGY;
+                case CHEMICAL -> MekanismPortFamilies.CHEMICAL;
+                case RADIOACTIVE_CHEMICAL -> MekanismPortFamilies.RADIOACTIVE_CHEMICAL;
+                case HEAT -> MekanismPortFamilies.HEAT;
             };
             return port.families().stream()
                     .filter(family -> family.familyId().equals(familyId) && family.ioType() == ioType)
@@ -159,6 +182,18 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
             return minEnergyOutput(EnergyHatchSize.TINY);
         }
 
+        public Builder anyChemicalInput() { return minChemicalInput(PortTiers.ChemicalTier.BASIC); }
+
+        public Builder anyChemicalOutput() { return minChemicalOutput(PortTiers.ChemicalTier.BASIC); }
+
+        public Builder anyRadioactiveChemicalInput() { return add(PortCategory.RADIOACTIVE_CHEMICAL, IOType.INPUT, 0, "any"); }
+
+        public Builder anyRadioactiveChemicalOutput() { return add(PortCategory.RADIOACTIVE_CHEMICAL, IOType.OUTPUT, 0, "any"); }
+
+        public Builder anyHeatInput() { return add(PortCategory.HEAT, IOType.INPUT, 0, "any"); }
+
+        public Builder anyHeatOutput() { return add(PortCategory.HEAT, IOType.OUTPUT, 0, "any"); }
+
         public Builder minItemInput(ItemBusSize size) {
             return add(PortCategory.ITEM, IOType.INPUT, size.ordinal(), size.id());
         }
@@ -181,6 +216,14 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
 
         public Builder minEnergyOutput(EnergyHatchSize size) {
             return add(PortCategory.ENERGY, IOType.OUTPUT, size.ordinal(), size.id());
+        }
+
+        public Builder minChemicalInput(PortTiers.ChemicalTier size) {
+            return add(PortCategory.CHEMICAL, IOType.INPUT, size.detectionTier(), size.id());
+        }
+
+        public Builder minChemicalOutput(PortTiers.ChemicalTier size) {
+            return add(PortCategory.CHEMICAL, IOType.OUTPUT, size.detectionTier(), size.id());
         }
 
         private Builder add(PortCategory category, IOType ioType, int minTier, String minTierId) {

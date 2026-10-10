@@ -540,6 +540,12 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public PortTierRequirementSpec fluidOutputTier(String id) { return KubeJSInterfaceHelpers.fluidOutputTier(id); }
     public PortTierRequirementSpec energyInputTier(String id) { return KubeJSInterfaceHelpers.energyInputTier(id); }
     public PortTierRequirementSpec energyOutputTier(String id) { return KubeJSInterfaceHelpers.energyOutputTier(id); }
+    public PortTierRequirementSpec chemicalInputTier(String id) { return KubeJSInterfaceHelpers.chemicalInputTier(id); }
+    public PortTierRequirementSpec chemicalOutputTier(String id) { return KubeJSInterfaceHelpers.chemicalOutputTier(id); }
+    public PortTierRequirementSpec radioactiveChemicalInputTier() { return KubeJSInterfaceHelpers.radioactiveChemicalInputTier(); }
+    public PortTierRequirementSpec radioactiveChemicalOutputTier() { return KubeJSInterfaceHelpers.radioactiveChemicalOutputTier(); }
+    public PortTierRequirementSpec heatInputTier() { return KubeJSInterfaceHelpers.heatInputTier(); }
+    public PortTierRequirementSpec heatOutputTier() { return KubeJSInterfaceHelpers.heatOutputTier(); }
 
     public MachineBuilderJS durationByInterface(String type, float min, float max, float atMin, float atMax) {
         return durationByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);

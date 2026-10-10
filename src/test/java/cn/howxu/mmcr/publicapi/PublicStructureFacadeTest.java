@@ -5,6 +5,9 @@ import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.internal.api.facade.recipe.ModifierAdapters;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.definition.MachineStructureBuilder;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.definition.InterfaceTiers;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.LevelType;
@@ -28,6 +31,7 @@ import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierOperation;
 import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierScope;
 import cn.howxu.mmcr.publicapi.recipe.IoDirection;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.util.IOType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.BlockTags;
@@ -123,6 +127,62 @@ class PublicStructureFacadeTest {
         assertThat(limits.requirements()).extracting(PortTierLimits.RequirementView::minTierId)
                 .containsExactly("small", "ultimate");
         assertThatThrownBy(() -> PortLimits.builder().range("item_input", 3, 1)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void chemical_facade_factories_preserve_tiers_and_directions_in_runtime_conversion() {
+        for (var tier : PortTierLimits.ChemicalTier.values()) {
+            var limits = PortTierLimits.combine(PortTierLimits.chemicalInput(tier),
+                    PortTierLimits.chemicalOutput(tier.id()));
+            assertThat(StructureAdapters.unwrap(limits)).isEqualTo(InterfaceTiers.chemical(tier.id()));
+            assertThat(StructureAdapters.unwrap(PortTierLimits.chemical(tier.id())))
+                    .isEqualTo(StructureAdapters.unwrap(limits));
+            assertThat(StructureAdapters.unwrap(PortTierLimits.chemical(tier)))
+                    .isEqualTo(StructureAdapters.unwrap(limits));
+            assertThat(StructureAdapters.unwrap(PortTierLimits.chemical(tier, IoDirection.INPUT)))
+                    .isEqualTo(InterfaceTiers.chemicalInput(tier.id()));
+            assertThat(StructureAdapters.unwrap(PortTierLimits.chemicalOutput(tier)))
+                    .isEqualTo(InterfaceTiers.chemicalOutput(tier.id()));
+            assertThat(StructureAdapters.unwrap(PortTierLimits.chemicalInput(tier.id())))
+                    .isEqualTo(InterfaceTiers.chemicalInput(tier.id()));
+        }
+        assertThatThrownBy(() -> PortTierLimits.chemical("normal")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> PortTierLimits.chemical(PortTierLimits.ChemicalTier.BASIC, null))
+                .isInstanceOf(NullPointerException.class);
+
+        var stage = Structures.stage().pattern(p -> p.layer("C").controller('C'))
+                .portTiers(t -> t.minChemicalInput(PortTierLimits.ChemicalTier.ADVANCED)
+                        .minChemicalOutput(PortTierLimits.ChemicalTier.ELITE)
+                        .anyChemicalInput().anyChemicalOutput()
+                        .anyRadioactiveChemicalInput().anyRadioactiveChemicalOutput()
+                        .anyHeatInput().anyHeatOutput()).build();
+        var runtime = MachineDefinitionConverter.toDeclaration(StructureAdapters.unwrap(stage));
+        assertThat(runtime.portTierRequirements()).isEqualTo(PortTierRequirementSpec.from(PortTiers.builder()
+                .minChemicalInput(PortTiers.ChemicalTier.ADVANCED).minChemicalOutput(PortTiers.ChemicalTier.ELITE)
+                .anyChemicalInput().anyChemicalOutput().anyRadioactiveChemicalInput().anyRadioactiveChemicalOutput()
+                .anyHeatInput().anyHeatOutput().build()));
+        assertThat(stage.portTiers().requirements()).extracting(PortTierLimits.RequirementView::category)
+                .containsExactly(PortTierLimits.PortCategory.CHEMICAL, PortTierLimits.PortCategory.CHEMICAL,
+                        PortTierLimits.PortCategory.CHEMICAL, PortTierLimits.PortCategory.CHEMICAL,
+                        PortTierLimits.PortCategory.RADIOACTIVE_CHEMICAL, PortTierLimits.PortCategory.RADIOACTIVE_CHEMICAL,
+                        PortTierLimits.PortCategory.HEAT, PortTierLimits.PortCategory.HEAT);
+    }
+
+    @Test
+    void single_tier_facade_factories_require_the_requested_directions() {
+        assertThat(StructureAdapters.unwrap(PortTierLimits.radioactiveChemical()))
+                .isEqualTo(InterfaceTiers.radioactiveChemical());
+        assertThat(StructureAdapters.unwrap(PortTierLimits.heat())).isEqualTo(InterfaceTiers.heat());
+        assertThat(StructureAdapters.unwrap(PortTierLimits.combine(PortTierLimits.radioactiveChemicalInput(),
+                PortTierLimits.radioactiveChemicalOutput(), PortTierLimits.heatInput(), PortTierLimits.heatOutput())))
+                .isEqualTo(PortTiers.combine(InterfaceTiers.radioactiveChemical(), InterfaceTiers.heat()));
+        assertThat(StructureAdapters.unwrap(PortTierLimits.radioactiveChemical(IoDirection.OUTPUT)))
+                .isEqualTo(InterfaceTiers.radioactiveChemicalOutput());
+        assertThat(StructureAdapters.unwrap(PortTierLimits.heat(IoDirection.INPUT)))
+                .isEqualTo(InterfaceTiers.heatInput());
+        assertThatThrownBy(() -> PortTierLimits.heat(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new PortTiers.Requirement(PortTiers.PortCategory.HEAT,
+                IOType.INPUT, 1, "advanced")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

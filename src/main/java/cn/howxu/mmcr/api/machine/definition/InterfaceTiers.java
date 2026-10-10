@@ -2,7 +2,7 @@ package cn.howxu.mmcr.api.machine.definition;
 
 import cn.howxu.mmcr.util.IOType;
 import java.util.Objects;
-/** Small factories for independent item, fluid, and energy port tiers.
+/** Small factories for independent port tiers and single-tier port presence requirements.
  * @author howxu <dev@howxu.cn>
  */
 public final class InterfaceTiers {
@@ -83,6 +83,53 @@ public final class InterfaceTiers {
     }
 
     public static PortTiers energyOutput(String id) { return energyOutput(find(id, PortTiers.EnergyTier.values())); }
+
+    public static PortTiers chemical(String id) { return chemical(find(id, PortTiers.ChemicalTier.values())); }
+
+    public static PortTiers chemical(PortTiers.ChemicalTier tier) {
+        return PortTiers.combine(chemicalInput(tier), chemicalOutput(tier));
+    }
+
+    public static PortTiers chemical(PortTiers.ChemicalTier tier, IOType ioType) {
+        Objects.requireNonNull(ioType, "ioType");
+        return ioType == IOType.INPUT ? chemicalInput(tier) : chemicalOutput(tier);
+    }
+
+    public static PortTiers chemicalInput(String id) { return chemicalInput(find(id, PortTiers.ChemicalTier.values())); }
+
+    public static PortTiers chemicalInput(PortTiers.ChemicalTier tier) {
+        return PortTiers.builder().minChemicalInput(tier).build();
+    }
+
+    public static PortTiers chemicalOutput(String id) { return chemicalOutput(find(id, PortTiers.ChemicalTier.values())); }
+
+    public static PortTiers chemicalOutput(PortTiers.ChemicalTier tier) {
+        return PortTiers.builder().minChemicalOutput(tier).build();
+    }
+
+    public static PortTiers radioactiveChemical() {
+        return PortTiers.combine(radioactiveChemicalInput(), radioactiveChemicalOutput());
+    }
+
+    public static PortTiers radioactiveChemical(IOType ioType) {
+        Objects.requireNonNull(ioType, "ioType");
+        return ioType == IOType.INPUT ? radioactiveChemicalInput() : radioactiveChemicalOutput();
+    }
+
+    public static PortTiers radioactiveChemicalInput() { return PortTiers.builder().anyRadioactiveChemicalInput().build(); }
+
+    public static PortTiers radioactiveChemicalOutput() { return PortTiers.builder().anyRadioactiveChemicalOutput().build(); }
+
+    public static PortTiers heat() { return PortTiers.combine(heatInput(), heatOutput()); }
+
+    public static PortTiers heat(IOType ioType) {
+        Objects.requireNonNull(ioType, "ioType");
+        return ioType == IOType.INPUT ? heatInput() : heatOutput();
+    }
+
+    public static PortTiers heatInput() { return PortTiers.builder().anyHeatInput().build(); }
+
+    public static PortTiers heatOutput() { return PortTiers.builder().anyHeatOutput().build(); }
 
     public static PortTiers combine(PortTiers... declarations) {
         return PortTiers.combine(declarations);

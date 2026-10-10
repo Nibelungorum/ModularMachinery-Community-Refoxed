@@ -180,6 +180,12 @@ public final class GameTestRegistry {
         register(event, "module_connection_module_disconnected", 100, helper -> new ModuleConnectionGameTest().moduleFormsIndependentlyButCannotRunWithoutHost(helper));
         register(event, "module_connection_connected", 100, helper -> new ModuleConnectionGameTest().sharedCouplerConnectsModuleAndEnablesHostGatedRecipes(helper));
         register(event, "module_connection_interface_conflict", 100, helper -> new ModuleConnectionGameTest().sharedInterfaceInvalidatesHost(helper));
+        register(event, "mekanism_chemical_structure_constraints", 20,
+                helper -> new MekanismPortGameTest().chemicalStructureChecksCountsAndMinimumTiers(helper));
+        register(event, "mekanism_single_tier_structure_constraints", 20,
+                helper -> new MekanismPortGameTest().singleTierStructureChecksFamilyAndDirection(helper));
+        register(event, "mekanism_single_tier_structure_counts", 20,
+                helper -> new MekanismPortGameTest().singleTierStructureChecksCounts(helper));
         register(event, "mekanism_normal_chemical_radioactive_rejection", 100,
                 helper -> new MekanismPortGameTest().normalChemicalPortRejectsRadioactiveAndAcceptsNonRadioactive(helper));
         register(event, "mekanism_radioactive_chemical_only_accepts_radioactive", 100,

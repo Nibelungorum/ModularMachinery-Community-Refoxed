@@ -251,9 +251,16 @@ public final class KubeJSApi {
 
     public PortTierRequirementSpec portTierRequirements(List<String> minimums) {
         List<PortTierRequirementSpec.Requirement> requirements = new ArrayList<>();
-        for (String minimum : minimums) requirements.add(parseTierRequirement(minimum));
+        for (String minimum : minimums) requirements.addAll(parseTierRequirement(minimum).requirements());
         return requirements.isEmpty() ? PortTierRequirementSpec.none() : new PortTierRequirementSpec(requirements);
     }
+
+    public PortTierRequirementSpec chemicalInputTier(String id) { return KubeJSInterfaceHelpers.chemicalInputTier(id); }
+    public PortTierRequirementSpec chemicalOutputTier(String id) { return KubeJSInterfaceHelpers.chemicalOutputTier(id); }
+    public PortTierRequirementSpec radioactiveChemicalInputTier() { return KubeJSInterfaceHelpers.radioactiveChemicalInputTier(); }
+    public PortTierRequirementSpec radioactiveChemicalOutputTier() { return KubeJSInterfaceHelpers.radioactiveChemicalOutputTier(); }
+    public PortTierRequirementSpec heatInputTier() { return KubeJSInterfaceHelpers.heatInputTier(); }
+    public PortTierRequirementSpec heatOutputTier() { return KubeJSInterfaceHelpers.heatOutputTier(); }
 
     public MachineIngredient itemInput(String itemId, long count, float consumeChance) {
         return new MachineIngredient.ItemIngredient(Ingredient.of(requireItem(itemId)), MachineOutput.recipeStackAmount(count), null, consumeChance);
@@ -564,34 +571,28 @@ public final class KubeJSApi {
         };
     }
 
-    private static PortTierRequirementSpec.Requirement parseTierRequirement(String minimum) {
+    private static PortTierRequirementSpec parseTierRequirement(String minimum) {
         String[] parts = minimum.split(">=", -1);
-        if (parts.length != 2) throw new IllegalArgumentException("Invalid port tier requirement: " + minimum);
-        String[] port = parts[0].split("_", -1);
-        if (port.length != 3) throw new IllegalArgumentException("Invalid port tier requirement: " + minimum);
-        String categoryName = port[0];
-        String ioName = port[1];
-        var category = switch (categoryName) {
-            case "item" -> PortTierRequirementSpec.PortCategory.ITEM;
-            case "fluid" -> PortTierRequirementSpec.PortCategory.FLUID;
-            case "energy" -> PortTierRequirementSpec.PortCategory.ENERGY;
-            default -> throw new IllegalArgumentException("Unknown port category: " + categoryName);
-        };
-        var io = switch (ioName) {
-            case "input" -> cn.howxu.mmcr.util.IOType.INPUT;
-            case "output" -> cn.howxu.mmcr.util.IOType.OUTPUT;
-            default -> throw new IllegalArgumentException("Unknown port IO: " + ioName);
-        };
-        String expectedFamily = category == PortTierRequirementSpec.PortCategory.ITEM ? "bus" : "hatch";
-        if (!port[2].equals(expectedFamily)) throw new IllegalArgumentException("Invalid port family: " + parts[0]);
-        String[] tiers = category == PortTierRequirementSpec.PortCategory.FLUID
-                ? new String[] {"tiny", "small", "normal", "reinforced", "big", "huge", "ludicrous", "vacuum"}
-                : category == PortTierRequirementSpec.PortCategory.ENERGY
-                ? new String[] {"tiny", "small", "normal", "reinforced", "big", "huge", "ludicrous", "ultimate"}
-                : new String[] {"tiny", "small", "normal", "reinforced", "big", "huge", "ludicrous"};
-        for (int tier = 0; tier < tiers.length; tier++) {
-            if (tiers[tier].equals(parts[1])) return new PortTierRequirementSpec.Requirement(category, io, tier, parts[1]);
+        if (parts.length == 1) {
+            return switch (minimum) {
+                case "radioactive_chemical_input_hatch" -> KubeJSInterfaceHelpers.radioactiveChemicalInputTier();
+                case "radioactive_chemical_output_hatch" -> KubeJSInterfaceHelpers.radioactiveChemicalOutputTier();
+                case "heat_input_hatch" -> KubeJSInterfaceHelpers.heatInputTier();
+                case "heat_output_hatch" -> KubeJSInterfaceHelpers.heatOutputTier();
+                default -> throw new IllegalArgumentException("Invalid port tier requirement: " + minimum);
+            };
         }
-        throw new IllegalArgumentException("Unknown port tier: " + parts[1]);
+        if (parts.length != 2) throw new IllegalArgumentException("Invalid port tier requirement: " + minimum);
+        return switch (parts[0]) {
+            case "item_input_bus" -> KubeJSInterfaceHelpers.itemInputTier(parts[1]);
+            case "item_output_bus" -> KubeJSInterfaceHelpers.itemOutputTier(parts[1]);
+            case "fluid_input_hatch" -> KubeJSInterfaceHelpers.fluidInputTier(parts[1]);
+            case "fluid_output_hatch" -> KubeJSInterfaceHelpers.fluidOutputTier(parts[1]);
+            case "energy_input_hatch" -> KubeJSInterfaceHelpers.energyInputTier(parts[1]);
+            case "energy_output_hatch" -> KubeJSInterfaceHelpers.energyOutputTier(parts[1]);
+            case "chemical_input_hatch" -> KubeJSInterfaceHelpers.chemicalInputTier(parts[1]);
+            case "chemical_output_hatch" -> KubeJSInterfaceHelpers.chemicalOutputTier(parts[1]);
+            default -> throw new IllegalArgumentException("Invalid port family: " + parts[0]);
+        };
     }
 }

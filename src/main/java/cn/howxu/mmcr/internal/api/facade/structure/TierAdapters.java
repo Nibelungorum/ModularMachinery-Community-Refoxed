@@ -26,6 +26,7 @@ public final class TierAdapters {
     public static String id(PortTierLimits.ItemTier tier) { return toCore(tier).id(); }
     public static String id(PortTierLimits.FluidTier tier) { return toCore(tier).id(); }
     public static String id(PortTierLimits.EnergyTier tier) { return toCore(tier).id(); }
+    public static String id(PortTierLimits.ChemicalTier tier) { return toCore(tier).id(); }
     public static PortTierLimits item(String id) { return wrap(InterfaceTiers.item(id)); }
     public static PortTierLimits item(PortTierLimits.ItemTier tier) { return wrap(InterfaceTiers.item(toCore(tier))); }
     public static PortTierLimits item(PortTierLimits.ItemTier tier, IoDirection io) {
@@ -53,6 +54,23 @@ public final class TierAdapters {
     public static PortTierLimits energyInput(PortTierLimits.EnergyTier tier) { return wrap(InterfaceTiers.energyInput(toCore(tier))); }
     public static PortTierLimits energyOutput(String id) { return wrap(InterfaceTiers.energyOutput(id)); }
     public static PortTierLimits energyOutput(PortTierLimits.EnergyTier tier) { return wrap(InterfaceTiers.energyOutput(toCore(tier))); }
+    public static PortTierLimits chemical(String id) { return wrap(InterfaceTiers.chemical(id)); }
+    public static PortTierLimits chemical(PortTierLimits.ChemicalTier tier) { return wrap(InterfaceTiers.chemical(toCore(tier))); }
+    public static PortTierLimits chemical(PortTierLimits.ChemicalTier tier, IoDirection io) {
+        return wrap(InterfaceTiers.chemical(toCore(tier), toCore(io)));
+    }
+    public static PortTierLimits chemicalInput(String id) { return wrap(InterfaceTiers.chemicalInput(id)); }
+    public static PortTierLimits chemicalInput(PortTierLimits.ChemicalTier tier) { return wrap(InterfaceTiers.chemicalInput(toCore(tier))); }
+    public static PortTierLimits chemicalOutput(String id) { return wrap(InterfaceTiers.chemicalOutput(id)); }
+    public static PortTierLimits chemicalOutput(PortTierLimits.ChemicalTier tier) { return wrap(InterfaceTiers.chemicalOutput(toCore(tier))); }
+    public static PortTierLimits radioactiveChemical() { return wrap(InterfaceTiers.radioactiveChemical()); }
+    public static PortTierLimits radioactiveChemical(IoDirection io) { return wrap(InterfaceTiers.radioactiveChemical(toCore(io))); }
+    public static PortTierLimits radioactiveChemicalInput() { return wrap(InterfaceTiers.radioactiveChemicalInput()); }
+    public static PortTierLimits radioactiveChemicalOutput() { return wrap(InterfaceTiers.radioactiveChemicalOutput()); }
+    public static PortTierLimits heat() { return wrap(InterfaceTiers.heat()); }
+    public static PortTierLimits heat(IoDirection io) { return wrap(InterfaceTiers.heat(toCore(io))); }
+    public static PortTierLimits heatInput() { return wrap(InterfaceTiers.heatInput()); }
+    public static PortTierLimits heatOutput() { return wrap(InterfaceTiers.heatOutput()); }
 
     private static IOType toCore(IoDirection io) {
         return switch (io) {
@@ -102,6 +120,15 @@ public final class TierAdapters {
         };
     }
 
+    private static PortTiers.ChemicalTier toCore(PortTierLimits.ChemicalTier tier) {
+        return switch (tier) {
+            case BASIC -> PortTiers.ChemicalTier.BASIC;
+            case ADVANCED -> PortTiers.ChemicalTier.ADVANCED;
+            case ELITE -> PortTiers.ChemicalTier.ELITE;
+            case ULTIMATE -> PortTiers.ChemicalTier.ULTIMATE;
+        };
+    }
+
     /** Core-backed tier builder.
      * @author howxu <dev@howxu.cn>
      */
@@ -114,12 +141,20 @@ public final class TierAdapters {
         public PortTierLimits.Builder anyFluidOutput() { value.anyFluidOutput(); return this; }
         public PortTierLimits.Builder anyEnergyInput() { value.anyEnergyInput(); return this; }
         public PortTierLimits.Builder anyEnergyOutput() { value.anyEnergyOutput(); return this; }
+        public PortTierLimits.Builder anyChemicalInput() { value.anyChemicalInput(); return this; }
+        public PortTierLimits.Builder anyChemicalOutput() { value.anyChemicalOutput(); return this; }
+        public PortTierLimits.Builder anyRadioactiveChemicalInput() { value.anyRadioactiveChemicalInput(); return this; }
+        public PortTierLimits.Builder anyRadioactiveChemicalOutput() { value.anyRadioactiveChemicalOutput(); return this; }
+        public PortTierLimits.Builder anyHeatInput() { value.anyHeatInput(); return this; }
+        public PortTierLimits.Builder anyHeatOutput() { value.anyHeatOutput(); return this; }
         public PortTierLimits.Builder minItemInput(PortTierLimits.ItemTier tier) { value.minItemInput(toCore(tier)); return this; }
         public PortTierLimits.Builder minItemOutput(PortTierLimits.ItemTier tier) { value.minItemOutput(toCore(tier)); return this; }
         public PortTierLimits.Builder minFluidInput(PortTierLimits.FluidTier tier) { value.minFluidInput(toCore(tier)); return this; }
         public PortTierLimits.Builder minFluidOutput(PortTierLimits.FluidTier tier) { value.minFluidOutput(toCore(tier)); return this; }
         public PortTierLimits.Builder minEnergyInput(PortTierLimits.EnergyTier tier) { value.minEnergyInput(toCore(tier)); return this; }
         public PortTierLimits.Builder minEnergyOutput(PortTierLimits.EnergyTier tier) { value.minEnergyOutput(toCore(tier)); return this; }
+        public PortTierLimits.Builder minChemicalInput(PortTierLimits.ChemicalTier tier) { value.minChemicalInput(toCore(tier)); return this; }
+        public PortTierLimits.Builder minChemicalOutput(PortTierLimits.ChemicalTier tier) { value.minChemicalOutput(toCore(tier)); return this; }
         public PortTierLimits build() { return wrap(value.build()); }
     }
 
@@ -145,6 +180,9 @@ public final class TierAdapters {
                 case ITEM -> PortTierLimits.PortCategory.ITEM;
                 case FLUID -> PortTierLimits.PortCategory.FLUID;
                 case ENERGY -> PortTierLimits.PortCategory.ENERGY;
+                case CHEMICAL -> PortTierLimits.PortCategory.CHEMICAL;
+                case RADIOACTIVE_CHEMICAL -> PortTierLimits.PortCategory.RADIOACTIVE_CHEMICAL;
+                case HEAT -> PortTierLimits.PortCategory.HEAT;
             };
         }
         public IoDirection ioType() { return toPublic(value.ioType()); }

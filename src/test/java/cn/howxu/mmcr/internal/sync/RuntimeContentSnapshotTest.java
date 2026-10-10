@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -42,6 +43,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.tags.ItemTags;
@@ -147,6 +149,49 @@ class RuntimeContentSnapshotTest {
 
         assertThat(decoded.machineId()).isEqualTo(original.machineId());
         assertThat(decoded.declarations()).isEqualTo(original.declarations());
+    }
+
+    @Test
+    void structure_sync_preserves_mixed_builtin_and_mekanism_port_constraints() {
+        var tiers = PortTierRequirementSpec.builder().anyItemInput().anyFluidOutput().anyEnergyInput()
+                .minChemicalInput(PortTiers.ChemicalTier.ADVANCED).minChemicalOutput(PortTiers.ChemicalTier.ULTIMATE)
+                .anyRadioactiveChemicalInput().anyRadioactiveChemicalOutput().anyHeatInput().anyHeatOutput().build();
+        var counts = PortRequirementSpec.builder().range("chemical_input_hatch", 1, 2)
+                .min("radioactive_chemical_output_hatch", 1).range("heat_input_hatch", 0, 1).build();
+        var original = new MachineStructureDefinition(MMCR.id("mixed_port_sync"),
+                new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK))),
+                counts, tiers, List.of(), MachineStructureRequirements.EMPTY);
+        var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            MachineStructureSyncCodec.encode(buf, original);
+            var decoded = MachineStructureSyncCodec.decode(buf);
+            assertThat(decoded.declarations()).isEqualTo(original.declarations());
+            assertThat(decoded.portTierRequirements().validate(List.of()))
+                    .isEqualTo(original.portTierRequirements().validate(List.of()));
+        } finally {
+            buf.release();
+        }
+    }
+
+    @Test
+    void structure_sync_rejects_inconsistent_mekanism_tiers_during_decode() throws Exception {
+        var read = MachineStructureSyncCodec.class.getDeclaredMethod("readPortTierRequirements", RegistryFriendlyByteBuf.class);
+        read.setAccessible(true);
+        for (var category : List.of(PortTierRequirementSpec.PortCategory.CHEMICAL,
+                PortTierRequirementSpec.PortCategory.RADIOACTIVE_CHEMICAL, PortTierRequirementSpec.PortCategory.HEAT)) {
+            var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+            try {
+                buf.writeVarInt(1);
+                buf.writeEnum(category);
+                buf.writeEnum(cn.howxu.mmcr.util.IOType.INPUT);
+                buf.writeVarInt(category == PortTierRequirementSpec.PortCategory.CHEMICAL ? 0 : 8);
+                ByteBufCodecs.STRING_UTF8.encode(buf,
+                        category == PortTierRequirementSpec.PortCategory.CHEMICAL ? "ultimate" : "any");
+                assertThatThrownBy(() -> read.invoke(null, buf)).hasCauseInstanceOf(IllegalArgumentException.class);
+            } finally {
+                buf.release();
+            }
+        }
     }
 
     @Test

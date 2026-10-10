@@ -3,6 +3,9 @@ package cn.howxu.mmcr.api.machine;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -173,6 +176,68 @@ class PortTierRequirementSpecTest {
 
         assertThat(machine.portTierRequirements()).isSameAs(PortTierRequirementSpec.none());
         assertThat(((Machine) machine).portTierRequirements()).isSameAs(PortTierRequirementSpec.none());
+    }
+
+    @Test
+    void chemical_minimums_compare_against_registered_tiers_in_both_directions() {
+        for (var minimum : PortTiers.ChemicalTier.values()) {
+            for (var actual : PortTiers.ChemicalTier.values()) {
+                var input = PortTierRequirementSpec.builder().minChemicalInput(minimum).build();
+                var output = PortTierRequirementSpec.builder().minChemicalOutput(minimum).build();
+                boolean sufficient = actual.ordinal() >= minimum.ordinal();
+                assertThat(input.validate(List.of(mekanismKind("chemical_input_hatch_" + actual.id()))).isEmpty())
+                        .as("input %s >= %s", actual, minimum).isEqualTo(sufficient);
+                assertThat(output.validate(List.of(mekanismKind("chemical_output_hatch_" + actual.id()))).isEmpty())
+                        .as("output %s >= %s", actual, minimum).isEqualTo(sufficient);
+            }
+        }
+    }
+
+    @Test
+    void chemical_requirements_keep_radioactivity_and_direction_separate() {
+        var normal = PortTierRequirementSpec.builder().anyChemicalInput().build();
+        var radioactive = PortTierRequirementSpec.builder().anyRadioactiveChemicalInput().build();
+        assertThat(normal.validate(List.of(mekanismKind("radioactive_chemical_input_hatch")))).isPresent();
+        assertThat(normal.validate(List.of(mekanismKind("chemical_output_hatch_ultimate")))).isPresent();
+        assertThat(radioactive.validate(List.of(mekanismKind("chemical_input_hatch_ultimate")))).isPresent();
+        assertThat(radioactive.validate(List.of(mekanismKind("radioactive_chemical_output_hatch")))).isPresent();
+        assertThat(radioactive.validate(List.of(mekanismKind("radioactive_chemical_input_hatch")))).isEmpty();
+    }
+
+    @Test
+    void single_tier_ports_require_presence_and_report_a_port_id_without_a_tier() {
+        var spec = PortTierRequirementSpec.builder().anyHeatInput().anyHeatOutput()
+                .anyRadioactiveChemicalInput().anyRadioactiveChemicalOutput().build();
+        assertThat(spec.validate(List.of())).hasValueSatisfying(failure ->
+                assertThat(failure.requirement().id()).isEqualTo("heat_input_hatch"));
+        assertThat(spec.validate(List.of(mekanismKind("heat_output_hatch")))).isPresent();
+        assertThat(spec.validate(List.of(mekanismKind("heat_input_hatch"), mekanismKind("heat_output_hatch"),
+                mekanismKind("radioactive_chemical_input_hatch"), mekanismKind("radioactive_chemical_output_hatch"))))
+                .isEmpty();
+        assertThat(spec.requirements()).extracting(PortTierRequirementSpec.Requirement::id)
+                .containsExactly("heat_input_hatch", "heat_output_hatch",
+                        "radioactive_chemical_input_hatch", "radioactive_chemical_output_hatch");
+    }
+
+    @Test
+    void raw_mekanism_requirements_reject_inconsistent_or_fabricated_tiers() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortTierRequirementSpec.Requirement(
+                PortTierRequirementSpec.PortCategory.CHEMICAL, IOType.INPUT, 0, "ultimate"));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortTierRequirementSpec.Requirement(
+                PortTierRequirementSpec.PortCategory.CHEMICAL, IOType.OUTPUT, 4, "basic"));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortTierRequirementSpec.Requirement(
+                PortTierRequirementSpec.PortCategory.HEAT, IOType.INPUT, 8, "any"));
+        assertThatIllegalArgumentException().isThrownBy(() -> new PortTierRequirementSpec.Requirement(
+                PortTierRequirementSpec.PortCategory.RADIOACTIVE_CHEMICAL, IOType.OUTPUT, 0, "advanced"));
+    }
+
+    private static IOPortKind mekanismKind(String id) {
+        var declaration = MekanismBridgeBootstrap.selectForTesting(true).portDeclarations().stream()
+                .filter(port -> port.id().equals(id)).findFirst().orElseThrow();
+        return declaration.type() == MekanismBridge.PortType.CHEMICAL
+                ? new PortKinds.ChemicalKind(id, declaration.ioType(), declaration.tier(),
+                        declaration.capacity(), declaration.radioactive())
+                : new PortKinds.HeatKind(id, declaration.ioType(), declaration.tier(), declaration.capacity());
     }
 
     private static IOPortKind kind(String id) {

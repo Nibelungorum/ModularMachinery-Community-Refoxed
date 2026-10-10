@@ -2244,6 +2244,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (portId.startsWith("fluid_output_hatch")) return Component.translatable("message.mmcr.port_requirement.fluid_output");
         if (portId.startsWith("energy_input_hatch")) return Component.translatable("message.mmcr.port_requirement.energy_input");
         if (portId.startsWith("energy_output_hatch")) return Component.translatable("message.mmcr.port_requirement.energy_output");
+        if (portId.startsWith("chemical_input_hatch")) return Component.translatable("message.mmcr.port_requirement.chemical_input");
+        if (portId.startsWith("chemical_output_hatch")) return Component.translatable("message.mmcr.port_requirement.chemical_output");
+        if (portId.startsWith("radioactive_chemical_input_hatch")) return Component.translatable("block.mmcr.radioactive_chemical_input_hatch");
+        if (portId.startsWith("radioactive_chemical_output_hatch")) return Component.translatable("block.mmcr.radioactive_chemical_output_hatch");
+        if (portId.startsWith("heat_input_hatch")) return Component.translatable("block.mmcr.heat_input_hatch");
+        if (portId.startsWith("heat_output_hatch")) return Component.translatable("block.mmcr.heat_output_hatch");
         if (portId.equals("factory_controller")) return Component.translatable("message.mmcr.port_requirement.factory_controller");
         return Component.literal(portId);
     }
@@ -2259,6 +2265,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             case "ludicrous" -> Component.translatable("message.mmcr.port_tier.ludicrous");
             case "vacuum" -> Component.translatable("message.mmcr.port_tier.vacuum");
             case "ultimate" -> Component.translatable("message.mmcr.port_tier.ultimate");
+            case "basic" -> Component.translatable("message.mmcr.port_tier.basic");
+            case "advanced" -> Component.translatable("message.mmcr.port_tier.advanced");
+            case "elite" -> Component.translatable("message.mmcr.port_tier.elite");
             default -> Component.literal(tierId);
         };
     }
