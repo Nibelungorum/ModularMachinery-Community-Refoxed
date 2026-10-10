@@ -15,9 +15,11 @@ import cn.howxu.mmcr.publicapi.recipe.IoDirection;
 import cn.howxu.mmcr.publicapi.structure.PortTierLimits;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.internal.port.IOPortKind;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** End-to-end tier conversion and structure sync preserve appended source categories.
  * @author howxu <dev@howxu.cn>
@@ -66,13 +69,15 @@ class SourcePortTierSyncTest {
 
     @Test
     void old_category_wire_ordinals_stay_stable_and_source_is_appended() {
-        assertThat(PortTiers.PortCategory.values()).containsExactly(PortTiers.PortCategory.ITEM,
+        assertThat(PortTiers.PortCategory.values()).startsWith(PortTiers.PortCategory.ITEM,
                 PortTiers.PortCategory.FLUID, PortTiers.PortCategory.ENERGY, PortTiers.PortCategory.SOURCE, PortTiers.PortCategory.MANA);
-        assertThat(PortTierLimits.PortCategory.values()).containsExactly(PortTierLimits.PortCategory.ITEM,
+        assertThat(PortTierLimits.PortCategory.values()).startsWith(PortTierLimits.PortCategory.ITEM,
                 PortTierLimits.PortCategory.FLUID, PortTierLimits.PortCategory.ENERGY, PortTierLimits.PortCategory.SOURCE, PortTierLimits.PortCategory.MANA);
         var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         try {
-            for (var category : PortTierRequirementSpec.PortCategory.values()) buffer.writeEnum(category);
+            for (var category : List.of(PortTierRequirementSpec.PortCategory.ITEM, PortTierRequirementSpec.PortCategory.FLUID,
+                    PortTierRequirementSpec.PortCategory.ENERGY, PortTierRequirementSpec.PortCategory.SOURCE,
+                    PortTierRequirementSpec.PortCategory.MANA)) buffer.writeEnum(category);
             assertThat(buffer.readVarInt()).isZero();
             assertThat(buffer.readVarInt()).isEqualTo(1);
             assertThat(buffer.readVarInt()).isEqualTo(2);
@@ -90,6 +95,52 @@ class SourcePortTierSyncTest {
             assertThat(MachineStructureSyncCodec.decode(legacy).portTierRequirements()).isEqualTo(tiers);
         } finally {
             legacy.release();
+        }
+    }
+
+    @Test
+    void public_mixed_constraints_survive_conversion_and_structure_sync() {
+        var limits = PortTierLimits.builder().anyItemInput().anyFluidOutput().anyEnergyInput()
+                .anySourceInput().anyManaOutput()
+                .minChemicalInput(PortTierLimits.ChemicalTier.ADVANCED).minChemicalOutput(PortTierLimits.ChemicalTier.ULTIMATE)
+                .anyRadioactiveChemicalInput().anyRadioactiveChemicalOutput().anyHeatInput().anyHeatOutput()
+                .anyStressInput().anyStressOutput().anyAirInput().anyAirOutput().build();
+        var counts = PortRequirementSpec.builder().range("chemical_input_hatch", 1, 2)
+                .min("radioactive_chemical_output_hatch", 1).range("heat_input_hatch", 0, 1)
+                .min("create_stress_input_interface", 1).min("pneumaticcraft_air_output_interface", 1).build();
+        var original = new MachineStructureDefinition(ResourceLocation.parse("test:mixed_port_sync"), new BlockArray(Map.of()),
+                counts, PortTierRequirementSpec.from(TierAdapters.unwrap(limits)), List.of(), MachineStructureRequirements.EMPTY);
+        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            MachineStructureSyncCodec.encode(buffer, original);
+            var decoded = MachineStructureSyncCodec.decode(buffer);
+            assertThat(decoded.declarations()).isEqualTo(original.declarations());
+            assertThat(decoded.portTierRequirements().validate(List.<IOPortKind>of()))
+                    .isEqualTo(original.portTierRequirements().validate(List.<IOPortKind>of()));
+            assertThat(buffer.isReadable()).isFalse();
+        } finally {
+            buffer.release();
+        }
+    }
+
+    @Test
+    void structure_sync_rejects_fabricated_tiers_during_decode() throws Exception {
+        var read = MachineStructureSyncCodec.class.getDeclaredMethod("readPortTierRequirements", RegistryFriendlyByteBuf.class);
+        read.setAccessible(true);
+        for (var category : List.of(PortTierRequirementSpec.PortCategory.CHEMICAL,
+                PortTierRequirementSpec.PortCategory.RADIOACTIVE_CHEMICAL, PortTierRequirementSpec.PortCategory.HEAT,
+                PortTierRequirementSpec.PortCategory.STRESS, PortTierRequirementSpec.PortCategory.AIR)) {
+            var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+            try {
+                buffer.writeVarInt(1);
+                buffer.writeEnum(category);
+                buffer.writeEnum(IOType.INPUT);
+                buffer.writeVarInt(category == PortTierRequirementSpec.PortCategory.CHEMICAL ? 0 : 8);
+                ByteBufCodecs.STRING_UTF8.encode(buffer, category == PortTierRequirementSpec.PortCategory.CHEMICAL ? "ultimate" : "any");
+                assertThatThrownBy(() -> read.invoke(null, buffer)).hasCauseInstanceOf(IllegalArgumentException.class);
+            } finally {
+                buffer.release();
+            }
         }
     }
 }

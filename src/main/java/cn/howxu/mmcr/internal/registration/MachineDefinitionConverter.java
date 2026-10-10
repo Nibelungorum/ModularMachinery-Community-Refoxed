@@ -242,6 +242,11 @@ public final class MachineDefinitionConverter {
                             case ENERGY -> PortTierRequirementSpec.PortCategory.ENERGY;
                             case SOURCE -> PortTierRequirementSpec.PortCategory.SOURCE;
                             case MANA -> PortTierRequirementSpec.PortCategory.MANA;
+                            case CHEMICAL -> PortTierRequirementSpec.PortCategory.CHEMICAL;
+                            case RADIOACTIVE_CHEMICAL -> PortTierRequirementSpec.PortCategory.RADIOACTIVE_CHEMICAL;
+                            case HEAT -> PortTierRequirementSpec.PortCategory.HEAT;
+                            case STRESS -> PortTierRequirementSpec.PortCategory.STRESS;
+                            case AIR -> PortTierRequirementSpec.PortCategory.AIR;
                         },
                         requirement.ioType(),
                         requirement.minTier(),

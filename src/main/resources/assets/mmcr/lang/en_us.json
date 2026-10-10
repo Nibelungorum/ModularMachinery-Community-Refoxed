@@ -865,6 +865,9 @@
   "item.mmcr.extended_combined_output_ultimate": "Ultimate Extended Combined Output Port",
   "message.mmcr.port_tier.basic": "basic",
   "message.mmcr.port_tier.advanced": "advanced",
+  "message.mmcr.port_tier.elite": "elite",
+  "message.mmcr.port_requirement.chemical_input": "chemical input hatch",
+  "message.mmcr.port_requirement.chemical_output": "chemical output hatch",
   "tooltip.mmcr.interface.unit.tanks": " tanks",
 
   "block.mmcr.chemical_input_hatch_basic": "Basic Chemical Input Hatch",

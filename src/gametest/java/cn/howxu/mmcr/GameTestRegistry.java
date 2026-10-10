@@ -29,6 +29,8 @@ import cn.howxu.mmcr.api.data.view.DataValue;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
 import cn.howxu.mmcr.api.machine.definition.DisplayStack;
+import cn.howxu.mmcr.api.machine.definition.InterfaceTiers;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.api.machine.definition.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
@@ -214,6 +216,64 @@ public final class GameTestRegistry {
         register(event, "module_connection_module_disconnected", 100, helper -> new ModuleConnectionGameTest().moduleFormsIndependentlyButCannotRunWithoutHost(helper));
         register(event, "module_connection_connected", 100, helper -> new ModuleConnectionGameTest().sharedCouplerConnectsModuleAndEnablesHostGatedRecipes(helper));
         register(event, "module_connection_interface_conflict", 100, helper -> new ModuleConnectionGameTest().sharedInterfaceInvalidatesHost(helper));
+        register(event, "port_constraints_chemical_grades_counts", 20,
+                helper -> new PortConstraintGameTest().chemicalStructureChecksCountsAndMinimumTiers(helper));
+        register(event, "port_constraints_radioactive_heat_families", 20,
+                helper -> new PortConstraintGameTest().radioactiveAndHeatFamiliesStaySeparate(helper));
+        register(event, "port_constraints_radioactive_presence_counts", 20,
+                helper -> new PortConstraintGameTest().singleTierStructureChecksCountsAndDirection(helper,
+                        "radioactive_chemical_input_hatch", "radioactive_chemical_output_hatch",
+                        InterfaceTiers.radioactiveChemical()));
+        register(event, "port_constraints_heat_presence_counts", 20,
+                helper -> new PortConstraintGameTest().singleTierStructureChecksCountsAndDirection(helper,
+                        "heat_input_hatch", "heat_output_hatch", InterfaceTiers.heat()));
+        register(event, "port_constraints_combined_extended_families", 20,
+                helper -> new PortConstraintGameTest().combinedAndExtendedPortsKeepIndependentFamilies(helper));
+        register(event, "port_constraints_extended_energy", 20,
+                helper -> new PortConstraintGameTest().highTierEnergyPortsCheckCountsAndDirection(helper,
+                        "extended_energy_input_hatch_ultimate", "extended_energy_output_hatch_ultimate"));
+        if (ModList.get().isLoaded("ae2")) {
+            register(event, "port_constraints_ae2_appmek_multiple_families", 20,
+                    helper -> new PortConstraintGameTest().multiResourceInterfacesContributeEachFamilyOnce(helper));
+        }
+        if (ModList.get().isLoaded("ae2") && ModList.get().isLoaded("appmek")) {
+            register(event, "port_constraints_appmek_radioactive_alias_counts", 20,
+                    helper -> new PortConstraintGameTest().sharedChemicalBindingKeepsIndependentCountAliases(helper));
+        }
+        if (ModList.get().isLoaded("appflux")) {
+            register(event, "port_constraints_applied_flux_energy", 20,
+                    helper -> new PortConstraintGameTest().highTierEnergyPortsCheckCountsAndDirection(helper,
+                            "appflux_me_flux_input_interface", "appflux_me_flux_output_interface"));
+        }
+        if (ModList.get().isLoaded("fluxnetworks")) {
+            register(event, "port_constraints_flux_networks_energy", 20,
+                    helper -> new PortConstraintGameTest().highTierEnergyPortsCheckCountsAndDirection(helper,
+                            "fluxnetworks_energy_input_interface", "fluxnetworks_energy_output_interface"));
+        }
+        if (ModList.get().isLoaded("create")) {
+            register(event, "port_constraints_stress_presence_counts", 20,
+                    helper -> new PortConstraintGameTest().singleTierStructureChecksCountsAndDirection(helper,
+                            "create_stress_input_interface", "create_stress_output_interface",
+                            InterfaceTiers.stress()));
+        }
+        if (ModList.get().isLoaded("pneumaticcraft")) {
+            register(event, "port_constraints_air_presence_counts", 20,
+                    helper -> new PortConstraintGameTest().singleTierStructureChecksCountsAndDirection(helper,
+                            "pneumaticcraft_air_input_interface", "pneumaticcraft_air_output_interface",
+                            InterfaceTiers.air()));
+        }
+        if (ModList.get().isLoaded("ars_nouveau")) {
+            register(event, "port_constraints_source_presence_counts", 20,
+                    helper -> new PortConstraintGameTest().singleTierStructureChecksCountsAndDirection(helper,
+                            "ars_source_input_interface", "ars_source_output_interface",
+                            PortTiers.builder().anySourceInput().anySourceOutput().build()));
+        }
+        if (ModList.get().isLoaded("botania")) {
+            register(event, "port_constraints_mana_presence_counts", 20,
+                    helper -> new PortConstraintGameTest().singleTierStructureChecksCountsAndDirection(helper,
+                            "botania_mana_input_pool", "botania_mana_output_pool",
+                            PortTiers.builder().anyManaInput().anyManaOutput().build()));
+        }
         register(event, "mekanism_normal_chemical_radioactive_rejection", 100,
                 helper -> new MekanismPortGameTest().normalChemicalPortRejectsRadioactiveAndAcceptsNonRadioactive(helper));
         register(event, "mekanism_radioactive_chemical_only_accepts_radioactive", 100,

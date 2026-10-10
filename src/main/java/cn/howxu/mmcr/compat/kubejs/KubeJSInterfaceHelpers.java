@@ -154,6 +154,16 @@ public final class KubeJSInterfaceHelpers {
     public static PortTierRequirementSpec sourceOutputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.sourceOutput(id)); }
     public static PortTierRequirementSpec manaInputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.manaInput(id)); }
     public static PortTierRequirementSpec manaOutputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.manaOutput(id)); }
+    public static PortTierRequirementSpec chemicalInputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.chemicalInput(id)); }
+    public static PortTierRequirementSpec chemicalOutputTier(String id) { return PortTierRequirementSpec.from(InterfaceTiers.chemicalOutput(id)); }
+    public static PortTierRequirementSpec radioactiveChemicalInputTier() { return PortTierRequirementSpec.from(InterfaceTiers.radioactiveChemicalInput()); }
+    public static PortTierRequirementSpec radioactiveChemicalOutputTier() { return PortTierRequirementSpec.from(InterfaceTiers.radioactiveChemicalOutput()); }
+    public static PortTierRequirementSpec heatInputTier() { return PortTierRequirementSpec.from(InterfaceTiers.heatInput()); }
+    public static PortTierRequirementSpec heatOutputTier() { return PortTierRequirementSpec.from(InterfaceTiers.heatOutput()); }
+    public static PortTierRequirementSpec stressInputTier() { return PortTierRequirementSpec.from(InterfaceTiers.stressInput()); }
+    public static PortTierRequirementSpec stressOutputTier() { return PortTierRequirementSpec.from(InterfaceTiers.stressOutput()); }
+    public static PortTierRequirementSpec airInputTier() { return PortTierRequirementSpec.from(InterfaceTiers.airInput()); }
+    public static PortTierRequirementSpec airOutputTier() { return PortTierRequirementSpec.from(InterfaceTiers.airOutput()); }
 
     private static BlockPredicate convert(cn.howxu.mmcr.api.machine.definition.BlockPredicate predicate) {
         if (predicate.isMachineCoupler()) return BlockPredicate.machineCoupler();

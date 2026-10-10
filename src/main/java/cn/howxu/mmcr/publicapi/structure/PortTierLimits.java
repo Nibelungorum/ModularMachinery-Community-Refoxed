@@ -13,7 +13,7 @@ public interface PortTierLimits {
     /** Independently tiered port families.
      * @author howxu <dev@howxu.cn>
      */
-    enum PortCategory { ITEM, FLUID, ENERGY, SOURCE, MANA }
+    enum PortCategory { ITEM, FLUID, ENERGY, SOURCE, MANA, CHEMICAL, RADIOACTIVE_CHEMICAL, HEAT, STRESS, AIR }
     /** Item bus tiers.
      * @author howxu <dev@howxu.cn>
      */
@@ -33,6 +33,14 @@ public interface PortTierLimits {
      */
     enum EnergyTier {
         TINY, SMALL, NORMAL, REINFORCED, BIG, HUGE, LUDICROUS, ULTIMATE;
+        public String id() { return TierAdapters.id(this); }
+    }
+
+    /** Non-radioactive chemical hatch tiers.
+     * @author howxu <dev@howxu.cn>
+     */
+    enum ChemicalTier {
+        BASIC, ADVANCED, ELITE, ULTIMATE;
         public String id() { return TierAdapters.id(this); }
     }
 
@@ -68,6 +76,29 @@ public interface PortTierLimits {
     static PortTierLimits manaInput(String id) { return TierAdapters.manaInput(id); }
     static PortTierLimits manaOutput() { return TierAdapters.manaOutput(); }
     static PortTierLimits manaOutput(String id) { return TierAdapters.manaOutput(id); }
+    static PortTierLimits chemical(String id) { return TierAdapters.chemical(id); }
+    static PortTierLimits chemical(ChemicalTier tier) { return TierAdapters.chemical(tier); }
+    static PortTierLimits chemical(ChemicalTier tier, IoDirection io) { return TierAdapters.chemical(tier, io); }
+    static PortTierLimits chemicalInput(String id) { return TierAdapters.chemicalInput(id); }
+    static PortTierLimits chemicalInput(ChemicalTier tier) { return TierAdapters.chemicalInput(tier); }
+    static PortTierLimits chemicalOutput(String id) { return TierAdapters.chemicalOutput(id); }
+    static PortTierLimits chemicalOutput(ChemicalTier tier) { return TierAdapters.chemicalOutput(tier); }
+    static PortTierLimits radioactiveChemical() { return TierAdapters.radioactiveChemical(); }
+    static PortTierLimits radioactiveChemical(IoDirection io) { return TierAdapters.radioactiveChemical(io); }
+    static PortTierLimits radioactiveChemicalInput() { return TierAdapters.radioactiveChemicalInput(); }
+    static PortTierLimits radioactiveChemicalOutput() { return TierAdapters.radioactiveChemicalOutput(); }
+    static PortTierLimits heat() { return TierAdapters.heat(); }
+    static PortTierLimits heat(IoDirection io) { return TierAdapters.heat(io); }
+    static PortTierLimits heatInput() { return TierAdapters.heatInput(); }
+    static PortTierLimits heatOutput() { return TierAdapters.heatOutput(); }
+    static PortTierLimits stress() { return TierAdapters.stress(); }
+    static PortTierLimits stress(IoDirection io) { return TierAdapters.stress(io); }
+    static PortTierLimits stressInput() { return TierAdapters.stressInput(); }
+    static PortTierLimits stressOutput() { return TierAdapters.stressOutput(); }
+    static PortTierLimits air() { return TierAdapters.air(); }
+    static PortTierLimits air(IoDirection io) { return TierAdapters.air(io); }
+    static PortTierLimits airInput() { return TierAdapters.airInput(); }
+    static PortTierLimits airOutput() { return TierAdapters.airOutput(); }
     List<RequirementView> requirements();
 
     /** Factory-owned tier requirement view.
@@ -96,12 +127,24 @@ public interface PortTierLimits {
         Builder anySourceOutput();
         Builder anyManaInput();
         Builder anyManaOutput();
+        Builder anyChemicalInput();
+        Builder anyChemicalOutput();
+        Builder anyRadioactiveChemicalInput();
+        Builder anyRadioactiveChemicalOutput();
+        Builder anyHeatInput();
+        Builder anyHeatOutput();
+        Builder anyStressInput();
+        Builder anyStressOutput();
+        Builder anyAirInput();
+        Builder anyAirOutput();
         Builder minItemInput(ItemTier tier);
         Builder minItemOutput(ItemTier tier);
         Builder minFluidInput(FluidTier tier);
         Builder minFluidOutput(FluidTier tier);
         Builder minEnergyInput(EnergyTier tier);
         Builder minEnergyOutput(EnergyTier tier);
+        Builder minChemicalInput(ChemicalTier tier);
+        Builder minChemicalOutput(ChemicalTier tier);
         PortTierLimits build();
     }
 }

@@ -2275,6 +2275,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (portId.startsWith("fluid_output_hatch")) return Component.translatable("message.mmcr.port_requirement.fluid_output");
         if (portId.startsWith("energy_input_hatch")) return Component.translatable("message.mmcr.port_requirement.energy_input");
         if (portId.startsWith("energy_output_hatch")) return Component.translatable("message.mmcr.port_requirement.energy_output");
+        if (portId.startsWith("chemical_input_hatch")) return Component.translatable("message.mmcr.port_requirement.chemical_input");
+        if (portId.startsWith("chemical_output_hatch")) return Component.translatable("message.mmcr.port_requirement.chemical_output");
+        if (portId.equals("radioactive_chemical_input_hatch")) return Component.translatable("block.mmcr.radioactive_chemical_input_hatch");
+        if (portId.equals("radioactive_chemical_output_hatch")) return Component.translatable("block.mmcr.radioactive_chemical_output_hatch");
+        if (portId.equals("heat_input_hatch")) return Component.translatable("block.mmcr.heat_input_hatch");
+        if (portId.equals("heat_output_hatch")) return Component.translatable("block.mmcr.heat_output_hatch");
+        if (portId.equals("create_stress_input_interface")) return Component.translatable("block.mmcr.create_stress_input_interface");
+        if (portId.equals("create_stress_output_interface")) return Component.translatable("block.mmcr.create_stress_output_interface");
+        if (portId.equals("pneumaticcraft_air_input_interface")) return Component.translatable("block.mmcr.pneumaticcraft_air_input_interface");
+        if (portId.equals("pneumaticcraft_air_output_interface")) return Component.translatable("block.mmcr.pneumaticcraft_air_output_interface");
+        if (portId.equals("source_input_interface") || portId.equals("ars_source_input_interface")) return Component.translatable("block.mmcr.ars_source_input_interface");
+        if (portId.equals("source_output_interface") || portId.equals("ars_source_output_interface")) return Component.translatable("block.mmcr.ars_source_output_interface");
         if (portId.equals("mana_input_pool")) return Component.translatable("message.mmcr.port_requirement.mana_input");
         if (portId.equals("mana_output_pool")) return Component.translatable("message.mmcr.port_requirement.mana_output");
         if (portId.equals("factory_controller")) return Component.translatable("message.mmcr.port_requirement.factory_controller");
@@ -2292,6 +2304,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             case "ludicrous" -> Component.translatable("message.mmcr.port_tier.ludicrous");
             case "vacuum" -> Component.translatable("message.mmcr.port_tier.vacuum");
             case "ultimate" -> Component.translatable("message.mmcr.port_tier.ultimate");
+            case "basic" -> Component.translatable("message.mmcr.port_tier.basic");
+            case "advanced" -> Component.translatable("message.mmcr.port_tier.advanced");
+            case "elite" -> Component.translatable("message.mmcr.port_tier.elite");
             default -> Component.literal(tierId);
         };
     }
@@ -3354,7 +3369,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 for (CapabilityBinding binding : kind.bindings()) {
                     if (!family.matches(binding)) continue;
                     for (String alias : family.countAliases()) {
-                        String key = family.ioType() + ":" + binding.type().id();
+                        String key = family.ioType() + ":" + family.familyId();
                         if (countedAliases.add(key) && !alias.equals(kind.id())) counts.merge(alias, 1, Integer::sum);
                     }
                 }

@@ -865,6 +865,9 @@
   "item.mmcr.extended_combined_output_ultimate": "究极扩展组合输出端口",
   "message.mmcr.port_tier.basic": "基础",
   "message.mmcr.port_tier.advanced": "进阶",
+  "message.mmcr.port_tier.elite": "精英",
+  "message.mmcr.port_requirement.chemical_input": "化学品输入仓",
+  "message.mmcr.port_requirement.chemical_output": "化学品输出仓",
   "tooltip.mmcr.interface.unit.tanks": " 个储罐",
 
   "block.mmcr.chemical_input_hatch_basic": "基础化学品输入仓",

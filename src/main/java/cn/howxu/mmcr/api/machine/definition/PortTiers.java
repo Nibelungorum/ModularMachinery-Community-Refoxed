@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.machine.definition;
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -40,7 +41,12 @@ public record PortTiers(List<Requirement> requirements) {
         FLUID,
         ENERGY,
         SOURCE,
-        MANA
+        MANA,
+        CHEMICAL,
+        RADIOACTIVE_CHEMICAL,
+        HEAT,
+        STRESS,
+        AIR
     }
 
     public enum ItemTier {
@@ -105,6 +111,28 @@ public record PortTiers(List<Requirement> requirements) {
         }
     }
 
+    /** Chemical hatch tiers mapped to registered detection tiers.
+     * @author howxu <dev@howxu.cn>
+     */
+    public enum ChemicalTier {
+        BASIC("basic", 2),
+        ADVANCED("advanced", 3),
+        ELITE("elite", 4),
+        ULTIMATE("ultimate", 5);
+
+        private final String id;
+        private final int detectionTier;
+
+        ChemicalTier(String id, int detectionTier) {
+            this.id = id;
+            this.detectionTier = detectionTier;
+        }
+
+        public String id() { return id; }
+
+        public int detectionTier() { return detectionTier; }
+    }
+
     public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
         public Requirement {
             if (category == null) throw new IllegalArgumentException("category null");
@@ -116,6 +144,9 @@ public record PortTiers(List<Requirement> requirements) {
                 case FLUID -> minTier < FluidTier.values().length ? FluidTier.values()[minTier].id() : null;
                 case ENERGY -> minTier < EnergyTier.values().length ? EnergyTier.values()[minTier].id() : null;
                 case SOURCE, MANA -> minTier == 0 ? "normal" : null;
+                case CHEMICAL -> Arrays.stream(ChemicalTier.values())
+                        .filter(tier -> tier.detectionTier() == minTier).map(ChemicalTier::id).findFirst().orElse(null);
+                case RADIOACTIVE_CHEMICAL, HEAT, STRESS, AIR -> minTier == 0 ? "any" : null;
             };
             if (!minTierId.equals(expectedTierId)) {
                 throw new IllegalArgumentException("minTier and minTierId do not match");
@@ -151,6 +182,26 @@ public record PortTiers(List<Requirement> requirements) {
 
         public Builder anyManaOutput() { return add(PortCategory.MANA, IOType.OUTPUT, 0, "normal"); }
 
+        public Builder anyChemicalInput() { return minChemicalInput(ChemicalTier.BASIC); }
+
+        public Builder anyChemicalOutput() { return minChemicalOutput(ChemicalTier.BASIC); }
+
+        public Builder anyRadioactiveChemicalInput() { return add(PortCategory.RADIOACTIVE_CHEMICAL, IOType.INPUT, 0, "any"); }
+
+        public Builder anyRadioactiveChemicalOutput() { return add(PortCategory.RADIOACTIVE_CHEMICAL, IOType.OUTPUT, 0, "any"); }
+
+        public Builder anyHeatInput() { return add(PortCategory.HEAT, IOType.INPUT, 0, "any"); }
+
+        public Builder anyHeatOutput() { return add(PortCategory.HEAT, IOType.OUTPUT, 0, "any"); }
+
+        public Builder anyStressInput() { return add(PortCategory.STRESS, IOType.INPUT, 0, "any"); }
+
+        public Builder anyStressOutput() { return add(PortCategory.STRESS, IOType.OUTPUT, 0, "any"); }
+
+        public Builder anyAirInput() { return add(PortCategory.AIR, IOType.INPUT, 0, "any"); }
+
+        public Builder anyAirOutput() { return add(PortCategory.AIR, IOType.OUTPUT, 0, "any"); }
+
         public Builder minItemInput(ItemTier size) {
             return add(PortCategory.ITEM, IOType.INPUT, size.ordinal(), size.id());
         }
@@ -173,6 +224,14 @@ public record PortTiers(List<Requirement> requirements) {
 
         public Builder minEnergyOutput(EnergyTier size) {
             return add(PortCategory.ENERGY, IOType.OUTPUT, size.ordinal(), size.id());
+        }
+
+        public Builder minChemicalInput(ChemicalTier size) {
+            return add(PortCategory.CHEMICAL, IOType.INPUT, size.detectionTier(), size.id());
+        }
+
+        public Builder minChemicalOutput(ChemicalTier size) {
+            return add(PortCategory.CHEMICAL, IOType.OUTPUT, size.detectionTier(), size.id());
         }
 
         private Builder add(PortCategory category, IOType ioType, int minTier, String minTierId) {
