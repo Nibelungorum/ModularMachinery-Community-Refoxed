@@ -1,7 +1,7 @@
 {
   "name": "guide.mmcr_patchouli.entry.controllers.formation.name",
   "category": "mmcr:controllers",
-  "icon": "mmcr:textures/block/basic_controller.png",
+  "icon": "mmcr:blueprint",
   "sortnum": 10,
   "pages": [
     {

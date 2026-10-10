@@ -1,0 +1,68 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.extended_fluids.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:extended_fluid_input_hatch_basic",
+  "sortnum": 15,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_fluid_input_hatch_basic",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_fluids.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_fluid_output_hatch_basic",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_fluids.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p1"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_fluid_input_hatch_advanced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_fluids.p2.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p2"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_fluid_output_hatch_advanced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_fluids.p3.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p3"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_fluid_input_hatch_reinforced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_fluids.p4.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p4"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_fluid_output_hatch_reinforced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_fluids.p5.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p5"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_fluid_input_hatch_ultimate",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_fluids.p6.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p6"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_fluid_output_hatch_ultimate",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_fluids.p7.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p7"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_fluids.p8"}
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "name": "guide.mmcr_patchouli.entry.ports.extended_energy.name",
+  "category": "mmcr:ports",
+  "icon": "mmcr:extended_energy_input_hatch_reinforced",
+  "sortnum": 25,
+  "pages": [
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_energy_input_hatch_reinforced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_energy.p0.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_energy.p0"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_energy_output_hatch_reinforced",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_energy.p1.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_energy.p1"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_energy_input_hatch_ultimate",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_energy.p2.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_energy.p2"}
+    },
+    {
+      "type": "patchouli:spotlight",
+      "item": "mmcr:extended_energy_output_hatch_ultimate",
+      "title": "guide.mmcr_patchouli.entry.ports.extended_energy.p3.title",
+      "link_recipe": true,
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_energy.p3"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.entry.ports.extended_energy.p4"}
+    }
+  ]
+}
