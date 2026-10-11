@@ -548,8 +548,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             AutoIoHandler handler = transferHandler(capability).orElse(null);
             if (handler == null) {
-                autoIOConfigs.remove(capability.type());
-                autoIOStates.remove(capability.type());
+                if (!autoIOConfigs.isEmpty()) autoIOConfigs.remove(capability.type());
+                if (!autoIOStates.isEmpty()) autoIOStates.remove(capability.type());
                 continue;
             }
             AutoIOConfig config = autoIOConfig(capability.type());

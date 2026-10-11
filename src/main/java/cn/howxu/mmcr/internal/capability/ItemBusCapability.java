@@ -50,6 +50,7 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
     private final IOType ioType;
     private final IItemHandler itemHandler;
     private final CapabilityView view;
+    private final boolean exposeTransferFacet;
     private final AsyncPlanningFacet asyncPlanning;
 
     public ItemBusCapability(IItemHandler itemHandler, IOType ioType) {
@@ -67,6 +68,7 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
         this.port = port;
         this.ioType = ioType;
         this.itemHandler = itemHandler;
+        this.exposeTransferFacet = exposeTransferFacet;
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override public Object planningIdentity() { return itemHandler; }
 
@@ -121,6 +123,9 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
     @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        if (facetType == TransferFacet.class) {
+            return exposeTransferFacet ? Optional.of(facetType.cast(this)) : Optional.empty();
+        }
         return MachineCapability.super.facet(facetType);
     }
 

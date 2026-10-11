@@ -173,6 +173,28 @@ class ControllerStateSyncTest {
                 tick, totalTick, 1L, 1L, false, 0, 0, 0, 0L, Map.of(), 0, 1);
     }
 
+    @Test
+    void cached_idle_packet_initializes_later_players_and_refreshes_after_published_state_changes() throws Exception {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        ServerPlayer first = player();
+        ServerPlayer later = player();
+        PktMachineStatePayload initial = controller.machineStatePacket();
+        controller.broadcastState(List.of(first), initial);
+        assertThat(controller.machineStatePacket()).isSameAs(initial);
+        controller.broadcastState(List.of(first, later), controller.machineStatePacket());
+        assertThat(packets(first)).containsExactly(initial);
+        assertThat(packets(later)).containsExactly(initial);
+
+        controller.setMachine(null);
+        PktMachineStatePayload changed = controller.machineStatePacket();
+        assertThat(changed).isNotSameAs(initial);
+        assertThat(changed.machineId()).isEmpty();
+        controller.broadcastState(List.of(first, later), changed);
+        assertThat(packets(first)).containsExactly(initial, changed);
+        assertThat(packets(later)).containsExactly(initial, changed);
+        assertThat(controller.machineStatePacket()).isSameAs(changed);
+    }
+
     private static ServerPlayer player() throws Exception {
         Unsafe unsafe = unsafe();
         ServerPlayer player = (ServerPlayer) unsafe.allocateInstance(ServerPlayer.class);
@@ -180,6 +202,48 @@ class ControllerStateSyncTest {
         connection.packets = new ArrayList<>();
         player.connection = connection;
         return player;
+    }
+
+    @Test
+    void equivalent_packet_refreshes_receiver_baseline_without_sending_an_update() throws Exception {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        ServerPlayer player = player();
+        var first = payload("mmcr:recipe", 1, 20);
+        var equivalent = payload("mmcr:recipe", 1, 20);
+        controller.broadcastState(List.of(player), first);
+        controller.broadcastState(List.of(player), equivalent);
+        Field receiversField = MachineControllerBlockEntity.class.getDeclaredField("stateReceivers");
+        receiversField.setAccessible(true);
+        assertThat(((Map<?, ?>) receiversField.get(controller)).get(player)).isSameAs(equivalent);
+        assertThat(packets(player)).containsExactly(first);
+        controller.broadcastState(List.of(player), equivalent.withProgress(2, 20));
+        assertThat(packets(player)).containsExactly(first,
+                new PktMachineProgressPayload(BlockPos.ZERO, "mmcr:recipe", 2, 20));
+    }
+
+    @Test
+    void receiver_membership_handles_duplicates_reordering_and_same_size_replacement() throws Exception {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        ServerPlayer first = player();
+        ServerPlayer second = player();
+        ServerPlayer replacement = player();
+        var idle = payload("", 0, 0);
+        controller.broadcastState(List.of(first, second), idle);
+        controller.broadcastState(List.of(second, first), idle);
+        controller.broadcastState(List.of(first, first), idle);
+        controller.broadcastState(List.of(first, second), idle);
+        assertThat(packets(first)).containsExactly(idle);
+        assertThat(packets(second)).containsExactly(idle, idle);
+
+        controller.broadcastState(List.of(second, replacement), idle);
+        controller.broadcastState(List.of(first, second), idle);
+        assertThat(packets(first)).containsExactly(idle, idle);
+        assertThat(packets(second)).containsExactly(idle, idle);
+        assertThat(packets(replacement)).containsExactly(idle);
+        controller.broadcastState(List.of(), idle);
+        controller.broadcastState(List.of(first, second), idle);
+        assertThat(packets(first)).containsExactly(idle, idle, idle);
+        assertThat(packets(second)).containsExactly(idle, idle, idle);
     }
 
     private static List<CustomPacketPayload> packets(ServerPlayer player) {

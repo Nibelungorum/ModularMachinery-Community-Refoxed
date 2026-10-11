@@ -4,15 +4,19 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import com.google.common.collect.ImmutableList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.AbstractList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -20,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.RandomAccess;
 
 public final class StructureMatcher {
 
@@ -71,11 +76,11 @@ public final class StructureMatcher {
             int entryIndex = plan.sentinelAt(index);
             BlockPos relativePos = plan.entryPositions().get(entryIndex);
             BlockPredicate expected = plan.entryPredicates().get(entryIndex);
-            Mismatch mismatch = new Mismatch(relativePos, ctrlPos.offset(relativePos), expected,
-                    level.getBlockState(ctrlPos.offset(relativePos)), structureVersion, frontFacing, rollFacing,
-                    stageNumber, patternIdentity);
-            if (!matchesEntry(expected, mismatch.actualState(), effectiveReplacements.getOrDefault(relativePos, List.of()), stateSensitive)) {
-                return Optional.of(mismatch);
+            BlockPos worldPos = ctrlPos.offset(relativePos);
+            BlockState actualState = level.getBlockState(worldPos);
+            if (!matchesEntry(expected, actualState, effectiveReplacements.getOrDefault(relativePos, List.of()), stateSensitive)) {
+                return Optional.of(new Mismatch(relativePos, worldPos, expected, actualState,
+                        structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity));
             }
         }
         return Optional.empty();
@@ -123,18 +128,94 @@ public final class StructureMatcher {
         }
     }
 
+    /** Internal observation; public entries and diagnostics are materialized only when requested.
+     * @author howxu <dev@howxu.cn> */
+    private static final class CapturedEntry {
+        private final BlockPos relativePos;
+        private final BlockPos worldPos;
+        private final BlockPredicate expected;
+        private final BlockState actualState;
+        private final ScanIdentity identity;
+        private final BlockPredicate matchingExpected;
+        private final List<BlockPredicate> replacementPredicates;
+        private @Nullable ScanEntry entry;
+
+        private CapturedEntry(BlockPos relativePos, BlockPos worldPos, BlockPredicate expected, BlockState actualState,
+                              ScanIdentity identity, BlockPredicate matchingExpected,
+                              List<BlockPredicate> replacementPredicates) {
+            this.relativePos = relativePos;
+            this.worldPos = worldPos;
+            this.expected = expected;
+            this.actualState = actualState;
+            this.identity = identity;
+            this.matchingExpected = matchingExpected;
+            this.replacementPredicates = List.copyOf(replacementPredicates);
+        }
+
+        private synchronized ScanEntry entry() {
+            if (entry == null) {
+                Mismatch mismatch = new Mismatch(relativePos, worldPos, expected, actualState, identity.structureVersion(),
+                        identity.frontFacing(), identity.rollFacing(), identity.stageNumber(), identity.patternIdentity());
+                entry = new ScanEntry(mismatch, matchingExpected, replacementPredicates);
+            }
+            return entry;
+        }
+
+        private boolean matches(boolean stateSensitive) {
+            if (matchingExpected.matches(actualState, stateSensitive)) return true;
+            for (BlockPredicate replacement : replacementPredicates) {
+                if (replacement.matches(actualState, stateSensitive)) return true;
+            }
+            return expected instanceof BlockPredicate.Air && actualState.isAir();
+        }
+    }
+
+    /** Owns a completed capture list; its unmodifiable public view is created on demand.
+     * @author howxu <dev@howxu.cn> */
+    private static final class CapturedEntries extends AbstractList<ScanEntry> implements RandomAccess {
+        private final List<CapturedEntry> captured;
+        private @Nullable List<ScanEntry> view;
+
+        private CapturedEntries(List<CapturedEntry> captured) {
+            this.captured = captured;
+        }
+
+        @Override public ScanEntry get(int index) { return captured.get(index).entry(); }
+        @Override public int size() { return captured.size(); }
+
+        private synchronized List<ScanEntry> view() {
+            if (view == null) view = Collections.unmodifiableList(this);
+            return view;
+        }
+
+        private ScanResult match(ScanStatus completionStatus, boolean stateSensitive) {
+            for (int index = 0; index < captured.size(); index++) {
+                CapturedEntry entry = captured.get(index);
+                if (!entry.matches(stateSensitive)) {
+                    return new ScanResult(ScanStatus.MISMATCH, index + 1, entry.entry().mismatch(), null);
+                }
+            }
+            return new ScanResult(completionStatus, captured.size(), null, null);
+        }
+    }
+
     /** Immutable server-thread capture of one bounded scan batch. */
     public record ScanBatch(ScanIdentity identity, List<ScanEntry> entries, int nextSentinelCursor,
                             boolean sentinelsChecked, int nextCursor, ScanStatus completionStatus,
                             @Nullable InvalidationReason invalidation, boolean stateSensitive) {
         public ScanBatch {
-            entries = List.copyOf(entries);
+            if (!(entries instanceof CapturedEntries)) entries = List.copyOf(entries);
+        }
+
+        public List<ScanEntry> entries() {
+            return entries instanceof CapturedEntries captured ? captured.view() : entries;
         }
 
         public ScanResult match() {
             if (invalidation != null) {
                 return new ScanResult(ScanStatus.INVALIDATED, 0, null, invalidation);
             }
+            if (entries instanceof CapturedEntries captured) return captured.match(completionStatus, stateSensitive);
             int checked = 0;
             for (ScanEntry entry : entries) {
                 checked++;
@@ -157,6 +238,7 @@ public final class StructureMatcher {
         private final boolean stateSensitive;
         private final ScanOptions options;
         private final int activeSentinelCount;
+        private final CapturePredicates capturePredicates = new CapturePredicates();
         private int sentinelCursor;
         private boolean sentinelsChecked;
         private int scanIndex;
@@ -225,21 +307,22 @@ public final class StructureMatcher {
                 return pendingBatch = new ScanBatch(identity, List.of(), sentinelCursor, sentinelsChecked, scanIndex,
                         ScanStatus.INVALIDATED, invalidated, stateSensitive);
             }
-            List<ScanEntry> entries = new java.util.ArrayList<>();
-            CapturePredicates memo = new CapturePredicates();
             int budget = batchSize();
+            List<CapturedEntry> entries = new ArrayList<>(budget);
+            CapturePredicates memo = capturePredicates;
+            memo.beginBatch();
             int nextSentinelCursor = sentinelCursor;
             boolean nextSentinelsChecked = sentinelsChecked;
             int nextScanIndex = scanIndex;
             if (previousMismatch != null) {
-                entries.add(entryAt(previousMismatch.relativePos(), previousMismatch.expected(), level, ctrlPos, memo));
+                entries.add(entryAt(previousMismatch.relativePos(), previousMismatch.expected(), level, ctrlPos, memo, identity));
             }
             if (options.sentinelEnabled() && !nextSentinelsChecked) {
                 while (nextSentinelCursor < activeSentinelCount && entries.size() < budget) {
                     int index = scanPlan.sentinelAt(nextSentinelCursor++);
                     BlockPos relativePos = scanPlan.entryPositions().get(index);
                     BlockPredicate expected = scanPlan.entryPredicates().get(index);
-                    entries.add(entryAt(relativePos, expected, level, ctrlPos, memo));
+                    entries.add(entryAt(relativePos, expected, level, ctrlPos, memo, identity));
                 }
                 nextSentinelsChecked = nextSentinelCursor == activeSentinelCount;
             }
@@ -251,10 +334,10 @@ public final class StructureMatcher {
                 int index = nextScanIndex++;
                 BlockPos relativePos = scanPlan.entryPositions().get(index);
                 BlockPredicate expected = scanPlan.entryPredicates().get(index);
-                entries.add(entryAt(relativePos, expected, level, ctrlPos, memo));
+                entries.add(entryAt(relativePos, expected, level, ctrlPos, memo, identity));
             }
             ScanStatus status = nextScanIndex == scanPlan.entryCount() ? ScanStatus.VALID : ScanStatus.IN_PROGRESS;
-            return pendingBatch = new ScanBatch(identity, entries, nextSentinelCursor, nextSentinelsChecked,
+            return pendingBatch = new ScanBatch(identity, new CapturedEntries(entries), nextSentinelCursor, nextSentinelsChecked,
                     nextScanIndex, status, null, stateSensitive);
         }
 
@@ -277,16 +360,17 @@ public final class StructureMatcher {
             previousMismatch = null;
         }
 
-        private ScanEntry entryAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos,
-                                  CapturePredicates memo) {
-            Mismatch mismatch = mismatchAt(relativePos, expected, level, ctrlPos,
-                    structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
+        private CapturedEntry entryAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos,
+                                      CapturePredicates memo, ScanIdentity identity) {
+            BlockPos worldPos = ctrlPos.offset(relativePos);
+            BlockState actualState = level.getBlockState(worldPos);
             List<SingleBlockModifierReplacement> entryReplacements = replacements.getOrDefault(relativePos, List.of());
             List<BlockPredicate> replacementPredicates = entryReplacements.isEmpty() ? List.of() : entryReplacements.stream()
                     .map(SingleBlockModifierReplacement::getReplacement)
                     .map(predicate -> snapshotPredicate(predicate, memo))
                     .toList();
-            return new ScanEntry(mismatch, snapshotPredicate(expected, memo), replacementPredicates);
+            return new CapturedEntry(relativePos, worldPos, expected, actualState, identity,
+                    snapshotPredicate(expected, memo), replacementPredicates);
         }
 
         private static BlockPredicate snapshotPredicate(BlockPredicate predicate,
@@ -295,41 +379,84 @@ public final class StructureMatcher {
                     && !(predicate instanceof BlockPredicate.DeferredBlock deferred && !deferred.networkInterface())) {
                 return predicate;
             }
-            BlockPredicate cached = memo.get(predicate);
-            if (cached != null) return cached;
+            CapturedPredicate cached = memo.get(predicate);
+            if (cached != null && cached.batch == memo.batch) return cached.snapshot;
             BlockPredicate snapshot = switch (predicate) {
-                case BlockPredicate.DeferredBlock deferred when !deferred.networkInterface() ->
-                        new BlockPredicate.OfBlock(deferred.supplier().get());
+                case BlockPredicate.DeferredBlock deferred when !deferred.networkInterface() -> {
+                    Block block = deferred.supplier().get();
+                    yield cached != null && cached.snapshot instanceof BlockPredicate.OfBlock previous
+                            && previous.block() == block ? previous : new BlockPredicate.OfBlock(block);
+                }
                 case BlockPredicate.AnyOf anyOf -> {
                     List<BlockPredicate> children = anyOf.children();
-                    List<BlockPredicate> snapshots = null;
+                    BlockPredicate.AnyOf previous = cached != null && cached.snapshot instanceof BlockPredicate.AnyOf value
+                            ? value : anyOf;
+                    List<BlockPredicate> previousChildren = previous.children();
+                    ImmutableList.Builder<BlockPredicate> snapshots = children.size() == previousChildren.size()
+                            ? null : ImmutableList.builderWithExpectedSize(children.size());
                     for (int index = 0; index < children.size(); index++) {
-                        BlockPredicate child = children.get(index);
-                        BlockPredicate childSnapshot = snapshotPredicate(child, memo);
-                        if (childSnapshot != child && snapshots == null) snapshots = new ArrayList<>(children);
-                        if (snapshots != null) snapshots.set(index, childSnapshot);
+                        BlockPredicate childSnapshot = snapshotPredicate(children.get(index), memo);
+                        if (snapshots == null && childSnapshot != previousChildren.get(index)) {
+                            snapshots = ImmutableList.builderWithExpectedSize(children.size());
+                            for (int previousIndex = 0; previousIndex < index; previousIndex++) {
+                                snapshots.add(previousChildren.get(previousIndex));
+                            }
+                        }
+                        if (snapshots != null) snapshots.add(childSnapshot);
                     }
-                    if (snapshots != null) yield new BlockPredicate.AnyOf(List.copyOf(snapshots));
-                    List<BlockPredicate> immutableChildren = List.copyOf(children);
-                    yield immutableChildren == children ? anyOf : new BlockPredicate.AnyOf(immutableChildren);
+                    if (snapshots != null) yield new BlockPredicate.AnyOf(snapshots.build());
+                    if (cached != null) yield previous;
+                    List<BlockPredicate> immutableChildren = List.copyOf(previousChildren);
+                    yield immutableChildren == previousChildren ? previous : new BlockPredicate.AnyOf(immutableChildren);
                 }
                 default -> predicate;
             };
-            memo.put(predicate, snapshot);
+            memo.put(predicate, snapshot, cached);
             return snapshot;
         }
 
         /** @author howxu <dev@howxu.cn> */
         private static final class CapturePredicates {
-            private @Nullable IdentityHashMap<BlockPredicate, BlockPredicate> captured;
+            private @Nullable IdentityHashMap<BlockPredicate, CapturedPredicate> captured;
+            private @Nullable BlockPredicate lastPredicate;
+            private @Nullable CapturedPredicate lastCaptured;
+            private long batch;
 
-            @Nullable BlockPredicate get(BlockPredicate predicate) {
-                return captured == null ? null : captured.get(predicate);
+            void beginBatch() { batch++; }
+
+            @Nullable CapturedPredicate get(BlockPredicate predicate) {
+                if (predicate == lastPredicate) return lastCaptured;
+                CapturedPredicate entry = captured == null ? null : captured.get(predicate);
+                if (entry != null) {
+                    lastPredicate = predicate;
+                    lastCaptured = entry;
+                }
+                return entry;
             }
 
-            void put(BlockPredicate predicate, BlockPredicate snapshot) {
-                if (captured == null) captured = new IdentityHashMap<>();
-                captured.put(predicate, snapshot);
+            void put(BlockPredicate predicate, BlockPredicate snapshot, @Nullable CapturedPredicate entry) {
+                if (entry == null) {
+                    if (captured == null) captured = new IdentityHashMap<>();
+                    entry = new CapturedPredicate(batch, snapshot);
+                    captured.put(predicate, entry);
+                } else {
+                    entry.batch = batch;
+                    entry.snapshot = snapshot;
+                }
+                lastPredicate = predicate;
+                lastCaptured = entry;
+            }
+        }
+
+        /** Server-thread memo entry; only its immutable predicate snapshot reaches the worker.
+         * @author howxu <dev@howxu.cn> */
+        private static final class CapturedPredicate {
+            private long batch;
+            private BlockPredicate snapshot;
+
+            private CapturedPredicate(long batch, BlockPredicate snapshot) {
+                this.batch = batch;
+                this.snapshot = snapshot;
             }
         }
 
@@ -338,13 +465,6 @@ public final class StructureMatcher {
             return checked || cursor == activeSentinelCount || index < scanPlan.sentinelAt(cursor);
         }
 
-        private static Mismatch mismatchAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos,
-                                            long structureVersion, Direction frontFacing, Direction rollFacing,
-                                            int stageNumber, Object patternIdentity) {
-            BlockPos worldPos = ctrlPos.offset(relativePos);
-            return new Mismatch(relativePos, worldPos, expected, level.getBlockState(worldPos),
-                    structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity);
-        }
     }
 
 

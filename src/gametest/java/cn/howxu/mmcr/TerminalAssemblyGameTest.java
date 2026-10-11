@@ -320,6 +320,7 @@ public class TerminalAssemblyGameTest {
         controller.setBuildBlocksPerTickForTesting(1);
         controller.setStructureCheckIntervalForTesting(1);
         controller.setStructureScanBatchesForTesting(ServerConfig.DEFAULT_STRUCTURE_SCAN_BATCHES);
+        controller.setScanBatchTrackingForTesting(true);
         long acceptedAt = helper.getLevel().getGameTime();
         ServerPlayer player = servicePlayer(helper);
         MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, true);
@@ -341,6 +342,7 @@ public class TerminalAssemblyGameTest {
             for (int batchesThisTick : controller.scanBatchesPerTickForTesting().values()) {
                 helper.assertTrue(batchesThisTick <= 1, "The structure scanner performs at most one batch per tick");
             }
+            helper.assertTrue(!controller.scanBatchesPerTickForTesting().isEmpty(), "Explicitly enabled scan tracking records batches");
             helper.assertTrue(controller.scanBatchCountForTesting() > 0,
                     "Structure scanning starts after the build completes");
             helper.assertTrue(countPlacedStructureBlocks(helper, template) == expectedCount,
@@ -578,7 +580,7 @@ public class TerminalAssemblyGameTest {
         MultiblockAssemblyService.Result accepted = MultiblockAssemblyService.build(player, controller, false);
         helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS, "Survival build reserves materials");
         player.setRemoved(RemovalReason.DISCARDED);
-        helper.runAtTickTime(2, () -> {
+        helper.succeedWhen(() -> {
             long dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
                             new AABB(helper.absolutePos(controllerPos)).inflate(1))
                     .stream()
@@ -587,7 +589,6 @@ public class TerminalAssemblyGameTest {
                     .sum();
             helper.assertTrue(dropped == template.size(),
                     "A disconnected builder receives every unplaced reserved material as drops");
-            helper.succeed();
         });
     }
 

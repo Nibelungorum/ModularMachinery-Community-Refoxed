@@ -82,6 +82,7 @@ public final class NetworkInterfaceBindingCoordinator {
 
     private static void reconcile(MinecraftServer server, MachineControllerBlockEntity controller,
                                   List<NetworkInterfaceBlockEntity> networks) {
+        if (networks.isEmpty()) return;
         List<StoredConnection> connections = networks.stream()
                 .flatMap(network -> network.connections().stream().map(connection -> new StoredConnection(network, connection)))
                 .sorted(Comparator.comparingLong(stored -> stored.connection.sequence()))
@@ -113,6 +114,7 @@ public final class NetworkInterfaceBindingCoordinator {
         Map<GlobalPos, Integer> connectionCountCache = new HashMap<>();
         for (BlockPos controllerPos : StructureClaimRegistry.get(level).claimedControllers()) {
             if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller)) continue;
+            if (controller.activeNetworkInterfacePositions().isEmpty()) continue;
             GlobalPos controllerKey = GlobalPos.of(level.dimension(), controllerPos);
             List<NetworkInterfaceBlockEntity> networks = interfaceCache.computeIfAbsent(controllerKey,
                     ignored -> activeInterfaces(server, controller));
@@ -150,6 +152,7 @@ public final class NetworkInterfaceBindingCoordinator {
 
     private static List<NetworkInterfaceBlockEntity> activeInterfaces(MinecraftServer server,
                                                                         MachineControllerBlockEntity controller) {
+        if (controller.activeNetworkInterfacePositions().isEmpty()) return List.of();
         ServerLevel level = server.getLevel(controller.getLevel().dimension());
         if (level == null) return List.of();
         return controller.activeNetworkInterfacePositions().stream().sorted(Comparator.<BlockPos>comparingInt(BlockPos::getX)

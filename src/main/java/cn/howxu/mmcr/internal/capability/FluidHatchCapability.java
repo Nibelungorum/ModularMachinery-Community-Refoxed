@@ -49,6 +49,7 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
     private final IOType ioType;
     private final IFluidHandler fluidHandler;
     private final CapabilityView view;
+    private final boolean exposeTransferFacet;
     private final AsyncPlanningFacet asyncPlanning;
 
     public FluidHatchCapability(IFluidHandler fluidHandler, IOType ioType) {
@@ -66,6 +67,7 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
         this.port = port;
         this.ioType = ioType;
         this.fluidHandler = fluidHandler;
+        this.exposeTransferFacet = exposeTransferFacet;
         this.asyncPlanning = new AsyncPlanningFacet() {
             @Override public Object planningIdentity() { return fluidHandler; }
 
@@ -114,6 +116,9 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
     @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        if (facetType == TransferFacet.class) {
+            return exposeTransferFacet ? Optional.of(facetType.cast(this)) : Optional.empty();
+        }
         return MachineCapability.super.facet(facetType);
     }
 

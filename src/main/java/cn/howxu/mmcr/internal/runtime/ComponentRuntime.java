@@ -22,6 +22,9 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.modifier.ModifierTarget;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
@@ -67,6 +70,7 @@ public final class ComponentRuntime {
                     Map.of("raw_reason_id", "operation_failed_without_status")));
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
+    private List<MachineCapability> tickFacetCandidates = List.of();
     private List<CapabilityIdentity> capabilityIdentity = List.of();
     private List<CapabilityPresentationSegment> capabilityPresentationSegments = List.of();
     private Map<BlockPos, List<Integer>> capabilitySourceIndices = Map.of();
@@ -134,6 +138,10 @@ public final class ComponentRuntime {
             componentPresentationEpoch++;
         }
         this.capabilities = nextCapabilities;
+        // These closed built-in capabilities cannot expose TickFacet. Custom facet queries may change dynamically.
+        tickFacetCandidates = nextCapabilities.stream().filter(capability -> capability.getClass() != ItemBusCapability.class
+                && capability.getClass() != FluidHatchCapability.class
+                && capability.getClass() != EnergyHatchCapability.class).toList();
         this.capabilityIdentity = nextIdentity;
         capabilityPresentationSegments = List.copyOf(nextSegments);
         capabilitySourceIndices = nextSources;
@@ -155,6 +163,14 @@ public final class ComponentRuntime {
 
     public List<MachineCapability> capabilities() {
         return capabilities;
+    }
+
+    /** Candidate membership is refreshed on every replacement; custom facets are queried live. */
+    public boolean hasTickFacets() {
+        for (MachineCapability capability : tickFacetCandidates) {
+            if (capability.facet(TickFacet.class).isPresent()) return true;
+        }
+        return false;
     }
 
     /**

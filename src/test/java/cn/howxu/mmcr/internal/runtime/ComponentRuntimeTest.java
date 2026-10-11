@@ -8,6 +8,9 @@ import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.TickFacet;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
@@ -111,6 +114,43 @@ class ComponentRuntimeTest {
         assertThat(runtime.replaceLinkedPortPositions(Set.of(BlockPos.ZERO))).isFalse();
         assertThat(runtime.replaceModuleConnectionState(connection, 1)).isTrue();
         assertThat(runtime.replaceModuleConnectionState(connection, 1)).isFalse();
+    }
+
+    @Test
+    void idle_tick_detection_tracks_dynamic_custom_facets_without_rebinding_and_clears_removed_capabilities() {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        ComponentRuntime runtime = controller.componentRuntime();
+        CountingTickCapability capability = new CountingTickCapability();
+        ProcessingComponent component = component(new TestCapabilityHost(List.of(capability)), "tick");
+        runtime.replaceComponents(List.of(component));
+        long version = runtime.capabilityVersion();
+        CraftingRuntime crafting = new CraftingRuntime(controller, runtime);
+        for (int index = 0; index < 10; index++) {
+            assertThat(runtime.hasTickFacets()).isFalse();
+            crafting.tickIdle();
+        }
+        assertThat(capability.plans).isZero();
+
+        capability.enabled = true;
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+        assertThat(runtime.hasTickFacets()).isTrue();
+        crafting.tickIdle();
+        assertThat(capability.plans).isEqualTo(1);
+
+        capability.enabled = false;
+        assertThat(runtime.hasTickFacets()).isFalse();
+        crafting.tickIdle();
+        assertThat(capability.plans).isEqualTo(1);
+        capability.enabled = true;
+        runtime.replaceComponents(List.of(component));
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+        assertThat(runtime.hasTickFacets()).isTrue();
+        runtime.clear();
+        assertThat(runtime.hasTickFacets()).isFalse();
+        int reads = capability.tickFacetReads;
+        crafting.tickIdle();
+        assertThat(capability.tickFacetReads).isEqualTo(reads);
+        assertThat(capability.plans).isEqualTo(1);
     }
 
     @Test
@@ -1440,6 +1480,34 @@ class ComponentRuntimeTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class CountingTickCapability implements MachineCapability, TickFacet {
+        private final TestCapability delegate = new TestCapability("tick");
+        private boolean enabled;
+        private int tickFacetReads;
+        private int plans;
+
+        @Override public CapabilityType type() { return delegate.type(); }
+        @Override public CapabilityDirections directions() { return delegate.directions(); }
+        @Override public CapabilityView view() { return delegate.view(); }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+
+        @Override
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+            if (facetType == TickFacet.class) {
+                tickFacetReads++;
+                return enabled ? Optional.of(facetType.cast(this)) : Optional.empty();
+            }
+            return delegate.facet(facetType);
+        }
+
+        @Override
+        public CapabilityTickResult plan(CapabilityTickContext context) {
+            plans++;
+            return CapabilityTickResult.empty();
+        }
     }
 
     private record TestCapability(String id, CapabilityStorage storage, CapabilityDirections directions)

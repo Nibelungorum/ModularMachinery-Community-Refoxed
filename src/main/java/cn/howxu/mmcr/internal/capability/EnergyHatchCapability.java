@@ -102,6 +102,7 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
         if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        if (facetType == TransferFacet.class) return Optional.of(facetType.cast(this));
         return MachineCapability.super.facet(facetType);
     }
 

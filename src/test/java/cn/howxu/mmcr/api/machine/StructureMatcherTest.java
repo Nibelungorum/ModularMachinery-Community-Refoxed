@@ -29,6 +29,7 @@ import java.util.function.Supplier;
 
 import net.minecraft.resources.ResourceLocation;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StructureMatcherTest {
 
@@ -636,6 +637,99 @@ class StructureMatcherTest {
     }
 
     @Test
+    void capture_reuses_unchanged_snapshots_but_resolves_suppliers_for_every_batch() {
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<Block> supplied = new AtomicReference<>(Blocks.STONE);
+        BlockPredicate deferred = new BlockPredicate.DeferredBlock(() -> {
+            calls.incrementAndGet();
+            return supplied.get();
+        });
+        BlockPredicate expected = new BlockPredicate.AnyOf(List.of(new BlockPredicate.AnyOf(List.of(deferred)), deferred));
+        Map<BlockPos, BlockPredicate> predicates = new LinkedHashMap<>();
+        Map<BlockPos, Block> blocks = new LinkedHashMap<>();
+        for (int index = 0; index < 3; index++) {
+            BlockPos pos = new BlockPos(index, 0, 0);
+            predicates.put(pos, expected);
+            blocks.put(pos, Blocks.STONE);
+        }
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(predicates), Map.of(), true,
+                StructureMatcher.ScanOptions.of(3, false, 0));
+        StructureMatcher.ScanBatch first = scan.capture(LevelStub.create(blocks), BlockPos.ZERO);
+        scan.apply(first.identity(), first.match());
+        StructureMatcher.ScanBatch second = scan.capture(LevelStub.create(blocks), BlockPos.ZERO);
+        assertThat(second.entries().getFirst().matchingExpected()).isSameAs(first.entries().getFirst().matchingExpected());
+        assertThat(calls.get()).isEqualTo(2);
+        scan.apply(second.identity(), second.match());
+        supplied.set(Blocks.DIRT);
+        blocks.replaceAll((pos, block) -> Blocks.DIRT);
+        StructureMatcher.ScanBatch third = scan.capture(LevelStub.create(blocks), BlockPos.ZERO);
+        assertThat(calls.get()).isEqualTo(3);
+        assertThat(third.entries().getFirst().matchingExpected()).isNotSameAs(first.entries().getFirst().matchingExpected());
+        assertThat(first.match().status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        assertThat(third.match().status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+    }
+
+    @Test
+    void capture_refreshes_mutable_children_between_batches_without_mutating_old_snapshots() {
+        List<BlockPredicate> children = new ArrayList<>(List.of(new BlockPredicate.OfBlock(Blocks.STONE)));
+        BlockPredicate expected = new BlockPredicate.AnyOf(children);
+        Map<BlockPos, BlockPredicate> predicates = new LinkedHashMap<>();
+        for (int index = 0; index < 3; index++) predicates.put(new BlockPos(index, 0, 0), expected);
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(predicates), Map.of(), true,
+                StructureMatcher.ScanOptions.of(3, false, 0));
+        StructureMatcher.ScanBatch first = scan.capture(LevelStub.create(Map.of(BlockPos.ZERO, Blocks.STONE)), BlockPos.ZERO);
+        scan.apply(first.identity(), first.match());
+        children.add(new BlockPredicate.OfBlock(Blocks.DIRT));
+        StructureMatcher.ScanBatch second = scan.capture(LevelStub.create(Map.of(new BlockPos(1, 0, 0), Blocks.DIRT)), BlockPos.ZERO);
+        scan.apply(second.identity(), second.match());
+        children.clear();
+        children.add(new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK));
+        StructureMatcher.ScanBatch third = scan.capture(LevelStub.create(Map.of(new BlockPos(2, 0, 0), Blocks.GOLD_BLOCK)), BlockPos.ZERO);
+        assertThat(first.entries().getFirst().matchingExpected().children()).hasSize(1);
+        assertThat(first.match().status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        assertThat(second.match().status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        assertThat(third.match().status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+    }
+
+    @Test
+    void failed_capture_retries_suppliers_without_reusing_partial_or_old_snapshots() {
+        AtomicReference<Block> supplied = new AtomicReference<>(Blocks.STONE);
+        AtomicInteger firstCalls = new AtomicInteger();
+        AtomicInteger secondCalls = new AtomicInteger();
+        BlockPredicate firstLeaf = new BlockPredicate.DeferredBlock(() -> {
+            firstCalls.incrementAndGet();
+            return supplied.get();
+        });
+        BlockPredicate secondLeaf = new BlockPredicate.DeferredBlock(() -> {
+            if (secondCalls.incrementAndGet() == 2) throw new IllegalStateException("supplier unavailable");
+            return supplied.get();
+        });
+        BlockPredicate nested = new BlockPredicate.AnyOf(List.of(firstLeaf, secondLeaf, firstLeaf));
+        BlockPredicate expected = new BlockPredicate.AnyOf(List.of(nested, secondLeaf));
+        BlockPos nextPos = new BlockPos(1, 0, 0);
+        Map<BlockPos, BlockPredicate> ordered = new LinkedHashMap<>();
+        ordered.put(BlockPos.ZERO, expected);
+        ordered.put(nextPos, expected);
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(new BlockArray(ordered), Map.of(), true,
+                StructureMatcher.ScanOptions.of(2, false, 0));
+        Level level = LevelStub.create(Map.of(BlockPos.ZERO, Blocks.STONE, nextPos, Blocks.DIRT));
+        StructureMatcher.ScanBatch first = scan.capture(level, BlockPos.ZERO);
+        scan.apply(first.identity(), first.match());
+        supplied.set(Blocks.DIRT);
+
+        assertThatThrownBy(() -> scan.capture(level, BlockPos.ZERO))
+                .isInstanceOf(IllegalStateException.class).hasMessage("supplier unavailable");
+        assertThat(scan.cursor()).isEqualTo(1);
+        assertThat(first.match().status()).isEqualTo(StructureMatcher.ScanStatus.IN_PROGRESS);
+        StructureMatcher.ScanBatch retry = scan.capture(level, BlockPos.ZERO);
+
+        assertThat(retry.match().status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+        assertThat(retry.entries().getFirst().matchingExpected()).isNotSameAs(first.entries().getFirst().matchingExpected());
+        assertThat(firstCalls.get()).isEqualTo(3);
+        assertThat(secondCalls.get()).isEqualTo(3);
+    }
+
+    @Test
     void capture_shared_replacements_match_only_their_configured_positions() {
         AtomicInteger calls = new AtomicInteger();
         BlockPredicate replacementPredicate = new BlockPredicate.AnyOf(List.of(new BlockPredicate.DeferredBlock(() -> {
@@ -812,5 +906,71 @@ class StructureMatcherTest {
 
         assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.INVALIDATED);
         assertThat(result.checkedEntries()).isZero();
+    }
+
+    @Test
+    void captured_diagnostic_keeps_observed_state_and_complete_identity_after_world_changes() {
+        BlockPos relative = new BlockPos(1, 2, 3);
+        BlockPos controller = new BlockPos(10, 64, -3);
+        BlockPos world = controller.offset(relative);
+        BlockPredicate expected = new BlockPredicate.OfBlock(Blocks.STONE);
+        BlockArray pattern = new BlockArray(Map.of(relative, expected));
+        Object identity = new Object();
+        Level level = LevelStub.create(Map.of(world, Blocks.DIRT));
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(7L, Direction.UP, Direction.WEST,
+                3, identity, pattern, Map.of(), true, StructureMatcher.ScanOptions.of(1, false, 0), null);
+        StructureMatcher.ScanBatch batch = scan.capture(level, controller);
+
+        level.setBlock(world, Blocks.STONE.defaultBlockState(), 3);
+        StructureMatcher.ScanResult result = batch.match();
+        StructureMatcher.Mismatch mismatch = result.mismatch().orElseThrow();
+        assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.MISMATCH);
+        assertThat(mismatch.relativePos()).isEqualTo(relative);
+        assertThat(mismatch.worldPos()).isEqualTo(world);
+        assertThat(mismatch.actualState()).isSameAs(Blocks.DIRT.defaultBlockState());
+        assertThat(mismatch.expected()).isSameAs(expected);
+        assertThat(mismatch.structureVersion()).isEqualTo(7L);
+        assertThat(mismatch.frontFacing()).isEqualTo(Direction.UP);
+        assertThat(mismatch.rollFacing()).isEqualTo(Direction.WEST);
+        assertThat(mismatch.stageNumber()).isEqualTo(3);
+        assertThat(mismatch.patternIdentity()).isSameAs(identity);
+        assertThat(batch.entries().getFirst().mismatch()).isSameAs(mismatch);
+
+        StructureMatcher.ScanEntry legacy = new StructureMatcher.ScanEntry(mismatch, expected, List.of());
+        assertThat(legacy.mismatch()).isSameAs(mismatch);
+        assertThat(batch.entries().getFirst()).isEqualTo(legacy);
+        assertThat(legacy).isEqualTo(batch.entries().getFirst());
+        assertThat(legacy.hashCode()).isEqualTo(batch.entries().getFirst().hashCode());
+        assertThat(legacy.toString()).isEqualTo(batch.entries().getFirst().toString());
+    }
+
+    @Test
+    void successful_capture_matches_the_observation_after_the_world_changes() {
+        BlockPos controller = new BlockPos(10, 64, -3);
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE)));
+        Level level = LevelStub.create(Map.of(controller, Blocks.STONE));
+        StructureMatcher.ScanState scan = StructureMatcher.beginScan(pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(1, false, 0));
+        StructureMatcher.ScanBatch batch = scan.capture(level, controller);
+
+        level.setBlock(controller, Blocks.DIRT.defaultBlockState(), 3);
+        assertThat(batch.match().status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+        assertThat(batch.match().mismatch()).isEmpty();
+        assertThatThrownBy(() -> batch.entries().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void scan_entry_preserves_nullable_diagnostics_and_record_deconstruction() {
+        BlockPredicate expected = new BlockPredicate.OfBlock(Blocks.STONE);
+        StructureMatcher.ScanEntry entry = new StructureMatcher.ScanEntry(null, expected, List.of());
+        Record record = entry;
+        assertThat(record).isSameAs(entry);
+        assertThat(entry.mismatch()).isNull();
+        assertThat(entry).isEqualTo(new StructureMatcher.ScanEntry(null, expected, List.of()));
+        if (entry instanceof StructureMatcher.ScanEntry(var mismatch, var matchingExpected, var replacements)) {
+            assertThat(mismatch).isNull();
+            assertThat(matchingExpected).isSameAs(expected);
+            assertThat(replacements).isEmpty();
+        }
     }
 }

@@ -258,6 +258,10 @@ public final class MachineControllerRuntime {
         return workingSnapshot;
     }
 
+    boolean shouldCheckStructure(long gameTime) {
+        return structure.shouldCheck(gameTime);
+    }
+
     private Map<String, DataValue> currentDataStorageValues() {
         if (controller.getLevel() != null && controller.getLevel().isClientSide()) {
             return clientDataStorageValues;
@@ -530,6 +534,20 @@ public final class MachineControllerRuntime {
 
     StructureMatcher.ScanBatch captureStructureScan(ServerLevel level, BlockPos controllerPos) {
         return structure.captureScan(level, controllerPos);
+    }
+
+    void markStructureScanStepped(long gameTime) {
+        structure.setScanSteppedTick(gameTime);
+    }
+
+    void setStructureCheckActive(boolean active) {
+        structure.setCheckActive(active);
+    }
+
+    void scheduleStructureScanContinuation(long nextCheckTick, StructureRuntime.CheckReason reason) {
+        structure.setNextCheckTick(nextCheckTick);
+        structure.setCheckReason(reason == StructureRuntime.CheckReason.SAFETY_CHECK
+                ? StructureRuntime.CheckReason.SAFETY_CHECK : StructureRuntime.CheckReason.SCAN_CONTINUATION);
     }
 
     void applyStructureScanResult(StructureMatcher.ScanIdentity identity, StructureMatcher.ScanResult result) {

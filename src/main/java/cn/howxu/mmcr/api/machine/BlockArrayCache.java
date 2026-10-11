@@ -37,7 +37,7 @@ public final class BlockArrayCache {
     }
 
     public static void buildCache(Collection<Machine> machines) {
-        CACHE = buildCacheSnapshot(machines);
+        installCache(buildCacheSnapshot(machines));
     }
 
     static Map<Key, BlockArray> buildCacheSnapshot(Collection<Machine> machines) {
@@ -58,6 +58,7 @@ public final class BlockArrayCache {
 
     static void installCache(Map<Key, BlockArray> cache) {
         CACHE = Map.copyOf(cache);
+        CompiledMachinePattern.clearScanPlanCache();
     }
 
     static BlockArray get(Map<Key, BlockArray> cache, BlockArray pattern, Direction facing) {
@@ -68,6 +69,7 @@ public final class BlockArrayCache {
 
     public static void clear() {
         CACHE = Map.of();
+        CompiledMachinePattern.clearScanPlanCache();
     }
 
     /** Test-only helper. Never call from production code. */

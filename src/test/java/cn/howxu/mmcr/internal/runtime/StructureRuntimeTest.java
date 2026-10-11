@@ -501,6 +501,62 @@ class StructureRuntimeTest {
     }
 
     @Test
+    void scheduling_checks_initial_and_dirty_structures_without_waiting_for_deadlines() throws Exception {
+        StructureRuntime runtime = runtimeOf(controller());
+        assertThat(invoke(runtime, "shouldCheck", 0L)).isEqualTo(true);
+        assertThat(invoke(runtime, "checkCounter")).isEqualTo(0);
+        invoke(runtime, "setDirty", false);
+        assertThat(invoke(runtime, "shouldCheck", 0L)).isEqualTo(true);
+        assertThat(invoke(runtime, "checkCounter")).isEqualTo(0);
+
+        invoke(runtime, "setNextCheckTick", 20L);
+        StructureSnapshot display = runtime.snapshot();
+        assertThat(invoke(runtime, "shouldCheck", 19L)).isEqualTo(false);
+        assertThat(invoke(runtime, "shouldCheck", 20L)).isEqualTo(true);
+        assertThat(invoke(runtime, "checkReason")).isEqualTo(StructureRuntime.CheckReason.DIRTY_EVENT);
+        assertThat(runtime.snapshot()).isSameAs(display);
+
+        runtime.requestCheck();
+        assertThat(invoke(runtime, "shouldCheck", 1L)).isEqualTo(true);
+    }
+
+    @Test
+    void formed_scheduling_marks_safety_checks_only_at_the_deadline() throws Exception {
+        MachineControllerBlockEntity controller = controller();
+        StructureRuntime runtime = runtimeOf(controller);
+        Machine machine = controller.currentStructureSnapshot().configuredMachine();
+        publishFormation(runtime, machine, machine.pattern(), MachinePatternCompiler.compile(machine),
+                Direction.SOUTH, Direction.NORTH, 1);
+        invoke(runtime, "setDirty", false);
+        invoke(runtime, "setNextCheckTick", 20L);
+        StructureSnapshot display = runtime.snapshot();
+
+        assertThat(invoke(runtime, "shouldCheck", 19L)).isEqualTo(false);
+        assertThat(invoke(runtime, "checkReason")).isEqualTo(StructureRuntime.CheckReason.DIRTY_EVENT);
+        assertThat(invoke(runtime, "shouldCheck", 20L)).isEqualTo(true);
+        assertThat(invoke(runtime, "checkReason")).isEqualTo(StructureRuntime.CheckReason.SAFETY_CHECK);
+        assertThat(runtime.snapshot()).isSameAs(display);
+    }
+
+    @Test
+    void scheduling_continues_scans_without_reclassifying_them_as_safety_checks() throws Exception {
+        MachineControllerBlockEntity controller = controller();
+        StructureRuntime runtime = runtimeOf(controller);
+        Machine machine = controller.currentStructureSnapshot().configuredMachine();
+        publishFormation(runtime, machine, machine.pattern(), MachinePatternCompiler.compile(machine),
+                Direction.SOUTH, Direction.NORTH, 1);
+        invoke(runtime, "setDirty", false);
+        invoke(runtime, "setNextCheckTick", 20L);
+        invoke(runtime, "setCheckReason", StructureRuntime.CheckReason.SCAN_CONTINUATION);
+        invoke(runtime, "setScan", StructureMatcher.beginScan(machine.pattern(), Map.of(), true,
+                StructureMatcher.ScanOptions.of(2, false, 0)));
+
+        assertThat(invoke(runtime, "shouldCheck", 19L)).isEqualTo(false);
+        assertThat(invoke(runtime, "shouldCheck", 20L)).isEqualTo(true);
+        assertThat(invoke(runtime, "checkReason")).isEqualTo(StructureRuntime.CheckReason.SCAN_CONTINUATION);
+    }
+
+    @Test
     void clearScanResetsScanSteppedTick() throws Exception {
         MachineControllerBlockEntity controller = controller();
         StructureRuntime runtime = runtimeOf(controller);

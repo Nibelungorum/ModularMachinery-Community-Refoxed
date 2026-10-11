@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StructureClaimRegistryTest {
 
@@ -30,6 +31,40 @@ class StructureClaimRegistryTest {
         assertThat(result.conflict().componentPos()).isEqualTo(occupiedScheduler);
         assertThat(registry.ownersOf(freePort)).containsExactly(first);
         assertThat(registry.ownersOf(occupiedScheduler)).containsExactly(first);
+    }
+
+    @Test
+    void claimed_controller_snapshots_are_reused_and_remain_immutable_across_claim_changes() {
+        StructureClaimRegistry registry = new StructureClaimRegistry();
+        BlockPos first = new BlockPos(0, 64, 0);
+        BlockPos second = new BlockPos(10, 64, 0);
+        BlockPos third = new BlockPos(20, 64, 0);
+        BlockPos port = new BlockPos(1, 64, 0);
+        var claim = new StructureClaimRegistry.Claim(port, ComponentClaimPolicy.EXCLUSIVE);
+        var empty = registry.claimedControllers();
+        assertThat(registry.claim(first, List.of(claim)).accepted()).isTrue();
+        var firstSnapshot = registry.claimedControllers();
+        assertThat(firstSnapshot).containsExactly(first);
+        assertThat(registry.claimedControllers()).isSameAs(firstSnapshot);
+        assertThatThrownBy(firstSnapshot::clear).isInstanceOf(UnsupportedOperationException.class);
+
+        assertThat(registry.claim(second, List.of(claim)).accepted()).isFalse();
+        registry.release(third);
+        assertThat(registry.claimedControllers()).isSameAs(firstSnapshot);
+        assertThat(registry.claim(second, List.of()).accepted()).isTrue();
+        var secondSnapshot = registry.claimedControllers();
+        assertThat(secondSnapshot).containsExactlyInAnyOrder(first, second);
+        assertThat(firstSnapshot).containsExactly(first);
+        assertThat(empty).isEmpty();
+
+        assertThat(registry.claim(first, List.of()).accepted()).isTrue();
+        assertThat(registry.claimedControllers()).containsExactlyInAnyOrder(first, second);
+        assertThat(registry.ownersOf(port)).isEmpty();
+        registry.release(first);
+        assertThat(registry.claimedControllers()).containsExactly(second);
+        assertThat(secondSnapshot).containsExactlyInAnyOrder(first, second);
+        registry.release(second);
+        assertThat(registry.claimedControllers()).isEmpty();
     }
 
     @Test

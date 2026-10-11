@@ -211,6 +211,29 @@ class NetworkInterfaceBindingCoordinatorTest {
     }
 
     @Test
+    void heartbeat_skips_identity_resolution_for_controllers_without_network_interfaces() throws Exception {
+        Fixture fixture = fixture(2, 2, true, true);
+        BlockPos position = fixture.sourceController.getBlockPos();
+        MachineControllerBlockEntity idle = new MachineControllerBlockEntity(position, fixture.sourceController.getBlockState()) {
+            @Override public MachineReference machineReference() {
+                throw new AssertionError("An interface-free controller must not resolve network identity");
+            }
+        };
+        idle.setLevel(fixture.level);
+        publishFormed(idle, fixture.sourceController.currentStructureSnapshot().machine());
+        fixture.level.blockEntities.put(position, idle);
+        StructureClaimRegistry.get(fixture.level).claim(position, List.of());
+
+        NetworkInterfaceBindingCoordinator.heartbeat(fixture.level);
+
+        fixture.level.blockEntities.put(position, fixture.sourceController);
+        assertThat(fixture.sourceNetwork.addConnection(new NetworkInterfaceBlockEntity.Connection(
+                fixture.targetEndpoint, fixture.targetMachine, 1L))).isTrue();
+        NetworkInterfaceBindingCoordinator.heartbeat(fixture.level);
+        assertThat(fixture.sourceNetwork.connections()).isEmpty();
+    }
+
+    @Test
     void heartbeat_removes_reciprocal_records_when_the_loaded_source_has_a_stale_owner() throws Exception {
         Fixture fixture = fixture(2, 2, true, true);
         assertThat(connect(fixture)).isEqualTo(NetworkInterfaceBindingCoordinator.ConnectionResult.CONNECTED);

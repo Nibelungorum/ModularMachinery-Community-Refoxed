@@ -45,7 +45,6 @@ import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
 import cn.howxu.mmcr.api.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
-import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.compat.create.StressSession;
@@ -103,6 +102,7 @@ public final class CraftingRuntime {
     private @Nullable CraftingStateSnapshot cachedStateSnapshot;
     private @Nullable CraftingStatus.Status cachedSnapshotStatus;
     private @Nullable String cachedSnapshotStatusMessage;
+    private @Nullable ExecutionStatus cachedSnapshotFailure;
     private @Nullable ResourceLocation cachedRecipeId;
     private String cachedRecipeIdText = "";
     private long cachedPresentationEpoch = Long.MIN_VALUE;
@@ -674,7 +674,7 @@ public final class CraftingRuntime {
     }
 
     public CapabilityTickResult tickIdle() {
-        if (components.capabilities().stream().noneMatch(capability -> capability.facet(TickFacet.class).isPresent())) {
+        if (!components.hasTickFacets()) {
             return handleCapabilityTickResult(CapabilityTickResult.empty());
         }
         MachineBehaviorContext machineContext = behaviorContext();
@@ -865,18 +865,23 @@ public final class CraftingRuntime {
         if (previous != null && Objects.equals(previous.recipeId(), recipeId)
                 && cachedSnapshotStatus == currentStatus
                 && Objects.equals(cachedSnapshotStatusMessage, statusMessage)
-                && Objects.equals(previous.failure(), failure)
+                && Objects.equals(cachedSnapshotFailure, failure)
                 && previous.structureVersion() == structure
                 && previous.capabilityVersion() == capability
                 && previous.modifierVersion() == modifier
                 && previous.tick() == tickCount() && previous.totalTick() == totalTick()
                 && previous.parallelism() == parallelism()
-                && previous.maxParallelism() == maxParallelism()) return previous;
+                && previous.maxParallelism() == maxParallelism()) {
+            // Equal replacement failures need only one deep comparison, even when the payload is reused.
+            cachedSnapshotFailure = failure;
+            return previous;
+        }
         snapshotBuildCountForTesting++;
         cachedStateSnapshot = new CraftingStateSnapshot(recipeId, status, failure,
                 structure, capability, modifier, tickCount(), totalTick(), parallelism(), maxParallelism());
         cachedSnapshotStatus = currentStatus;
         cachedSnapshotStatusMessage = statusMessage;
+        cachedSnapshotFailure = failure;
         return cachedStateSnapshot;
     }
 

@@ -100,6 +100,17 @@ public final class StructureRuntime {
         controller.tickStructure(level, controllerPos);
     }
 
+    boolean shouldCheck(long gameTime) {
+        if (dirty || !formed && nextCheckTick < 0L) return true;
+        checkCounter++;
+        if (scan != null && gameTime >= nextCheckTick) return true;
+        if (formed && gameTime >= nextCheckTick) {
+            checkReason = CheckReason.SAFETY_CHECK;
+            return true;
+        }
+        return gameTime >= nextCheckTick;
+    }
+
     public void onChunkStateChanged(ServerLevel level, BlockPos controllerPos) {
         if (level == null || controllerPos == null) {
             throw new IllegalArgumentException("Structure chunk state requires a level and controller position");

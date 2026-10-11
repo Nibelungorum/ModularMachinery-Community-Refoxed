@@ -26,11 +26,14 @@ public final class ControllerSyncRuntime {
     public MachineStateSnapshot machineState(ControllerRuntimeSnapshot runtime, @Nullable ResourceLocation recipePoolId) {
         require(runtime);
         ExecutionStatus failure = runtime.factory().failure() == null ? runtime.crafting().failure() : runtime.factory().failure();
+        FactoryRuntime.ThreadSnapshot thread = activeFactoryThread(runtime);
+        String recipeId = thread != null && !thread.recipeId().isEmpty() ? thread.recipeId()
+                : runtime.crafting().recipeId() == null ? "" : runtime.crafting().recipeId().toString();
         return new MachineStateSnapshot(
                 runtime.structure().formed(),
                 runtime.structure().structureAreaLoaded(),
                 active(runtime),
-                activeRecipe(runtime),
+                recipeId,
                 runtime.foundLevelIds(),
                 runtime.machineId(),
                 runtime.controllerRole(),
@@ -41,9 +44,9 @@ public final class ControllerSyncRuntime {
                 runtime.crafting().status().getStatus(),
                 runtime.crafting().status().getUnlocMessage(),
                 failure,
-                tick(runtime),
-                totalTick(runtime),
-                currentParallelism(runtime),
+                thread == null ? runtime.crafting().tick() : thread.tick(),
+                thread == null ? runtime.crafting().totalTick() : thread.totalTick(),
+                thread == null ? runtime.crafting().parallelism() : thread.parallelism(),
                 maxParallelism(runtime),
                 runtime.crafting().status().isPaused() || runtime.factory().paused(),
                 runtime.factoryControllerPresent(),
@@ -171,9 +174,10 @@ public final class ControllerSyncRuntime {
 
     private FactoryRuntime.ThreadSnapshot activeFactoryThread(ControllerRuntimeSnapshot runtime) {
         if (!factoryControllerPresent(runtime)) return null;
-        return runtime.factory().presentationLanes().stream()
-                .filter(FactoryRuntime.ThreadSnapshot::active)
-                .findFirst().orElse(null);
+        for (FactoryRuntime.ThreadSnapshot thread : runtime.factory().presentationLanes()) {
+            if (thread.active()) return thread;
+        }
+        return null;
     }
 
     private static String failureUnloc(ExecutionStatus failure) {

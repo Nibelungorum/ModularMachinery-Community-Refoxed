@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import com.google.common.collect.MapMaker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -32,7 +33,8 @@ public record CompiledMachinePattern(
         Map<Direction, Map<BlockPos, List<SingleBlockModifierReplacement>>> modifierReplacements,
         boolean stateSensitive
 ) {
-    private static final Map<ScanPlanKey, ScanPlan> SCAN_PLAN_CACHE = new ConcurrentHashMap<>();
+    // Weak keys use identity equality and let replaced or temporary patterns be reclaimed.
+    private static final Map<BlockArray, Map<Integer, ScanPlan>> SCAN_PLAN_CACHE = new MapMaker().weakKeys().makeMap();
 
     public CompiledMachinePattern {
         if (machine == null) throw new IllegalArgumentException("machine null");
@@ -133,11 +135,12 @@ public record CompiledMachinePattern(
     public ScanPlan scanPlan(Direction facing, int sentinelCount) {
         BlockArray pattern = rotatedPattern(facing);
         if (pattern == null) return ScanPlan.empty();
-        return SCAN_PLAN_CACHE.computeIfAbsent(new ScanPlanKey(pattern, Math.max(0, sentinelCount)),
-                key -> ScanPlan.create(key.pattern(), key.sentinelCount()));
+        return ScanPlan.forPattern(pattern, sentinelCount);
     }
 
-    private record ScanPlanKey(BlockArray pattern, int sentinelCount) { }
+    static void clearScanPlanCache() {
+        SCAN_PLAN_CACHE.clear();
+    }
 
     /**
      * Immutable, allocation-free-per-scan lookup order for one rotated pattern.
@@ -151,7 +154,6 @@ public record CompiledMachinePattern(
         private final int[] entryOrder;
         private final int[] sentinelIndexes;
         private final boolean[] sentinelMembership;
-        private static final Map<PatternKey, ScanPlan> STANDALONE_CACHE = new ConcurrentHashMap<>();
 
         private ScanPlan(List<BlockPos> entryPositions, List<BlockPredicate> entryPredicates,
                          List<Map.Entry<BlockPos, BlockPredicate>> entries, int[] entryOrder,
@@ -190,11 +192,9 @@ public record CompiledMachinePattern(
 
         public static ScanPlan forPattern(BlockArray pattern, int sentinelCount) {
             int count = Math.max(0, sentinelCount);
-            return STANDALONE_CACHE.computeIfAbsent(new PatternKey(pattern, count),
-                    key -> create(key.pattern(), key.sentinelCount()));
+            return SCAN_PLAN_CACHE.computeIfAbsent(pattern, ignored -> new ConcurrentHashMap<>())
+                    .computeIfAbsent(count, ignored -> create(pattern, count));
         }
-
-        private record PatternKey(BlockArray pattern, int sentinelCount) { }
 
         public List<BlockPos> entryPositions() { return entryPositions; }
 

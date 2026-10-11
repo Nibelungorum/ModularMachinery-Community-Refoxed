@@ -662,6 +662,22 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void structure_check_scope_clears_active_flag_when_a_callback_throws() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        RuntimeTestFixtures.formStructure(controller, controller.structureSnapshot().configuredMachine());
+        RuntimeException failure = new IllegalStateException("expected structure check failure");
+        controller.setStructureCheckCallbackForTesting(() -> {
+            assertThat(controller.structureWorkSnapshotForTesting().checkActive()).isTrue();
+            throw failure;
+        });
+        controller.requestImmediateStructureCheck();
+
+        assertThatThrownBy(() -> controller.tickStructure((ServerLevel) controller.getLevel(), controller.getBlockPos()))
+                .isSameAs(failure);
+        assertThat(controller.structureWorkSnapshotForTesting().checkActive()).isFalse();
+    }
+
+    @Test
     void loading_existing_parallel_configuration_invalidates_outer_snapshot_caches() throws Exception {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         Machine machine = new DynamicMachine(MMCR.id("loaded_parallel_snapshot"), "Loaded Parallel Snapshot",
@@ -1725,6 +1741,7 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.structureSnapshot().formed()).isTrue();
         assertThat(controller.structureSnapshot().matchedStage()).isEqualTo(1);
+        assertThat(controller.scanBatchesPerTickForTesting()).isEmpty();
     }
 
     private MachineControllerBlockEntity expandStructureControllerWith(ResourceLocation machineId, BlockPos controllerPos,
@@ -2306,6 +2323,24 @@ class MachineControllerBlockEntityTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         controller.setMachine(new DynamicMachine(machineId, "recipe pool test", new BlockArray(Map.of())));
         return controller;
+    }
+
+    @Test
+    void cached_state_packet_refreshes_when_only_the_selected_recipe_pool_changes() {
+        ResourceLocation firstPool = MMCR.id("cached_state_pool_first");
+        ResourceLocation secondPool = MMCR.id("cached_state_pool_second");
+        MachineControllerBlockEntity controller = recipePoolController(MMCR.id("cached_state_pools"), firstPool, secondPool);
+        var snapshot = controller.runtimeSnapshot();
+        var first = controller.machineStatePacket();
+        assertThat(first.recipePoolId()).isEqualTo(firstPool.toString());
+        assertThat(controller.machineStatePacket()).isSameAs(first);
+
+        assertThat(controller.selectRecipePool(secondPool)).isTrue();
+        assertThat(controller.runtimeSnapshot()).isSameAs(snapshot);
+        var second = controller.machineStatePacket();
+        assertThat(second).isNotSameAs(first);
+        assertThat(second.recipePoolId()).isEqualTo(secondPool.toString());
+        assertThat(controller.machineStatePacket()).isSameAs(second);
     }
 
     private static MachineControllerRuntime controllerRuntime(MachineControllerBlockEntity controller) {

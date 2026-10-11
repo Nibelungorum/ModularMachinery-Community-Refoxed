@@ -2,10 +2,12 @@ package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.registry.ModBlocks;
+import com.google.common.base.Suppliers;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
@@ -29,7 +31,8 @@ public final class BuiltinRegistration {
 
     public static Supplier<? extends Block> block(String name) {
         if (name != null && name.indexOf(':') >= 0) return block(ResourceLocation.parse(name));
-        return () -> ModBlocks.BLOCKS.get(name).get();
+        var holder = Suppliers.memoize(() -> Objects.requireNonNull(ModBlocks.BLOCKS.get(name)));
+        return () -> holder.get().get();
     }
 
     public static Supplier<? extends Block> block(ResourceLocation id) {

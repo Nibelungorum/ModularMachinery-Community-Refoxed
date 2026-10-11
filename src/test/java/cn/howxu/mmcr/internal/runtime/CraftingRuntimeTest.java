@@ -111,6 +111,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.lang.reflect.Field;
 import java.util.Set;
@@ -439,6 +440,39 @@ class CraftingRuntimeTest {
         assertThat(first.failure()).isNotNull();
         assertThat(changed.failure()).isSameAs(changedFailure);
         assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(++builds);
+    }
+
+    @Test
+    void snapshots_reuse_equal_replacement_failures_and_detect_subsequent_changes() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        Map<String, String> details = new HashMap<>(Map.of("detail_0", "value_0", "detail_1", "value_1"));
+        ExecutionStatus original = ExecutionStatus.blocked(MMCR.id("search_failure"), MMCR.id("test"),
+                FailureOccurrence.at(BuiltinFailureReasons.RECIPE_SEARCH, MMCR.id("test"), FailurePhase.RECIPE_SEARCH,
+                        null, null, details));
+        runtime.recordSearchFailure(original);
+        CraftingStateSnapshot first = runtime.snapshot();
+        ExecutionStatus equal = ExecutionStatus.blocked(original.id(), original.source(),
+                FailureOccurrence.at(original.reason(), original.source(), FailurePhase.RECIPE_SEARCH,
+                        null, null, new HashMap<>(details)));
+        runtime.recordSearchFailure(equal);
+        assertThat(runtime.failure()).isSameAs(equal).isNotSameAs(original);
+        assertThat(runtime.snapshot()).isSameAs(first);
+        assertThat(runtime.snapshot()).isSameAs(first);
+
+        details.put("detail_0", "changed");
+        ExecutionStatus changed = ExecutionStatus.blocked(original.id(), original.source(),
+                FailureOccurrence.at(original.reason(), original.source(), FailurePhase.RECIPE_SEARCH,
+                        null, null, details));
+        runtime.recordSearchFailure(changed);
+        CraftingStateSnapshot next = runtime.snapshot();
+        assertThat(next).isNotSameAs(first);
+        assertThat(next.failure()).isSameAs(changed);
+        assertThat(first.failure().details()).containsEntry("detail_0", "value_0");
+        runtime.invalidate();
+        assertThat(runtime.snapshot().failure()).isNull();
+        runtime.recordSearchFailure(equal);
+        assertThat(runtime.snapshot().failure()).isSameAs(equal);
     }
 
     @Test

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import java.util.Set;
@@ -32,6 +33,71 @@ class CompiledMachinePatternTest {
     void cleanup() {
         MachineRegistry.clearForTesting();
         BlockArrayCache.clearForTesting();
+    }
+
+    @Test
+    void scan_plans_reuse_pattern_identity_and_normalize_sentinel_counts() {
+        BlockArray pattern = pattern();
+        Machine machine = new DynamicMachine(MMCR.id("scan_plan_cache"), "Scan Plan Cache", pattern);
+        CompiledMachinePattern compiled = new CompiledMachinePattern(machine, Map.of(Direction.SOUTH, pattern),
+                Map.of(), Map.of(), Map.of());
+        CompiledMachinePattern.ScanPlan plan = compiled.scanPlan(Direction.SOUTH, 2);
+
+        assertThat(compiled.scanPlan(Direction.SOUTH, 2)).isSameAs(plan);
+        assertThat(CompiledMachinePattern.ScanPlan.forPattern(pattern, 2)).isSameAs(plan);
+        assertThat(compiled.scanPlan(Direction.SOUTH, 0)).isNotSameAs(plan);
+        assertThat(compiled.scanPlan(Direction.SOUTH, -1)).isSameAs(compiled.scanPlan(Direction.SOUTH, 0));
+        assertThat(plan.entryPositions()).containsExactlyElementsOf(pattern.pattern().keySet());
+        assertThat(plan.sentinelIndexes()).hasSize(2);
+        assertThat(compiled.scanPlan(Direction.NORTH, 2).entryPositions()).isEmpty();
+    }
+
+    @Test
+    void equal_patterns_with_different_entry_order_keep_their_own_scan_plans() {
+        BlockPredicate predicate = new BlockPredicate.OfBlock(Blocks.STONE);
+        BlockPos first = BlockPos.ZERO;
+        BlockPos second = new BlockPos(1, 0, 0);
+        Map<BlockPos, BlockPredicate> forward = new LinkedHashMap<>();
+        forward.put(first, predicate);
+        forward.put(second, predicate);
+        Map<BlockPos, BlockPredicate> reverse = new LinkedHashMap<>();
+        reverse.put(second, predicate);
+        reverse.put(first, predicate);
+        BlockArray forwardPattern = new BlockArray(forward);
+        BlockArray reversePattern = new BlockArray(reverse);
+        assertThat(forwardPattern).isEqualTo(reversePattern);
+
+        var forwardPlan = CompiledMachinePattern.ScanPlan.forPattern(forwardPattern, 1);
+        var reversePlan = CompiledMachinePattern.ScanPlan.forPattern(reversePattern, 1);
+
+        assertThat(forwardPlan).isNotSameAs(reversePlan);
+        assertThat(forwardPlan.entryPositions()).containsExactly(first, second);
+        assertThat(reversePlan.entryPositions()).containsExactly(second, first);
+        assertThat(forwardPlan.entryPredicates()).containsExactly(predicate, predicate);
+        assertThat(reversePlan.entryPredicates()).containsExactly(predicate, predicate);
+    }
+
+    @Test
+    void replacing_structure_caches_evicts_compiled_and_standalone_scan_plans() {
+        BlockArray pattern = pattern();
+        Machine machine = new DynamicMachine(MMCR.id("scan_plan_reload"), "Scan Plan Reload", pattern);
+        MachineRegistry.register(machine);
+        for (Runnable reload : List.<Runnable>of(MachineRegistry::rebuildCompiledCache,
+                () -> MachineRegistry.installStructures(Map.of()),
+                () -> BlockArrayCache.buildCache(List.of(machine)))) {
+            CompiledMachinePattern compiled = MachineRegistry.getCompiled(machine.registryName());
+            BlockArray rotated = compiled.rotatedPattern(Direction.SOUTH);
+            var compiledPlan = compiled.scanPlan(Direction.SOUTH, 2);
+            var standalonePlan = CompiledMachinePattern.ScanPlan.forPattern(pattern, 2);
+
+            reload.run();
+
+            var reloadedPlan = MachineRegistry.getCompiled(machine.registryName()).scanPlan(Direction.SOUTH, 2);
+            assertThat(reloadedPlan).isNotSameAs(compiledPlan);
+            assertThat(reloadedPlan.entryPositions()).containsExactlyElementsOf(compiledPlan.entryPositions());
+            assertThat(CompiledMachinePattern.ScanPlan.forPattern(rotated, 2)).isNotSameAs(compiledPlan);
+            assertThat(CompiledMachinePattern.ScanPlan.forPattern(pattern, 2)).isNotSameAs(standalonePlan);
+        }
     }
 
     @Test
@@ -73,10 +139,12 @@ class CompiledMachinePatternTest {
     void clear_for_testing_clears_compiled_patterns() {
         Machine machine = new DynamicMachine(MMCR.id("clear_test"), "Clear Test", pattern());
         MachineRegistry.register(machine);
+        var plan = CompiledMachinePattern.ScanPlan.forPattern(machine.pattern(), 2);
 
         MachineRegistry.clearForTesting();
 
         assertThat(MachineRegistry.getCompiled(machine.registryName())).isNull();
+        assertThat(CompiledMachinePattern.ScanPlan.forPattern(machine.pattern(), 2)).isNotSameAs(plan);
     }
 
     @Test

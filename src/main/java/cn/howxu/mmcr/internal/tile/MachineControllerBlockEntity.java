@@ -4,7 +4,6 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockArrayCache;
@@ -191,17 +190,23 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int matcherInvocationCountForTesting;
     private int scanBatchCountForTesting;
     private int structureSafetyCheckCountForTesting;
-    private final Map<Long, Integer> scanBatchesPerTickForTesting = new LinkedHashMap<>();
+    private @Nullable Map<Long, Integer> scanBatchesPerTickForTesting;
     private @Nullable Integer structureCheckIntervalOverrideForTesting;
     private @Nullable Integer structureScanBatchesOverrideForTesting;
     private @Nullable Integer buildBlocksPerTickOverrideForTesting;
     private boolean clientActive;
     private @Nullable ResourceLocation clientRecipeId;
     private final Map<ServerPlayer, PktMachineStatePayload> stateReceivers = new IdentityHashMap<>();
+    private final Set<ServerPlayer> currentStateReceivers = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final List<ServerPlayer> stateRecipients = new ArrayList<>();
+    private @Nullable ControllerRuntimeSnapshot cachedStatePacketSnapshot;
+    private @Nullable ResourceLocation cachedStatePacketRecipePool;
+    private @Nullable PktMachineStatePayload cachedStatePacket;
     private boolean clientStateBaseline;
     private @Nullable ExecutionStatus lastFailure;
     private @Nullable ResourceLocation selectedRecipePoolId;
     private boolean redstonePaused;
+    private final BlockPos directSignalPosition;
     private boolean runtimePersistenceChanged;
     private @Nullable MachineWorkMode activeWorkMode;
     private @Nullable MachineAsyncCoordinator.TaskKey pendingStructureScanTask;
@@ -269,6 +274,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
+        directSignalPosition = new DirectSignalPosition(worldPosition);
         runtime = new MachineControllerRuntime(this);
         normalRecipeThread = new MachineRecipeThread(this, runtime.craftingRuntime());
     }
@@ -862,7 +868,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public int matcherInvocationCountForTesting() { return matcherInvocationCountForTesting; }
     public int scanBatchCountForTesting() { return scanBatchCountForTesting; }
     public int structureSafetyCheckCountForTesting() { return structureSafetyCheckCountForTesting; }
-    public Map<Long, Integer> scanBatchesPerTickForTesting() { return Map.copyOf(scanBatchesPerTickForTesting); }
+    public Map<Long, Integer> scanBatchesPerTickForTesting() {
+        return scanBatchesPerTickForTesting == null ? Map.of() : Map.copyOf(scanBatchesPerTickForTesting);
+    }
+    public void setScanBatchTrackingForTesting(boolean enabled) {
+        scanBatchesPerTickForTesting = enabled ? new LinkedHashMap<>() : null;
+    }
     public boolean isStructureDiagnosticRequestedForTesting() { return structureWorkSnapshot().diagnosticRequested(); }
     public void setStructureDiagnosticCallbackForTesting(@Nullable Runnable callback) {
         structureDiagnosticCallbackForTesting = callback;
@@ -1333,7 +1344,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public long getMaxParallelism() {
-        return SYNC_RUNTIME.machineState(currentRuntimeSnapshot()).maxParallelism();
+        return currentRuntimeSnapshot().maxParallelism();
     }
 
     public int parallelControllerCount() {
@@ -1539,7 +1550,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         try {
             if (!advanceBuildTask()) {
                 // 1.21+ exposes the old strong-power query through SignalGetter's direct signal helper.
-                boolean powered = level.getDirectSignalTo(getBlockPos()) > 0;
+                boolean powered = level.getDirectSignalTo(directSignalPosition) > 0;
                 if (powered) {
                     if (!redstonePaused) invalidateAsyncLifecycle(runtimeLevel);
                     redstonePaused = true;
@@ -1558,8 +1569,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                         if (behavior instanceof TickBehavior tickBehavior) {
                             setActiveState(true);
                             try {
-                                boolean hasCapabilityTick = runtime.componentRuntime().capabilities().stream()
-                                        .anyMatch(capability -> capability.facet(TickFacet.class).isPresent());
+                                boolean hasCapabilityTick = runtime.componentRuntime().hasTickFacets();
                                 TickBehaviorContext context = hasCapabilityTick || tickBehavior.hasServerTick()
                                         ? runtime.tickBehaviorContext() : null;
                                 var tickResult = hasCapabilityTick
@@ -1865,11 +1875,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void runStructureCheckPass() {
-        publishStructureWork(state -> state.withCheckActive(true));
+        runtime.setStructureCheckActive(true);
         try {
             checkStructurePass();
         } finally {
-            publishStructureWork(state -> state.withCheckActive(false));
+            runtime.setStructureCheckActive(false);
             publishRuntimeState();
         }
     }
@@ -1879,7 +1889,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (structureCheckCallbackForTesting != null) structureCheckCallbackForTesting.run();
         StructureWorkSnapshot work = structureWorkSnapshot();
         if (work.scan() != null) {
-            advanceStructureScan();
+            advanceStructureScan(work);
             return;
         }
         if (work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK && structure.formed()) {
@@ -1936,17 +1946,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean shouldCheckStructure() {
-        StructureSnapshot structure = currentRuntimeSnapshot().structure();
-        StructureWorkSnapshot work = structureWorkSnapshot();
-        if (structure.dirty()) return true;
-        if (!structure.formed() && work.nextCheckTick() < 0L) return true;
-        publishStructureWork(state -> state.withCheckCounter(work.checkCounter() + 1));
-        if (work.scan() != null && level.getGameTime() >= work.nextCheckTick()) return true;
-        if (structure.formed() && level.getGameTime() >= work.nextCheckTick()) {
-            publishStructureWork(state -> state.withCheckReason(StructureRuntime.CheckReason.SAFETY_CHECK));
-            return true;
-        }
-        return level.getGameTime() >= work.nextCheckTick();
+        return runtime.shouldCheckStructure(level.getGameTime());
     }
 
     private long nextStructureSafetyCheckTick(long gameTime) {
@@ -2421,18 +2421,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void advanceStructureScan() {
-        StructureWorkSnapshot work = structureWorkSnapshot();
+        advanceStructureScan(structureWorkSnapshot());
+    }
+
+    private void advanceStructureScan(StructureWorkSnapshot work) {
         if (pendingStructureScanTask != null) {
-            if (level.getGameTime() - work.scanStartedTick() > structureScanTimeoutTicks()) {
+            if (level.getGameTime() - work.scanStartedTick() > structureScanTimeoutTicks(work)) {
                 invalidateStructureScan(StructureMatcher.InvalidationReason.TIMEOUT);
             }
             return;
         }
-        boolean identityChanged = invalidateActiveStructureScanIfIdentityChanged();
-        if (!identityChanged && level.getGameTime() - work.scanStartedTick() > structureScanTimeoutTicks()) {
+        boolean identityChanged = invalidateActiveStructureScanIfIdentityChanged(work);
+        if (!identityChanged && level.getGameTime() - work.scanStartedTick() > structureScanTimeoutTicks(work)) {
             invalidateStructureScan(StructureMatcher.InvalidationReason.TIMEOUT);
+            work = structureWorkSnapshot();
         }
-        work = structureWorkSnapshot();
+        if (identityChanged) work = structureWorkSnapshot();
         if (work.scan() == null) return;
         StructureMatcher.ScanBatch batch = runtime.captureStructureScan(serverLevel(), getBlockPos());
         if (batch.invalidation() != null) {
@@ -2441,9 +2445,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
             applyStructureScanResult(scanResult, work);
             return;
         }
-        publishStructureWork(state -> state.withScanSteppedTick(level.getGameTime()));
+        runtime.markStructureScanStepped(level.getGameTime());
         scanBatchCountForTesting++;
-        scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
+        if (scanBatchesPerTickForTesting != null) {
+            scanBatchesPerTickForTesting.merge(level.getGameTime(), 1, Integer::sum);
+        }
         MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(getBlockPos(), level.getGameTime(),
                 MachineWorkMode.ASYNC, STRUCTURE_SCAN_LANE, lifecycleEpoch);
         Object candidateIdentity = work.scanCandidate();
@@ -2469,9 +2475,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.requestStructureCheck();
             return;
         }
-        publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L)
-                .withCheckReason(checkReason == StructureRuntime.CheckReason.SAFETY_CHECK
-                        ? StructureRuntime.CheckReason.SAFETY_CHECK : StructureRuntime.CheckReason.SCAN_CONTINUATION));
+        runtime.scheduleStructureScanContinuation(level.getGameTime() + 1L, checkReason);
     }
 
     private MainThreadStep.Result executeStructureScanStep(MachineAsyncCoordinator.TaskKey taskKey, MainThreadStep step) {
@@ -2530,9 +2534,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void applyStructureScanResult(StructureMatcher.ScanResult scanResult, StructureWorkSnapshot work) {
         if (scanResult.inProgress()) {
-            publishStructureWork(state -> state.withNextCheckTick(level.getGameTime() + 1L)
-                    .withCheckReason(work.checkReason() == StructureRuntime.CheckReason.SAFETY_CHECK
-                            ? StructureRuntime.CheckReason.SAFETY_CHECK : StructureRuntime.CheckReason.SCAN_CONTINUATION));
+            runtime.scheduleStructureScanContinuation(level.getGameTime() + 1L, work.checkReason());
             return;
         }
         CandidatePattern candidatePattern = work.scanCandidate() instanceof CandidatePattern candidate ? candidate : null;
@@ -2707,7 +2709,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean invalidateActiveStructureScanIfIdentityChanged() {
-        StructureWorkSnapshot work = structureWorkSnapshot();
+        return invalidateActiveStructureScanIfIdentityChanged(structureWorkSnapshot());
+    }
+
+    private boolean invalidateActiveStructureScanIfIdentityChanged(StructureWorkSnapshot work) {
         if (work.scan() == null) return false;
         if (isRemoved()) {
             runtime.invalidateStructureScan(StructureMatcher.InvalidationReason.REMOVED);
@@ -2750,8 +2755,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return ServerConfig.structureSafetyScanBatches();
     }
 
-    private long structureScanTimeoutTicks() {
-        StructureWorkSnapshot work = structureWorkSnapshot();
+    private long structureScanTimeoutTicks(StructureWorkSnapshot work) {
         if (work.scan() == null) return (long) structureCheckIntervalTicks() * structureScanBatches();
         int batchSize = work.scan().batchSize();
         int sentinelBudget = Math.min(structureSentinelCount(), Math.max(0, batchSize - 1));
@@ -3834,32 +3838,63 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void broadcastStateIfChanged() {
         if (!(level instanceof ServerLevel sl) || isRemoved()) return;
-        PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot(),
-                currentRecipePoolId());
-        ChunkPos chunkPos = new ChunkPos(getBlockPos());
-        broadcastState(sl.getPlayers(p -> p.getChunkTrackingView().contains(chunkPos.x, chunkPos.z)
-                && !p.connection.chunkSender.isPending(chunkPos.toLong())
-                && (p.distanceToSqr(getBlockPos().getCenter()) < 64 * 64
-                || (p.containerMenu instanceof MachineControllerMenu menu
-                && menu.controllerPos().equals(getBlockPos())))), packet);
+        PktMachineStatePayload packet = machineStatePacket();
+        BlockPos pos = getBlockPos();
+        int chunkX = pos.getX() >> 4;
+        int chunkZ = pos.getZ() >> 4;
+        long chunkKey = ChunkPos.asLong(chunkX, chunkZ);
+        stateRecipients.clear();
+        List<ServerPlayer> players = sl.players();
+        for (int index = 0; index < players.size(); index++) {
+            ServerPlayer player = players.get(index);
+            if (player.getChunkTrackingView().contains(chunkX, chunkZ)
+                    && !player.connection.chunkSender.isPending(chunkKey)
+                    && (player.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D) < 64 * 64
+                    || (player.containerMenu instanceof MachineControllerMenu menu && menu.controllerPos().equals(pos)))) {
+                stateRecipients.add(player);
+            }
+        }
+        broadcastState(stateRecipients, packet);
+        stateRecipients.clear();
+    }
+
+    PktMachineStatePayload machineStatePacket() {
+        ResourceLocation recipePoolId = currentRecipePoolId();
+        ControllerRuntimeSnapshot snapshot = runtimeSnapshot();
+        if (cachedStatePacket == null || cachedStatePacketSnapshot != snapshot
+                || !Objects.equals(cachedStatePacketRecipePool, recipePoolId)) {
+            cachedStatePacket = PktMachineStatePayload.from(getBlockPos(), snapshot, recipePoolId);
+            cachedStatePacketSnapshot = snapshot;
+            cachedStatePacketRecipePool = recipePoolId;
+        }
+        return cachedStatePacket;
     }
 
     void broadcastState(List<ServerPlayer> recipients, PktMachineStatePayload packet) {
-        Set<ServerPlayer> currentReceivers = Collections.newSetFromMap(new IdentityHashMap<>());
-        currentReceivers.addAll(recipients);
-        stateReceivers.keySet().removeIf(player -> !currentReceivers.contains(player));
-        for (ServerPlayer player : recipients) {
-            var update = PktMachineStatePayload.nextUpdate(packet, stateReceivers.get(player));
-            if (update == null) continue;
-            player.connection.send(new ClientboundCustomPayloadPacket(update));
+        currentStateReceivers.clear();
+        boolean newReceiver = false;
+        for (int index = 0; index < recipients.size(); index++) {
+            ServerPlayer player = recipients.get(index);
+            currentStateReceivers.add(player);
+            newReceiver |= !stateReceivers.containsKey(player);
+        }
+        if (newReceiver || currentStateReceivers.size() != stateReceivers.size()) {
+            stateReceivers.keySet().removeIf(player -> !currentStateReceivers.contains(player));
+        }
+        for (int index = 0; index < recipients.size(); index++) {
+            ServerPlayer player = recipients.get(index);
+            PktMachineStatePayload previous = stateReceivers.get(player);
+            if (previous == packet) continue;
+            var update = PktMachineStatePayload.nextUpdate(packet, previous);
+            if (update != null) player.connection.send(new ClientboundCustomPayloadPacket(update));
             stateReceivers.put(player, packet);
         }
+        currentStateReceivers.clear();
     }
 
     public void sendClientStateBaseline(ServerPlayer player) {
         if (!(level instanceof ServerLevel) || isRemoved()) return;
-        PktMachineStatePayload packet = PktMachineStatePayload.from(getBlockPos(), runtimeSnapshot(),
-                currentRecipePoolId());
+        PktMachineStatePayload packet = machineStatePacket();
         player.connection.send(new ClientboundCustomPayloadPacket(packet));
         stateReceivers.put(player, packet);
     }

@@ -24,6 +24,7 @@ public final class StructureClaimRegistry {
     private final Map<BlockPos, Set<BlockPos>> ownersByComponent = new LinkedHashMap<>();
     private final Map<BlockPos, Set<Claim>> claimsByController = new LinkedHashMap<>();
     private final Map<BlockPos, ResourceDomain> domainsByController = new HashMap<>();
+    private @Nullable Set<BlockPos> cachedClaimedControllers;
     private long nextDomainId;
     private long nextGeneration;
 
@@ -53,6 +54,7 @@ public final class StructureClaimRegistry {
 
         release(immutableControllerPos);
         claimsByController.put(immutableControllerPos, new LinkedHashSet<>(normalized));
+        cachedClaimedControllers = null;
         for (Claim claim : normalized) {
             ownersByComponent.computeIfAbsent(claim.componentPos(), ignored -> new LinkedHashSet<>())
                     .add(immutableControllerPos);
@@ -66,6 +68,7 @@ public final class StructureClaimRegistry {
         if (previous == null) {
             return;
         }
+        cachedClaimedControllers = null;
         for (Claim claim : previous) {
             Set<BlockPos> owners = ownersByComponent.get(claim.componentPos());
             if (owners == null) {
@@ -93,7 +96,8 @@ public final class StructureClaimRegistry {
     }
 
     public Set<BlockPos> claimedControllers() {
-        return Set.copyOf(claimsByController.keySet());
+        if (cachedClaimedControllers == null) cachedClaimedControllers = Set.copyOf(claimsByController.keySet());
+        return cachedClaimedControllers;
     }
 
     private void rebuildDomains() {
