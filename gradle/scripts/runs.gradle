@@ -22,6 +22,15 @@ dependencies {
     clientMods("curse.maven:${jec_id}:${jec_version}")
     // AE2 x JEI integration
     clientMods("curse.maven:${ae2xjei_id}:${ae2xjei_version}")
+    // 可视化性能监测
+    clientMods("maven.modrinth:${kotlinFF_id}:${kotlinFF_version}")
+    clientMods("maven.modrinth:${ob_id}:${ob_version}")
+    clientMods("maven.modrinth:${architectury_id}:${architectury_version}")
+    // minimap
+    // clientMods("maven.modrinth:${minimap_id}:${minimap_version}")
+    // data en
+    // why u have such a big number of dependences ?
+    // clientMods("curse.maven:${de_id}:${de_version}")
 }
 
 runs {
