@@ -30,7 +30,11 @@ dependencies {
     // clientMods("maven.modrinth:${minimap_id}:${minimap_version}")
     // data en
     // why u have such a big number of dependences ?
-    // clientMods("curse.maven:${de_id}:${de_version}")
+    // clientMods(files('/home/howxu/Downloads/curios-neoforge-9.5.1+1.21.1.jar'))
+    // clientMods(files('/home/howxu/Downloads/ldlib2-neoforge-1.21.1-2.2.42-all.jar'))
+    // clientMods(files('/home/howxu/Downloads/data_energistics-1.21.1-3.3.5.jar'))
+    // ctm
+    // clientMods(files('/home/howxu/Downloads/ctm.jar'))
 }
 
 runs {

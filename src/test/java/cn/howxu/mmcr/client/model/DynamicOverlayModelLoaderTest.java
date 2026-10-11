@@ -62,11 +62,12 @@ class DynamicOverlayModelLoaderTest {
     }
 
     private BakedModel bake(DynamicOverlayBakedModel.Kind kind, ResourceLocation itemBlockId) {
-        IGeometryBakingContext context = (IGeometryBakingContext) Proxy.newProxyInstance(
-                getClass().getClassLoader(), new Class<?>[]{IGeometryBakingContext.class},
-                (proxy, method, args) -> method.getName().equals("getTransforms") ? ItemTransforms.NO_TRANSFORMS : null);
-        return new DynamicOverlayModelLoader.Unbaked(kind, itemBlockId).bake(context, null,
-                material -> sprites.computeIfAbsent(material.texture(), TestSprite::new), null, ItemOverrides.EMPTY);
+        var description = itemBlockId == null ? null
+                : DynamicOverlayItemModel.describeBlock(BuiltInRegistries.BLOCK.get(itemBlockId));
+        return new DynamicOverlayModelLoader.DynamicModel(kind, description,
+                sprites.computeIfAbsent(MMCR.id("block/ctm/basic_casing/particle"), TestSprite::new),
+                texture -> sprites.computeIfAbsent(texture, TestSprite::new),
+                ItemTransforms.NO_TRANSFORMS, ItemOverrides.EMPTY, null);
     }
 
     @ParameterizedTest
@@ -138,6 +139,44 @@ class DynamicOverlayModelLoaderTest {
                 .allSatisfy(quad -> assertThat(quad.getDirection()).isEqualTo(Direction.EAST))
                 .extracting(quad -> quad.getSprite().contents().name()).containsExactly(
                         ControllerSpecCache.specFor(machineId).frontTexture(), MMCR.id("block/overlay_basic_active"));
+    }
+
+    @Test
+    void runtime_block_and_item_quads_follow_the_reloaded_atlas() {
+        var machineId = MMCR.id("test_cube");
+        var base = ResourceLocation.parse("mekanism:block/sps_casing");
+        MachineAppearanceCache.replaceSnapshot(Map.of(machineId,
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), base, null)));
+        MachineControllerBlock block = (MachineControllerBlock) ModBlocks.controllerFor(machineId).get();
+        var state = block.defaultBlockState();
+        var model = bake(DynamicOverlayBakedModel.Kind.CONTROLLER, BuiltInRegistries.BLOCK.getKey(block));
+        var random = RandomSource.create(0L);
+        var originalBase = model.getQuads(state, Direction.DOWN, random, ModelData.EMPTY, RenderType.solid())
+                .getFirst().getSprite();
+        var originalOverlays = model.getQuads(state, null, random, ModelData.EMPTY, RenderType.translucent())
+                .stream().map(BakedQuad::getSprite).toList();
+        var passes = model.getRenderPasses(ItemStack.EMPTY, false);
+        passes.forEach(pass -> pass.getQuads(null, null, random));
+
+        // Atlas upload closes the old sprites and installs replacements, even for the same texture IDs.
+        sprites.replaceAll((texture, sprite) -> {
+            sprite.contents().close();
+            return new TestSprite(texture);
+        });
+
+        assertThat(model.getQuads(state, Direction.DOWN, random, ModelData.EMPTY, RenderType.solid()))
+                .singleElement().satisfies(quad -> assertThat(quad.getSprite())
+                        .isSameAs(sprites.get(base)).isNotSameAs(originalBase));
+        assertThat(model.getQuads(state, null, random, ModelData.EMPTY, RenderType.translucent()))
+                .extracting(BakedQuad::getSprite)
+                .containsExactly(sprites.get(ControllerSpecCache.specFor(machineId).frontTexture()),
+                        sprites.get(MMCR.id("block/overlay_basic_idle")))
+                .doesNotContainAnyElementsOf(originalOverlays);
+        for (var pass : passes) {
+            assertThat(pass.getQuads(null, null, random)).isNotEmpty()
+                    .allSatisfy(quad -> assertThat(quad.getSprite())
+                            .isSameAs(sprites.get(quad.getSprite().contents().name())));
+        }
     }
 
     @Test

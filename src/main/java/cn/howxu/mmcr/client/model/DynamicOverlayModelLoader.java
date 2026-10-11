@@ -193,34 +193,39 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             }
             BakedModel shaft = description != null && DynamicOverlayTextures.isStressPort(description.portKind())
                     ? baker.bake(ResourceLocation.parse("create:block/shaft"), BlockModelRotation.X90_Y0) : null;
-            return new DynamicModel(kind, description, spriteGetter, context.getTransforms(), overrides, shaft);
+            TextureAtlasSprite particle = spriteGetter.apply(new Material(TextureAtlas.LOCATION_BLOCKS, FALLBACK_TEXTURE));
+            // Runtime lookups must not feed CTM's baking-time texture scraper for this shared model.
+            return new DynamicModel(kind, description, particle,
+                    texture -> Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(texture),
+                    context.getTransforms(), overrides, shaft);
         }
     }
 
     private record CtmContext(BakedModel model, BlockState state, ModelData data, ChunkRenderTypeSet renderTypes) {
     }
 
-    private static final class DynamicModel implements IDynamicBakedModel {
+    static final class DynamicModel implements IDynamicBakedModel {
         private final DynamicOverlayBakedModel.Kind kind;
         private final @Nullable DynamicOverlayItemModel.Description itemDescription;
-        private final Function<Material, TextureAtlasSprite> spriteGetter;
+        private final Function<ResourceLocation, TextureAtlasSprite> runtimeSpriteGetter;
         private final ItemTransforms transforms;
         private final ItemOverrides overrides;
         private final TextureAtlasSprite particle;
         private final List<BakedModel> itemPasses;
         private final @Nullable BakedModel itemShaft;
 
-        private DynamicModel(DynamicOverlayBakedModel.Kind kind,
-                             @Nullable DynamicOverlayItemModel.Description itemDescription,
-                             Function<Material, TextureAtlasSprite> spriteGetter,
-                             ItemTransforms transforms, ItemOverrides overrides, @Nullable BakedModel itemShaft) {
+        DynamicModel(DynamicOverlayBakedModel.Kind kind,
+                     @Nullable DynamicOverlayItemModel.Description itemDescription,
+                     TextureAtlasSprite particle,
+                     Function<ResourceLocation, TextureAtlasSprite> runtimeSpriteGetter,
+                     ItemTransforms transforms, ItemOverrides overrides, @Nullable BakedModel itemShaft) {
             this.kind = kind;
             this.itemDescription = itemDescription;
-            this.spriteGetter = spriteGetter;
+            this.runtimeSpriteGetter = runtimeSpriteGetter;
             this.transforms = transforms;
             this.overrides = overrides;
             this.itemShaft = itemShaft;
-            this.particle = sprite(FALLBACK_TEXTURE);
+            this.particle = particle;
             this.itemPasses = List.of(new ItemPass(this, false), new ItemPass(this, true));
         }
 
@@ -355,7 +360,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         }
 
         private TextureAtlasSprite sprite(ResourceLocation texture) {
-            return spriteGetter.apply(new Material(TextureAtlas.LOCATION_BLOCKS, texture));
+            return runtimeSpriteGetter.apply(texture);
         }
 
         private TextureAtlasSprite baseSprite(ResourceLocation texture) {
