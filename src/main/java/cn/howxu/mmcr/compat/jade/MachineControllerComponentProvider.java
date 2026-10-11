@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.client.gui.RecipePoolDisplayName;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -11,6 +12,8 @@ import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.ui.BoxStyle;
 import snownee.jade.api.ui.IElementHelper;
+import snownee.jade.impl.ui.SimpleProgressStyle;
+import snownee.jade.overlay.DisplayHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,11 +61,25 @@ public enum MachineControllerComponentProvider implements IComponentProvider<Blo
             tooltip.add(elements.progress(
                     ratio,
                     text,
-                    elements.progressStyle().color(0xFF4CBB17),
+                    new CenteredProgressStyle().color(0xFF4CBB17),
                     BoxStyle.getNestedBox(),
                     false));
         } catch (NullPointerException | IllegalAccessError | ExceptionInInitializerError ignored) {
             // graceful degradation; bar is unobservable in this environment
+        }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class CenteredProgressStyle extends SimpleProgressStyle {
+        @Override
+        public void render(GuiGraphics graphics, float x, float y, float width, float height,
+                           float progress, Component text) {
+            super.render(graphics, x, y, width, height, progress, null);
+            if (text == null) return;
+            // Jade 15 draws text at x + 1. A zero-progress pass draws only the text,
+            // retaining Jade's text color, opacity and vertical alignment.
+            float textX = x + (width - DisplayHelper.font().width(text)) / 2F - 1F;
+            super.render(graphics, textX, y, width, height, 0F, text);
         }
     }
 
