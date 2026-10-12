@@ -97,6 +97,15 @@ public class Client {
         // modBus.addListener(ArtificialStarRenderer::registerModel);
         modBus.addListener(Client::registerRuntimeResourcePack);
         modBus.addListener(Client::registerPreviewReloadListener);
+        if (ModList.get().isLoaded("emi")) {
+            try {
+                Class.forName("dev.emi.emi.runtime.EmiLog", true, Client.class.getClassLoader());
+                Class.forName("cn.howxu.mmcr.compat.emi.EmiClientEvents")
+                        .getMethod("register", IEventBus.class).invoke(null, modBus);
+            } catch (ReflectiveOperationException exception) {
+                throw new IllegalStateException("Unable to register EMI client events", exception);
+            }
+        }
         NeoForge.EVENT_BUS.addListener(this::tickMachineSounds);
         NeoForge.EVENT_BUS.addListener(Client::tickControllerIdleEasterEgg);
         NeoForge.EVENT_BUS.addListener(this::clearMachineSounds);

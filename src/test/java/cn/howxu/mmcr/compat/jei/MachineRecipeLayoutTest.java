@@ -67,7 +67,8 @@ class MachineRecipeLayoutTest {
                 List.of(new FluidStack(Fluids.LAVA.builtInRegistryHolder(), 125))
         );
 
-        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(MachineRecipeDisplay.from(recipe), 4);
+        MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
+        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
 
         assertThat(layout.inputs().slots())
                 .extracting(slot -> slot.entry().kind(), slot -> slot.entry().index(),
@@ -76,6 +77,9 @@ class MachineRecipeLayoutTest {
                         tuple(MachineRecipeLayout.Kind.FLUID, 0, 12, 8), tuple(MachineRecipeLayout.Kind.FLUID, 1, 30, 8),
                         tuple(MachineRecipeLayout.Kind.ITEM, 0, 48, 8), tuple(MachineRecipeLayout.Kind.ITEM, 1, 30, 26),
                         tuple(MachineRecipeLayout.Kind.ITEM, 2, 48, 26));
+        var resources = display.data().entries();
+        assertThat(layout.inputs().slots()).extracting(slot -> slot.entry().resource())
+                .containsExactly(resources.get(1), resources.get(3), resources.get(0), resources.get(2), resources.get(4));
         assertThat(layout.width()).isEqualTo(150);
         assertThat(layout.height()).isEqualTo(150);
         assertThat(layout.durationTextX()).isEqualTo(8);

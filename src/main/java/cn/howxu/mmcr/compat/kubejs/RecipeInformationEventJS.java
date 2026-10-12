@@ -10,22 +10,22 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * KubeJS client event for localized JEI recipe information.
+ * KubeJS client event for localized JEI/EMI recipe information.
  *
  * @author howxu <dev@howxu.cn>
  */
 public final class RecipeInformationEventJS implements KubeEvent {
-    private final boolean jeiAvailable;
+    private final boolean viewerAvailable;
     private final Consumer<String> warning;
     private final List<RecipeInformation> entries = new ArrayList<>();
     private boolean warnedUnavailable;
 
-    RecipeInformationEventJS(boolean jeiAvailable) {
-        this(jeiAvailable, message -> MMCR.LOG.warn(message));
+    RecipeInformationEventJS(boolean viewerAvailable) {
+        this(viewerAvailable, message -> MMCR.LOG.warn(message));
     }
 
-    RecipeInformationEventJS(boolean jeiAvailable, Consumer<String> warning) {
-        this.jeiAvailable = jeiAvailable;
+    RecipeInformationEventJS(boolean viewerAvailable, Consumer<String> warning) {
+        this.viewerAvailable = viewerAvailable;
         this.warning = warning;
     }
 
@@ -44,9 +44,9 @@ public final class RecipeInformationEventJS implements KubeEvent {
     }
 
     private boolean available() {
-        if (jeiAvailable) return true;
+        if (viewerAvailable) return true;
         if (!warnedUnavailable) {
-            warning.accept("JEI is not loaded; MMCR client recipe information registrations are ignored");
+            warning.accept("Neither JEI nor EMI is loaded; MMCR client recipe information registrations are ignored");
             warnedUnavailable = true;
         }
         return false;

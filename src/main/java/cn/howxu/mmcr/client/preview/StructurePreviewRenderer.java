@@ -71,6 +71,12 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     }
 
     @Override
+    public void prepareSynchronously(PreviewCamera camera) {
+        if (closed) throw new IllegalStateException("Cannot prepare a closed structure preview");
+        scene.prepareSynchronously(camera);
+    }
+
+    @Override
     public void render(PreviewRenderContext context) {
         if (closed || context.viewport().width() <= 0 || context.viewport().height() <= 0) return;
         int mouseX = context.mouseX();

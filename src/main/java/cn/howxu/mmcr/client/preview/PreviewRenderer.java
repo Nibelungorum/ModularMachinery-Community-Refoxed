@@ -14,6 +14,10 @@ interface PreviewRenderer {
 
     void render(PreviewRenderContext context);
 
+    default void prepareSynchronously(PreviewCamera camera) {
+        throw new UnsupportedOperationException("Synchronous preparation is not supported by this preview renderer");
+    }
+
     default void setInteractive(boolean interactive) { }
 
     Object hitResult();

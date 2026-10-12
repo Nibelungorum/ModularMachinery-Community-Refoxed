@@ -4,9 +4,11 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.client.preview.StructureMaterialSummary.Entry;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema.Candidate;
+import cn.howxu.mmcr.client.render.GuiClipContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -15,6 +17,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * JEI-independent structure preview panel shared by preview hosts.
@@ -26,6 +29,7 @@ public final class StructurePreviewPanel implements AutoCloseable {
 
     private final Machine machine;
     private final List<MachineStructureStage> stages;
+    private final Function<StructurePreviewSchema, PreviewRenderer> rendererFactory;
     private StructurePreviewCompilation compilation;
     private @Nullable StructurePreviewSchema schema;
     private @Nullable StructurePreviewWidget widget;
@@ -39,11 +43,17 @@ public final class StructurePreviewPanel implements AutoCloseable {
     }
 
     public StructurePreviewPanel(Machine machine, int stageNumber) {
+        this(machine, stageNumber, null, StructurePreviewRenderer::new);
+    }
+
+    StructurePreviewPanel(Machine machine, int stageNumber, @Nullable StructurePreviewCompilation initialCompilation,
+                          Function<StructurePreviewSchema, PreviewRenderer> rendererFactory) {
         this.machine = Objects.requireNonNull(machine, "machine");
         this.stages = List.copyOf(machine.structureStages());
         if (stages.isEmpty()) throw new IllegalArgumentException("machine structure stages empty");
         this.stageIndex = stageIndexFor(stageNumber, stages);
-        this.compilation = acquireCompilation(stageIndex);
+        this.compilation = initialCompilation == null ? acquireCompilation(stageIndex) : initialCompilation;
+        this.rendererFactory = rendererFactory;
     }
 
     public void render(GuiGraphics graphics, int width, int height,
@@ -58,20 +68,16 @@ public final class StructurePreviewPanel implements AutoCloseable {
             } else {
                 if (compileAnimationStart < 0L) compileAnimationStart = System.currentTimeMillis();
                 long elapsed = Math.max(0L, System.currentTimeMillis() - compileAnimationStart);
-                status = Component.literal(compileStatus(elapsed));
+                status = compileStatus(elapsed);
             }
             Minecraft minecraft = Minecraft.getInstance();
-            graphics.enableScissor(statusOriginX, statusOriginY,
-                    statusOriginX + width, statusOriginY + height);
-            try {
-                var pose = graphics.pose().last().pose();
-                int localOriginX = statusOriginX - Math.round(pose.m30());
-                int localOriginY = statusOriginY - Math.round(pose.m31());
+            var pose = graphics.pose().last().pose();
+            int localOriginX = statusOriginX - Math.round(pose.m30());
+            int localOriginY = statusOriginY - Math.round(pose.m31());
+            GuiClipContext.drawClipped(graphics, localOriginX, localOriginY, width, height, () -> {
                 int x = localOriginX + Math.max(0, (width - minecraft.font.width(status)) / 2);
                 graphics.drawString(minecraft.font, status, x, localOriginY + height / 2, 0xFFFFFFFF, false);
-            } finally {
-                graphics.disableScissor();
-            }
+            });
             return;
         }
 
@@ -97,6 +103,20 @@ public final class StructurePreviewPanel implements AutoCloseable {
 
     public boolean isReady() {
         return widget != null;
+    }
+
+    /** Ensures schema and an independent mesh exist for a single-frame capture; normal render stays async. */
+    public void prepareSynchronously() {
+        if (closed) throw new IllegalStateException("Cannot prepare a closed structure panel");
+        if (widget == null) {
+            StructurePreviewSchema completed = compilation.schema();
+            if (completed == null) {
+                Direction facing = machine.controller().requireVerticalFacing() ? Direction.UP : Direction.SOUTH;
+                completed = new StructurePreviewSchemaFactory().create(stages.get(stageIndex), machine.registryName(), facing);
+            }
+            adoptCompletedSchema(completed);
+        }
+        widget.prepareSynchronously();
     }
 
     public @Nullable StructurePreviewSchema schema() {
@@ -203,7 +223,7 @@ public final class StructurePreviewPanel implements AutoCloseable {
     private void adoptCompletedSchema(StructurePreviewSchema completed) {
         schema = completed;
         materials = StructureMaterialSummary.from(completed);
-        widget = new StructurePreviewWidget(new StructurePreviewRenderer(completed));
+        widget = new StructurePreviewWidget(rendererFactory.apply(completed));
     }
 
     @Override
@@ -251,13 +271,14 @@ public final class StructurePreviewPanel implements AutoCloseable {
     }
 
     private void ensurePreviewStarted() {
+        if (widget != null) return;
         compilation.start();
         StructurePreviewSchema completed = compilation.schema();
         if (completed != null && widget == null) adoptCompletedSchema(completed);
     }
 
-    private static String compileStatus(long elapsedMillis) {
+    private static Component compileStatus(long elapsedMillis) {
         int dotCount = (int) (Math.max(0L, elapsedMillis) / 1_000L % 3L) + 1;
-        return "Render compile" + ".".repeat(dotCount);
+        return Component.translatable("jei.mmcr.structure_preview.compiling").append(".".repeat(dotCount));
     }
 }

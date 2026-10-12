@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.client.recipe.MachineRecipeData;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
@@ -21,8 +22,7 @@ import java.util.stream.Collectors;
 public final class MachineRecipeDisplays {
 
     private static final Comparator<MachineRecipeDisplay> ORDER = Comparator
-            .comparingInt((MachineRecipeDisplay display) -> display.recipe().priority()).reversed()
-            .thenComparing(MachineRecipeDisplay::recipeId);
+            .comparing(MachineRecipeDisplay::data, MachineRecipeData.ORDER);
 
     private MachineRecipeDisplays() {
     }

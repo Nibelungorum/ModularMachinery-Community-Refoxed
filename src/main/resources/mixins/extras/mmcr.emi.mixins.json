@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.emi",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "EmiRecipeScreenMixin",
+    "EmiWidgetGroupMixin",
+    "EmiRenderHelperMixin",
+    "EmiRecipeScreenshotButtonWidgetMixin",
+    "EmiScreenshotRecorderMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

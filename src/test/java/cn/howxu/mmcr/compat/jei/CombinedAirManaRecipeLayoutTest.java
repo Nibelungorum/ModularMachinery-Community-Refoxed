@@ -59,7 +59,10 @@ class CombinedAirManaRecipeLayoutTest {
             var category = category();
             for (int scale = 1; scale <= 5; scale++) {
                 var layout = MachineRecipeLayout.forDisplay(display, scale);
-                assertThat(layout.metadataPages()).isEmpty();
+                if (!layout.metadataPages().isEmpty()) {
+                    assertThat(layout.metadataPages().getLast().endY()).isEqualTo(layout.informationTextY(display));
+                    assertThat(layout.metadataPages().getFirst().startY()).isLessThanOrEqualTo(layout.durationTextY());
+                }
                 assertThat(layout.manaRows()).hasSize(2);
                 assertThat(layout.inputs().slots()).hasSize(50);
                 assertThat(layout.outputs().slots()).isEmpty();

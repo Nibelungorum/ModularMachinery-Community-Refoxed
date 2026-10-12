@@ -1,10 +1,10 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.recipe.RecipeDisplayDrawing;
+import cn.howxu.mmcr.client.recipe.RecipeSlotLayout;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
-import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
-import cn.howxu.mmcr.compat.botania.client.ManaJeiDisplay;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -14,11 +14,9 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
-import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
-import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.ReadableNumber;
 import cn.howxu.mmcr.util.SaturatingLong;
@@ -40,8 +38,6 @@ import mezz.jei.api.recipe.RecipeType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.StringSplitter;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.Style;
@@ -57,7 +53,6 @@ import org.jetbrains.annotations.Nullable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-import java.util.Locale;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.function.ToIntFunction;
@@ -71,16 +66,14 @@ import java.util.stream.Collectors;
 public final class MachineRecipeCategory implements IRecipeCategory<MachineRecipeDisplay> {
 
     private static final int FLUID_SLOT_CAPACITY = 1000;
-    private static final float TEXT_SCALE = 0.85F;
+    private static final float TEXT_SCALE = RecipeDisplayDrawing.TEXT_SCALE;
     private static final int TEXT_LINE_SPACING = MachineRecipeLayout.TEXT_LINE_SPACING;
-    private static final float SMART_INTERFACE_TEXT_SCALE = 0.85F;
     private static final int SMART_INTERFACE_LINE_SPACING = MachineRecipeLayout.TEXT_LINE_SPACING;
-    private static final int JEI_SLOT_SIZE = 16;
     private static final int LEVEL_LABEL_SLOT_GAP = 2;
     private static final int LEVEL_ITEM_CYCLE_TICKS = 60;
     static final int ITEM_OVERLAY_X = 0;
     static final int ITEM_OVERLAY_Y = 0;
-    static final float ITEM_OVERLAY_SCALE = 0.6F;
+    static final float ITEM_OVERLAY_SCALE = RecipeDisplayDrawing.OVERLAY_SCALE;
     private static final IIngredientRenderer<FluidStack> FULL_FLUID_RENDERER = new IIngredientRenderer<>() {
         @Override
         public void render(GuiGraphics guiGraphics, FluidStack fluid) {
@@ -104,10 +97,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     private final RecipeType<MachineRecipeDisplay> recipeType;
     private final IDrawable icon;
     private final IDrawable sourceSlotBackground;
-    private final @Nullable IDrawable stressIcon;
-    private final @Nullable IDrawable airIcon;
-    private final @Nullable IDrawable manaIcon;
-    private final @Nullable IDrawable heatIcon;
     private final IGuiHelper guiHelper;
 
     public MachineRecipeCategory(IGuiHelper guiHelper, ResourceLocation poolId, ResourceLocation iconMachineId) {
@@ -118,20 +107,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         this.sourceSlotBackground = guiHelper.drawableBuilder(
                 MMCR.id("textures/gui/ars_nouveau/jei_source_slot.png"), 0, 0, 18, 18)
                 .setTextureSize(18, 18).build();
-        ResourceLocation cogwheel = ResourceLocation.parse("create:cogwheel");
-        this.stressIcon = BuiltInRegistries.ITEM.containsKey(cogwheel)
-                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(cogwheel))
-                : null;
-        this.airIcon = BuiltInRegistries.ITEM.containsKey(PneumaticIds.ADVANCED_PRESSURE_TUBE)
-                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(PneumaticIds.ADVANCED_PRESSURE_TUBE))
-                : null;
-        this.manaIcon = BuiltInRegistries.ITEM.containsKey(BotaniaManaIds.CREATIVE_POOL)
-                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(BotaniaManaIds.CREATIVE_POOL))
-                : null;
-        ResourceLocation superheatingElement = ResourceLocation.parse("mekanism:superheating_element");
-        this.heatIcon = BuiltInRegistries.ITEM.containsKey(superheatingElement)
-                ? guiHelper.createDrawableItemLike(BuiltInRegistries.ITEM.get(superheatingElement))
-                : null;
     }
 
     @Override
@@ -175,18 +150,18 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, IFocusGroup focuses) {
-        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        if (layout.arrow() != null) {
-            addRecipeArrow(builder, guiHelper, layout.arrow());
-        }
-        if (!layout.metadataPages().isEmpty()) {
-            var slots = builder.getRecipeSlots().getSlots().stream()
-                    .filter(slot -> slot.getSlotName().filter(name -> name.startsWith("mmcr_details_")).isPresent())
-                    .toList();
-            var widget = new MachineRecipeMetadataWidget(this, recipe, layout, slots);
-            builder.addSlottedWidget(widget, slots);
-            builder.addGuiEventListener(widget);
-        }
+        addLiveWidget(builder, recipe, new MachineRecipeLayout.Live(recipe));
+    }
+
+    void addLiveWidget(IRecipeExtrasBuilder builder, MachineRecipeDisplay recipe, MachineRecipeLayout.Live layout) {
+        var slots = builder.getRecipeSlots().getSlots().stream()
+                .filter(slot -> slot.getSlotName().filter(name -> name.startsWith("mmcr_details_")
+                        || name.startsWith("mmcr_body_")).isPresent()).toList();
+        // Own the same real slots even before pagination becomes necessary. JEI caches this
+        // widget and its offsets, so it stays at the recipe origin across layout transitions.
+        var widget = new MachineRecipeMetadataWidget(this, recipe, layout, slots);
+        builder.addSlottedWidget(widget, slots);
+        builder.addGuiEventListener(widget);
     }
 
     static void addRecipeArrow(IRecipeExtrasBuilder builder, IGuiHelper guiHelper, RecipeSlotLayout.Arrow arrow) {
@@ -197,185 +172,38 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
 
     @Override
     public void draw(MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics, double mouseX, double mouseY) {
-        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        drawTextEntries(recipe, layout.inputs(), true, guiGraphics);
-        drawTextEntries(recipe, layout.outputs(), false, guiGraphics);
-        if (layout.metadataPages().isEmpty()) drawMetadata(recipe, layout, guiGraphics);
+        // The page-owned widget draws the complete body using its single cached measurement.
     }
 
     void drawMetadata(MachineRecipeDisplay recipe, MachineRecipeLayout layout, GuiGraphics guiGraphics) {
-        long gameTime = Minecraft.getInstance().level == null ? 0L : Minecraft.getInstance().level.getGameTime();
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0F);
-        int textX = (int) (layout.durationTextX() / TEXT_SCALE);
-        guiGraphics.drawString(Minecraft.getInstance().font,
-                Component.translatable("jei.mmcr.machine_recipe.duration", recipe.durationTicks(), seconds(recipe.durationTicks())),
-                textX, (int) (layout.durationTextY() / TEXT_SCALE), 0xFF404040, false);
-
-        int y = layout.durationTextY() + TEXT_LINE_SPACING;
-        for (EnergyIngredient energy : recipe.energyInputs()) {
-            guiGraphics.drawString(Minecraft.getInstance().font,
-                    Component.translatable("jei.mmcr.machine_recipe.energy_in", ReadableNumber.format(energy.fePerTick()),
-                            ReadableNumber.format(saturatedEnergyTotal(energy.fePerTick(), recipe.durationTicks()))),
-                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
-            y += TEXT_LINE_SPACING;
+        for (var row : layout.details()) {
+            RecipeDisplayDrawing.drawMetadataRow(guiGraphics, row.metadata(), row.wrapped(), row.x(),
+                    row.y() + (row.kind() == MachineRecipeLayout.DetailKind.LEVEL ? 5 : 0));
         }
-        for (EnergyIngredient energy : recipe.energyOutputs()) {
-            guiGraphics.drawString(Minecraft.getInstance().font,
-                    Component.translatable("jei.mmcr.machine_recipe.energy_out", ReadableNumber.format(energy.fePerTick())),
-                    textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
-            y += TEXT_LINE_SPACING;
-        }
-        for (MachineRecipeDisplay.StressDisplay stress : recipe.stressInputs()) {
-            drawStressLine(stress.label(true), guiGraphics, textX, (int) (y / TEXT_SCALE));
-            y += TEXT_LINE_SPACING;
-        }
-        for (MachineRecipeDisplay.StressDisplay stress : recipe.stressOutputs()) {
-            drawStressLine(stress.label(false), guiGraphics, textX, (int) (y / TEXT_SCALE));
-            y += TEXT_LINE_SPACING;
-        }
-        y = layout.airTextY(recipe);
-        for (MachineRecipeDisplay.AirDisplay air : recipe.airInputs()) {
-            drawAirLine(air.label(true), guiGraphics, textX, (int) (y / TEXT_SCALE));
-            y += TEXT_LINE_SPACING;
-        }
-        for (MachineRecipeDisplay.AirDisplay air : recipe.airOutputs()) {
-            drawAirLine(air.label(false), guiGraphics, textX, (int) (y / TEXT_SCALE));
-            y += TEXT_LINE_SPACING;
-        }
-        if (recipe.minimumTemperature().isPresent()) {
-            drawHeatLine(MachineRecipeDisplay.minimumTemperatureLabel(recipe.minimumTemperature().getAsDouble()),
-                    guiGraphics, textX, (int) (y / TEXT_SCALE));
-            y += TEXT_LINE_SPACING;
-        }
-        if (recipe.outputHeat().isPresent()) {
-            drawHeatLine(MachineRecipeDisplay.outputHeatLabel(recipe.outputHeat().getAsDouble()),
-                    guiGraphics, textX, (int) (y / TEXT_SCALE));
-            y += TEXT_LINE_SPACING;
-        }
-        for (var row : layout.manaRows()) {
-            drawManaLine(((ManaJeiDisplay) row.entry().ingredient()).label(), guiGraphics,
-                    textX, (int) (row.y() / TEXT_SCALE));
-        }
-        Component hostRequirement = hostRequirementComponent(recipe, gameTime);
-        if (!hostRequirement.getString().isEmpty()) {
-            y = layout.hostRequirementTextY();
-            guiGraphics.drawString(Minecraft.getInstance().font, hostRequirement, textX,
-                    (int) (y / TEXT_SCALE), 0xFF404040, false);
-            y += TEXT_LINE_SPACING;
-        }
-        drawLevelRequirementLabels(recipe, layout, guiGraphics, textX);
-        drawStageRequirementLabels(recipe, layout, guiGraphics, textX);
-        y = layout.smartInterfaceTextY(recipe);
-        guiGraphics.pose().popPose();
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(SMART_INTERFACE_TEXT_SCALE, SMART_INTERFACE_TEXT_SCALE, 1.0F);
-        textX = (int) (layout.durationTextX() / SMART_INTERFACE_TEXT_SCALE);
-        for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceInputs()) {
-            guiGraphics.drawString(Minecraft.getInstance().font, smartInterface.label(),
-                    textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
-            y += SMART_INTERFACE_LINE_SPACING;
-        }
-        for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
-            guiGraphics.drawString(Minecraft.getInstance().font, smartInterface.label(),
-                    textX, (int) (y / SMART_INTERFACE_TEXT_SCALE), 0xFF404040, false);
-            y += SMART_INTERFACE_LINE_SPACING;
-        }
-        guiGraphics.pose().popPose();
-        drawSourceTextLines(layout, guiGraphics);
-        drawRecipeInformation(recipe, layout, guiGraphics);
     }
 
-    private void drawStressLine(Component label, GuiGraphics guiGraphics, int x, int y) {
-        var font = Minecraft.getInstance().font;
-        if (stressIcon != null) {
-            float iconScale = (float) font.lineHeight / stressIcon.getHeight();
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(x, y, 0F);
-            guiGraphics.pose().scale(iconScale, iconScale, 1F);
-            stressIcon.draw(guiGraphics, 0, 0);
-            guiGraphics.pose().popPose();
-            x += (int) (stressIcon.getWidth() * iconScale) + 2;
-        }
-        guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
+    @Nullable IDrawable bodyArrow(MachineRecipeLayout layout) {
+        var arrow = layout.arrow();
+        return arrow == null ? null : new RecipeArrowDrawable(guiHelper.createAnimatedRecipeArrow(200), arrow.height() > arrow.width());
     }
 
-    private void drawAirLine(Component label, GuiGraphics guiGraphics, int x, int y) {
-        var font = Minecraft.getInstance().font;
-        if (airIcon != null) {
-            float iconScale = (float) font.lineHeight / airIcon.getHeight();
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(x, y, 0F);
-            guiGraphics.pose().scale(iconScale, iconScale, 1F);
-            airIcon.draw(guiGraphics, 0, 0);
-            guiGraphics.pose().popPose();
-            x += (int) (airIcon.getWidth() * iconScale) + 2;
-        }
-        guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
-    }
-
-    private void drawManaLine(Component label, GuiGraphics guiGraphics, int x, int y) {
-        var font = Minecraft.getInstance().font;
-        if (manaIcon != null) {
-            float iconScale = (float) font.lineHeight / manaIcon.getHeight();
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(x, y, 0F);
-            guiGraphics.pose().scale(iconScale, iconScale, 1F);
-            manaIcon.draw(guiGraphics, 0, 0);
-            guiGraphics.pose().popPose();
-            x += (int) (manaIcon.getWidth() * iconScale) + 2;
-        }
-        guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
-    }
-
-    private void drawHeatLine(Component label, GuiGraphics guiGraphics, int x, int y) {
-        var font = Minecraft.getInstance().font;
-        if (heatIcon != null) {
-            float iconScale = (float) font.lineHeight / heatIcon.getHeight();
-            guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(x, y, 0F);
-            guiGraphics.pose().scale(iconScale, iconScale, 1F);
-            heatIcon.draw(guiGraphics, 0, 0);
-            guiGraphics.pose().popPose();
-            x += (int) (heatIcon.getWidth() * iconScale) + 2;
-        }
-        guiGraphics.drawString(font, label, x, y, 0xFF404040, false);
-    }
-
-    private void drawRecipeInformation(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
-                                       GuiGraphics guiGraphics) {
-        List<Component> information = RecipeInformationRegistry.componentsFor(
-                recipe.recipePoolId(), recipe.recipeId());
-        int lineCount = Math.min(information.size(), layout.informationLineCapacity(recipe, getHeight()));
-        if (lineCount == 0) return;
-
-        var font = Minecraft.getInstance().font;
-        int margin = layout.durationTextX();
-        int maxTextWidth = (int) ((getWidth() - margin * 2) / TEXT_SCALE);
-        int textX = (int) (margin / TEXT_SCALE);
-        int y = layout.informationTextY(recipe);
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0F);
-        for (int index = 0; index < lineCount; index++) {
-            var lines = font.split(information.get(index), maxTextWidth);
-            if (!lines.isEmpty()) {
-                guiGraphics.drawString(font, lines.getFirst(), textX, (int) (y / TEXT_SCALE), 0xFF404040, false);
-            }
-            y += TEXT_LINE_SPACING;
-        }
-        guiGraphics.pose().popPose();
+    void drawBodyText(MachineRecipeDisplay recipe, MachineRecipeLayout layout, GuiGraphics graphics) {
+        drawTextEntries(recipe, layout.inputs(), true, graphics);
+        drawTextEntries(recipe, layout.outputs(), false, graphics);
     }
 
     @Override
     public void getTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlotsView, double mouseX, double mouseY) {
-        MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(recipe);
-        if (layout.metadataPages().isEmpty()) {
-            metadataTooltip(tooltip, recipe, layout, mouseX, mouseY);
-        }
+        // Tooltips follow the same widget measurement and viewport as drawing and slots.
     }
 
     void metadataTooltip(ITooltipBuilder tooltip, MachineRecipeDisplay recipe, MachineRecipeLayout layout,
                          double mouseX, double mouseY) {
+        if (!layout.details().isEmpty()) {
+            layout.details().stream().filter(row -> row.contains(mouseX, mouseY)).findFirst()
+                    .ifPresent(row -> tooltip.addAll(row.metadata().tooltip()));
+            return;
+        }
         if (appendStressTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
         if (appendAirTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
         sourceTooltip(layout, mouseX, mouseY)
@@ -387,17 +215,17 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return recipe.recipeId();
     }
 
-    private static String seconds(int ticks) {
-        return String.format(Locale.ROOT, "%.1f", ticks / 20.0F);
-    }
-
     static String inputOverlayText(float consumeChance, String language) {
         if (consumeChance == 0F) return language.startsWith("zh") ? "不消耗" : "Keep";
-        return consumeChance < 1F ? Math.round(consumeChance * 100F) + "%" : "";
+        return RecipeDisplayDrawing.chanceLabel(true, consumeChance).getString();
+    }
+
+    private static String inputOverlayText(float consumeChance) {
+        return RecipeDisplayDrawing.chanceLabel(true, consumeChance).getString();
     }
 
     static String outputOverlayText(float chance) {
-        return chance < 1F ? Math.round(chance * 100F) + "%" : "";
+        return RecipeDisplayDrawing.chanceLabel(false, chance).getString();
     }
 
     static Component levelLabel(LevelRequirement requirement) {
@@ -471,8 +299,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
-    private static int levelSlotX(int textX, int labelWidth) {
-        return textX + labelWidth + LEVEL_LABEL_SLOT_GAP;
+    static int levelSlotX(int textX, int labelWidth) {
+        return Math.min(textX + labelWidth + LEVEL_LABEL_SLOT_GAP, MachineRecipeLayout.CATEGORY_WIDTH - 8 - 16);
     }
 
     private static IIngredientRenderer<ItemStack> levelItemRenderer(LevelRequirement requirement) {
@@ -507,27 +335,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         };
     }
 
-    private static void drawLevelRequirementLabels(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
-            GuiGraphics guiGraphics, int textX) {
-        int index = 0;
-        for (LevelRequirement requirement : sortedLevelRequirements(recipe.recipe())) {
-            int slotY = layout.levelRequirementSlotY(recipe, index++);
-            int labelY = slotY + (JEI_SLOT_SIZE - Minecraft.getInstance().font.lineHeight) / 2 + 2;
-            guiGraphics.drawString(Minecraft.getInstance().font, levelLabel(requirement), textX,
-                    (int) (labelY / TEXT_SCALE), 0xFF404040, false);
-        }
-    }
-
-    private static void drawStageRequirementLabels(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
-            GuiGraphics guiGraphics, int textX) {
-        int y = layout.stageRequirementTextY(recipe);
-        for (StageRequirement requirement : recipe.recipe().stageRequirements()) {
-            guiGraphics.drawString(Minecraft.getInstance().font, stageRequirementLabel(requirement), textX,
-                    (int) (y / TEXT_SCALE), 0xFF404040, false);
-            y += TEXT_LINE_SPACING;
-        }
-    }
-
     static Component stageRequirementLabel(StageRequirement requirement) {
         return Component.translatable("jei.mmcr.machine_recipe.minimum_stage", requirement.minStage());
     }
@@ -542,7 +349,19 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return Component.translatable("jei.mmcr.machine_recipe.required_host", hostName);
     }
 
-    private static List<LevelRequirement> sortedLevelRequirements(MachineRecipe recipe) {
+    static Component allHostRequirementComponent(MachineRecipeDisplay recipe) {
+        Component names = Component.empty();
+        boolean first = true;
+        for (var hostId : recipe.requiredHostIds()) {
+            var registration = MachineDefinitions.getRegistration(hostId);
+            if (!first) names = names.copy().append(Component.literal(", "));
+            names = names.copy().append(registration == null ? Component.literal(hostId.toString()) : registration.displayName());
+            first = false;
+        }
+        return Component.translatable("jei.mmcr.machine_recipe.required_host", names);
+    }
+
+    static List<LevelRequirement> sortedLevelRequirements(MachineRecipe recipe) {
         return recipe.levelRequirements().stream()
                 .sorted(Comparator.comparing((LevelRequirement requirement) -> requirement.typeId().toString())
                         .thenComparing(requirement -> requirement.levelId().toString()))
@@ -562,6 +381,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         boolean source = entry.isPresent() && entry.get().typeId().equals(ArsSourceIds.SOURCE);
         IRecipeSlotBuilder jeiSlot = builder.addSlot(source ? entry.get().role() : RecipeIngredientRole.RENDER_ONLY,
                 slot.x(), slot.y());
+        jeiSlot.setSlotName("mmcr_body_" + slot.x() + "_" + slot.y());
         if (source) {
             jeiSlot.setBackground(sourceSlotBackground, -1, -1);
         } else {
@@ -573,7 +393,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         } else if (entry.get().typeId().equals(FluidRequirement.TYPE.id())) {
             addFluid(jeiSlot, recipe, slot.entry(), entry.get(), input);
         } else {
-            addGeneric(jeiSlot, entry.get());
+            var resource = slot.entry().resource();
+            if (resource == null) addGeneric(jeiSlot, entry.get());
+            else addGeneric(jeiSlot, entry.get(), resource.amount());
         }
     }
 
@@ -594,16 +416,21 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 .findFirst();
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     static void addGeneric(IRecipeSlotBuilder slot, JeiDisplayEntry entry) {
+        long amount = entry.ingredient() instanceof SourceJeiIngredient source ? source.amount() : entry.count();
+        addGeneric(slot, entry, amount);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void addGeneric(IRecipeSlotBuilder slot, JeiDisplayEntry entry, long amount) {
         if (entry.isTextOnly()) {
             slot.addRichTooltipCallback((view, tooltip) -> tooltip.add((Component) entry.ingredient()));
             return;
         }
         if (entry.ingredient() instanceof SourceJeiIngredient source) {
-            String chance = source.input() ? inputOverlayText(entry.chance(), selectedLanguage())
+            String chance = source.input() ? inputOverlayText(entry.chance())
                     : outputOverlayText(entry.chance());
-            setItemOverlay(slot, chance, ReadableNumber.formatForSlot(source.amount(), 0, ""));
+            setItemOverlay(slot, chance, ReadableNumber.formatForSlot(amount, 0, ""));
             slot.addIngredient(SourceJeiIngredient.TYPE, source);
             if (!source.input()) {
                 slot.addRichTooltipCallback((view, tooltip) -> appendOutputChanceTooltip(tooltip, entry.chance()));
@@ -612,21 +439,21 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
         boolean chemical = entry.typeId().equals(MekanismRecipeTypes.CHEMICAL);
         String quantity = entry.ingredientType() == VanillaTypes.ITEM_STACK
-                ? itemQuantityText(entry.count())
-                : chemical ? chemicalQuantityText(entry.count()) : fluidQuantityText(entry.count());
+                ? itemQuantityText(amount)
+                : chemical ? chemicalQuantityText(amount) : RecipeDisplayDrawing.fluidQuantityText(amount);
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
             String chance = entry.role() == RecipeIngredientRole.INPUT
-                    ? inputOverlayText(entry.chance(), selectedLanguage())
+                    ? inputOverlayText(entry.chance())
                     : outputOverlayText(entry.chance());
             setItemOverlay(slot, chance, quantity);
         } else if (chemical) {
             if (entry.role() == RecipeIngredientRole.INPUT) {
-                setItemOverlay(slot, inputOverlayText(entry.chance(), selectedLanguage()), quantity);
+                setItemOverlay(slot, inputOverlayText(entry.chance()), quantity);
             } else {
                 setItemOverlay(slot, outputOverlayText(entry.chance()), quantity);
             }
             slot.addRichTooltipCallback((view, tooltip) -> {
-                appendChemicalQuantityTooltip(tooltip, entry.count());
+                appendChemicalQuantityTooltip(tooltip, amount);
                 if (entry.role() == RecipeIngredientRole.INPUT) {
                     appendConsumeChanceTooltip(tooltip, entry.chance(), true);
                 } else {
@@ -656,17 +483,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             displayEntry(recipe, slot.entry(), input).ifPresent(entry -> guiGraphics.drawString(Minecraft.getInstance().font,
                     (Component) entry.ingredient(), slot.x(), slot.y() + 4, 0xFF404040, false));
         }
-    }
-
-    private static void drawSourceTextLines(MachineRecipeLayout layout, GuiGraphics guiGraphics) {
-        var font = Minecraft.getInstance().font;
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().scale(TEXT_SCALE, TEXT_SCALE, 1.0F);
-        for (MachineRecipeLayout.TextPlan line : layout.sourceTextLines()) {
-            guiGraphics.drawString(font, Language.getInstance().getVisualOrder(sourceTextLine(line, font.getSplitter())),
-                    (int) (line.x() / TEXT_SCALE), (int) (line.y() / TEXT_SCALE), 0xFF404040, false);
-        }
-        guiGraphics.pose().popPose();
     }
 
     static FormattedText sourceTextLine(MachineRecipeLayout.TextPlan line, StringSplitter splitter) {
@@ -699,11 +515,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (MachineRecipeDisplay.ItemOutputDisplay output : recipe.itemOutputs()) {
             builder.addOutputSlot(-1000, -1000).addItemStack(output.stack());
         }
-        for (JeiDisplayEntry entry : recipe.entries()) {
+        var entries = recipe.entries();
+        for (int index = 0; index < entries.size(); index++) {
+            JeiDisplayEntry entry = entries.get(index);
             if (entry.typeId().equals(ItemRequirement.TYPE.id())
                     || entry.typeId().equals(FluidRequirement.TYPE.id())) continue;
             if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) {
-                addChemicalTransferSlot(builder, entry);
+                addChemicalTransferSlot(builder, entry, recipe.data().entries().get(index).amount());
                 continue;
             }
             if (entry.role() != RecipeIngredientRole.INPUT || !entry.transferable()) continue;
@@ -712,12 +530,12 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
-    private static void addChemicalTransferSlot(IRecipeLayoutBuilder builder, JeiDisplayEntry entry) {
+    private static void addChemicalTransferSlot(IRecipeLayoutBuilder builder, JeiDisplayEntry entry, long amount) {
         IRecipeSlotBuilder slot = entry.role() == RecipeIngredientRole.INPUT
                 ? builder.addInputSlot(-1000, -1000)
                 : builder.addOutputSlot(-1000, -1000);
         for (ChemicalStack chemical : actualChemicalStacks(entry.ingredient())) {
-            slot.addIngredient(MekanismJEI.TYPE_CHEMICAL, chemical.copyWithAmount(entry.count()));
+            slot.addIngredient(MekanismJEI.TYPE_CHEMICAL, chemical.copyWithAmount(amount));
         }
     }
 
@@ -747,7 +565,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             MachineRecipeLayout.EntryPlan entry, boolean input) {
         if (input) {
             MachineRecipeDisplay.ItemInputDisplay item = recipe.itemInputs().get(entry.index());
-            String overlayText = inputOverlayText(item.consumeChance(), selectedLanguage());
+            String overlayText = inputOverlayText(item.consumeChance());
             setItemOverlay(jeiSlot, overlayText, itemQuantityText(item.count()));
             jeiSlot.addRichTooltipCallback((view, tooltip) -> appendInputTooltip(tooltip, item));
             List<ItemStack> stacks = item.stacks().stream().map(MachineRecipeCategory::jeiItemStack).toList();
@@ -790,7 +608,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         if (input) {
             MachineRecipeDisplay.FluidInputDisplay fluidDisplay = recipe.fluidInputs().get(entry.index());
             if (!(display.ingredient() instanceof FluidStack fluid) || fluid.isEmpty()) return;
-            setItemOverlay(jeiSlot, inputOverlayText(fluidDisplay.consumeChance(), selectedLanguage()),
+            setItemOverlay(jeiSlot, inputOverlayText(fluidDisplay.consumeChance()),
                     fluidQuantityText(fluidDisplay.amount()));
             jeiSlot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER)
                     .addFluidStack(fluid.getFluid(), FLUID_SLOT_CAPACITY, fluid.getComponentsPatch());
@@ -811,26 +629,20 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
-    private static String selectedLanguage() {
-        Minecraft minecraft = Minecraft.getInstance();
-        return minecraft == null || minecraft.getLanguageManager() == null
-                ? "en_us" : minecraft.getLanguageManager().getSelected();
-    }
-
     private static void setItemOverlay(IRecipeSlotBuilder jeiSlot, String chanceText, String quantityText) {
         if (!chanceText.isEmpty() || !quantityText.isEmpty()) {
-            jeiSlot.setOverlay(new JeiSlotOverlayDrawable(chanceText, quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+            jeiSlot.setOverlay(new SlotOverlay(chanceText, quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
         }
     }
 
     private static void setQuantityOverlay(IRecipeSlotBuilder jeiSlot, String quantityText) {
         if (!quantityText.isEmpty()) {
-            jeiSlot.setOverlay(new JeiSlotOverlayDrawable("", quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
+            jeiSlot.setOverlay(new SlotOverlay("", quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
         }
     }
 
     static String itemQuantityText(long count) {
-        return count > 1 ? ReadableNumber.formatForSlot(count, 0, "") : "";
+        return RecipeDisplayDrawing.itemQuantityText(count);
     }
 
     static long saturatedEnergyTotal(long fePerTick, int durationTicks) {
@@ -838,13 +650,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     }
 
     static String fluidQuantityText(int amount) {
-        return amount <= 10
-                ? ReadableNumber.formatForSlot(amount, 0, "mB")
-                : ReadableNumber.formatForSlot(amount, 3, "B");
+        return RecipeDisplayDrawing.fluidQuantityText(amount);
     }
 
     static String chemicalQuantityText(long amount) {
-        return ReadableNumber.formatForSlot(amount, 3, "B");
+        return RecipeDisplayDrawing.chemicalQuantityText(amount);
     }
 
     static List<Component> fluidTooltip(FluidStack fluid) {
@@ -985,4 +795,14 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         return false;
     }
 
+    /** JEI wrapper around the shared overlay renderer.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record SlotOverlay(String chanceText, String quantityText) implements IDrawable {
+        @Override public int getWidth() { return 16; }
+        @Override public int getHeight() { return 16; }
+        @Override public void draw(GuiGraphics graphics, int x, int y) {
+            RecipeDisplayDrawing.drawSlotOverlay(graphics, x, y, chanceText, quantityText);
+        }
+    }
 }

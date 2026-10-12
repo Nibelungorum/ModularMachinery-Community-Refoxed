@@ -84,6 +84,26 @@ public final class PreviewSceneRenderer {
         }
     }
 
+    /** Prepares an independently owned single-frame capture before its first draw. */
+    public void prepareSynchronously(PreviewCamera camera) {
+        assertRenderThread();
+        if (closed) throw new IllegalStateException("Cannot prepare a closed preview scene");
+        PreviewSceneCamera sceneCamera = PreviewSceneCamera.from(camera, 1, 1);
+        cancelFullCompilation();
+        fullCompilation = null;
+        fullCompilationCancelled = null;
+        long generation = requestedGeneration = compileState.requestFullRebuild();
+        lastEye = sceneCamera.eye();
+        AtomicBoolean cancelled = new AtomicBoolean();
+        var input = PreviewSceneMeshCompiler.capture(level, schema, visibility);
+        var compiled = PreviewSceneMeshCompiler.compileSynchronously(input, sceneCamera, cancelled);
+        // Reuse the async path's generation/closed guards and rejected-result disposal, inline.
+        finishFullCompilation(null, generation, sceneCamera, cancelled, compiled, null);
+        if (!compileState.hasCompleteCache() || compileState.pendingKind() == SceneCompileKind.FULL) {
+            throw new IllegalStateException("Synchronous preview compilation was not published");
+        }
+    }
+
     public void render(PreviewSceneRenderContext context, PreviewCamera camera, BlockHitResult hoverHit,
                        BlockHitResult selectedHit, boolean renderTranslucent, boolean renderBlockEntities) {
         assertRenderThread();

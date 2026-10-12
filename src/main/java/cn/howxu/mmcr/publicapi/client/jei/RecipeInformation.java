@@ -5,7 +5,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.ApiStatus;
 
-/** Localized category/recipe information, independent of JEI implementation classes.
+/** Localized category/recipe information, independent of recipe viewer implementation classes.
+ * Retains the historical JEI package name; consumed by the active JEI or EMI integration.
  * @author howxu <dev@howxu.cn>
  */
 @ApiStatus.NonExtendable

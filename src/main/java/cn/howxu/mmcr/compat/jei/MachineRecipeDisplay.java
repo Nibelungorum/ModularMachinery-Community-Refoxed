@@ -2,8 +2,8 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.api.presentation.ComponentSnapshots;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -11,27 +11,18 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
-import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
-import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
-import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.MekanismTemperatureDisplay;
 import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
-import cn.howxu.mmcr.util.ReadableNumber;
+import cn.howxu.mmcr.client.recipe.MachineRecipeData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import com.mojang.serialization.DynamicOps;
 
-import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -40,14 +31,9 @@ import mezz.jei.api.recipe.RecipeIngredientRole;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.math.BigDecimal;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.stream.Collectors;
 
@@ -74,11 +60,37 @@ public record MachineRecipeDisplay(
         List<SmartInterfaceDisplay> smartInterfaceInputs,
         List<SmartInterfaceDisplay> smartInterfaceOutputs,
         List<SmartInterfaceModifierDisplay> smartInterfaceModifiers,
-        Set<ResourceLocation> requiredHostIds
+        Set<ResourceLocation> requiredHostIds,
+        MachineRecipeData data
 ) {
 
     public MachineRecipeDisplay {
-        requiredHostIds = sortedHostIds(requiredHostIds);
+        requiredHostIds = MachineRecipeData.sortedHostIds(requiredHostIds);
+        itemInputs = List.copyOf(itemInputs);
+        itemOutputs = List.copyOf(itemOutputs);
+        fluidInputs = List.copyOf(fluidInputs);
+        chemicalInputs = List.copyOf(chemicalInputs);
+        fluidOutputs = List.copyOf(fluidOutputs);
+        energyInputs = List.copyOf(energyInputs);
+        energyOutputs = List.copyOf(energyOutputs);
+        outputs = List.copyOf(outputs);
+        smartInterfaceInputs = List.copyOf(smartInterfaceInputs);
+        smartInterfaceOutputs = List.copyOf(smartInterfaceOutputs);
+        smartInterfaceModifiers = List.copyOf(smartInterfaceModifiers);
+        data = Objects.requireNonNull(data, "data");
+    }
+
+    /** Retains the existing public constructor for integrations constructing JEI views directly. */
+    public MachineRecipeDisplay(MachineRecipe recipe, ResourceLocation recipeId, ResourceLocation recipePoolId,
+            int durationTicks, List<ItemInputDisplay> itemInputs, List<ItemOutputDisplay> itemOutputs,
+            List<FluidInputDisplay> fluidInputs, List<ChemicalInputDisplay> chemicalInputs,
+            List<FluidOutputDisplay> fluidOutputs, List<EnergyIngredient> energyInputs,
+            List<EnergyIngredient> energyOutputs, List<MachineOutput> outputs,
+            List<SmartInterfaceDisplay> smartInterfaceInputs, List<SmartInterfaceDisplay> smartInterfaceOutputs,
+            List<SmartInterfaceModifierDisplay> smartInterfaceModifiers, Set<ResourceLocation> requiredHostIds) {
+        this(recipe, recipeId, recipePoolId, durationTicks, itemInputs, itemOutputs, fluidInputs, chemicalInputs,
+                fluidOutputs, energyInputs, energyOutputs, outputs, smartInterfaceInputs, smartInterfaceOutputs,
+                smartInterfaceModifiers, requiredHostIds, MachineRecipeData.from(recipe, null));
     }
 
     public static MachineRecipeDisplay from(MachineRecipe recipe) {
@@ -86,54 +98,52 @@ public record MachineRecipeDisplay(
     }
 
     public static MachineRecipeDisplay from(MachineRecipe recipe, RegistryAccess registryAccess) {
-        DynamicOps<JsonElement> componentOps = registryAccess == null
-                ? JsonOps.INSTANCE
-                : RegistryOps.create(JsonOps.INSTANCE, registryAccess);
+        MachineRecipeData data = MachineRecipeData.from(recipe, registryAccess);
         List<ItemInputDisplay> itemInputs = new ArrayList<>();
+        List<ItemOutputDisplay> itemOutputs = new ArrayList<>();
         List<FluidInputDisplay> fluidInputs = new ArrayList<>();
+        List<FluidOutputDisplay> fluidOutputs = new ArrayList<>();
         List<ChemicalInputDisplay> chemicalInputs = new ArrayList<>();
+        List<MachineOutput> outputs = new ArrayList<>();
         List<EnergyIngredient> energyInputs = new ArrayList<>();
         List<EnergyIngredient> energyOutputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceInputs = new ArrayList<>();
         List<SmartInterfaceDisplay> smartInterfaceOutputs = new ArrayList<>();
-        List<SmartInterfaceModifierDisplay> smartInterfaceModifiers = List.of();
-        List<MachineRequirement> requirements = recipe.runtimeRequirements();
-        for (var requirement : requirements) {
-            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.INPUT) {
-                DataComponentPredicateSet components = item.components();
-                List<ItemStack> baseStacks = safeItems(item.item())
-                        .map(stack -> new ItemStack(stack.getItem(), item.count()))
-                        .toList();
-                itemInputs.add(new ItemInputDisplay(item.item(), baseStacks, item.count(), item.consumeChance(), components, componentOps));
-            } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.INPUT) {
-                fluidInputs.add(new FluidInputDisplay(fluid.fluid(), fluid.amount(), fluid.consumeChance()));
-            } else if (requirement instanceof LoadedChemicalRequirement chemical && chemical.io() == RecipeModifier.IOType.INPUT) {
-                chemicalInputs.add(new ChemicalInputDisplay(chemical.ingredient(), chemical.ingredient().amount(), chemical.consumeChance()));
-            } else if (requirement instanceof EnergyRequirement energy) {
+        for (var entry : data.entries()) {
+            MachineRequirement requirement = entry.requirement();
+            boolean input = entry.io() == IOType.INPUT;
+            if (requirement instanceof ItemRequirement item) {
+                if (input) itemInputs.add(new ItemInputDisplay(item.item(), entry.items(), item.count(),
+                        entry.chance(), entry.components(), data.componentOps()));
+                else {
+                    ItemStack stack = entry.items().getFirst();
+                    itemOutputs.add(new ItemOutputDisplay(stack, entry.chance()));
+                    outputs.add(new MachineOutput.ItemOutput(stack, entry.chance()));
+                }
+            } else if (requirement instanceof FluidRequirement fluid) {
+                if (input) fluidInputs.add(new FluidInputDisplay(fluid.fluid(), fluid.amount(), entry.chance()));
+                else {
+                    FluidStack stack = entry.fluids().getFirst();
+                    fluidOutputs.add(new FluidOutputDisplay(stack, entry.chance()));
+                    outputs.add(new MachineOutput.FluidOutput(stack, entry.chance()));
+                }
+            } else if (requirement instanceof LoadedChemicalRequirement chemical && input) {
+                chemicalInputs.add(new ChemicalInputDisplay(chemical.ingredient(), entry.amount(), entry.chance()));
+            }
+        }
+        for (MachineRequirement requirement : data.requirements()) {
+            if (requirement instanceof EnergyRequirement energy) {
                 EnergyIngredient ingredient = new EnergyIngredient(energy.fePerTick(), energy.io() == RecipeModifier.IOType.INPUT);
                 if (ingredient.input()) energyInputs.add(ingredient);
                 else energyOutputs.add(ingredient);
-            } else if (requirement instanceof SmartInterfaceRequirement smartInterface
-                    && smartInterface.io() == RecipeModifier.IOType.INPUT) {
-                smartInterfaceDisplay(smartInterface).ifPresent(smartInterfaceInputs::add);
-            }
-        }
-
-        List<MachineOutput> outputs = new ArrayList<>();
-        List<ItemOutputDisplay> itemOutputs = new ArrayList<>();
-        List<FluidOutputDisplay> fluidOutputs = new ArrayList<>();
-        for (MachineRequirement requirement : requirements) {
-            if (requirement instanceof ItemRequirement item && item.io() == RecipeModifier.IOType.OUTPUT) {
-                ItemStack stack = item.stack(componentOps);
-                itemOutputs.add(new ItemOutputDisplay(stack, item.chance()));
-                outputs.add(new MachineOutput.ItemOutput(stack, item.chance()));
-            } else if (requirement instanceof FluidRequirement fluid && fluid.io() == RecipeModifier.IOType.OUTPUT) {
-                FluidStack stack = fluid.stack().copy();
-                fluidOutputs.add(new FluidOutputDisplay(stack, fluid.chance()));
-                outputs.add(new MachineOutput.FluidOutput(stack, fluid.chance()));
-            } else if (requirement instanceof SmartInterfaceRequirement smartInterface
-                    && smartInterface.io() == RecipeModifier.IOType.OUTPUT) {
-                smartInterfaceDisplay(smartInterface).ifPresent(smartInterfaceOutputs::add);
+            } else if (requirement instanceof SmartInterfaceRequirement smart) {
+                var row = MachineRecipeData.smartInterfaceMetadata(smart);
+                SmartInterfaceDisplay display = new SmartInterfaceDisplay(
+                        Component.translatable("mmcr.smart_interface.type." + smart.interfaceType()),
+                        MachineRecipeData.smartInterfaceValue(smart.minValue(), smart.maxValue()),
+                        smart.io() == IOType.INPUT, row.tooltip().getFirst());
+                if (display.input()) smartInterfaceInputs.add(display);
+                else smartInterfaceOutputs.add(display);
             }
         }
         return new MachineRecipeDisplay(
@@ -151,24 +161,10 @@ public record MachineRecipeDisplay(
                 List.copyOf(outputs),
                 List.copyOf(smartInterfaceInputs),
                 List.copyOf(smartInterfaceOutputs),
-                List.copyOf(smartInterfaceModifiers),
-                recipe.requiredHostIds()
+                List.of(),
+                data.requiredHostIds(),
+                data
         );
-    }
-
-    private static Set<ResourceLocation> sortedHostIds(Set<ResourceLocation> ids) {
-        if (ids == null || ids.isEmpty()) return Set.of();
-        return ids.stream()
-                .sorted(Comparator.comparing(ResourceLocation::toString))
-                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), Collections::unmodifiableSet));
-    }
-
-    private static Stream<ItemStack> safeItems(Ingredient ingredient) {
-        try {
-            return Stream.of(ingredient.getItems());
-        } catch (UnsupportedOperationException ignored) {
-            return Stream.empty();
-        }
     }
 
     public List<Component> tooltips() {
@@ -181,21 +177,11 @@ public record MachineRecipeDisplay(
     }
 
     public OptionalDouble minimumTemperature() {
-        return recipe.runtimeRequirements().stream()
-                .filter(LoadedHeatRequirement.class::isInstance)
-                .map(LoadedHeatRequirement.class::cast)
-                .filter(requirement -> requirement.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE)
-                .mapToDouble(requirement -> requirement.heat().value())
-                .findFirst();
+        return data.minimumTemperature();
     }
 
     public OptionalDouble outputHeat() {
-        return recipe.runtimeRequirements().stream()
-                .filter(LoadedHeatRequirement.class::isInstance)
-                .map(LoadedHeatRequirement.class::cast)
-                .filter(requirement -> requirement.heat().kind() == HeatRequirement.Kind.OUTPUT_HEAT)
-                .mapToDouble(requirement -> requirement.heat().value())
-                .findFirst();
+        return data.outputHeat();
     }
 
     public List<StressDisplay> stressInputs() { return stressDisplays(IOType.INPUT); }
@@ -203,7 +189,7 @@ public record MachineRecipeDisplay(
     public List<StressDisplay> stressOutputs() { return stressDisplays(IOType.OUTPUT); }
 
     private List<StressDisplay> stressDisplays(IOType io) {
-        return recipe.runtimeRequirements().stream()
+        return data.requirements().stream()
                 .filter(StressRequirement.class::isInstance)
                 .map(StressRequirement.class::cast)
                 .filter(requirement -> requirement.io() == io)
@@ -218,22 +204,12 @@ public record MachineRecipeDisplay(
     public record StressDisplay(double baseStress, double minRpm, double rpm, List<String> tags) {
         public StressDisplay { tags = List.copyOf(tags); }
 
-        private String stressText(boolean input) {
-            return BigDecimal.valueOf(input ? minRpm : Math.abs(rpm))
-                    .multiply(BigDecimal.valueOf(baseStress)).stripTrailingZeros().toPlainString();
-        }
-
         public Component label(boolean input) {
-            return Component.translatable(input ? "jei.mmcr.machine_recipe.stress_in"
-                    : "jei.mmcr.machine_recipe.stress_out", stressText(input));
+            return MachineRecipeData.stressMetadata(baseStress, minRpm, rpm, input).text();
         }
 
         public List<Component> tooltip(boolean input) {
-            Component formula = Component.translatable("jei.mmcr.machine_recipe.stress_formula",
-                    BigDecimal.valueOf(input ? minRpm : rpm).stripTrailingZeros().toPlainString(),
-                    BigDecimal.valueOf(baseStress).stripTrailingZeros().toPlainString(), stressText(input));
-            return input ? List.of(formula, Component.translatable("jei.mmcr.machine_recipe.stress_minimum_note"))
-                    : List.of(formula);
+            return MachineRecipeData.stressMetadata(baseStress, minRpm, rpm, input).tooltip();
         }
     }
 
@@ -242,7 +218,7 @@ public record MachineRecipeDisplay(
     public List<AirDisplay> airOutputs() { return airDisplays(IOType.OUTPUT); }
 
     private List<AirDisplay> airDisplays(IOType io) {
-        return recipe.runtimeRequirements().stream()
+        return data.requirements().stream()
                 .filter(AirRequirement.class::isInstance)
                 .map(AirRequirement.class::cast)
                 .filter(requirement -> requirement.io() == io)
@@ -256,33 +232,21 @@ public record MachineRecipeDisplay(
     public record AirDisplay(long airPerTick, float minPressure, List<String> tags) {
         public AirDisplay { tags = List.copyOf(tags); }
 
-        private String pressureText() {
-            return new BigDecimal(Float.toString(minPressure)).stripTrailingZeros().toPlainString();
-        }
-
         public Component label(boolean input) {
-            if (!input) return Component.translatable("jei.mmcr.machine_recipe.air_out", ReadableNumber.format(airPerTick));
-            if (airPerTick == 0) return Component.translatable("jei.mmcr.machine_recipe.air_condition", pressureText());
-            return Component.translatable("jei.mmcr.machine_recipe.air_in", ReadableNumber.format(airPerTick), pressureText());
+            return MachineRecipeData.airMetadata(airPerTick, minPressure, input).text();
         }
 
         public List<Component> tooltip(boolean input) {
-            if (!input) return List.of(Component.translatable("jei.mmcr.machine_recipe.air_out.tooltip", airPerTick));
-            if (airPerTick == 0) return List.of(Component.translatable("jei.mmcr.machine_recipe.air_condition.tooltip", pressureText()));
-            return List.of(Component.translatable("jei.mmcr.machine_recipe.air_in.tooltip", airPerTick, pressureText()));
+            return MachineRecipeData.airMetadata(airPerTick, minPressure, input).tooltip();
         }
     }
 
     public static Component minimumTemperatureLabel(double kelvin) {
-        var unit = MekanismTemperatureDisplay.configuredUnit();
-        return Component.translatable("jei.mmcr.machine_recipe.mekanism_temperature",
-                MekanismTemperatureDisplay.fromKelvin(kelvin, unit), MekanismTemperatureDisplay.symbol(unit));
+        return MachineRecipeData.temperatureLabel(kelvin, true);
     }
 
     public static Component outputHeatLabel(double kelvin) {
-        var unit = MekanismTemperatureDisplay.configuredUnit();
-        return Component.translatable("jei.mmcr.machine_recipe.heat_output",
-                MekanismTemperatureDisplay.fromKelvin(kelvin, unit), MekanismTemperatureDisplay.symbol(unit));
+        return MachineRecipeData.temperatureLabel(kelvin, false);
     }
 
     /**
@@ -291,74 +255,28 @@ public record MachineRecipeDisplay(
      * cannot prevent its machine category from loading.
      */
     public List<JeiDisplayEntry> entries() {
-        return recipe.runtimeRequirements().stream()
-                .filter(requirement -> !(requirement instanceof EnergyRequirement)
-                        && !(requirement instanceof LoadedHeatRequirement)
-                        && !(requirement instanceof SmartInterfaceRequirement)
-                        && !(requirement instanceof LevelRequirement)
-                        && !(requirement instanceof StageRequirement)
-                        && !(requirement instanceof StressRequirement)
-                        && !(requirement instanceof AirRequirement))
-                .map(requirement -> new RecipeIoEntry(
-                        requirement.io() == RecipeModifier.IOType.INPUT
+        return data.entries().stream()
+                .map(entry -> new RecipeIoEntry(
+                        entry.io() == IOType.INPUT
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,
-                        requirement.type().id(), requirement, requirementAmount(requirement), requirementChance(requirement)))
+                        entry.typeId(), entry.requirement(), entry.amount(), entry.chance()))
                 .flatMap(entry -> JeiIngredientAdapterRegistry.display(entry)
                         .map(Stream::of)
                         .orElseGet(() -> Stream.of(JeiIngredientAdapterRegistry.textEntry(entry))))
                 .toList();
     }
 
-    private static long requirementAmount(MachineRequirement requirement) {
-        if (requirement instanceof ItemRequirement item) {
-            return item.io() == RecipeModifier.IOType.INPUT ? item.count() : item.stack().getCount();
-        }
-        if (requirement instanceof FluidRequirement fluid) {
-            return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
-        }
-        if (requirement instanceof EnergyRequirement energy) return energy.fePerTick();
-        if (requirement instanceof LoadedChemicalRequirement chemical) return chemical.ingredient().amount();
-        if (requirement instanceof SourceRequirement source) return source.amount();
-        if (requirement instanceof ManaRequirement mana) return mana.amount();
-        return 1L;
-    }
-
-    private static float requirementChance(MachineRequirement requirement) {
-        if (requirement instanceof ItemRequirement item) {
-            return item.io() == RecipeModifier.IOType.INPUT ? item.consumeChance() : item.chance();
-        }
-        if (requirement instanceof FluidRequirement fluid) {
-            return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.consumeChance() : fluid.chance();
-        }
-        if (requirement instanceof LoadedChemicalRequirement chemical) {
-            return chemical.io() == RecipeModifier.IOType.INPUT ? chemical.consumeChance() : chemical.chance();
-        }
-        return 1F;
-    }
-
-    private static Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceRequirement requirement) {
-        Component displayType = Component.translatable("mmcr.smart_interface.type." + requirement.interfaceType());
-        String value = valueText(requirement.minValue(), requirement.maxValue());
-        boolean input = requirement.io() == RecipeModifier.IOType.INPUT;
-        Component tooltip = Component.translatable(input
-                ? "jei.mmcr.smart_interface.requirement.input"
-                : "jei.mmcr.smart_interface.requirement.output", displayType, value);
-        return Optional.of(new SmartInterfaceDisplay(displayType, value, input, tooltip));
-    }
-
-    private static String valueText(float minValue, float maxValue) {
-        String min = formatValue(minValue);
-        if (Float.compare(minValue, maxValue) == 0) return min;
-        return "[" + min + ", " + formatValue(maxValue) + "]";
-    }
-
-    private static String formatValue(float value) {
-        return Float.toString(value);
-    }
-
     public record SmartInterfaceDisplay(Component type, String value, boolean input, Component tooltip) {
+        public SmartInterfaceDisplay {
+            type = ComponentSnapshots.copy(type);
+            tooltip = ComponentSnapshots.copy(tooltip);
+        }
+
+        @Override public Component type() { return ComponentSnapshots.copy(type); }
+        @Override public Component tooltip() { return ComponentSnapshots.copy(tooltip); }
+
         public Component label() {
-            return Component.translatable("mmcr.smart_interface.value", type, value);
+            return Component.translatable("mmcr.smart_interface.value", type(), value);
         }
     }
 
@@ -456,8 +374,12 @@ public record MachineRecipeDisplay(
         }
 
         public boolean hasUnexportedComponentConstraints() {
-            return !components.isEmpty() && components.exactPatch().isEmpty();
+            List<ItemStack> candidates = stacks();
+            return !components.isEmpty() && (candidates.isEmpty() || components.hasNonExactValues()
+                    || candidates.stream().anyMatch(stack -> !components.matches(stack, componentOps)));
         }
+
+        @Override public List<ItemStack> baseStacks() { return baseStacks.stream().map(ItemStack::copy).toList(); }
     }
 
     /**
@@ -477,6 +399,8 @@ public record MachineRecipeDisplay(
             stack = stack == null ? ItemStack.EMPTY : stack.copy();
             chance = MachineOutput.clampChance(chance);
         }
+
+        @Override public ItemStack stack() { return stack.copy(); }
     }
 
     /**
@@ -487,6 +411,8 @@ public record MachineRecipeDisplay(
             stack = stack == null ? FluidStack.EMPTY : stack.copy();
             chance = MachineOutput.clampChance(chance);
         }
+
+        @Override public FluidStack stack() { return stack.copy(); }
     }
 
     static String describeStack(ItemStack stack) {

@@ -5,6 +5,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
 
 /** MMCR-provided workstation association; stack getters return copies.
+ * Retains the historical JEI package name; consumed by the active JEI or EMI integration.
  * @author howxu <dev@howxu.cn>
  */
 @ApiStatus.NonExtendable
@@ -25,7 +26,7 @@ public interface Workstation {
         ResourceLocation recipePoolId();
         ItemStack workstation();
     }
-    /** A machine controller associated with a JEI recipe type ID.
+    /** A machine controller associated with a recipe type ID, resolved by the active JEI or EMI integration.
      * @author howxu <dev@howxu.cn>
      */
     @ApiStatus.NonExtendable

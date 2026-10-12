@@ -4,6 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.RecipeInformation;
 import cn.howxu.mmcr.api.recipe.RecipeInformation.Target;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
+import cn.howxu.mmcr.internal.client.RecipeViewerRegistration;
+import cn.howxu.mmcr.internal.sync.RecipeViewerBackend;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -54,7 +56,7 @@ class RecipeInformationEventJSTest {
     }
 
     @Test
-    void missing_jei_warns_once_and_ignores_all_registrations() {
+    void missing_viewers_warn_once_and_ignore_all_registrations() {
         List<String> warnings = new ArrayList<>();
         var event = new RecipeInformationEventJS(false, warnings::add);
 
@@ -62,12 +64,13 @@ class RecipeInformationEventJSTest {
         event.addRecipeInfo(null, null, (Object[]) null);
 
         assertThat(event.entries()).isEmpty();
-        assertThat(warnings).singleElement().asString().contains("JEI is not loaded");
+        assertThat(warnings).singleElement().asString().contains("Neither JEI nor EMI is loaded");
     }
 
     @Test
     void successful_client_reload_replaces_previous_snapshot() {
         var manager = new Object();
+        long previousVersion = RecipeViewerRegistration.informationVersion();
         Plugin.beginClientReload(manager, 0);
 
         Plugin.completeClientReloadForTesting(manager, true,
@@ -75,6 +78,7 @@ class RecipeInformationEventJSTest {
 
         assertThat(RecipeInformationRegistry.componentsFor(MMCR.id("pool"), MMCR.id("new_recipe")))
                 .containsExactly(Component.translatable("jei.example.new"));
+        assertThat(RecipeViewerRegistration.informationVersion()).isEqualTo(previousVersion + 1);
     }
 
     @Test
@@ -91,9 +95,11 @@ class RecipeInformationEventJSTest {
 
     @Test
     void failed_client_reload_retains_previous_snapshot() {
-        RecipeInformationRegistry.replaceKubeJS(List.of(
-                RecipeInformation.recipe(MMCR.id("old_recipe"), "jei.example.old")));
         var manager = new Object();
+        Plugin.beginClientReload(manager, 0);
+        Plugin.completeClientReloadForTesting(manager, true,
+                event -> event.addRecipeInfo("mmcr:old_recipe", "jei.example.old"), () -> 0);
+        long previousVersion = RecipeViewerRegistration.informationVersion();
         AtomicInteger errors = new AtomicInteger();
         Plugin.beginClientReload(manager, errors.get());
 
@@ -105,5 +111,50 @@ class RecipeInformationEventJSTest {
         assertThat(RecipeInformationRegistry.componentsFor(MMCR.id("pool"), MMCR.id("old_recipe")))
                 .containsExactly(Component.translatable("jei.example.old"));
         assertThat(RecipeInformationRegistry.componentsFor(MMCR.id("pool"), MMCR.id("new_recipe"))).isEmpty();
+        assertThat(RecipeViewerRegistration.informationVersion()).isEqualTo(previousVersion);
+    }
+
+    @Test
+    void emi_only_backend_enters_available_client_reload_branch() {
+        var manager = new Object();
+        Plugin.beginClientReload(manager, 0);
+        Plugin.completeClientReloadForTesting(manager,
+                RecipeViewerBackend.select(false, true) != RecipeViewerBackend.NONE,
+                event -> event.addRecipeInfo("mmcr:emi_recipe", "jei.example.emi"), () -> 0);
+
+        assertThat(RecipeInformationRegistry.componentsFor(MMCR.id("pool"), MMCR.id("emi_recipe")))
+                .containsExactly(Component.translatable("jei.example.emi"));
+    }
+
+    @Test
+    void no_viewer_preserves_previous_information_and_version() {
+        var manager = new Object();
+        RecipeInformationRegistry.replaceKubeJS(List.of(RecipeInformation.recipe(MMCR.id("old_recipe"), "jei.example.old")));
+        long previousVersion = RecipeViewerRegistration.informationVersion();
+        Plugin.beginClientReload(manager, 0);
+        Plugin.completeClientReloadForTesting(manager,
+                RecipeViewerBackend.select(false, false) != RecipeViewerBackend.NONE,
+                event -> event.addRecipeInfo("mmcr:new_recipe", "jei.example.new"), () -> 0);
+
+        assertThat(RecipeInformationRegistry.componentsFor(MMCR.id("pool"), MMCR.id("old_recipe")))
+                .containsExactly(Component.translatable("jei.example.old"));
+        assertThat(RecipeInformationRegistry.componentsFor(MMCR.id("pool"), MMCR.id("new_recipe"))).isEmpty();
+        assertThat(RecipeViewerRegistration.informationVersion()).isEqualTo(previousVersion);
+    }
+
+    @Test
+    void throwing_publisher_preserves_previous_information_and_version() {
+        var manager = new Object();
+        RecipeInformationRegistry.replaceKubeJS(List.of(RecipeInformation.recipe(MMCR.id("old_recipe"), "jei.example.old")));
+        long previousVersion = RecipeViewerRegistration.informationVersion();
+        Plugin.beginClientReload(manager, 0);
+
+        assertThatThrownBy(() -> Plugin.completeClientReloadForTesting(manager, true, event -> {
+            event.addRecipeInfo("mmcr:new_recipe", "jei.example.new");
+            throw new IllegalStateException("publisher failure");
+        }, () -> 0)).isInstanceOf(IllegalStateException.class);
+        assertThat(RecipeInformationRegistry.componentsFor(MMCR.id("pool"), MMCR.id("old_recipe")))
+                .containsExactly(Component.translatable("jei.example.old"));
+        assertThat(RecipeViewerRegistration.informationVersion()).isEqualTo(previousVersion);
     }
 }

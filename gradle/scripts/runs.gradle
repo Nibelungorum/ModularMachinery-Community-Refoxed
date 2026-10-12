@@ -21,7 +21,9 @@ dependencies {
     // JECharacters
     clientMods("curse.maven:${jec_id}:${jec_version}")
     // AE2 x JEI integration
-    clientMods("curse.maven:${ae2xjei_id}:${ae2xjei_version}")
+    if (recipeViewerJei) {
+        clientMods("curse.maven:${ae2xjei_id}:${ae2xjei_version}")
+    }
     // 可视化性能监测
     clientMods("maven.modrinth:${kotlinFF_id}:${kotlinFF_version}")
     clientMods("maven.modrinth:${ob_id}:${ob_version}")

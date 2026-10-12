@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
+import cn.howxu.mmcr.client.recipe.RecipeSlotLayout;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.drawable.IDrawableAnimated;
 import mezz.jei.api.gui.widgets.IRecipeExtrasBuilder;

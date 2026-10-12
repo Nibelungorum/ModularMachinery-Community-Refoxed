@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client.preview.scene;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.preview.PreviewLevel;
+import cn.howxu.mmcr.client.preview.PreviewCamera;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -10,14 +11,17 @@ import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.joml.Vector3f;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies the render region used by the preview mesh compiler.
@@ -65,6 +69,29 @@ class PreviewSceneMeshCompilerTest {
 
         assertThat(future).isNotDone();
         assertThat(pendingWorker.get()).isNotNull();
+    }
+
+    @Test
+    void synchronous_cpu_result_is_available_without_a_worker_or_render_callback_turn() {
+        PreviewCamera camera = new PreviewCamera();
+        camera.reset(new Vector3f(), 4);
+        var input = new PreviewSceneMeshCompiler.CompilationInput(List.of(), PreviewVisibility.ALL, null, null);
+        try (var compiled = PreviewSceneMeshCompiler.compileSynchronously(input,
+                PreviewSceneCamera.from(camera, 1, 1), new AtomicBoolean())) {
+            assertThat(compiled).isNotNull();
+            assertThat(compiled.parts()).hasSize(1);
+            assertThat(compiled.blockEntities()).isEmpty();
+        }
+    }
+
+    @Test
+    void synchronous_cpu_cancellation_fails_before_any_result_can_be_published() {
+        PreviewCamera camera = new PreviewCamera();
+        camera.reset(new Vector3f(), 4);
+        var input = new PreviewSceneMeshCompiler.CompilationInput(List.of(), PreviewVisibility.ALL, null, null);
+        assertThatThrownBy(() -> PreviewSceneMeshCompiler.compileSynchronously(input,
+                PreviewSceneCamera.from(camera, 1, 1), new AtomicBoolean(true)))
+                .isInstanceOf(CompletionException.class);
     }
 
     @Test

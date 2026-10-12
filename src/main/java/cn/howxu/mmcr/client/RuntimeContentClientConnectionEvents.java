@@ -2,6 +2,7 @@ package cn.howxu.mmcr.client;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.sync.ClientRuntimeSnapshotBridge;
+import cn.howxu.mmcr.internal.sync.RecipeViewerReloadBridge;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -20,10 +21,12 @@ public final class RuntimeContentClientConnectionEvents {
     @SubscribeEvent
     public static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
         ClientRuntimeSnapshotBridge.resetForConnection();
+        RecipeViewerReloadBridge.resetForConnection();
     }
 
     @SubscribeEvent
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         ClientRuntimeSnapshotBridge.resetForConnection();
+        RecipeViewerReloadBridge.resetForConnection();
     }
 }

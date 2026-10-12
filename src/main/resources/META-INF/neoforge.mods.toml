@@ -26,6 +26,10 @@ config="mixins/extras/mmcr.jei.mixins.json"
 requiredMods=["jei"]
 
 [[mixins]]
+config="mixins/extras/mmcr.emi.mixins.json"
+requiredMods=["emi"]
+
+[[mixins]]
 config="mixins/extras/mmcr.kubejs.mixins.json"
 requiredMods=["kubejs"]
 
@@ -105,6 +109,13 @@ side="BOTH"
 modId="athena"
 type="optional"
 versionRange="[4.0.2,)"
+ordering="AFTER"
+side="CLIENT"
+
+[[dependencies.${mod_id}]]
+modId="emi"
+type="optional"
+versionRange="[1.1.24,)"
 ordering="AFTER"
 side="CLIENT"
 

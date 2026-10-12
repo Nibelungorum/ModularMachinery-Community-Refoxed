@@ -328,7 +328,8 @@ class PneumaticAirDisplayTest {
             assertThat(layout.inputs().slots()).hasSize(15);
             assertThat(layout.outputs().slots()).hasSize(15);
             assertThat(layout.durationTextY()).isEqualTo(110);
-            assertThat(layout.metadataPages()).isEmpty();
+            if (scale >= 4) assertThat(layout.metadataPages()).hasSizeGreaterThan(1);
+            else assertThat(layout.metadataPages()).isEmpty();
         }
     }
 
@@ -344,7 +345,8 @@ class PneumaticAirDisplayTest {
             assertThat(layout.inputs().slots()).hasSize(50);
             assertThat(layout.durationTextY()).isEqualTo(138);
             assertMandatoryRowsInside(layout, display);
-            assertThat(layout.metadataPages()).isEmpty();
+            if (scale >= 3) assertThat(layout.metadataPages()).hasSizeGreaterThan(1);
+            else assertThat(layout.metadataPages()).isEmpty();
         }
     }
 

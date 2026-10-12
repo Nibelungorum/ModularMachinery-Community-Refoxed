@@ -5,7 +5,7 @@ import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
 import java.util.List;
 
 /**
- * Startup-script workstation registrations retained until JEI initializes.
+ * Startup-script workstations and the last atomically committed viewer cycle.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -21,5 +21,9 @@ public final class JeiWorkstationRegistry {
 
     public static List<JeiWorkstationRegistration> kubeJSEntries() {
         return kubeJSEntries;
+    }
+
+    public static List<JeiWorkstationRegistration> publicEntries() {
+        return RecipeInformationRegistry.publicSnapshot().workstations();
     }
 }

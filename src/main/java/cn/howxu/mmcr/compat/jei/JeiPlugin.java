@@ -5,14 +5,11 @@ import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredient;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredientHelper;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiIngredientRenderer;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.MachineDefinitions;
-import cn.howxu.mmcr.publicapi.event.RegisterJeiRecipeInformationEvent;
-import cn.howxu.mmcr.publicapi.event.RegisterJeiWorkstationsEvent;
-import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
 import cn.howxu.mmcr.client.gui.BlueprintScreen;
-import cn.howxu.mmcr.internal.client.JeiWorkstationRegistry;
-import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
+import cn.howxu.mmcr.internal.client.RecipeViewerRegistration;
+import cn.howxu.mmcr.internal.client.RecipeViewerSnapshot;
+import cn.howxu.mmcr.internal.sync.RecipeViewerBackend;
 import cn.howxu.mmcr.registry.ModBlocks;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.recipe.RecipeType;
@@ -26,14 +23,13 @@ import mezz.jei.api.runtime.IJeiRuntime;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.common.NeoForge;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -43,6 +39,16 @@ import java.util.stream.Collectors;
  */
 @mezz.jei.api.JeiPlugin
 public final class JeiPlugin implements IModPlugin {
+    private final Supplier<RecipeViewerSnapshot> capture;
+    private RecipeViewerSnapshot registrationSnapshot;
+
+    public JeiPlugin() {
+        this(() -> RecipeViewerRegistration.captureAsync().join());
+    }
+
+    JeiPlugin(Supplier<RecipeViewerSnapshot> capture) {
+        this.capture = capture;
+    }
 
     @Override
     public ResourceLocation getPluginUid() {
@@ -51,21 +57,20 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerIngredients(IModIngredientRegistration registration) {
+        if (RecipeViewerBackend.current() == RecipeViewerBackend.EMI) return;
         registration.register(SourceJeiIngredient.TYPE, List.of(), new SourceJeiIngredientHelper(),
                 new SourceJeiIngredientRenderer(), SourceJeiIngredient.CODEC);
     }
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
-        RegisterJeiRecipeInformationEvent event = new RegisterJeiRecipeInformationEvent();
-        NeoForge.EVENT_BUS.post(event);
-        ClientRegistrationAdapters.freeze(event);
-        RecipeInformationRegistry.replacePublic(ClientRegistrationAdapters.coreEntries(event));
+        if (RecipeViewerBackend.current() == RecipeViewerBackend.EMI) return;
+        registrationSnapshot = capture.get();
         JeiIngredientAdapterRegistry.registerBuiltIns();
         var jeiHelpers = registration.getJeiHelpers();
         var guiHelper = jeiHelpers.getGuiHelper();
         registration.addRecipeCategories(new MachineStructureCategory(guiHelper, jeiHelpers.getIngredientManager()));
-        Map<ResourceLocation, List<ResourceLocation>> machinesByPool = machineIdsByPool();
+        Map<ResourceLocation, List<ResourceLocation>> machinesByPool = registrationSnapshot.machinesByPool();
         JeiRuntimeReloader.markRegisteredRecipePoolCategories(machinesByPool.keySet());
         machinesByPool.forEach((poolId, machineIds) -> registration.addRecipeCategories(
                 new MachineRecipeCategory(guiHelper, poolId, machineIds.getFirst())));
@@ -73,6 +78,7 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void onRuntimeAvailable(IJeiRuntime runtime) {
+        if (RecipeViewerBackend.current() == RecipeViewerBackend.EMI) return;
         JeiRuntimeReloader.setRuntime(runtime);
     }
 
@@ -83,6 +89,7 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
+        if (RecipeViewerBackend.current() == RecipeViewerBackend.EMI) return;
         List<MachineStructureDisplay> structures = MachineRegistry.getAll().values().stream()
                 .map(MachineStructureDisplay::from)
                 .toList();
@@ -107,18 +114,12 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        Map<ResourceLocation, List<ResourceLocation>> machinesByPool = machineIdsByPool();
+        if (RecipeViewerBackend.current() == RecipeViewerBackend.EMI) return;
+        if (registrationSnapshot == null) registrationSnapshot = capture.get();
+        Map<ResourceLocation, List<ResourceLocation>> machinesByPool = registrationSnapshot.machinesByPool();
         Map<RecipeType<?>, List<ItemStack>> workstations = new LinkedHashMap<>();
-        machinesByPool.forEach((poolId, machineIds) -> machineIds.forEach(machineId ->
-                addWorkstation(workstations, JeiMachineRecipeTypes.forPool(poolId), controllerFor(machineId))));
 
-        RegisterJeiWorkstationsEvent event = new RegisterJeiWorkstationsEvent();
-        NeoForge.EVENT_BUS.post(event);
-        ClientRegistrationAdapters.freeze(event);
-        List<JeiWorkstationRegistration> manualEntries = new ArrayList<>(ClientRegistrationAdapters.coreEntries(event));
-        manualEntries.addAll(JeiWorkstationRegistry.kubeJSEntries());
-
-        manualEntries.forEach(entry -> {
+        registrationSnapshot.workstations().forEach(entry -> {
             switch (entry) {
                 case JeiWorkstationRegistration.RecipePoolItem poolItem -> {
                     if (!machinesByPool.containsKey(poolItem.recipePoolId())) {
@@ -164,6 +165,7 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerRecipeTransferHandlers(IRecipeTransferRegistration registration) {
+        if (RecipeViewerBackend.current() == RecipeViewerBackend.EMI) return;
         var helper = registration.getTransferHelper();
         var ingredientManager = registration.getJeiHelpers().getIngredientManager();
         machineIdsByPool().keySet().forEach(poolId -> {
@@ -174,22 +176,16 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+        if (RecipeViewerBackend.current() == RecipeViewerBackend.EMI) return;
         registration.addGuiScreenHandler(BlueprintScreen.class, new BlueprintScreenJeiHandler());
     }
 
     static Set<ResourceLocation> machineIds() {
-        Set<ResourceLocation> ids = new LinkedHashSet<>(MachineRegistry.getAll().keySet());
-        ids.addAll(MachineDefinitions.effectiveSnapshot().keySet());
-        return ids;
+        return RecipeViewerRegistration.machineIds();
     }
 
     static Map<ResourceLocation, List<ResourceLocation>> machineIdsByPool() {
-        Map<ResourceLocation, List<ResourceLocation>> machinesByPool = new LinkedHashMap<>();
-        machineIds().stream().sorted().forEach(machineId ->
-                MachineRegistry.recipePoolsForMachine(machineId).forEach(poolId ->
-                        machinesByPool.computeIfAbsent(poolId, ignored -> new java.util.ArrayList<>()).add(machineId)));
-        machinesByPool.replaceAll((ignored, machineIds) -> List.copyOf(machineIds));
-        return machinesByPool;
+        return RecipeViewerRegistration.machineIdsByPool();
     }
 
     private static ItemStack controllerFor(ResourceLocation machineId) {

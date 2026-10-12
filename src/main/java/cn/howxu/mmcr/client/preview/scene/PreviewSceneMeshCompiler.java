@@ -88,6 +88,12 @@ public final class PreviewSceneMeshCompiler {
         return compileAsync(input, camera, cancelled, Util.backgroundExecutor());
     }
 
+    /** Runs CPU compilation inline; no render-thread installation callback or queued worker is awaited. */
+    static CompiledScene compileSynchronously(CompilationInput input, PreviewSceneCamera camera,
+                                            AtomicBoolean cancelled) {
+        return compileAsync(input, camera, cancelled, Runnable::run).getNow(null);
+    }
+
     static CompletableFuture<CompiledScene> compileAsync(CompilationInput input, PreviewSceneCamera camera,
                                                           AtomicBoolean cancelled, Executor executor) {
         int workerCount = workerCount(input.entries().size());

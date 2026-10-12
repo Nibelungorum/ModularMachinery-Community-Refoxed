@@ -47,6 +47,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.InterfaceMenuGameTest;
 import cn.howxu.mmcr.compat.patchouli.PatchouliGuideGameTest;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -78,6 +79,18 @@ public final class GameTestRegistry {
     @GameTestGenerator
     public static Collection<TestFunction> generateTests() {
         List<TestFunction> event = new ArrayList<>();
+        register(event, "recipe_display_components", 20, RecipeDisplayDataGameTest::displayCopiesOutputComponents);
+        register(event, "recipe_display_registry_exact", 20, RecipeDisplayDataGameTest::displayResolvesRegistryExactComponents);
+        register(event, "recipe_display_unexported_constraints", 20, RecipeDisplayDataGameTest::displayRetainsUnexportedConstraints);
+        register(event, "recipe_display_input_patch_empty_tags", 20, RecipeDisplayDataGameTest::displayPreservesInputPatchAndEmptyTags);
+        register(event, "recipe_display_fluid_components", 20, RecipeDisplayDataGameTest::displayCopiesFluidComponentsRoundTrip);
+        if (ModList.get().isLoaded("mekanism")) {
+            register(event, "recipe_display_chemical_output", 20, RecipeDisplayDataGameTest::displayResolvesChemicalOutput);
+        }
+        register(event, "item_bus_fill_direction", 20, ItemBusFillRulesGameTest::inputFillAllowedOutputFillRejected);
+        register(event, "item_bus_fill_components_quick_move", 20, ItemBusFillRulesGameTest::componentStacksAndQuickMoveClearing);
+        register(event, "item_bus_fill_inventory_space", 20, ItemBusFillRulesGameTest::fullInventoryBlocksClearingWithoutMutation);
+        register(event, "item_bus_fill_oversized_stack", 20, ItemBusFillRulesGameTest::oversizedUnusedBusStackRejectsFillWithoutMutation);
         register(event, "running_installed_fluid_probability", 20, RunningRecipeGameTest::installedFluidProbabilityAttempts);
         register(event, "running_mixed_input_native_partial", 20, RunningRecipeGameTest::mixedInputCommitRetainsNativePaymentAfterEnergyChanges);
         register(event, "running_retained_input_removed", 20, RunningRecipeGameTest::removedRetainedInputStopsContinuousPayment);
@@ -104,6 +117,15 @@ public final class GameTestRegistry {
                     .findTestFunction(MMCR.id("registry_reflection_helper").toString())
                     .isPresent();
             helper.assertTrue(registered, "GameTestRegistry reflection helper registers the canonical test ID");
+            helper.assertTrue(helper.getBounds().contains(helper.absolutePos(new BlockPos(63, 1, 63)).getCenter())
+                            && !helper.getBounds().contains(helper.absolutePos(new BlockPos(240, 1, 1)).getCenter()),
+                    "Ordinary tests prepare compact bounds without the distant cross-chunk fixture");
+            TestFunction wide = net.minecraft.gametest.framework.GameTestRegistry
+                    .findTestFunction(MMCR.id("controller_tick_recipe_hooks").toString()).orElseThrow();
+            var wideTemplate = helper.getLevel().getStructureManager()
+                    .get(ResourceLocation.parse(wide.structureName())).orElseThrow();
+            helper.assertTrue(wideTemplate.getSize().getX() > 255,
+                    "Cross-chunk hook registration still resolves the original wide template");
             helper.succeed();
         });
         register(event, "recipe_amount_codec_limits", 20,
@@ -134,7 +156,8 @@ public final class GameTestRegistry {
                 helper -> new ControllerTickGameTest().formedControllerCanBeBroken(helper, true));
         register(event, "upgrade_bus_invalidation", 100,
                 helper -> new UpgradeBusGameTest().optionalBusesPreserveActiveRecipe(helper));
-        register(event, "controller_tick_recipe_hooks", 100,
+        // The fixture aligns its controller to X=240..255 and places casing in the next chunk.
+        register(event, "controller_tick_recipe_hooks", 100, "mmcr:empty",
                 helper -> new ControllerTickGameTest().recipeMachineHooksPublishTextAndRespectRedstone(helper));
         register(event, "controller_tick_partial_io", 100,
                 helper -> new ControllerTickGameTest().formedTickCommitsPartialOutputAndDataAtomically(helper));
@@ -582,7 +605,8 @@ public final class GameTestRegistry {
                     helper -> new FluxNetworksRecipeGameTest().prefetchAndConsumeOnce(helper));
             register(event, "fluxnetworks_recipe_restore", 100,
                     helper -> new FluxNetworksRecipeGameTest().restoreAndCancelWithoutSecondDebit(helper));
-            register(event, "fluxnetworks_cross_dimension", 100,
+            // Keep the original harness for the fixture that writes to a distant Nether position.
+            register(event, "fluxnetworks_cross_dimension", 100, "mmcr:empty",
                     helper -> new FluxNetworksDeviceGameTest().crossDimensionNativeTransfer(helper));
             register(event, "fluxnetworks_drop_configuration", 100,
                     helper -> new FluxNetworksDeviceGameTest().dropAndReplacePreserveEnergy(helper));
@@ -598,7 +622,8 @@ public final class GameTestRegistry {
                     helper -> new FluxNetworksRecipeGameTest().successfulCandidateRetractsFailedWarmup(helper));
         }
         if (ModList.get().isLoaded("extendedae_plus")) {
-            register(event, "eaep_channel_card_own_menu", 100,
+            // Dynamic profile placement extends above the template (energy cell at Y=24 or 26).
+            register(event, "eaep_channel_card_own_menu", 100, "mmcr:empty",
                     helper -> new ChannelCardMenuGameTest().channelCardsSurviveOwnMenusAndReconnect(helper));
             register(event, "eaep_mirror_sync", 200,
                     helper -> new MirrorPatternInterfaceGameTest().syncAndPersistence(helper));
@@ -893,7 +918,12 @@ public final class GameTestRegistry {
 
     private static void register(Collection<TestFunction> tests, String name, int maxTicks,
                                  Consumer<GameTestHelper> test) {
-        tests.add(new TestFunction(MMCR.MODID, MMCR.id(name).toString(), "mmcr:empty",
+        register(tests, name, maxTicks, "mmcr:empty_compact", test);
+    }
+
+    private static void register(Collection<TestFunction> tests, String name, int maxTicks,
+                                 String template, Consumer<GameTestHelper> test) {
+        tests.add(new TestFunction(MMCR.MODID, MMCR.id(name).toString(), template,
                 maxTicks, 0, true, test));
     }
 }

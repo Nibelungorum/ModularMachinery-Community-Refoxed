@@ -1,9 +1,22 @@
+def recipeViewer = providers.gradleProperty('recipe_viewer').getOrElse('both')
+if (!(recipeViewer in ['jei', 'emi', 'both', 'none'])) {
+    throw new GradleException("Invalid recipe_viewer '${recipeViewer}'; expected jei, emi, both, or none")
+}
+ext.recipeViewerJei = recipeViewer in ['jei', 'both']
+ext.recipeViewerEmi = recipeViewer in ['emi', 'both']
+
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
     // jei from maven central
-    api("mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}")
+    compileOnly("mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}")
     compileOnly("mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}")
-    runtimeOnly("mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}")
+    compileOnly("curse.maven:${emi_id}:${emi_version}")
+    if (recipeViewerJei) {
+        runtimeOnly("mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}")
+    }
+    if (recipeViewerEmi) {
+        runtimeOnly("curse.maven:${emi_id}:${emi_version}")
+    }
 
     // Jade maven central
     implementation "maven.modrinth:jade:${jade_version}"
@@ -70,7 +83,6 @@ dependencies {
     compileOnly "maven.modrinth:${pnc_id}:${pnc_version}"
     localRuntime "maven.modrinth:${pnc_id}:${pnc_version}"
 
-    implementation "curse.maven:${emi_id}:${emi_version}"
     // Exact APIs bundled by the existing Create artifact; nested jars are not on javac's classpath.
     compileOnly("com.tterrag.registrate:Registrate:MC1.21-1.3.0+62") { transitive = false }
     compileOnly("dev.engine-room.flywheel:flywheel-neoforge-1.21.1:1.0.4") { transitive = false }

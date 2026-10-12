@@ -60,6 +60,11 @@ public final class StructurePreviewWidget implements AutoCloseable {
         renderer.render(context);
     }
 
+    public void prepareSynchronously() {
+        if (closed) throw new IllegalStateException("Cannot prepare a closed preview widget");
+        renderer.prepareSynchronously(camera);
+    }
+
     /** Renders this preview inside the supplied GUI rectangle. */
     public void render(GuiGraphics graphics, int x, int y, int width, int height, float partialTick,
             int mouseX, int mouseY) {

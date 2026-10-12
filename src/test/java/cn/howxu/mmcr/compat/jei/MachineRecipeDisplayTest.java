@@ -40,6 +40,7 @@ import mekanism.api.chemical.ChemicalStack;
 import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import net.minecraft.core.Holder;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.StringSplitter;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.resources.language.LanguageManager;
 import net.minecraft.core.component.DataComponentPatch;
@@ -649,7 +650,7 @@ class MachineRecipeDisplayTest {
                 default -> Integer.toString(index - 1);
             };
             assertThat(slot.overlays).singleElement().satisfies(arguments -> {
-                assertThat(arguments[0]).isInstanceOf(JeiSlotOverlayDrawable.class)
+                assertThat(arguments[0]).isInstanceOf(IDrawable.class)
                         .extracting("chanceText", "quantityText").containsExactly(chance, quantity);
                 assertThat(arguments[1]).isEqualTo(0);
                 assertThat(arguments[2]).isEqualTo(0);
@@ -1271,10 +1272,14 @@ class MachineRecipeDisplayTest {
         Field languageManagerField = Minecraft.class.getDeclaredField("languageManager");
         languageManagerField.setAccessible(true);
         languageManagerField.set(minecraft, new LanguageManager("en_us", language -> {}));
-        // No level requirement calls font.width; setRecipe only needs a non-null method-reference receiver.
+        // Layout now measures all metadata lines; use vanilla splitting with deterministic glyph widths.
         Field fontField = Minecraft.class.getDeclaredField("font");
         fontField.setAccessible(true);
-        fontField.set(minecraft, unsafe.allocateInstance(Font.class));
+        Font font = (Font) unsafe.allocateInstance(Font.class);
+        Field splitterField = Font.class.getDeclaredField("splitter");
+        splitterField.setAccessible(true);
+        splitterField.set(font, new StringSplitter((codePoint, style) -> 3F));
+        fontField.set(minecraft, font);
         return minecraft;
     }
 

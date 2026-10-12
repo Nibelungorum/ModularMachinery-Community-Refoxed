@@ -1,14 +1,15 @@
-package cn.howxu.mmcr.compat.jei;
+package cn.howxu.mmcr.client.recipe;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
-import static cn.howxu.mmcr.compat.jei.RecipeSlotLayout.Orientation.HORIZONTAL;
-import static cn.howxu.mmcr.compat.jei.RecipeSlotLayout.Orientation.VERTICAL;
+import static cn.howxu.mmcr.client.recipe.RecipeSlotLayout.Orientation.HORIZONTAL;
+import static cn.howxu.mmcr.client.recipe.RecipeSlotLayout.Orientation.VERTICAL;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
@@ -18,6 +19,15 @@ import static org.assertj.core.groups.Tuple.tuple;
  * @author howxu <dev@howxu.cn>
  */
 class RecipeSlotLayoutTest {
+    @Test
+    void viewersShareSourceFluidChemicalItemAndFallbackOrdering() {
+        assertThat(List.of(RecipeSlotLayout.Kind.OTHER, RecipeSlotLayout.Kind.ITEM,
+                RecipeSlotLayout.Kind.SOURCE, RecipeSlotLayout.Kind.CHEMICAL, RecipeSlotLayout.Kind.FLUID)
+                .stream().sorted(Comparator.comparingInt(RecipeSlotLayout::kindOrder)).toList())
+                .containsExactly(RecipeSlotLayout.Kind.SOURCE, RecipeSlotLayout.Kind.FLUID,
+                        RecipeSlotLayout.Kind.CHEMICAL, RecipeSlotLayout.Kind.ITEM, RecipeSlotLayout.Kind.OTHER);
+    }
+
     @ParameterizedTest
     @CsvSource({
             "1,1,HORIZONTAL,3,3", "2,1,HORIZONTAL,3,3", "3,1,HORIZONTAL,3,3",

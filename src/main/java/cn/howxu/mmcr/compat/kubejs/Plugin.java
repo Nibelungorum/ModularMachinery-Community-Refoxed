@@ -8,6 +8,9 @@ import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
+import cn.howxu.mmcr.internal.client.RecipeViewerRegistration;
+import cn.howxu.mmcr.internal.sync.RecipeViewerBackend;
+import cn.howxu.mmcr.internal.sync.RecipeViewerReloadBridge;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import dev.latvian.mods.kubejs.event.EventGroupWrapper;
@@ -20,7 +23,6 @@ import dev.latvian.mods.kubejs.script.BindingRegistry;
 import dev.latvian.mods.kubejs.script.ScriptManager;
 import dev.latvian.mods.kubejs.script.ScriptType;
 import net.minecraft.server.MinecraftServer;
-import net.neoforged.fml.ModList;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -63,7 +65,7 @@ public class Plugin implements KubeJSPlugin {
             StartupContentRegistration.completeKubeJSStartupIfReady();
         }
         if (manager.scriptType == ScriptType.CLIENT) {
-            completeClientReload(manager, isJeiLoaded(), MMCREvents::postClient,
+            completeClientReload(manager, isRecipeViewerLoaded(), MMCREvents::postClient,
                     () -> manager.scriptType.console.errors.size());
         }
     }
@@ -148,26 +150,28 @@ public class Plugin implements KubeJSPlugin {
         CLIENT_RELOADS.put(manager, errorCount);
     }
 
-    static void completeClientReloadForTesting(Object manager, boolean jeiAvailable,
+    static void completeClientReloadForTesting(Object manager, boolean viewerAvailable,
                                                Consumer<RecipeInformationEventJS> publisher,
                                                IntSupplier errorCount) {
-        completeClientReload(manager, jeiAvailable, publisher, errorCount);
+        completeClientReload(manager, viewerAvailable, publisher, errorCount);
     }
 
-    private static void completeClientReload(Object manager, boolean jeiAvailable,
+    private static void completeClientReload(Object manager, boolean viewerAvailable,
                                              Consumer<RecipeInformationEventJS> publisher,
                                              IntSupplier errorCount) {
         Integer initialErrors = CLIENT_RELOADS.remove(manager);
         if (initialErrors == null) return;
-        RecipeInformationEventJS event = new RecipeInformationEventJS(jeiAvailable);
+        RecipeInformationEventJS event = new RecipeInformationEventJS(viewerAvailable);
         publisher.accept(event);
-        if (jeiAvailable && errorCount.getAsInt() == initialErrors) {
+        if (viewerAvailable && errorCount.getAsInt() == initialErrors) {
             RecipeInformationRegistry.replaceKubeJS(event.entries());
+            RecipeViewerRegistration.informationChanged();
+            RecipeViewerReloadBridge.informationChanged();
         }
     }
 
-    private static boolean isJeiLoaded() {
-        return ModList.get().isLoaded("jei");
+    private static boolean isRecipeViewerLoaded() {
+        return RecipeViewerBackend.current() != RecipeViewerBackend.NONE;
     }
 
     static void setCurrentServerForTesting(MinecraftServer server) {

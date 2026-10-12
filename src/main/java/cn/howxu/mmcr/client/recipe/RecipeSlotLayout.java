@@ -1,4 +1,4 @@
-package cn.howxu.mmcr.compat.jei;
+package cn.howxu.mmcr.client.recipe;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -12,7 +12,7 @@ import java.util.stream.IntStream;
  * PS: 这是一个离散优化取局部最优解的算法(居然还在追着我杀T_T)
  * @author howxu <dev@howxu.cn>
  */
-record RecipeSlotLayout(Orientation orientation, int inputColumns, int outputColumns,
+public record RecipeSlotLayout(Orientation orientation, int inputColumns, int outputColumns,
                         List<Position> inputs, List<Position> outputs,
                         @Nullable Arrow arrow, int bottom) {
     private static final int LEFT = 12;
@@ -24,7 +24,7 @@ record RecipeSlotLayout(Orientation orientation, int inputColumns, int outputCol
     private static final int ARROW_HEIGHT = 16;
     private static final int ARROW_MARGIN = 2;
 
-    static RecipeSlotLayout forCounts(int inputs, int outputs) {
+    public static RecipeSlotLayout forCounts(int inputs, int outputs) {
         if (inputs == 0 && outputs == 0) {
             return new RecipeSlotLayout(Orientation.HORIZONTAL, 3, 3,
                     List.of(), List.of(), null, TOP + STEP);
@@ -91,10 +91,18 @@ record RecipeSlotLayout(Orientation orientation, int inputColumns, int outputCol
         return count / columns + (count % columns == 0 ? 0 : 1);
     }
 
-    enum Orientation { HORIZONTAL, VERTICAL }
+    /** Viewer-neutral resource ordering; adapters classify their actual rendered ingredients here.
+     * @author howxu <dev@howxu.cn>
+     */
+    public enum Kind { SOURCE, FLUID, CHEMICAL, ITEM, OTHER }
+    public enum Orientation { HORIZONTAL, VERTICAL }
     private enum Alignment { LEFT, RIGHT, CENTER }
-    record Position(int x, int y) {}
-    record Arrow(int x, int y, int width, int height) {}
+    public record Position(int x, int y) {}
+    public record Arrow(int x, int y, int width, int height) {}
+
+    public static int kindOrder(Kind kind) {
+        return kind.ordinal();
+    }
 
     private record Candidate(int columns, int inputRows, int outputRows) {
         int height() { return Math.max(inputRows, outputRows); }
