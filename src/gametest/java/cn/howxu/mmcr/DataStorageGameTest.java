@@ -87,6 +87,12 @@ public final class DataStorageGameTest {
         ServerPlayer observer = observer(helper);
         observer.containerMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
         helper.getLevel().players().add(observer);
+        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(observer, observer.containerMenu));
+        int textBaselines = screenTextPackets(observer);
+        helper.assertTrue(textBaselines == 1
+                        && lastScreenTextPacket(observer).controllerPos().equals(controllerPos)
+                        && lastScreenTextPacket(observer).lines().isEmpty(),
+                "Menu Open sends one empty baseline before storage callbacks");
 
         helper.runAtTickTime(80, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Pure-tick structure formed");
@@ -98,16 +104,24 @@ public final class DataStorageGameTest {
             helper.assertTrue(ticks >= 1L && ticks <= 5L,
                     "Tick behavior writes at a 20-tick period, actual=" + ticks);
             PktControllerScreenTextPayload textPayload = lastScreenTextPacket(observer);
-            helper.assertTrue(textPayload != null && hasDynamicText(textPayload.lines()),
-                    "A legacy test-only menu without a new session still receives callback text");
+            helper.assertTrue(screenTextPackets(observer) == textBaselines + ticks
+                            && textPayload != null && textPayload.controllerPos().equals(controllerPos)
+                            && hasDynamicText(textPayload.lines())
+                            && textPayload.lines().stream().anyMatch(line -> line.text().getString().equals("ticks=" + ticks)),
+                    "Registered legacy menu receives exactly one text update per storage callback after its baseline");
+            ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(observer, observer.containerMenu));
             observer.setPos(controllerPos.getX() + 0.5, controllerPos.getY() + 0.5, controllerPos.getZ() + 0.5);
+            int reopenedBaselines = uiPackets(observer).size();
             MachineControllerMenu reopenedMenu = new MachineControllerMenu(1, observer.getInventory(), controller);
             observer.containerMenu = reopenedMenu;
-            ControllerUiEvents.opened(new PlayerContainerEvent.Open(observer, reopenedMenu));
+            var reopenedEvent = new PlayerContainerEvent.Open(observer, reopenedMenu);
+            ControllerSyncEvents.onMenuOpen(reopenedEvent);
+            ControllerUiEvents.opened(reopenedEvent);
             var reopenedSnapshot = uiPackets(observer).getLast().snapshotData();
-            helper.assertTrue(hasUiDynamicText(reopenedSnapshot) && reopenedSnapshot.hasDataStorage()
+            helper.assertTrue(uiPackets(observer).size() == reopenedBaselines + 1
+                            && hasUiDynamicText(reopenedSnapshot) && reopenedSnapshot.hasDataStorage()
                             && reopenedSnapshot.dataStorageValues().get("ticks").longValue() == ticks,
-                    "Reopened actual session receives current text and bound storage in its full snapshot");
+                    "Reopened actual session receives exactly one full snapshot with current text and bound storage");
             helper.assertTrue(controller.runtimeSnapshot().crafting().status().getStatus()
                             == CraftingStatus.Status.IDLE,
                     "Pure-tick controller does not start recipe crafting");
@@ -140,7 +154,9 @@ public final class DataStorageGameTest {
             int uiBaselines = uiPackets(observer).size();
             MachineControllerMenu serverMenu = new MachineControllerMenu(2, observer.getInventory(), controller);
             observer.containerMenu = serverMenu;
-            ControllerUiEvents.opened(new PlayerContainerEvent.Open(observer, serverMenu));
+            var serverOpenEvent = new PlayerContainerEvent.Open(observer, serverMenu);
+            ControllerSyncEvents.onMenuOpen(serverOpenEvent);
+            ControllerUiEvents.opened(serverOpenEvent);
             serverMenu.broadcastChanges();
             helper.assertTrue(uiPackets(observer).size() == uiBaselines + 1
                             && hasUiDynamicText(uiPackets(observer).getLast().snapshotData())
@@ -173,6 +189,7 @@ public final class DataStorageGameTest {
                     "Chunk reentry preserves both unchanged complete baselines");
             helper.getLevel().players().remove(observer);
             observer.closeContainer();
+            ControllerSyncEvents.forgetPlayer(observer);
             ControllerScreenTextCache.clear(controllerPos);
             helper.succeed();
         });
@@ -199,6 +216,7 @@ public final class DataStorageGameTest {
         AtomicInteger starts = new AtomicInteger();
         AtomicInteger ticks = new AtomicInteger();
         AtomicInteger finishes = new AtomicInteger();
+        List<String> callbackTrace = new ArrayList<>();
         AtomicReference<String> callbackFailure = new AtomicReference<>();
         BlockArray pattern = new BlockArray(Map.of(
                 inputPos.subtract(controllerPos), new BlockPredicate.OfBlock(
@@ -214,6 +232,7 @@ public final class DataStorageGameTest {
                 List.of(), registeredMachine.failureAction(), RecipeBehavior.builder()
                         .beforeStart(context -> {
                             starts.incrementAndGet();
+                            callbackTrace.add("Start");
                             context.setDuration(2);
                             context.setRequirements(List.of(
                                     new cn.howxu.mmcr.api.recipe.requirement.ItemRequirement(
@@ -227,6 +246,7 @@ public final class DataStorageGameTest {
                         })
                         .recipeTick(context -> {
                             ticks.incrementAndGet();
+                            callbackTrace.add("Tick");
                             if (context.totalTick() != 2
                                     || ((cn.howxu.mmcr.api.recipe.requirement.ItemRequirement)
                                     context.requirements().getFirst()).count() != 2
@@ -237,6 +257,7 @@ public final class DataStorageGameTest {
                         })
                         .beforeFinish(context -> {
                             finishes.incrementAndGet();
+                            callbackTrace.add("Finish");
                             if (((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount() != 2) {
                                 callbackFailure.compareAndSet(null,
                                         "Recipe Finish uses the loaded effective output snapshot");
@@ -266,19 +287,28 @@ public final class DataStorageGameTest {
                             && controller.runtimeSnapshot().crafting().totalTick() == 2
                             && starts.get() == 1,
                     "Controller load restores the effective recipe without rerunning Start");
+            helper.assertTrue(input.nativeItemHandler().amount(1) == 0L,
+                    "Load preserves the effective input already consumed at Start");
             input.nativeItemHandler().extractItem(0, 1, false);
 
-            controller.serverTick();
-            controller.serverTick();
+                    })
+                    // Real level ticks supply fresh execution rounds/gameTime and the controller permit.
+                    .thenWaitUntil(() -> helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
+                            "Loaded recipe completes through the real controller ticker"))
+                    .thenExecute(() -> {
             String callbackError = callbackFailure.get();
             helper.assertTrue(callbackError == null,
                     callbackError == null ? "Recipe callbacks use the loaded effective snapshot" : callbackError);
-            helper.assertTrue(ticks.get() == 2 && finishes.get() == 1,
+            helper.assertTrue(starts.get() == 1 && ticks.get() == 2 && finishes.get() == 1,
                     "Loaded recipe continues through Tick and Finish callbacks");
+            helper.assertTrue(callbackTrace.equals(List.of("Start", "Tick", "Tick", "Finish")),
+                    "Reload preserves the callback order without replaying Start");
             helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
                             && output.nativeItemHandler().resource(0).is(Items.GOLD_NUGGET)
                             && output.nativeItemHandler().amount(0) == 2L,
                     "Loaded effective output finishes through the real output bus");
+            helper.assertTrue(input.nativeItemHandler().amount(1) == 0L,
+                    "Loaded continuation does not restore or repay the consumed Start input");
             helper.succeed();
                     });
         });
@@ -333,6 +363,13 @@ public final class DataStorageGameTest {
                 .map(packet -> (PktControllerScreenTextPayload) ((ClientboundCustomPayloadPacket) packet).payload())
                 .reduce((first, second) -> second)
                 .orElse(null);
+    }
+
+    private static int screenTextPackets(ServerPlayer player) {
+        return (int) ((RecordingConnection) player.connection).packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
+                        && custom.payload() instanceof PktControllerScreenTextPayload)
+                .count();
     }
 
     private static boolean hasUiDynamicText(ControllerUiSnapshotData snapshot) {

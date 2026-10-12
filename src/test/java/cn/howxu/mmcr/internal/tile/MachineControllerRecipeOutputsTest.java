@@ -405,7 +405,7 @@ class MachineControllerRecipeOutputsTest {
         var working = controllerRuntime.currentSnapshot();
         assertThat(working).isNotSameAs(first);
         assertThat(working.recipePresentation()).isNotSameAs(first.recipePresentation());
-        assertThat(controllerRuntime.snapshot()).isSameAs(first);
+        assertThat(controllerRuntime.snapshot()).isSameAs(working);
         controllerRuntime.publishSnapshot();
 
         assertThat(runtime.activeRecipe()).isSameAs(active);

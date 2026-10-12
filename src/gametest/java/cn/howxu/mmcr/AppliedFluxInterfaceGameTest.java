@@ -77,6 +77,39 @@ public class AppliedFluxInterfaceGameTest {
         helper.succeed();
     }
 
+    public void prefetchReservationRestoresWithActualPortNbt(GameTestHelper helper) {
+        assertBridgesAvailable();
+        BlockPos originalPos = new BlockPos(0, 1, 0);
+        BlockPos restoredPos = new BlockPos(2, 1, 0);
+        helper.setBlock(originalPos, ModBlocks.BLOCKS.get(INPUT_PORT_ID.getPath()).get().defaultBlockState());
+        helper.setBlock(restoredPos, ModBlocks.BLOCKS.get(INPUT_PORT_ID.getPath()).get().defaultBlockState());
+        FluxEnergyInputInterfaceBlockEntity original = helper.getBlockEntity(originalPos);
+        FluxEnergyInputInterfaceBlockEntity restored = helper.getBlockEntity(restoredPos);
+        var networkStorage = new TestEnergyStorage(100);
+        var network = new FluxEnergyNetwork(networkStorage);
+        var capability = new FluxEnergyInputCapability(inputBuffer(original), "gametest-restored-prefetch", network::planExactExtract);
+        var plan = capability.planPrefetch(60).orElseThrow();
+        helper.assertTrue(plan.operation().commit().success(), "Production prefetch adapter pays the actual placed port buffer");
+        var originalCapability = (FluxEnergyInputCapability) original.capabilitySnapshot().capabilities().getFirst();
+        helper.assertTrue(originalCapability.consumeReservation(20).success(), "Original port consumes part of the reservation");
+        var saved = original.saveWithoutMetadata(helper.getLevel().registryAccess());
+        restored.loadWithComponents(saved, helper.getLevel().registryAccess());
+        var buffer = inputBuffer(restored);
+        helper.assertTrue(buffer.amount() == 40 && buffer.reserved() == 40 && buffer.idleExcess() == 0
+                        && networkStorage.amount == 40,
+                "Actual registered port NBT restores remaining energy and reservation without repeating bridge extraction");
+        var restoredCapability = (FluxEnergyInputCapability) restored.capabilitySnapshot().capabilities().getFirst();
+        helper.assertTrue(buffer.storage().extract(10L, true) == 10L, "Restored port supports native simulation");
+        helper.assertTrue(buffer.amount() == 40 && buffer.reserved() == 40 && networkStorage.amount == 40,
+                "Restored simulation preserves cache, reservation and network balance");
+        helper.assertTrue(restoredCapability.consumeReservation(10).success(), "Restored port consumes native reservation once");
+        helper.assertTrue(restoredCapability.releaseReservation(30) == 30 && restoredCapability.releaseReservation(30) == 0
+                        && buffer.amount() == 30 && buffer.reserved() == 0 && buffer.idleExcess() == 30
+                        && networkStorage.amount == 40,
+                "Restored remainder becomes idle exactly once; save/load, consume and release conserve total energy");
+        helper.succeed();
+    }
+
     public void gridNodeHostsAreExposedAndExternalFeIsSuppressed(GameTestHelper helper) {
         assertBridgesAvailable();
 
@@ -162,19 +195,21 @@ public class AppliedFluxInterfaceGameTest {
         }
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
+        long availabilityGameTime = helper.getLevel().getGameTime();
         long setupAvailabilityEpoch = controller.resourceAvailabilityEpoch();
         controller.setMachine(machine);
         helper.assertTrue(controller.resourceAvailabilityEpoch() == setupAvailabilityEpoch + 1L,
                 "Initial module-state binding publishes availability in this action's game time");
         controller.setStructureCheckIntervalForTesting(1);
         controller.requestImmediateStructureCheck();
-        assertCommittedEnergyPresentation(helper, controller, inputPos, outputPos);
+        assertCommittedEnergyPresentation(helper, controller, inputPos, outputPos, availabilityGameTime);
         helper.succeed();
     }
 
     private static void assertCommittedEnergyPresentation(GameTestHelper helper,
                                                           MachineControllerBlockEntity controller,
-                                                          BlockPos inputPos, BlockPos outputPos) {
+                                                          BlockPos inputPos, BlockPos outputPos,
+                                                          long availabilityGameTime) {
         BlockPos itemPos = new BlockPos(1, 1, 2);
         helper.setBlock(itemPos, ModBlocks.BLOCKS.get(PortKinds.ITEM_INPUT.id()).get().defaultBlockState());
         ItemInputBusBlockEntity itemPort = helper.getBlockEntity(itemPos);
@@ -182,6 +217,8 @@ public class AppliedFluxInterfaceGameTest {
         FluxEnergyOutputInterfaceBlockEntity outputPort = helper.getBlockEntity(outputPos);
         helper.assertTrue(itemPort.itemHandler().insertItem(0, new ItemStack(Items.IRON_INGOT, 3), false).isEmpty(),
                 "Item fixture commits its initial contents");
+        // Establish the item availability baseline before attaching the controller.
+        itemPort.flushStorageChanges();
         List<IOPortBlockEntity> ports = List.of(itemPort, inputPort, outputPort);
         for (IOPortBlockEntity port : ports) port.linkControllerAppearance(controller.getBlockPos(), null);
         controller.componentRuntime().replaceComponents(ports.stream().map(port -> new ProcessingComponent(
@@ -216,8 +253,10 @@ public class AppliedFluxInterfaceGameTest {
                 "Output commit leaves the old snapshot isolated");
         long pendingEpoch = controller.componentRuntime().capabilityPresentationEpoch();
         long availabilityEpoch = controller.resourceAvailabilityEpoch();
+        outputPort.flushStorageChanges();
         helper.assertTrue(outputPort.getEnergyStorage().insert(40L, true) == 40L,
                 "Output simulation exercises native admission");
+        outputPort.flushStorageChanges();
         helper.assertTrue(outputPort.getEnergyStorage().amount() == 80L
                         && controller.componentRuntime().capabilityPresentationEpoch() == pendingEpoch
                         && controller.resourceAvailabilityEpoch() == availabilityEpoch
@@ -230,20 +269,24 @@ public class AppliedFluxInterfaceGameTest {
                 "Simulated input insertion does not notify");
         helper.assertTrue(inputPort.getEnergyStorage().insert(100L, false) == 100L,
                 "Actual Flux input cache accepts the consumption fixture energy");
+        inputPort.flushStorageChanges();
         var cached = controller.currentRuntimeSnapshot();
         helper.assertTrue(cached.capabilityPresentations().get(1).amount() == 100L,
                 "Controller observes input cache energy immediately after native insertion");
         helper.assertTrue(cached.capabilityPresentations().getFirst() == itemRow
                         && cached.capabilityPresentations().get(2) == pending.capabilityPresentations().get(2),
                 "Input insertion reuses the unrelated item and output rows despite availability/input notifications");
+        inputPort.flushStorageChanges();
         long cachedEpoch = controller.componentRuntime().capabilityPresentationEpoch();
         long cachedAvailabilityEpoch = controller.resourceAvailabilityEpoch();
         helper.assertTrue(cachedEpoch == pendingEpoch + 3L
-                        && cachedAvailabilityEpoch == availabilityEpoch,
-                "Input commit retains all three callbacks and coalesces availability with setMachine in the same game time");
+                        && cachedAvailabilityEpoch == availabilityEpoch
+                        && helper.getLevel().getGameTime() == availabilityGameTime,
+                "Input commit and flush retain all three callbacks and coalesce availability with setMachine in the same game time");
         var inputCapability = (FluxEnergyInputCapability) inputPort.capabilitySnapshot().capabilities().getFirst();
         helper.assertTrue(inputCapability.consumeReservation(30L).success(),
                 "Real Flux input capability consumes local energy natively");
+        inputPort.flushStorageChanges();
         var consumed = controller.currentRuntimeSnapshot();
         helper.assertTrue(inputPort.getEnergyStorage().amount() == 70L
                         && consumed.capabilityPresentations().get(1).amount() == 70L,
@@ -258,6 +301,7 @@ public class AppliedFluxInterfaceGameTest {
                 "Consumption retains separate storage/input-change callbacks without an availability increase");
         helper.assertTrue(inputPort.getEnergyStorage().extract(20L, true) == 20L,
                 "Input simulation exercises native extraction");
+        inputPort.flushStorageChanges();
         helper.assertTrue(inputPort.getEnergyStorage().amount() == 70L
                         && controller.componentRuntime().capabilityPresentationEpoch() == consumedEpoch
                         && controller.resourceAvailabilityEpoch() == availabilityEpoch
@@ -284,6 +328,7 @@ public class AppliedFluxInterfaceGameTest {
         helper.assertTrue(networkStorage.amount == 20L && buffer.amount() == 170L && buffer.reserved() == 100L
                         && buffer.idleExcess() == 0L && prefetched.capabilityPresentations().get(1).amount() == 170L,
                 "Committed real prefetch publishes energy and its actual reservation");
+        inputPort.flushStorageChanges();
         helper.assertTrue(controller.componentRuntime().capabilityPresentationEpoch() == consumedEpoch + 3L
                         && controller.resourceAvailabilityEpoch() == availabilityEpoch,
                 "Native prefetch retains storage/input-change events plus one availability event in the same game time");
@@ -294,6 +339,7 @@ public class AppliedFluxInterfaceGameTest {
         long prefetchedEpoch = controller.componentRuntime().capabilityPresentationEpoch();
         helper.assertTrue(inputCapability.consumeReservation(30L).success(),
                 "The actual port capability consumes genuinely reserved prefetched energy");
+        inputPort.flushStorageChanges();
         var reservedConsumed = controller.currentRuntimeSnapshot();
         helper.assertTrue(buffer.amount() == 140L && buffer.reserved() == 70L && networkStorage.amount == 20L
                         && reservedConsumed.capabilityPresentations().get(1).amount() == 140L,
@@ -308,6 +354,7 @@ public class AppliedFluxInterfaceGameTest {
         long reservedConsumedEpoch = controller.componentRuntime().capabilityPresentationEpoch();
         helper.assertTrue(buffer.storage().extract(20L, true) == 20L,
                 "Reserved consumption simulation exercises native admission");
+        inputPort.flushStorageChanges();
         helper.assertTrue(buffer.amount() == 140L && buffer.reserved() == 70L && buffer.idleExcess() == 0L
                         && networkStorage.amount == 20L
                         && controller.componentRuntime().capabilityPresentationEpoch() == reservedConsumedEpoch

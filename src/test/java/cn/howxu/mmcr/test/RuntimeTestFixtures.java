@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.test;
 
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
+import net.neoforged.neoforge.capabilities.CapabilityListenerHolder;
+
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -9,6 +13,8 @@ import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidInputHatchBlockEntity;
@@ -23,6 +29,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.TickRateManager;
 import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -89,6 +96,17 @@ public final class RuntimeTestFixtures {
         controller.setLevel(level);
     }
 
+    /** Returns the real attached base runtime, rather than creating an unattached test lane. */
+    public static CraftingRuntime craftingRuntime(MachineControllerBlockEntity controller) {
+        try {
+            Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+            field.setAccessible(true);
+            return ((MachineControllerRuntime) field.get(controller)).craftingRuntime();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to access attached crafting runtime", exception);
+        }
+    }
+
     public static void replaceBlockEntity(MachineControllerBlockEntity controller, BlockEntity replacement) {
         if (!(controller.getLevel() instanceof TestServerLevel level)) {
             throw new IllegalArgumentException("Unexpected test level");
@@ -151,6 +169,14 @@ public final class RuntimeTestFixtures {
         testLevel.gameTime = Math.max(1L, testLevel.gameTime) + 1L;
     }
 
+    public static long beginLevelTick(ServerLevel level, boolean running) {
+        level.tickRateManager().setFrozen(!running);
+        level.tickRateManager().tick();
+        long gameTime = level.getGameTime();
+        MachineAsyncCoordinator.get(level).beginLevelTick(gameTime);
+        return SharedIoCoordinator.get(level).beginExecutionRound(gameTime, level.tickRateManager().runsNormally());
+    }
+
     public static void setDirectSignal(Level level, BlockPos pos, int signal) {
         if (!(level instanceof TestServerLevel testLevel)) throw new IllegalArgumentException("Unexpected test level");
         testLevel.directSignals.put(pos, signal);
@@ -164,6 +190,7 @@ public final class RuntimeTestFixtures {
             blockEntities.put(controller.getBlockPos(), controller);
             for (BlockEntity component : components) blockEntities.put(component.getBlockPos(), component);
             setField(TestServerLevel.class, level, "blockEntities", blockEntities);
+            setField(TestServerLevel.class, level, "tickRateManager", new TickRateManager());
             Map<BlockPos, BlockState> blocks = new HashMap<>();
             setField(TestServerLevel.class, level, "directSignals", new HashMap<>());
             blocks.put(controller.getBlockPos(), controller.getBlockState());
@@ -171,6 +198,7 @@ public final class RuntimeTestFixtures {
                     predicate.preferredState().ifPresent(state -> blocks.put(controller.getBlockPos().offset(relative), state)));
             setField(TestServerLevel.class, level, "blocks", blocks);
             setField(ServerLevel.class, level, "players", List.of());
+            setField(ServerLevel.class, level, "capListenerHolder", new CapabilityListenerHolder());
             setField(Level.class, level, "dimension", Level.OVERWORLD);
             return level;
         } catch (ReflectiveOperationException exception) {
@@ -228,6 +256,7 @@ public final class RuntimeTestFixtures {
         private Map<BlockPos, Integer> directSignals = new HashMap<>();
         private Set<Long> loadedChunks;
         private long gameTime;
+        private TickRateManager tickRateManager;
 
         private TestServerLevel() {
             super(null, null, null, null, Level.OVERWORLD, null, null, false, 0L, List.of(), false, null);
@@ -255,6 +284,8 @@ public final class RuntimeTestFixtures {
         }
 
         @Override public long getGameTime() { return Math.max(1L, gameTime); }
+
+        @Override public TickRateManager tickRateManager() { return tickRateManager; }
 
         @Override public RecipeManager getRecipeManager() {
             return RECIPE_MANAGER;

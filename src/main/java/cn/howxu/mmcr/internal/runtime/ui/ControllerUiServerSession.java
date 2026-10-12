@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
 import cn.howxu.mmcr.internal.menu.ControllerMenuOpenData;
 import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
+import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
@@ -74,7 +75,6 @@ public final class ControllerUiServerSession {
     private final UiProtocolRegistration protocols;
     private @Nullable ControllerUiSnapshotData.CaptureCache captureCache;
     private Map<String, ControllerScreenTextSnapshot> textSnapshots = Map.of();
-    private @Nullable ControllerUiSnapshotData lastSnapshot;
     private boolean active;
     private boolean closed;
     private long revision;
@@ -102,7 +102,12 @@ public final class ControllerUiServerSession {
     public ServerPlayer player() { return player; }
     public ControllerMenuOpenData openData() { return openData; }
     public UiProtocolRegistration protocols() { return protocols; }
-    public boolean active() { return active && !closed; }
+    public boolean active() { return !closed() && active; }
+    /** Exact identity checks never query runtime; a new menu may still await installation and Open. */
+    public boolean closed() {
+        if ((active || closed) && !exactBindingValid()) invalidate();
+        return closed;
+    }
 
     public @Nullable Status consumeRequest(long requestId) {
         return requests.consume(requestId, level.getGameTime());
@@ -111,7 +116,7 @@ public final class ControllerUiServerSession {
     /** One viewer's built-in and custom-state delivery, on Open, menu broadcast and after requests. */
     public void broadcastChanges() {
         if (!active()) return;
-        pollSnapshot().ifPresent(this::broadcastSnapshot);
+        pollCapturedSnapshot().ifPresent(this::broadcastSnapshot);
         if (!active()) return;
         for (var capability : protocols.capabilities(openData.machineId())) {
             if (!active()) return;
@@ -119,13 +124,19 @@ public final class ControllerUiServerSession {
         }
     }
 
-    private void broadcastSnapshot(ControllerUiSnapshotData next) {
+    private void broadcastSnapshot(CapturedSnapshot captured) {
+        ControllerUiSnapshotData next = captured.snapshot();
         try {
             if (sentSnapshot == null || !next.sameShape(sentSnapshot)) {
                 var packet = new PktControllerUiSnapshotPayload(menu.containerId, openData.sessionId(), next.revision(), next);
                 // Fail synchronously here, not later in the connection's network encoder.
                 ControllerUiPayloadCodec.encodeBounded(PktControllerUiSnapshotPayload.STREAM_CODEC, packet,
                         level.registryAccess(), ControllerUiPayloadCodec.SNAPSHOT_LIMIT);
+                // Output resource decoding and encoding are author callbacks, just like capture.
+                if (!snapshotBindingValid(captured.binding())) {
+                    if (captureCache != null) captureCache.clear();
+                    return;
+                }
                 player.connection.send(new ClientboundCustomPayloadPacket(packet));
                 fullBaselineRevision = next.revision();
             } else {
@@ -170,7 +181,7 @@ public final class ControllerUiServerSession {
     private @Nullable ProviderContext providerContext() {
         if (!active()) return null;
         ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
-        if (!validateRuntime(runtime)) return null;
+        if (!active() || !validateRuntime(runtime)) return null;
         return new ProviderContext(new ServerContext(player, owner.controllerUiBehaviorContext(runtime), Optional.empty()),
                 runtime);
     }
@@ -252,7 +263,7 @@ public final class ControllerUiServerSession {
     /** The first baseline remains queued for pollSnapshot; Open runs after container installation. */
     public void activate(ServerPlayer player) {
         if (closed || active || player != this.player) return;
-        if (!boundIdentitiesValid(owner.runtimeSnapshot())) {
+        if (!exactBindingValid() || !boundIdentitiesValid(owner.runtimeSnapshot())) {
             invalidate();
             return;
         }
@@ -266,7 +277,7 @@ public final class ControllerUiServerSession {
     }
 
     public boolean validate() {
-        return active && !closed && validateRuntime(owner.runtimeSnapshot());
+        return active() && validateRuntime(owner.runtimeSnapshot());
     }
 
     private boolean validateRuntime(ControllerRuntimeSnapshot runtime) {
@@ -275,13 +286,16 @@ public final class ControllerUiServerSession {
         return false;
     }
 
-    private boolean boundIdentitiesValid(ControllerRuntimeSnapshot runtime) {
+    private boolean exactBindingValid() {
         return !owner.isRemoved() && owner.getLevel() == level && player.level() == level
                 && player.containerMenu == menu && level.dimension().equals(openData.dimension())
                 && ((ControllerUiMenu) menu).uiOpenData() == openData
                 && ((ControllerUiMenu) menu).uiServerSession() == this
-                && level.getBlockEntity(openData.pos()) == owner
-                && machineBinding.matches(runtime.structure(), physicalMachineId())
+                && level.getBlockEntity(openData.pos()) == owner;
+    }
+
+    private boolean boundIdentitiesValid(ControllerRuntimeSnapshot runtime) {
+        return exactBindingValid() && machineBinding.matches(runtime.structure(), physicalMachineId())
                 && ControllerMenuOpenData.machineId(owner, runtime).equals(openData.machineId())
                 && menu.stillValid(player);
     }
@@ -335,11 +349,17 @@ public final class ControllerUiServerSession {
     }
 
     public Optional<ControllerUiSnapshotData> pollSnapshot() {
-        if (!active || closed) return Optional.empty();
-        ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
-        if (!validateRuntime(runtime)) return Optional.empty();
+        return pollCapturedSnapshot().map(CapturedSnapshot::snapshot);
+    }
+
+    private Optional<CapturedSnapshot> pollCapturedSnapshot() {
+        if (!active()) return Optional.empty();
+        ResourceLocation recipePoolId = owner.currentRecipePoolId();
+        ProviderContext binding = providerContext();
+        if (binding == null) return Optional.empty();
+        ControllerRuntimeSnapshot runtime = binding.runtime();
         Map<String, ControllerScreenTextSnapshot> currentText = new LinkedHashMap<>();
-        MachineBehaviorContext context = owner.controllerUiBehaviorContext(runtime);
+        MachineBehaviorContext context = binding.context().machine();
         if (context.screenText() instanceof ControllerScreenTextState globalText) {
             captureText(currentText, ControllerUiSnapshotData.GLOBAL_TEXT_LANE, globalText);
         }
@@ -352,19 +372,32 @@ public final class ControllerUiServerSession {
         } else if (kind == Kind.NORMAL) {
             captureText(currentText, "base", owner.recipeScreenText("base"));
         }
-        textSnapshots = Map.copyOf(currentText);
+        Map<String, ControllerScreenTextSnapshot> nextText = Map.copyOf(currentText);
         if (captureCache == null) captureCache = new ControllerUiSnapshotData.CaptureCache(level.registryAccess());
-        ControllerUiSnapshotData next = captureCache.capture(openData.sessionId(), revision + 1,
-                openData.dimension(), openData.pos(), runtime, owner.currentRecipePoolId(),
+        var cache = captureCache;
+        Optional<ControllerUiSnapshotData> next = cache.poll(openData.sessionId(), revision + 1,
+                openData.dimension(), openData.pos(), runtime, recipePoolId,
                 context.dataStorageForRuntime() != null,
                 MachineRegistry.recipePoolsForMachine(openData.machineId()),
-                textSnapshots);
-        if (lastSnapshot != null && next.sameShape(lastSnapshot)
-                && next.laneData().equals(lastSnapshot.laneData())) return Optional.empty();
-        revision = next.revision();
-        lastSnapshot = next;
-        return Optional.of(next);
+                nextText);
+        if (!snapshotBindingValid(binding)) {
+            // close may have detached this cache while its capture was still running.
+            cache.clear();
+            return Optional.empty();
+        }
+        textSnapshots = nextText;
+        next.ifPresent(snapshot -> revision = snapshot.revision());
+        return next.map(snapshot -> new CapturedSnapshot(snapshot, binding));
     }
+
+    private boolean snapshotBindingValid(ProviderContext captured) {
+        ProviderContext current = providerContext();
+        return current != null && captured.sameBinding(current);
+    }
+
+    /** Carries the original binding through capture and synchronous wire validation.
+     * @author howxu <dev@howxu.cn> */
+    private record CapturedSnapshot(ControllerUiSnapshotData snapshot, ProviderContext binding) { }
 
     /** A just-placed controller can open before its first structure tick has bound the physical machine. */
     private ControllerRuntimeSnapshot physicalMachineProjection(ControllerRuntimeSnapshot runtime) {
@@ -394,15 +427,15 @@ public final class ControllerUiServerSession {
         if (closed) return;
         closed = true;
         active = false;
-        lastSnapshot = null;
+        ControllerSyncEvents.forgetMenu(player, menu);
+        owner.forgetMenu(player, menu);
         sentSnapshot = null;
         providerStates.clear();
         fullBaselineRevision = 0;
         textSnapshots = Map.of();
-        if (captureCache != null) {
-            captureCache.clear();
-            captureCache = null;
-        }
+        // A codec may close this session during capture. Detach without mutating its
+        // in-flight cache; pollCapturedSnapshot clears it after the binding check.
+        captureCache = null;
     }
 
     private void invalidate() {

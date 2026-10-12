@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.ServerConfig;
+import com.electronwill.nightconfig.core.CommentedConfig;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
@@ -84,6 +86,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.util.IOType;
@@ -107,8 +110,13 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import org.junit.jupiter.api.AfterEach;
+import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 
 import java.util.List;
 import java.util.HashMap;
@@ -132,6 +140,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * @author howxu <dev@howxu.cn>
  */
 class CraftingRuntimeTest {
+    private ServerThreadTestScope serverThreadScope;
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
     private static final FailureReason REGISTERED_RUNTIME_REASON = new FailureReason(
             MMCR.id("runtime_registered_restore"), "gui.mmcr.failure.runtime_registered_restore", 50);
@@ -139,6 +148,11 @@ class CraftingRuntimeTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        ServerConfig.SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
         if (FailureReasonRegistry.isFrozen()) FailureReasonRegistry.clearForTesting();
         if (FailureReasonRegistry.find(BuiltinFailureReasons.UNKNOWN.id()) == null) {
             BuiltinFailureReasons.register();
@@ -148,9 +162,18 @@ class CraftingRuntimeTest {
         }
     }
 
+    @BeforeEach
+    void installServerThread() throws Exception {
+        serverThreadScope = ServerThreadTestScope.open();
+    }
+
     @AfterEach
-    void cleanup() {
-        RecipeRegistry.clearForTesting();
+    void cleanup() throws Exception {
+        try {
+            RecipeRegistry.clearForTesting();
+        } finally {
+            if (serverThreadScope != null) serverThreadScope.close();
+        }
     }
 
     @Test
@@ -483,30 +506,110 @@ class CraftingRuntimeTest {
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         CraftingStateSnapshot oldSnapshot = runtime.snapshot();
         var started = runtime.observation();
+        assertThat(started.matches(runtime)).isTrue();
         String recipeText = runtime.recipeIdText();
         assertThat(recipeText).isEqualTo(recipe.id().toString());
 
         runtime.tick();
         var progressed = runtime.observation();
+        assertThat(started.matches(runtime)).isFalse();
+        assertThat(progressed.matches(runtime)).isTrue();
         assertThat(progressed).isNotEqualTo(started);
         assertThat(progressed.tick()).isGreaterThan(started.tick());
         assertThat(runtime.recipeIdText()).isSameAs(recipeText);
         runtime.pause();
         var paused = runtime.observation();
+        assertThat(progressed.matches(runtime)).isFalse();
+        assertThat(paused.matches(runtime)).isTrue();
         assertThat(paused.status()).isEqualTo(CraftingStatus.Status.PAUSED);
         runtime.resume();
+        assertThat(paused.matches(runtime)).isFalse();
+        assertThat(progressed.matches(runtime)).isTrue();
         assertThat(runtime.observation().status()).isEqualTo(CraftingStatus.Status.CRAFTING);
         runtime.recordSearchFailure(null);
+        assertThat(progressed.matches(runtime)).isFalse();
         assertThat(runtime.observation().failure()).isNotNull();
         assertThat(started.failure()).isNull();
         runtime.tick();
         assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+        assertThat(started.matches(runtime)).isFalse();
+        assertThat(runtime.observation().matches(runtime)).isTrue();
         assertThat(runtime.observation().recipeId()).isNull();
         assertThat(runtime.recipeIdText()).isEmpty();
         assertThat(oldSnapshot.tick()).isZero();
         assertThat(oldSnapshot.status().isPaused()).isFalse();
         oldSnapshot.status().overrideStatusMessage("test.changed.returned.copy");
         assertThat(oldSnapshot.status().getUnlocMessage()).isEqualTo(started.statusMessage());
+    }
+
+    @Test
+    void observation_comparison_detects_live_progress_metadata_and_keeps_its_baseline() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        CraftingStatus status = runtime.start(recipe("observation_metadata", 20, List.of()), 1L);
+        runtime.activeRecipe().setMaxParallelism(4);
+        var before = runtime.observation();
+        runtime.activeRecipe().setTick(1);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.activeRecipe().setTick(before.tick());
+        assertThat(before.matches(runtime)).isTrue();
+        runtime.activeRecipe().setTotalTick(30);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.activeRecipe().setTotalTick(before.totalTick());
+        runtime.activeRecipe().setMaxParallelism(8);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.activeRecipe().setMaxParallelism(before.maxParallelism());
+        runtime.activeRecipe().setParallelism(2);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.activeRecipe().setParallelism(before.parallelism());
+        assertThat(before.matches(runtime)).isTrue();
+        status.overrideStatusMessage("test.observation.message");
+        assertThat(before.matches(runtime)).isFalse();
+        status.overrideStatusMessage(before.statusMessage());
+        assertThat(before.matches(runtime)).isTrue();
+        assertThat(runtime.observation()).isEqualTo(before);
+    }
+
+    @Test
+    void observation_comparison_normalizes_unset_versions_and_detects_each_restore_change() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.start(recipe("observation_versions", 20, List.of()), 1L);
+        ActiveMachineRecipe active = runtime.activeRecipe();
+        runtime.restore(active, null, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE);
+        var before = runtime.observation();
+        runtime.restore(active, null, 0L, 0L, 0L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isTrue();
+        runtime.restore(active, null, 1L, 0L, 0L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.restore(active, null, 0L, 2L, 0L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.restore(active, null, 0L, 0L, 3L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isFalse();
+        runtime.restore(active, null, 0L, 0L, 0L, Long.MIN_VALUE);
+        assertThat(before.matches(runtime)).isTrue();
+    }
+
+    @Test
+    void observation_comparison_uses_failure_values_without_losing_changed_details() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        ExecutionStatus original = ExecutionStatus.blocked(MMCR.id("observation_failure"), MMCR.id("test"),
+                FailureOccurrence.at(BuiltinFailureReasons.RECIPE_SEARCH, MMCR.id("test"), FailurePhase.RECIPE_SEARCH,
+                        null, null, Map.of("detail", "first")));
+        runtime.recordSearchFailure(original);
+        var before = runtime.observation();
+        ExecutionStatus equal = ExecutionStatus.blocked(original.id(), original.source(),
+                FailureOccurrence.at(original.reason(), original.source(), FailurePhase.RECIPE_SEARCH,
+                        null, null, Map.of("detail", "first")));
+        runtime.recordSearchFailure(equal);
+        assertThat(runtime.failure()).isNotSameAs(original);
+        assertThat(before.matches(runtime)).isTrue();
+        runtime.recordSearchFailure(ExecutionStatus.blocked(original.id(), original.source(),
+                FailureOccurrence.at(original.reason(), original.source(), FailurePhase.RECIPE_SEARCH,
+                        null, null, Map.of("detail", "changed"))));
+        assertThat(before.matches(runtime)).isFalse();
+        assertThat(before.failure().details()).containsEntry("detail", "first");
     }
 
     @Test
@@ -659,6 +762,103 @@ class CraftingRuntimeTest {
         assertThat(runtime.shouldRetryFinish()).isFalse();
     }
 
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void installed_full_output_waits_without_repaying_final_resources_and_restores_waiting_facts(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        try {
+            var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+            var output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+            var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy, output);
+            energy.energyStorage().setAmount(100L);
+            var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            var recipe = RecipeTestSupport.create(MMCR.id("installed_full_finish"), MMCR.id("test_cube"), 1,
+                    List.of(new EnergyRequirement(7L)), List.of(output(Items.IRON_NUGGET, 1)));
+            RecipeRegistry.registerStatic(recipe);
+            runtime.start(recipe, 1);
+            var installed = runtime.ensureInstalledProgram();
+            for (int slot = 0; slot < output.itemHandler().size(); slot++) {
+                setItem(output.itemHandler(), slot, stack(Items.IRON_INGOT, 64));
+            }
+            long afterStart = energy.energyStorage().getAmountAsLong();
+            LevelStub.setGameTime(controller.getLevel(), 1);
+            if (mode != MachineWorkMode.SYNC) runtime.prepareInstalledTick(1);
+            assertThat(installed.tryAttempt(1, 1)).isTrue();
+            assertThat(installed.advance()).isTrue();
+            runtime.finish();
+            assertThat(runtime.finishPending()).isTrue();
+            assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.WAITING_FINISH);
+            var saved = new CompoundTag();
+            runtime.save(saved, EMPTY_LOOKUP);
+            var restored = new CraftingRuntime(controller, controller.componentRuntime());
+            restored.load(saved, null, EMPTY_LOOKUP);
+            assertThat(restored.finishPending()).isTrue();
+            LevelStub.setGameTime(controller.getLevel(), 11);
+            restored.tick();
+            setItem(output.itemHandler(), 0, ItemStack.EMPTY);
+            assertThat(restored.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+            restored.finish();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+            assertThat(item(output.itemHandler(), 0).is(Items.IRON_NUGGET)).isTrue();
+            assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        }
+    }
+
+    @Test
+    void native_finish_notification_exception_preserves_output_and_pauses_reentrant_reload() {
+        AtomicReference<CraftingRuntime> owner = new AtomicReference<>();
+        AtomicReference<CompoundTag> saved = new AtomicReference<>();
+        LongItemStorage storage = new LongItemStorage(1, 64L, () -> {
+                    var outputTag = new CompoundTag();
+                    owner.get().save(outputTag, EMPTY_LOOKUP);
+                    saved.set(outputTag);
+                    throw new IllegalStateException("output notification");
+                });
+        ItemOutputBusBlockEntity output = new ItemOutputBusBlockEntity(new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState()) {
+            @Override
+            public LongItemStorage itemHandler() { return storage; }
+        };
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
+        var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        owner.set(runtime);
+        var recipe = recipe("runtime_terminal_notification", 1, List.of(output(Items.IRON_NUGGET, 1)));
+        RecipeRegistry.registerStatic(recipe);
+        runtime.start(recipe, 1);
+        runtime.tick();
+        assertThatCode(runtime::finish).doesNotThrowAnyException();
+        assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+        assertThat(saved.get().getCompound("execution_commit").getString("phase"))
+                .isEqualTo(RecipeCommitLedger.Phase.UNCERTAIN.name());
+        var restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(saved.get(), null, EMPTY_LOOKUP);
+        restored.tick();
+        restored.finish();
+        assertThat(restored.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+        restored.resume();
+        LevelStub.setGameTime(controller.getLevel(), 100L);
+        restored.finish();
+        assertThat(storage.amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void malformed_execution_child_uses_runtime_fail_load_instead_of_replaying_resources() {
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        var recipe = RecipeTestSupport.create(MMCR.id("runtime_bad_ledger"), MMCR.id("test_cube"), 10, List.of(), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.start(recipe, 1L);
+        CompoundTag root = new CompoundTag();
+        runtime.save(root, EMPTY_LOOKUP);
+        root.getCompound("execution_commit").putString("phase", "INVALID");
+        var restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(root, null, EMPTY_LOOKUP);
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
+    }
+
     @Test
     void finish_output_replacement_keeps_non_physical_outputs() {
         ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
@@ -797,6 +997,168 @@ class CraftingRuntimeTest {
 
         assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(6);
         assertThat(runtime.active()).isTrue();
+    }
+
+    @Test
+    void context_free_sync_ticks_keep_the_resource_trace_without_callback_contexts() {
+        assertContextFreeTickTrace(false);
+    }
+
+    @Test
+    void context_free_async_ticks_keep_the_resource_trace_without_callback_contexts() {
+        assertContextFreeTickTrace(true);
+    }
+
+    private static void assertContextFreeTickTrace(boolean async) {
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        energy.energyStorage().setAmount(2_000L);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(energyRecipe("context_free_trace_" + async, 200, 7), 1).isCrafting()).isTrue();
+        long afterStart = energy.energyStorage().getAmountAsLong();
+        int recipeContexts = runtime.recipeTickContextBuildCountForTesting();
+        int capabilityContexts = runtime.capabilityTickContextBuildCountForTesting();
+        int machineContexts = controller.behaviorContextBuildCountForTesting();
+
+        for (int tick = 1; tick <= 100; tick++) {
+            LevelStub.setGameTime(controller.getLevel(), tick);
+            if (async) {
+                assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+                assertThat(runtime.commitAsyncTick(null)).isTrue();
+                assertThat(runtime.completeAsyncTickAfterInputs()).isTrue();
+                assertThat(runtime.completeAsyncTickAfterRecipe().isCrafting()).isTrue();
+                runtime.flushAsyncScreenText();
+            } else {
+                assertThat(runtime.tick().isCrafting()).isTrue();
+            }
+            assertThat(energy.energyStorage().getAmountAsLong())
+                    .as("gameTime=%s async=%s", controller.getLevel().getGameTime(), async)
+                    .isEqualTo(afterStart - 7L * tick);
+            assertThat(runtime.tickCount()).isEqualTo(tick);
+        }
+
+        assertThat(runtime.recipeTickContextBuildCountForTesting()).isEqualTo(recipeContexts);
+        assertThat(runtime.capabilityTickContextBuildCountForTesting()).isEqualTo(capabilityContexts);
+        assertThat(controller.behaviorContextBuildCountForTesting()).isEqualTo(machineContexts);
+        assertThat(runtime.finishPending()).isFalse();
+    }
+
+    @Test
+    void full_finish_output_does_not_repeat_inputs_or_ticks_until_capacity_returns() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(3, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output, energy);
+        setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        for (int slot = 0; slot < output.itemHandler().size(); slot++) {
+            setItem(output.itemHandler(), slot, stack(Items.IRON_NUGGET, 64));
+        }
+        energy.energyStorage().setAmount(200L);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("full_finish_trace"), MMCR.id("test_cube"), 2,
+                List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(7), output(Items.IRON_NUGGET, 1)));
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        long afterStart = energy.energyStorage().getAmountAsLong();
+        assertThat(input.itemHandler().amount(0)).isZero();
+        LevelStub.setGameTime(controller.getLevel(), 1);
+        runtime.tick();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+        LevelStub.setGameTime(controller.getLevel(), 2);
+        runtime.tick();
+        assertThat(runtime.finishPending()).isTrue();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 14L);
+        runtime.finish();
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.failure()).isNotNull();
+        int progress = runtime.tickCount();
+        LevelStub.setGameTime(controller.getLevel(), 3);
+        runtime.tick();
+        runtime.finish();
+        assertThat(runtime.tickCount()).isEqualTo(progress);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 14L);
+        setItem(output.itemHandler(), 0, ItemStack.EMPTY);
+        LevelStub.setGameTime(controller.getLevel(), 12);
+        assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+        assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(input.itemHandler().amount(0)).isZero();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 14L);
+    }
+
+    @Test
+    void async_after_phase_failure_keeps_the_committed_energy_grant_and_finish_retry_gate() {
+        for (CapabilityTickPhase phase : List.of(CapabilityTickPhase.AFTER_INPUTS, CapabilityTickPhase.AFTER_RECIPE)) {
+            EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+            List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+            components.add(new ProcessingComponent(null,
+                    new TickCapabilityHost(new FailOnceTickCapability(phase, false)), BlockPos.ZERO, BlockPos.ZERO,
+                    (String) null));
+            controller.componentRuntime().replaceComponents(components);
+            RuntimeTestFixtures.republish(controller);
+            energy.energyStorage().setAmount(200L);
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            assertThat(runtime.start(energyRecipe("async_failure_trace_" + phase.ordinal(), 1, 7), 1).isCrafting()).isTrue();
+            long afterStart = energy.energyStorage().getAmountAsLong();
+            LevelStub.setGameTime(controller.getLevel(), 1);
+            assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+            assertThat(runtime.commitAsyncTick(null)).isTrue();
+            boolean afterInputs = runtime.completeAsyncTickAfterInputs();
+            assertThat(afterInputs).isEqualTo(phase != CapabilityTickPhase.AFTER_INPUTS);
+            if (afterInputs) runtime.completeAsyncTickAfterRecipe();
+
+            assertThat(runtime.failure()).isNotNull();
+            assertThat(runtime.finishPending()).isTrue();
+            assertThat(runtime.tickCount()).isZero();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+            LevelStub.setGameTime(controller.getLevel(), 2);
+            assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNull();
+            runtime.tick();
+            runtime.finish();
+            assertThat(runtime.active()).isTrue();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+            LevelStub.setGameTime(controller.getLevel(), 11);
+            assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+        }
+    }
+
+    @Test
+    void async_nonfinal_after_phase_failure_grants_progress_without_replaying_committed_energy() {
+        for (CapabilityTickPhase phase : List.of(CapabilityTickPhase.AFTER_INPUTS, CapabilityTickPhase.AFTER_RECIPE)) {
+            EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+            List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+            components.add(new ProcessingComponent(null,
+                    new TickCapabilityHost(new FailOnceTickCapability(phase, false)), BlockPos.ZERO, BlockPos.ZERO,
+                    (String) null));
+            controller.componentRuntime().replaceComponents(components);
+            RuntimeTestFixtures.republish(controller);
+            energy.energyStorage().setAmount(200L);
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            assertThat(runtime.start(energyRecipe("async_nonfinal_failure_" + phase.ordinal(), 3, 7), 1).isCrafting()).isTrue();
+            long afterStart = energy.energyStorage().getAmountAsLong();
+            LevelStub.setGameTime(controller.getLevel(), 1);
+            assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+            assertThat(runtime.commitAsyncTick(null)).isTrue();
+            if (runtime.completeAsyncTickAfterInputs()) runtime.completeAsyncTickAfterRecipe();
+            assertThat(runtime.failure()).isNotNull();
+            assertThat(runtime.tickCount()).isEqualTo(1);
+            assertThat(runtime.finishPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+
+            LevelStub.setGameTime(controller.getLevel(), 20);
+            assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+            assertThat(runtime.commitAsyncTick(null)).isTrue();
+            assertThat(runtime.completeAsyncTickAfterInputs()).isTrue();
+            runtime.completeAsyncTickAfterRecipe();
+
+            assertThat(runtime.failure()).isNull();
+            assertThat(runtime.tickCount()).isEqualTo(2);
+            assertThat(runtime.finishPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 14L);
+        }
     }
 
     @Test

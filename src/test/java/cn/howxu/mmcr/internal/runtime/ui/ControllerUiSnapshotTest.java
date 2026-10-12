@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -229,6 +230,87 @@ class ControllerUiSnapshotTest {
         cache.clear();
         ControllerUiSnapshotData afterClear = capture(cache, 6, runtime(1, 1, 0, two, presentation, Map.of()), true, Map.of());
         assertThat(afterClear.laneData().getFirst().recipe()).isNotSameAs(reinstalled.laneData().getFirst().recipe());
+    }
+
+    @Test
+    void polling_committed_progress_skips_static_capture_and_unchanged_values_do_not_publish() {
+        CaptureCache cache = new CaptureCache();
+        ControllerRecipePresentation presentation = presentation();
+        ControllerRuntimeSnapshot initial = runtime(1, 0, 0, FactorySnapshot.empty(), presentation, Map.of());
+        ControllerUiSnapshotData first = poll(cache, SESSION, 1, initial, Map.of()).orElseThrow();
+        int encoded = ENCODINGS.get();
+        assertThat(poll(cache, SESSION, 2, initial, Map.of())).isEmpty();
+        ControllerRuntimeSnapshot progressed = initial.withRuntimeState(crafting(RECIPE, 2), initial.factory(),
+                initial.capabilityPresentations(), initial.maxParallelism(), presentation);
+        ControllerUiSnapshotData second = poll(cache, SESSION, 2, progressed, Map.of()).orElseThrow();
+        assertThat(second.header()).isSameAs(first.header());
+        assertThat(second.laneData().getFirst().recipe()).isSameAs(first.laneData().getFirst().recipe());
+        assertThat(second.laneData().getFirst().tick()).isEqualTo(2);
+        assertThat(ENCODINGS.get()).isEqualTo(encoded);
+        assertThat(poll(cache, SESSION, 3, progressed, Map.of())).isEmpty();
+        ControllerUiSnapshotData changedText = poll(cache, SESSION, 3, progressed,
+                Map.of("base", text(1, Component.literal("changed")))).orElseThrow();
+        assertThat(changedText.sameShape(second)).isFalse();
+        assertThat(ENCODINGS.get()).isEqualTo(encoded);
+    }
+
+    @Test
+    void factory_progress_keeps_all_static_lanes_but_session_change_and_clear_force_fresh_baselines() {
+        CaptureCache cache = new CaptureCache();
+        ControllerRecipePresentation presentation = presentation();
+        ControllerRuntimeSnapshot initial = runtime(1, 1, 0, factory(List.of(
+                thread("base", 0, true, false, 1, presentation), thread("core", 1, false, true, 4, presentation))),
+                presentation, Map.of());
+        ControllerUiSnapshotData first = poll(cache, SESSION, 1, initial, Map.of()).orElseThrow();
+        int encoded = ENCODINGS.get();
+        ControllerRuntimeSnapshot progressed = initial.withRuntimeState(initial.crafting(), factory(List.of(
+                thread("base", 0, true, false, 2, presentation), thread("core", 1, false, true, 5, presentation))),
+                initial.capabilityPresentations(), initial.maxParallelism(), presentation);
+        ControllerUiSnapshotData second = poll(cache, SESSION, 2, progressed, Map.of()).orElseThrow();
+        assertThat(second.sameShape(first)).isTrue();
+        assertThat(second.header()).isSameAs(first.header());
+        assertThat(second.laneData()).extracting(ControllerUiSnapshotData.LaneData::tick).containsExactly(2, 5);
+        assertThat(ENCODINGS.get()).isEqualTo(encoded);
+        UUID reopened = UUID.randomUUID();
+        ControllerUiSnapshotData baseline = poll(cache, reopened, 1, progressed, Map.of()).orElseThrow();
+        assertThat(baseline.sessionId()).isEqualTo(reopened);
+        assertThat(baseline.laneData().getFirst().recipe()).isNotSameAs(second.laneData().getFirst().recipe());
+        assertThat(ENCODINGS.get()).isEqualTo(encoded + 2);
+        cache.clear();
+        assertThat(poll(cache, reopened, 1, progressed, Map.of())).isPresent();
+        assertThat(ENCODINGS.get()).isEqualTo(encoded + 4);
+    }
+
+    @Test
+    void polling_static_changes_with_unchanged_versions_or_ticks_requires_a_full_shape() {
+        CaptureCache cache = new CaptureCache();
+        ControllerRecipePresentation presentation = presentation();
+        ControllerRuntimeSnapshot initial = runtime(1, 0, 0, FactorySnapshot.empty(), presentation, Map.of());
+        ControllerUiSnapshotData first = poll(cache, SESSION, 1, initial, Map.of()).orElseThrow();
+        ControllerRecipePresentation replacement = new ControllerRecipePresentation(List.of(
+                new MachineOutputAmount(new MutableOutput(5), 15)), 9, 12, 0, 20, 3);
+        ControllerRuntimeSnapshot replaced = initial.withRuntimeState(initial.crafting(), initial.factory(),
+                initial.capabilityPresentations(), initial.maxParallelism(), replacement);
+        assertThat(replaced.stateVersion()).isEqualTo(initial.stateVersion());
+        ControllerUiSnapshotData outputsChanged = poll(cache, SESSION, 2, replaced, Map.of()).orElseThrow();
+        assertThat(outputsChanged.sameShape(first)).isFalse();
+        assertThat(outputsChanged.laneData().getFirst().recipe().outputData().getFirst().amount()).isEqualTo(15);
+        ControllerUiSnapshotData poolChanged = cache.poll(SESSION, 3, Level.OVERWORLD, BlockPos.ZERO,
+                replaced, id("selected_pool"), true, List.of(POOL), Map.of()).orElseThrow();
+        assertThat(poolChanged.sameShape(outputsChanged)).isFalse();
+        assertThat(poolChanged.currentRecipePoolId()).contains(id("selected_pool"));
+        ControllerRuntimeSnapshot module = runtime(1, 2, 1, FactorySnapshot.empty(), replacement,
+                Map.of("mode", DataValue.of("new")));
+        ControllerUiSnapshotData moduleChanged = poll(cache, SESSION, 4, module, Map.of()).orElseThrow();
+        assertThat(moduleChanged.sameShape(poolChanged)).isFalse();
+        assertThat(moduleChanged.connectedHostId()).contains(id("host"));
+        assertThat(moduleChanged.dataStorageValues().get("mode").stringValue()).isEqualTo("new");
+    }
+
+    private static Optional<ControllerUiSnapshotData> poll(CaptureCache cache, UUID session, long revision,
+                                                          ControllerRuntimeSnapshot runtime,
+                                                          Map<String, ControllerScreenTextSnapshot> text) {
+        return cache.poll(session, revision, Level.OVERWORLD, BlockPos.ZERO, runtime, POOL, true, List.of(POOL), text);
     }
 
     @Test

@@ -28,6 +28,10 @@ public interface AppMekBridge {
     boolean supportsPatternInput(Object key);
     Optional<MachineOutput> patternOutput(Object key, long amount);
     PatternRequest patternRequest(Object holders);
+    /** Binds chemical inputs to the same physical request inventory as the batch's item/fluid inputs. */
+    default PatternRequest patternRequestFromInventory(Object inventory) {
+        throw new UnsupportedOperationException("Shared pattern inventory is not supported by this bridge");
+    }
     long flush(IOPortBlockEntity host, long budget);
     void registerCapabilities(RegisterCapabilitiesEvent event);
 

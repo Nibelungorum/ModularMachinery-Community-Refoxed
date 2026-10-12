@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
@@ -150,6 +151,79 @@ public final class RequirementPlanner {
             directions.put(requirementIndexes.get(index), requirements.get(index).io());
         }
         return new PlanningResult(new CraftingPlan(materialized, selectedParallelism, directions), null);
+    }
+
+    /** Resolves the complete requirement set at fixed parallelism; native commit retains completed effects. */
+    public PlanningResult planFixed(List<MachineRequirement> requirements,
+                                    List<MachineCapability> capabilities,
+                                    PlanningContext context,
+                                    List<Integer> requirementIndexes) {
+        if (requirements == null || capabilities == null || context == null) {
+            throw new IllegalArgumentException("requirements, capabilities and context must not be null");
+        }
+        if (requirementIndexes == null || requirementIndexes.size() != requirements.size()) {
+            throw new IllegalArgumentException("requirement indexes must match requirements");
+        }
+        long selected = context.requestedParallelism();
+        PlanningReservations feasibilityReservations = context.reservations().copy();
+        List<RequirementPlan> plans = new ArrayList<>(requirements.size());
+        List<PlanningReservations> materializationBases = new ArrayList<>(requirements.size());
+        for (int index = 0; index < requirements.size(); index++) {
+            MachineRequirement requirement = requirements.get(index);
+            int originalIndex = requirementIndexes.get(index);
+            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities);
+            PlanningContext requirementContext = new PlanningContext(selected, originalIndex,
+                    context.allowPartialOutputs(), feasibilityReservations, context.outputPolicies(),
+                    context.reservationOwner());
+            // Include every preceding callback's budget, but exclude this requirement's own reservation.
+            // Its factory may reserve again, or may only create operations; neither changes feasibility.
+            materializationBases.add(feasibilityReservations.copy());
+            RequirementPlan resolved;
+            RequirementHandler<?> registered = RequirementHandlerRegistry.handlerFor(requirement.type());
+            if (requirement instanceof EnergyRequirement energy
+                    && registered instanceof EnergyRequirementHandler energyHandler) {
+                RequirementPlan.OperationPlan operations = energyHandler.planFixed(energy, matching, requirementContext);
+                resolved = RequirementPlan.withOutputSimulation(originalIndex, selected, operations.operations(),
+                        operations.failure(), operations.outputSimulation());
+            } else {
+                RequirementPlan plan = handler(requirement.type()).plan(requirement, matching, requirementContext);
+                if (!plan.successful()) return failed(plan.failure(), originalIndex, plans, plan);
+                if (plan.maxParallelism() < selected) {
+                    return failed(failure(requirement, originalIndex), originalIndex, plans, plan);
+                }
+                RequirementPlan.ReservationResult reservation = plan.reservationResult(selected, feasibilityReservations);
+                if (reservation.failure() != null) {
+                    RequirementPlan rejected = RequirementPlan.withOutputSimulation(originalIndex, selected,
+                            List.of(), reservation.failure(), reservation.outputSimulation() == null
+                                    ? plan.outputSimulation() : reservation.outputSimulation());
+                    return failed(reservation.failure(), originalIndex, plans, rejected);
+                }
+                resolved = plan.preparedAt(selected);
+                if (reservation.outputSimulation() != null) {
+                    resolved = new RequirementPlan(originalIndex, resolved.maxParallelism(), resolved.operations(),
+                            resolved.failure(), reservation.outputSimulation(), resolved.operationFactory(),
+                            resolved.reservationFactory(), selected);
+                }
+                if (plan.reservationFactory() == null) {
+                    // Legacy factories without a simulation callback establish their budget by materializing once.
+                    resolved = resolved.materialize(selected, feasibilityReservations,
+                            failure(requirement, originalIndex, BuiltinFailureReasons.UNSAFE_OPERATION_PARALLELISM));
+                }
+            }
+            if (!resolved.successful()) return failed(resolved.failure(), originalIndex, plans, resolved);
+            plans.add(resolved);
+        }
+        List<RequirementPlan> materialized = new ArrayList<>(plans.size());
+        Map<Integer, RecipeModifier.IOType> directions = new LinkedHashMap<>();
+        for (int index = 0; index < plans.size(); index++) {
+            int originalIndex = requirementIndexes.get(index);
+            RequirementPlan resolved = plans.get(index).materialize(selected, materializationBases.get(index),
+                    failure(requirements.get(index), originalIndex, BuiltinFailureReasons.UNSAFE_OPERATION_PARALLELISM));
+            if (!resolved.successful()) return failed(resolved.failure(), originalIndex, materialized, resolved);
+            materialized.add(resolved);
+            directions.put(originalIndex, requirements.get(index).io());
+        }
+        return new PlanningResult(new CraftingPlan(materialized, selected, directions), null);
     }
 
     private static ReservationAttempt reserveCandidate(List<RequirementPlan> plans,

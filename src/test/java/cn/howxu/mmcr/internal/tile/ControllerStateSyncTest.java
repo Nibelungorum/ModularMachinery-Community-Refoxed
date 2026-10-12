@@ -13,10 +13,12 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.compat.jade.MachineControllerDataProvider;
 import cn.howxu.mmcr.internal.network.PktMachineProgressPayload;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -29,10 +31,12 @@ import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import snownee.jade.api.BlockAccessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -165,6 +169,34 @@ class ControllerStateSyncTest {
         controller.setRemoved();
         controller.applyClientProgress("mmcr:recipe", 9, 20);
         assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(8);
+    }
+
+    @Test
+    void jade_requests_read_current_committed_progress_without_a_menu_or_cached_provider_baseline() throws Exception {
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        Level level = LevelStub.createWithBlockEntities(List.of(controller));
+        Field clientSide = Level.class.getDeclaredField("isClientSide");
+        clientSide.setAccessible(true);
+        clientSide.set(level, true);
+        controller.setLevel(level);
+        BlockAccessor accessor = (BlockAccessor) Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[]{BlockAccessor.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("getTarget")) return controller;
+                    throw new AssertionError(method.getName());
+                });
+        controller.applyClientState("mmcr:recipe", false, false, List.of(), null, 0, 0, false,
+                null, CraftingStatus.working(), null, true, 1, 20, 3L, 8L, Map.of());
+        CompoundTag first = new CompoundTag();
+        MachineControllerDataProvider.INSTANCE.appendServerData(first, accessor);
+        assertThat(first.getInt("tick")).contains(1);
+        assertThat(first.getInt("totalTick")).contains(20);
+        assertThat(first.getLong("parallelism")).contains(3L);
+        controller.applyClientProgress("mmcr:recipe", 7, 20);
+        CompoundTag later = new CompoundTag();
+        MachineControllerDataProvider.INSTANCE.appendServerData(later, accessor);
+        assertThat(later.getInt("tick")).contains(7);
+        assertThat(later.getInt("totalTick")).isEqualTo(first.getInt("totalTick"));
+        assertThat(later.getLong("parallelism")).isEqualTo(first.getLong("parallelism"));
     }
 
     private static PktMachineStatePayload payload(String recipe, int tick, int totalTick) {

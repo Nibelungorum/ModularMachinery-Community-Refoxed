@@ -35,6 +35,20 @@ import cn.howxu.mmcr.publicapi.runtime.FluidOutputView;
 import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration.Status;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.OutputType;
+import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import com.mojang.serialization.Codec;
+import cn.howxu.mmcr.compat.jade.MachineControllerDataProvider;
+import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
+import net.minecraft.world.level.ChunkPos;
+import net.neoforged.neoforge.event.level.ChunkWatchEvent;
+import net.minecraft.nbt.CompoundTag;
+import snownee.jade.api.BlockAccessor;
+import java.lang.reflect.Proxy;
 import cn.howxu.mmcr.api.data.DataValue;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -79,11 +93,19 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerSynchronizer;
+import net.minecraft.world.inventory.RemoteSlot;
+import net.minecraft.world.level.block.state.BlockState;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Receipt;
 import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /** Real controller menus, dispatcher, providers and runtime ownership checks.
  * @author howxu <dev@howxu.cn>
@@ -93,6 +115,7 @@ public final class ControllerUiGameTest {
     private static final Map<ServerPlayer, Probe> PROBES = new IdentityHashMap<>();
     private static final Map<Integer, Probe> VIEWERS = new HashMap<>();
     private static final ThreadLocal<Probe> DECODING = new ThreadLocal<>();
+    private static final ThreadLocal<OutputCodecProbe> OUTPUT_CALLBACK = new ThreadLocal<>();
     private static final StreamCodec<RegistryFriendlyByteBuf, Integer> REQUEST_CODEC = StreamCodec.of(
             (buffer, value) -> buffer.writeVarInt(value), buffer -> {
                 Probe probe = DECODING.get();
@@ -150,6 +173,11 @@ public final class ControllerUiGameTest {
                 if (probe != null) {
                     probe.captures++;
                     if (probe.failCapture) throw new IllegalStateException("Expected fixture capture failure");
+                    if (probe.afterSnapshot != null) {
+                        Runnable callback = probe.afterSnapshot;
+                        probe.afterSnapshot = null;
+                        callback.run();
+                    }
                 }
                 var storage = context.machine().dataStorage();
                 return new ModeState(storage == null ? 0L : storage.get("mode_revision").flatMap(DataKey::asLong).orElse(0L),
@@ -189,6 +217,465 @@ public final class ControllerUiGameTest {
         private boolean failEncode;
         private Runnable afterHandle;
         private Runnable afterRevision;
+        private Runnable afterSnapshot;
+    }
+
+    public static void terminalMenuLifecycle(GameTestHelper helper) {
+        if (OutputRegistry.typeFor(CodecOutput.TYPE.id()) == null) OutputRegistry.register(CodecOutput.TYPE);
+        helper.assertTrue(OutputRegistry.canonicalType(CodecOutput.TYPE) == CodecOutput.TYPE,
+                "Output callbacks use the actual canonical runtime registry");
+        helper.assertTrue(OutputRegistry.toRequirement(new CodecOutput(37L), List.of("codec_fixture"))
+                        .equals(new EnergyRequirement(IOType.OUTPUT, 37L, List.of("codec_fixture"))),
+                "Codec fixture output converts to a canonical executable requirement with its direction and tags");
+        formedFixture(helper, original -> {
+            var owner = new CountingController(original.owner.getBlockPos(), original.owner.getBlockState());
+            helper.getLevel().removeBlockEntity(owner.getBlockPos());
+            helper.getLevel().setBlockEntity(owner);
+            owner.setMachine(MachineRegistry.getMachine(MACHINE_ID));
+            owner.serverTick();
+            helper.assertTrue(owner.structureSnapshot().formed() && owner.runtimeSnapshot().factoryControllerPresent()
+                            && owner.behaviorContext().dataStorage() != null,
+                    "Counting owner uses the real formed storage/factory binding");
+            try (var fixture = new Fixture(helper, owner, original.storage)) {
+                for (boolean factory : List.of(false, true)) {
+                    for (boolean forgetController : List.of(false, true)) {
+                        String stage = "terminal broadcast / factory=" + factory + " / forgetController=" + forgetController;
+                        var player = fixture.newPlayer();
+                        var menu = lifecycleMenu(fixture, player, factory);
+                        var session = ((ControllerUiMenu) menu).uiServerSession();
+                        var inventorySync = new InventorySync();
+                        int beforeInit = owner.queries;
+                        menu.setSynchronizer(inventorySync);
+                        menu.broadcastChanges();
+                        helper.assertTrue(!session.active() && !session.closed() && owner.queries > beforeInit,
+                                "Preinstalled inactive opening still initializes controller DataSlots: " + stage);
+                        player.containerMenu = menu;
+                        var event = new PlayerContainerEvent.Open(player, menu);
+                        ControllerSyncEvents.onMenuOpen(event);
+                        ControllerUiEvents.opened(event);
+                        helper.assertTrue(session.active(), "Installed opening activates normally: " + stage);
+                        menu.broadcastChanges();
+                        if (forgetController) ControllerSyncEvents.forgetController(owner);
+                        else session.close();
+                        helper.assertTrue(session.closed() && player.containerMenu == menu,
+                                "Independent close leaves the actual menu installed but terminal: " + stage);
+                        assertNoObservers(helper, owner, player, stage);
+                        Probe probe = PROBES.get(player);
+                        int revisions = probe.queries, captures = probe.captures, encodes = probe.encodes;
+                        owner.onPatternStartCommitted();
+                        fixture.storage.storage().set("mode_revision", DataValue.of(fixture.revision() + 1));
+                        var item = new ItemStack(Items.DIAMOND, 3);
+                        var carried = new ItemStack(Items.GOLD_INGOT, 2);
+                        menu.slots.getFirst().set(item);
+                        menu.setCarried(carried);
+                        int queries = owner.queries;
+                        int slots = inventorySync.slots, carriedChanges = inventorySync.carriedChanges;
+                        menu.broadcastChanges();
+                        menu.broadcastChanges();
+                        helper.assertTrue(owner.queries == queries && probe.queries == revisions
+                                        && probe.captures == captures && probe.encodes == encodes,
+                                "Closed real normal/factory broadcast does not query owner projection or provider captures: " + stage);
+                        helper.assertTrue(inventorySync.slots == slots + 1
+                                        && inventorySync.carriedChanges == carriedChanges + 1
+                                        && ItemStack.matches(inventorySync.lastSlot, item)
+                                        && ItemStack.matches(inventorySync.lastCarried, carried),
+                                "Terminal broadcast still synchronizes changed inventory and carried contents once: " + stage);
+                        // Full initialization also reads DataSlots; terminal wrappers must not reach the owner.
+                        menu.sendAllDataToRemote();
+                        helper.assertTrue(owner.queries == queries, "Terminal DataSlots retain their last values: " + stage);
+                    }
+                    for (boolean syncFirst : List.of(false, true)) {
+                        for (boolean closeInSnapshot : List.of(false, true)) {
+                            assertOpeningCloseOrder(helper, fixture, factory, syncFirst, closeInSnapshot);
+                        }
+                    }
+                }
+                for (boolean factory : List.of(false, true)) {
+                    for (var boundary : OutputCodecBoundary.values()) {
+                        for (var mutation : OutputCodecMutation.values()) {
+                            assertOutputCodecBoundary(helper, fixture, factory, boundary, mutation);
+                        }
+                    }
+                }
+                var normalPlayer = fixture.newPlayer();
+                var factoryPlayer = fixture.newPlayer();
+                var normal = lifecycleMenu(fixture, normalPlayer, false);
+                var factory = lifecycleMenu(fixture, factoryPlayer, true);
+                for (var menu : List.of(normal, factory)) {
+                    var session = ((ControllerUiMenu) menu).uiServerSession();
+                    var player = session.player();
+                    player.containerMenu = menu;
+                    var event = new PlayerContainerEvent.Open(player, menu);
+                    ControllerUiEvents.opened(event);
+                    ControllerSyncEvents.onMenuOpen(event);
+                }
+                owner.onChunkUnloaded();
+                helper.assertTrue(((ControllerUiMenu) normal).uiServerSession().closed()
+                                && ((ControllerUiMenu) factory).uiServerSession().closed(),
+                        "Owner unload terminates both actual menu sessions");
+                int queries = owner.queries;
+                normal.broadcastChanges();
+                factory.broadcastChanges();
+                helper.assertTrue(owner.queries == queries, "Unloaded owner is never queried by terminal menu broadcasts");
+                assertNoObservers(helper, owner, normalPlayer, "owner unload / factory=false");
+                assertNoObservers(helper, owner, factoryPlayer, "owner unload / factory=true");
+                var replacement = new CountingController(owner.getBlockPos(), owner.getBlockState());
+                helper.getLevel().removeBlockEntity(owner.getBlockPos());
+                helper.getLevel().setBlockEntity(replacement);
+                queries = owner.queries;
+                normal.broadcastChanges();
+                factory.broadcastChanges();
+                normal.sendAllDataToRemote();
+                factory.sendAllDataToRemote();
+                helper.assertTrue(normalPlayer.containerMenu == normalPlayer.inventoryMenu
+                                && factoryPlayer.containerMenu == factoryPlayer.inventoryMenu && owner.queries == queries
+                                && !((ControllerUiMenu) normal).uiServerSession().validate()
+                                && !((ControllerUiMenu) factory).uiServerSession().validate(),
+                        "Already-terminal owner replacement closes installed normal/factory containers without owner queries");
+            }
+            helper.assertTrue(runtime(owner).factoryRuntime().activeLaneCount() == 0
+                            && helper.getLevel().getBlockEntity(owner.getBlockPos()) == null,
+                    "Completed codec fixture leaves no active factory work or ticking replacement controller");
+        });
+        helper.succeed();
+    }
+
+    /** Actual canonical codec boundaries, not simulated session callbacks.
+     * @author howxu <dev@howxu.cn> */
+    private enum OutputCodecBoundary { CAPTURE_ENCODE, SEND_DECODE, SEND_ENCODE }
+    /** Independent lifecycle mutations within one output codec invocation.
+     * @author howxu <dev@howxu.cn> */
+    private enum OutputCodecMutation { CLOSE, REOPEN, STORAGE_REBIND }
+
+    /** Immutable custom output whose actual sync codec can reenter the menu lifecycle.
+     * @author howxu <dev@howxu.cn> */
+    private record CodecOutput(long amount) implements MachineOutput {
+        private static final OutputType<CodecOutput> TYPE = new OutputType.Definition<>(
+                MMCR.id("ui_lifecycle_codec_output"), Codec.LONG.xmap(CodecOutput::new, CodecOutput::amount).fieldOf("amount"),
+                (value, chance) -> value, (value, modifiers) -> value, value -> value,
+                OutputType.Presentation.defaults(MMCR.id("ui_lifecycle_codec_output")), "mmcr:ui_lifecycle_codec_output",
+                (value, tags) -> new EnergyRequirement(IOType.OUTPUT, value.amount(), tags),
+                requirement -> false, ignored -> null,
+                RecipeSyncCodec.of(16, (buffer, value) -> {
+                    buffer.writeLong(value.amount());
+                    var probe = OUTPUT_CALLBACK.get();
+                    if (probe != null) {
+                        probe.encodes++;
+                        probe.fire(probe.encodes == 1 ? OutputCodecBoundary.CAPTURE_ENCODE : OutputCodecBoundary.SEND_ENCODE);
+                    }
+                }, buffer -> {
+                    var value = new CodecOutput(buffer.readLong());
+                    var probe = OUTPUT_CALLBACK.get();
+                    if (probe != null) {
+                        probe.decodes++;
+                        probe.fire(OutputCodecBoundary.SEND_DECODE);
+                    }
+                    return value;
+                }, value -> {}));
+        @Override public OutputType<CodecOutput> outputType() { return TYPE; }
+        @Override public float chance() { return 1F; }
+    }
+
+    /** One synchronous capture/send attempt, disarmed before a callback opens another menu.
+     * @author howxu <dev@howxu.cn> */
+    private static final class OutputCodecProbe {
+        private final OutputCodecBoundary boundary;
+        private final Runnable callback;
+        private int encodes, decodes;
+        private boolean fired;
+        private OutputCodecProbe(OutputCodecBoundary boundary, Runnable callback) {
+            this.boundary = boundary;
+            this.callback = callback;
+        }
+        private void fire(OutputCodecBoundary actual) {
+            if (actual != boundary) return;
+            fired = true;
+            OUTPUT_CALLBACK.remove();
+            callback.run();
+        }
+    }
+
+    private static void assertOutputCodecBoundary(GameTestHelper helper, Fixture fixture, boolean factory,
+                                                 OutputCodecBoundary boundary, OutputCodecMutation mutation) {
+        String stage = boundary + " / " + mutation + " / factory=" + factory;
+        var factoryRuntime = runtime(fixture.owner).factoryRuntime();
+        if (factoryRuntime.activeLaneCount() == 0) {
+            var recipe = MachineRecipe.fromCanonical(MMCR.id("ui_lifecycle_codec_recipe"), MACHINE_ID, 200,
+                    List.of(), List.of(new CodecOutput(37L)), List.of(), 0, 1, false, false, false, Set.of());
+            var reservation = factoryRuntime.reservePatternStart(recipe, 1, List.of());
+            boolean committed = reservation != null && reservation.runtime().commitPatternStart(reservation.preparedStart());
+            String failureContext = "";
+            if (!committed) {
+                var shared = SharedIoCoordinator.get(helper.getLevel());
+                var snapshot = factoryRuntime.snapshot();
+                failureContext = " / reserved=" + (reservation != null)
+                        + " / failureStatus=" + (reservation == null ? snapshot.failure() : reservation.runtime().failure())
+                        + " / lanes=" + snapshot.presentationLanes()
+                        + " / receipts=" + terminalCodecReceipts(fixture)
+                        + " / round=" + shared.executionRoundId() + " / gameTime=" + helper.getLevel().getGameTime()
+                        + " / permitEligible=" + shared.controllerPermit(fixture.owner.getBlockPos()).eligible(
+                        shared.executionRoundId(), helper.getLevel().getGameTime(), helper.getLevel().tickRateManager().runsNormally());
+            }
+            helper.assertTrue(committed, "A real factory execution supplies the custom output to built-in UI capture: "
+                    + stage + failureContext);
+            factoryRuntime.releasePatternStart(reservation);
+            fixture.owner.onPatternStartCommitted();
+        }
+        var player = fixture.newPlayer();
+        var menu = lifecycleMenu(fixture, player, factory);
+        var session = ((ControllerUiMenu) menu).uiServerSession();
+        var later = new AtomicReference<AbstractContainerMenu>();
+        var probe = new OutputCodecProbe(boundary, () -> {
+            switch (mutation) {
+                case CLOSE -> session.close();
+                case REOPEN -> {
+                    var replacement = lifecycleMenu(fixture, player, factory);
+                    later.set(replacement);
+                    player.containerMenu = replacement;
+                    var event = new PlayerContainerEvent.Open(player, replacement);
+                    ControllerSyncEvents.onMenuOpen(event);
+                    ControllerUiEvents.opened(event);
+                }
+                case STORAGE_REBIND -> {
+                    fixture.owner.invalidateFormedStructure();
+                    helper.assertTrue(fixture.owner.behaviorContext().dataStorage() == null,
+                            "Output callback really detaches the former storage binding: " + stage);
+                    fixture.owner.requestImmediateStructureCheck();
+                    fixture.owner.serverTick();
+                    helper.assertTrue(fixture.owner.structureSnapshot().formed()
+                                    && fixture.owner.behaviorContext().dataStorage() != null
+                                    && fixture.owner.structureSnapshot().configuredMachine().registryName().equals(MACHINE_ID),
+                            "Output callback rebinds formed storage without changing the configured machine ID: " + stage);
+                }
+            }
+        });
+        player.containerMenu = menu;
+        var event = new PlayerContainerEvent.Open(player, menu);
+        ControllerSyncEvents.onMenuOpen(event);
+        OUTPUT_CALLBACK.set(probe);
+        try {
+            ControllerUiEvents.opened(event);
+        } catch (GameTestException failure) {
+            throw failure;
+        } catch (RuntimeException failure) {
+            var assertion = helper.assertionException(Component.literal("Built-in codec opening failed: " + stage
+                    + " / fired=" + probe.fired + " / encodes=" + probe.encodes + " / decodes=" + probe.decodes
+                    + " / " + failure.getClass().getSimpleName() + ": " + failure.getMessage()
+                    + " / stack=" + List.of(failure.getStackTrace())));
+            assertion.initCause(failure);
+            throw assertion;
+        } finally {
+            OUTPUT_CALLBACK.remove();
+        }
+        helper.assertTrue(probe.fired && probe.encodes == (boundary == OutputCodecBoundary.SEND_ENCODE ? 2 : 1)
+                        && probe.decodes == (boundary == OutputCodecBoundary.CAPTURE_ENCODE ? 0 : 1),
+                "Actual output sync codec reaches the selected callback boundary: " + stage);
+        UUID oldToken = session.openData().sessionId();
+        helper.assertTrue(packets(player, PktControllerUiSnapshotPayload.class).stream()
+                        .noneMatch(packet -> packet.sessionId().equals(oldToken))
+                        && packets(player, PktControllerUiProgressPayload.class).stream()
+                        .noneMatch(packet -> packet.sessionId().equals(oldToken))
+                        && (mutation == OutputCodecMutation.STORAGE_REBIND
+                        || packets(player, PktControllerUiCustomStatePayload.class).stream()
+                        .noneMatch(packet -> packet.sessionId().equals(oldToken))),
+                "Discarded work sends no old snapshot/progress; terminal openings send no provider state: " + stage);
+        helper.assertTrue(snapshotField(session, "sentSnapshot") == null
+                        && (long) snapshotField(session, "fullBaselineRevision") == 0L,
+                "Discarded old work cannot revive a sent snapshot or full baseline: " + stage);
+        if (mutation == OutputCodecMutation.STORAGE_REBIND) {
+            Object cache = snapshotField(session, "captureCache");
+            helper.assertTrue(session.active() && session.validate() && cache != null
+                            && snapshotField(cache, "observedSnapshot") == null
+                            && ((Map<?, ?>) snapshotField(cache, "lanes")).isEmpty()
+                            && lastState(player).viewer() == player.getId() && PROBES.get(player).captures == 1,
+                    "Same-ID binding replacement drops the old cache and preserves the valid current provider callback: " + stage);
+            session.close();
+        } else {
+            helper.assertTrue(session.closed() && snapshotField(session, "captureCache") == null,
+                    "Close/exact-menu replacement leaves the old session terminal with no attached cache: " + stage);
+            session.broadcastChanges();
+        }
+        if (later.get() == null) {
+            assertNoObservers(helper, fixture.owner, player, stage);
+            var replacement = lifecycleMenu(fixture, player, factory);
+            later.set(replacement);
+            player.containerMenu = replacement;
+            var replacementEvent = new PlayerContainerEvent.Open(player, replacement);
+            ControllerSyncEvents.onMenuOpen(replacementEvent);
+            ControllerUiEvents.opened(replacementEvent);
+        }
+        var replacement = later.get();
+        var newSession = ((ControllerUiMenu) replacement).uiServerSession();
+        var baselines = packets(player, PktControllerUiSnapshotPayload.class);
+        helper.assertTrue(!baselines.isEmpty(), "New opening sends a full baseline before codec verification: " + stage);
+        var baseline = baselines.getLast();
+        helper.assertTrue(replacement.containerId == menu.containerId && newSession.validate()
+                        && !newSession.openData().sessionId().equals(oldToken)
+                        && baseline.sessionId().equals(newSession.openData().sessionId())
+                        && lastState(player).viewer() == player.getId(),
+                "A new same-container opening independently sends its real full baseline and provider: " + stage);
+        byte[] wire = ControllerUiPayloadCodec.encodeBounded(PktControllerUiSnapshotPayload.STREAM_CODEC, baseline,
+                helper.getLevel().registryAccess(), ControllerUiPayloadCodec.SNAPSHOT_LIMIT);
+        var decoded = ControllerUiPayloadCodec.decodeExact(PktControllerUiSnapshotPayload.STREAM_CODEC, wire,
+                helper.getLevel().registryAccess(), ControllerUiPayloadCodec.SNAPSHOT_LIMIT);
+        helper.assertTrue(decoded.snapshotData().sameShape(baseline.snapshotData()),
+                "New opening's actual registry-backed full codec still round-trips after the old callback: " + stage);
+        int fullCount = packets(player, PktControllerUiSnapshotPayload.class).size();
+        session.close();
+        menu.removed(player);
+        ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(player, menu));
+        ControllerUiEvents.closed(new PlayerContainerEvent.Close(player, menu));
+        ControllerSyncEvents.onMenuOpen(event);
+        replacement.broadcastChanges();
+        helper.assertTrue(newSession.validate() && player.containerMenu == replacement
+                        && observerMap(MachineControllerBlockEntity.class, fixture.owner, "menuObservers").get(player) == replacement
+                        && packets(player, PktControllerUiSnapshotPayload.class).size() == fullCount,
+                "Old cleanup and a later unchanged poll preserve the new opening and its baseline: " + stage);
+        newSession.close();
+        assertNoObservers(helper, fixture.owner, player, stage);
+        // Each case owns its execution. Retired delivery slots remain occupied until real receipt ACKs arrive.
+        factoryRuntime.clear();
+        var pending = terminalCodecReceipts(fixture);
+        helper.assertTrue(pending.stream().allMatch(Receipt::terminal),
+                "Codec case teardown publishes terminal cancellation facts: " + stage + " / receipts=" + pending);
+        var async = MachineAsyncCoordinator.get(helper.getLevel());
+        var shared = SharedIoCoordinator.get(helper.getLevel());
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!pending.isEmpty() && System.nanoTime() < deadline) {
+            async.pumpReceiptDrains();
+            shared.drainReceiptAcknowledgements(helper.getLevel());
+            pending = terminalCodecReceipts(fixture);
+            if (!pending.isEmpty()) Thread.yield();
+        }
+        helper.assertTrue(pending.isEmpty() && factoryRuntime.activeLaneCount() == 0,
+                "Codec case teardown drains real terminal ACKs before same-position lane reuse: " + stage
+                        + " / receipts=" + pending);
+    }
+
+    private static Object snapshotField(Object target, String name) {
+        try {
+            var field = target.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            return field.get(target);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Cannot inspect actual UI snapshot state", exception);
+        }
+    }
+
+    private static List<Receipt> terminalCodecReceipts(Fixture fixture) {
+        var shared = SharedIoCoordinator.get(fixture.helper.getLevel());
+        var records = (Set<?>) ((Map<?, ?>) snapshotField(shared, "executionsByController")).get(fixture.owner.getBlockPos().asLong());
+        if (records == null) return List.of();
+        List<Receipt> receipts = new ArrayList<>();
+        for (var record : records) {
+            for (var slot : (Object[]) snapshotField(record, "slots")) {
+                var receipt = (Receipt) snapshotField(slot, "receipt");
+                if (receipt != null) receipts.add(receipt);
+            }
+        }
+        return List.copyOf(receipts);
+    }
+
+    private static AbstractContainerMenu lifecycleMenu(Fixture fixture, ServerPlayer player, boolean factory) {
+        BlockPos pos = fixture.owner.getBlockPos();
+        player.setPos(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+        return factory ? new FactoryControllerMenu(71, player.getInventory(), fixture.owner, player)
+                : new MachineControllerMenu(71, player.getInventory(), fixture.owner);
+    }
+
+    private static void assertOpeningCloseOrder(GameTestHelper helper, Fixture fixture, boolean factory,
+                                              boolean syncFirst, boolean closeInSnapshot) {
+        String stage = "opening close / factory=" + factory + " / syncFirst=" + syncFirst
+                + " / closeInSnapshot=" + closeInSnapshot;
+        var player = fixture.newPlayer();
+        var menu = lifecycleMenu(fixture, player, factory);
+        var session = ((ControllerUiMenu) menu).uiServerSession();
+        Probe probe = PROBES.get(player);
+        if (closeInSnapshot) probe.afterSnapshot = session::close;
+        else probe.afterRevision = session::close;
+        player.containerMenu = menu;
+        var event = new PlayerContainerEvent.Open(player, menu);
+        if (syncFirst) ControllerSyncEvents.onMenuOpen(event);
+        ControllerUiEvents.opened(event);
+        if (!syncFirst) ControllerSyncEvents.onMenuOpen(event);
+        helper.assertTrue(session.closed() && player.containerMenu == menu && probe.queries == 1
+                        && probe.captures == (closeInSnapshot ? 1 : 0) && probe.encodes == 0,
+                "Real opening provider closes independently in either callback and either legal listener order: " + stage);
+        assertNoObservers(helper, fixture.owner, player, stage);
+        ControllerSyncEvents.onMenuOpen(event);
+        assertNoObservers(helper, fixture.owner, player, stage);
+
+        var later = lifecycleMenu(fixture, player, factory);
+        var laterSession = ((ControllerUiMenu) later).uiServerSession();
+        player.containerMenu = later;
+        var laterEvent = new PlayerContainerEvent.Open(player, later);
+        ControllerSyncEvents.onMenuOpen(laterEvent);
+        helper.assertTrue(!laterSession.active() && !laterSession.closed(),
+                "Observer-first Open accepts a fresh not-yet-activated opening: " + stage);
+        ControllerUiEvents.opened(laterEvent);
+        Object observer = observerMap(ControllerSyncEvents.class, null, "MENUS").get(player);
+        helper.assertTrue(observer != null && laterSession.active(), "New opening registers and activates: " + stage);
+        session.close();
+        menu.removed(player);
+        ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(player, menu));
+        ControllerUiEvents.closed(new PlayerContainerEvent.Close(player, menu));
+        ControllerSyncEvents.onMenuOpen(event);
+        helper.assertTrue(observerMap(ControllerSyncEvents.class, null, "MENUS").get(player) == observer
+                        && observerMap(MachineControllerBlockEntity.class, fixture.owner, "menuObservers").get(player) == later
+                        && player.containerMenu == later && laterSession.active(),
+                "Repeated close, old removal and delayed old events preserve exact new opening identity: " + stage);
+        laterSession.close();
+        assertNoObservers(helper, fixture.owner, player, stage);
+    }
+
+    private static void assertNoObservers(GameTestHelper helper, MachineControllerBlockEntity owner, ServerPlayer player,
+                                          String stage) {
+        helper.assertTrue(!observerMap(ControllerSyncEvents.class, null, "MENUS").containsKey(player)
+                        && !observerMap(MachineControllerBlockEntity.class, owner, "menuObservers").containsKey(player),
+                "Terminal opening immediately leaves both reverse and controller-local observer indices: " + stage);
+    }
+
+    private static Map<?, ?> observerMap(Class<?> type, Object target, String name) {
+        try {
+            var field = type.getDeclaredField(name);
+            field.setAccessible(true);
+            return (Map<?, ?>) field.get(target);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Cannot inspect actual menu observer index", exception);
+        }
+    }
+
+    /** Counts real menu queries without replacing controller runtime or authorization.
+     * @author howxu <dev@howxu.cn> */
+    private static final class CountingController extends MachineControllerBlockEntity {
+        private int queries;
+        private CountingController(BlockPos pos, BlockState state) { super(pos, state); }
+        @Override public ControllerRuntimeSnapshot runtimeSnapshot() {
+            queries++;
+            return super.runtimeSnapshot();
+        }
+    }
+
+    /** Records vanilla remote inventory delivery, including carried contents.
+     * @author howxu <dev@howxu.cn> */
+    private static final class InventorySync implements ContainerSynchronizer {
+        private int slots, carriedChanges;
+        private ItemStack lastSlot = ItemStack.EMPTY, lastCarried = ItemStack.EMPTY;
+        @Override public void sendInitialData(AbstractContainerMenu menu, List<ItemStack> items, ItemStack carried, int[] data) {}
+        @Override public void sendSlotChange(AbstractContainerMenu menu, int slot, ItemStack item) {
+            slots++;
+            lastSlot = item.copy();
+        }
+        @Override public void sendCarriedChange(AbstractContainerMenu menu, ItemStack item) {
+            carriedChanges++;
+            lastCarried = item.copy();
+        }
+        @Override public void sendDataChange(AbstractContainerMenu menu, int id, int value) {}
+        @Override public RemoteSlot createSlot() {
+            return new RemoteSlot.Synchronized(component -> {
+                throw new AssertionError("Inventory fixture receives no client hash updates");
+            });
+        }
     }
 
     public static void requestStorage(GameTestHelper helper) {
@@ -407,13 +894,16 @@ public final class ControllerUiGameTest {
             fixture.owner.setMachine(MachineRegistry.getMachine(MACHINE_ID));
             fixture.reopen(player, 21);
             var ownerRequest = request(player, 1, SET_MODE.id(), 1, Optional.empty(), new byte[]{2});
+            var ownerSession = ui(player).uiServerSession();
             var level = helper.getLevel();
             var block = (MachineControllerBlock) fixture.owner.getBlockState().getBlock();
             var replacement = block.newBlockEntity(fixture.owner.getBlockPos(), fixture.owner.getBlockState());
             level.removeBlockEntity(fixture.owner.getBlockPos());
             level.setBlockEntity(replacement);
             dispatch(player, ownerRequest);
-            helper.assertTrue(probe.decodes == 3 && probe.handles == 2 && fixture.revision() == 1,
+            helper.assertTrue(probe.decodes == 3 && probe.handles == 2 && fixture.revision() == 1
+                            && ownerSession.closed() && !ownerSession.validate()
+                            && player.containerMenu == player.inventoryMenu,
                     "A same-position replacement cannot inherit the original owner authorization");
             fixture.close();
             helper.succeed();
@@ -715,6 +1205,80 @@ public final class ControllerUiGameTest {
         }
     }
 
+    public static void reopenedSessionUsesCommittedProgressAndJadeRequest(GameTestHelper helper) {
+        BlockPos relative = new BlockPos(2, 2, 2);
+        for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) {
+            helper.setBlock(relative.offset(x, y, z), ModBlocks.CASING.get().defaultBlockState());
+        }
+        helper.setBlock(relative, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity owner = helper.getBlockEntity(relative);
+        owner.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        owner.serverTick();
+        helper.assertTrue(owner.structureSnapshot().formed(), "Progress observation fixture forms synchronously");
+        var player = player(helper);
+        BlockPos pos = owner.getBlockPos();
+        player.setPos(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+        var crafting = runtime(owner).craftingRuntime();
+        var recipe = MachineRecipe.fromCanonical(MMCR.id("ui_committed_progress_baseline"), MMCR.id("test_cube"), 20,
+                List.of(), List.of(), List.of(), 0, 1, false, false, false, Set.of());
+        helper.assertTrue(crafting.start(recipe, 1).isCrafting(), "Observation fixture starts a real recipe");
+        crafting.tick();
+        crafting.tick();
+        owner.onPatternStartCommitted();
+        var accessor = (BlockAccessor) Proxy.newProxyInstance(BlockAccessor.class.getClassLoader(),
+                new Class<?>[]{BlockAccessor.class}, (proxy, method, arguments) -> {
+                    if (method.getName().equals("getTarget")) return owner;
+                    throw new UnsupportedOperationException(method.getName());
+                });
+        var jade = new CompoundTag();
+        MachineControllerDataProvider.INSTANCE.appendServerData(jade, accessor);
+        helper.assertTrue(jade.getInt("tick") == crafting.tickCount()
+                        && jade.getInt("totalTick") == crafting.totalTick() && jade.getBoolean("active"),
+                "Actual Jade request reports the current committed recipe progress");
+        try {
+            var first = new MachineControllerMenu(61, player.getInventory(), owner);
+            player.containerMenu = first;
+            ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, first));
+            var firstFull = packets(player, PktControllerUiSnapshotPayload.class).getLast();
+            helper.assertTrue(firstFull.snapshotData().laneData().getFirst().tick() == 2,
+                    "New session baseline starts at already committed progress");
+            var closed = first.uiServerSession();
+            player.closeContainer();
+            var chunkPos = ChunkPos.containing(pos);
+            var chunk = helper.getLevel().getChunkSource().getChunkNow(chunkPos.x, chunkPos.z);
+            helper.assertTrue(chunk != null, "Nearby observer's controller chunk is loaded");
+            ControllerSyncEvents.onChunkSent(new ChunkWatchEvent.Sent(player, chunk, helper.getLevel()));
+            helper.assertTrue(!packets(player, PktMachineStatePayload.class).isEmpty(),
+                    "Nearby observer has a real chunk-watch full-state baseline before no-UI progress");
+            int fullCount = packets(player, PktControllerUiSnapshotPayload.class).size();
+            int progressCount = packets(player, PktControllerUiProgressPayload.class).size();
+            int stateCount = packets(player, PktMachineStatePayload.class).size();
+            crafting.tick();
+            owner.onPatternStartCommitted();
+            var updatedJade = new CompoundTag();
+            MachineControllerDataProvider.INSTANCE.appendServerData(updatedJade, accessor);
+            helper.assertTrue(updatedJade.getInt("tick") == 3 && jade.getInt("tick") == 2,
+                    "A later Jade request gets current committed progress without mutating the previous response");
+            closed.broadcastChanges();
+            helper.assertTrue(packets(player, PktControllerUiSnapshotPayload.class).size() == fullCount
+                            && packets(player, PktControllerUiProgressPayload.class).size() == progressCount
+                            && packets(player, PktMachineStatePayload.class).size() == stateCount,
+                    "Closed session and nearby player without a UI receive no recipe-progress full state");
+            var second = new MachineControllerMenu(62, player.getInventory(), owner);
+            player.containerMenu = second;
+            ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, second));
+            var reopened = packets(player, PktControllerUiSnapshotPayload.class).getLast();
+            helper.assertTrue(!reopened.sessionId().equals(firstFull.sessionId())
+                            && reopened.snapshotData().laneData().getFirst().tick() == 3
+                            && packets(player, PktControllerUiSnapshotPayload.class).size() == fullCount + 1,
+                    "Reopen sends a fresh session baseline with the latest committed progress");
+        } finally {
+            player.closeContainer();
+            ((RecordingConnection) player.connection).getConnection().channel().close();
+        }
+        helper.succeed();
+    }
+
     private static void verifySnapshotOwnership(GameTestHelper helper) {
         BlockPos relative = new BlockPos(2, 2, 2);
         for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) {
@@ -965,6 +1529,8 @@ public final class ControllerUiGameTest {
                 PROBES.remove(player);
                 VIEWERS.remove(player.getId());
             }
+            runtime(owner).factoryRuntime().clear();
+            helper.getLevel().removeBlock(owner.getBlockPos(), false);
         }
     }
 
@@ -1110,7 +1676,8 @@ public final class ControllerUiGameTest {
         var replacement = block.newBlockEntity(pos, owner.getBlockState());
         level.removeBlockEntity(pos);
         level.setBlockEntity(replacement);
-        helper.assertTrue(replacedSession.pollSnapshot().isEmpty() && player.containerMenu == player.inventoryMenu,
+        helper.assertTrue(replacedSession.pollSnapshot().isEmpty() && player.containerMenu == player.inventoryMenu
+                        && replacedSession.closed() && !replacedSession.validate(),
                 "Replacement at the same position cannot inherit the original owner authorization");
         player.openMenu(owner.getBlockState().getMenuProvider(level, pos));
         var distantSession = ((ControllerUiMenu) player.containerMenu).uiServerSession();

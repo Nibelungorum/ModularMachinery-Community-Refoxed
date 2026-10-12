@@ -324,11 +324,59 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
         private Map<String, LaneProjection> lanes = Map.of();
         private @Nullable Map<String, cn.howxu.mmcr.api.data.DataValue> storageSource;
         private Map<String, DataValue> storageValues = Map.of();
+        private @Nullable CaptureSource observedSource;
+        private @Nullable ControllerUiSnapshotData observedSnapshot;
 
         public CaptureCache() { this(RegistryAccess.EMPTY); }
 
         public CaptureCache(RegistryAccess registries) {
             this.registries = Objects.requireNonNull(registries, "registries");
+        }
+
+        /** Compare committed inputs before capturing owned static values or encoding any outputs. */
+        public Optional<ControllerUiSnapshotData> poll(UUID sessionId, long revision, ResourceKey<Level> dimension,
+                                                      BlockPos controllerPos, ControllerRuntimeSnapshot runtime,
+                                                      @Nullable ResourceLocation recipePoolId, boolean hasDataStorage,
+                                                      List<ResourceLocation> recipePools,
+                                                      Map<String, ControllerScreenTextSnapshot> laneText) {
+            CaptureSource source = new CaptureSource(runtime, recipePoolId, hasDataStorage,
+                    List.copyOf(recipePools), Map.copyOf(laneText));
+            ControllerUiSnapshotData previous = observedSnapshot;
+            ControllerUiSnapshotData next;
+            if (previous != null && previous.sessionId().equals(sessionId)
+                    && previous.dimension().equals(dimension) && previous.controllerPos().equals(controllerPos)
+                    && source.sameShape(observedSource)) {
+                boolean changed = false;
+                for (int i = 0; i < previous.laneData().size(); i++) {
+                    LaneData lane = previous.laneData().get(i);
+                    int tick = previous.kind() == Kind.FACTORY
+                            ? runtime.factory().presentationLanes().get(i).tick() : runtime.crafting().tick();
+                    if (tick != lane.tick()) {
+                        changed = true;
+                        break;
+                    }
+                }
+                observedSource = source;
+                if (!changed) return Optional.empty();
+                List<LaneData> progress = new ArrayList<>(previous.laneData().size());
+                for (int i = 0; i < previous.laneData().size(); i++) {
+                    LaneData lane = previous.laneData().get(i);
+                    int tick = previous.kind() == Kind.FACTORY
+                            ? runtime.factory().presentationLanes().get(i).tick() : runtime.crafting().tick();
+                    progress.add(tick == lane.tick() ? lane : lane.withTick(tick));
+                }
+                next = new ControllerUiSnapshotData(sessionId, revision, true, dimension, controllerPos,
+                        previous.header(), progress);
+            } else {
+                next = capture(sessionId, revision, dimension, controllerPos, runtime, recipePoolId,
+                        hasDataStorage, recipePools, laneText);
+                observedSource = source;
+                if (previous != null && next.sameShape(previous) && next.laneData().equals(previous.laneData())) {
+                    return Optional.empty();
+                }
+            }
+            observedSnapshot = next;
+            return Optional.of(next);
         }
 
         public ControllerUiSnapshotData capture(UUID sessionId, long revision, ResourceKey<Level> dimension,
@@ -438,6 +486,59 @@ public record ControllerUiSnapshotData(UUID sessionId, long revision, boolean re
             lanes = Map.of();
             storageSource = null;
             storageValues = Map.of();
+            observedSource = null;
+            observedSnapshot = null;
+        }
+    }
+
+    /** Session-local committed inputs; runtime versions alone do not describe progress or author text changes.
+     * @author howxu <dev@howxu.cn> */
+    private record CaptureSource(ControllerRuntimeSnapshot runtime, @Nullable ResourceLocation pool, boolean hasStorage,
+                                 List<ResourceLocation> pools, Map<String, ControllerScreenTextSnapshot> text) {
+        boolean sameShape(@Nullable CaptureSource other) {
+            if (other == null || hasStorage != other.hasStorage || !Objects.equals(pool, other.pool)
+                    || !pools.equals(other.pools) || !text.equals(other.text)) return false;
+            ControllerRuntimeSnapshot before = other.runtime;
+            if (runtime == before) return true;
+            ControllerSyncRuntime sync = new ControllerSyncRuntime();
+            if (!runtime.structure().equals(before.structure())
+                    || !runtime.machineId().equals(before.machineId()) || !runtime.machineName().equals(before.machineName())
+                    || runtime.controllerRole() != before.controllerRole()
+                    || runtime.installedModuleCount() != before.installedModuleCount()
+                    || !runtime.moduleConnectionStatus().equals(before.moduleConnectionStatus())
+                    || !runtime.foundLevelIds().equals(before.foundLevelIds())
+                    || runtime.parallelControllerCount() != before.parallelControllerCount()
+                    || runtime.maxParallelism() != before.maxParallelism()
+                    || runtime.factoryControllerPresent() != before.factoryControllerPresent()
+                    || !runtime.dataStorageValues().equals(before.dataStorageValues())
+                    || sync.active(runtime) != sync.active(before)
+                    || runtime.crafting().status().isPaused() != before.crafting().status().isPaused()
+                    || runtime.factory().paused() != before.factory().paused()
+                    || !Objects.equals(runtime.crafting().failure(), before.crafting().failure())
+                    || !Objects.equals(runtime.factory().failure(), before.factory().failure())) return false;
+            Kind kind = ControllerUiServerSession.runtimeKind(runtime);
+            if (kind == Kind.TICK) return true;
+            if (kind == Kind.NORMAL) {
+                return Objects.equals(runtime.crafting().recipeId(), before.crafting().recipeId())
+                        && runtime.crafting().totalTick() == before.crafting().totalTick()
+                        && runtime.crafting().parallelism() == before.crafting().parallelism()
+                        && runtime.recipePresentation() == before.recipePresentation();
+            }
+            var current = runtime.factory().presentationLanes();
+            var previous = before.factory().presentationLanes();
+            if (runtime.factory().laneLimit() != before.factory().laneLimit()
+                    || runtime.factory().activeLaneCount() != before.factory().activeLaneCount()
+                    || current.size() != previous.size()) return false;
+            for (int i = 0; i < current.size(); i++) {
+                var lane = current.get(i);
+                var old = previous.get(i);
+                if (!lane.laneId().equals(old.laneId()) || lane.index() != old.index()
+                        || lane.baseThread() != old.baseThread() || lane.coreThread() != old.coreThread()
+                        || lane.active() != old.active() || !lane.recipeId().equals(old.recipeId())
+                        || lane.totalTick() != old.totalTick() || lane.parallelism() != old.parallelism()
+                        || !Objects.equals(lane.failure(), old.failure()) || lane.presentation() != old.presentation()) return false;
+            }
+            return true;
         }
     }
 

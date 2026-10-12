@@ -67,6 +67,7 @@ import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.event.ControllerUiEvents;
+import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
@@ -78,6 +79,7 @@ import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
@@ -139,6 +141,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
@@ -157,6 +160,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -187,6 +191,7 @@ class MachineControllerBlockEntityTest {
 
     @AfterEach
     void closeTextRegistration() {
+        ControllerSyncEvents.clear();
         textRegistrations.forEach(ControllerScreenTextRegistry.Registration::unregister);
         textRegistrations.clear();
         runtimeStateBatchLevels.forEach(level -> SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level)));
@@ -231,6 +236,214 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void unattended_committed_progress_is_lazy_and_both_api_queries_are_fresh() throws Exception {
+        ResourceLocation machineId = MMCR.id("lazy_committed_progress");
+        MachineControllerBlockEntity controller = textController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("lazy_progress_recipe"), machineId,
+                20, List.of(), List.of());
+        assertThat(runtime.craftingRuntime().start(recipe, 1L).isCrafting()).isTrue();
+        controller.syncRecipeRuntimeFailure(runtime.craftingRuntime());
+        ControllerRuntimeSnapshot baseline = controller.runtimeSnapshot();
+        int captures = runtime.projectionBuildCountForTesting();
+
+        for (int tick = 1; tick <= 5; tick++) {
+            runtime.craftingRuntime().activeRecipe().setTick(tick);
+            controller.syncRecipeRuntimeFailure(runtime.craftingRuntime());
+        }
+
+        assertThat(runtime.projectionBuildCountForTesting()).isEqualTo(captures);
+        ControllerRuntimeSnapshot latest = controller.runtimeSnapshot();
+        assertThat(latest.crafting().tick()).isEqualTo(5);
+        assertThat(latest.recipePresentation()).isSameAs(baseline.recipePresentation());
+        assertSharedStaticState(latest, baseline);
+        assertThat(runtime.projectionBuildCountForTesting()).isEqualTo(captures + 1);
+        assertThat(controller.currentRuntimeSnapshot()).isSameAs(latest);
+
+        runtime.beginUpdateBatch();
+        try {
+            runtime.craftingRuntime().activeRecipe().setTick(6);
+            assertThat(controller.runtimeSnapshot().crafting().tick()).isEqualTo(6);
+            assertThat(controller.currentRuntimeSnapshot().crafting().tick()).isEqualTo(6);
+        } finally {
+            runtime.endUpdateBatch();
+        }
+        assertThat(baseline.crafting().tick()).isZero();
+    }
+
+    @Test
+    void unattended_text_handlers_run_without_recapturing_static_projection() throws Exception {
+        ResourceLocation machineId = MMCR.id("lazy_text_handler");
+        MachineControllerBlockEntity controller = textController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        AtomicInteger callbacks = new AtomicInteger();
+        textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> {
+            callbacks.incrementAndGet();
+            context.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                    MMCR.id("lazy_handler_line"), Component.literal("live"));
+        }));
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        int captures = runtime.projectionBuildCountForTesting();
+
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
+
+        assertThat(callbacks).hasValue(3);
+        assertThat(runtime.projectionBuildCountForTesting()).isEqualTo(captures);
+        assertThat(runtime.screenText().snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.text().getString()).isEqualTo("live"));
+    }
+
+    @Test
+    void port_dirty_notifications_only_capture_once_when_an_api_observes() throws Exception {
+        ResourceLocation machineId = MMCR.id("lazy_port_capture");
+        MachineControllerBlockEntity controller = textController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(2, 0, 0));
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(), BlockPos.ZERO, List.of())));
+        ControllerRuntimeSnapshot baseline = controller.runtimeSnapshot();
+        int captures = runtime.projectionBuildCountForTesting();
+
+        energy.energyStorage().setAmount(17L);
+        controller.notifyCapabilityPresentationChanged(energy.getBlockPos());
+        controller.notifyCapabilityPresentationChanged(energy.getBlockPos());
+
+        assertThat(runtime.projectionBuildCountForTesting()).isEqualTo(captures);
+        ControllerRuntimeSnapshot latest = controller.runtimeSnapshot();
+        assertThat(latest.capabilityPresentations()).isNotSameAs(baseline.capabilityPresentations());
+        assertThat(latest.capabilityPresentations()).isEqualTo(controller.componentRuntime().capabilityPresentations());
+        assertThat(runtime.projectionBuildCountForTesting()).isEqualTo(captures + 1);
+        assertThat(controller.runtimeSnapshot()).isSameAs(latest);
+    }
+
+    @Test
+    void factory_failure_scalar_refreshes_dirty_lane_failure_without_capturing_presentation() throws Exception {
+        MachineControllerBlockEntity controller = runtimeStateBatchFactory(MMCR.id("lazy_factory_failure_scalar"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        FactoryRuntime factory = runtime.factoryRuntime();
+        controller.runtimeSnapshot();
+        int captures = runtime.projectionBuildCountForTesting();
+        CraftingRuntime lane = factory.activeRuntimes().getFirst();
+
+        lane.recordSearchFailure(null);
+        factory.markLaneRuntimeChanged(lane);
+
+        assertThat(factory.failure()).isSameAs(lane.failure()).isNotNull();
+        assertThat(runtime.projectionBuildCountForTesting()).isEqualTo(captures);
+        assertThat(factory.failure()).isSameAs(lane.failure());
+        assertThat(runtime.projectionBuildCountForTesting()).isEqualTo(captures);
+    }
+
+    @Test
+    void menu_events_send_late_observer_baselines_and_close_exact_openings() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("lazy_menu_observer"));
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("observer_line"), Component.literal("baseline"));
+        ServerPlayer player = player((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        MachineControllerMenu first = new MachineControllerMenu(1, new Inventory(player), controller);
+        player.containerMenu = first;
+        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, first));
+        assertThat(textPackets(player)).hasSize(1);
+        MachineControllerMenu later = new MachineControllerMenu(2, new Inventory(player), controller);
+        player.containerMenu = later;
+        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, later));
+        ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(player, first));
+        assertThat(textPackets(player)).hasSize(2);
+
+        runtime.screenText().clear(ControllerScreenTextScope.CONTROLLER);
+        invokeSyncOpenText(controller);
+        assertThat(textPackets(player)).hasSize(3);
+        ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(player, later));
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("closed_line"), Component.literal("closed"));
+        invokeSyncOpenText(controller);
+        assertThat(textPackets(player)).hasSize(3);
+    }
+
+    @Test
+    void tracking_receives_start_stop_and_late_live_baseline_without_progress_broadcasts() throws Exception {
+        ResourceLocation machineId = MMCR.id("lazy_tracking_transitions");
+        MachineControllerBlockEntity controller = textController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer first = player(level, controller.getBlockPos());
+        controller.sendClientStateBaseline(first);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("lazy_tracking_recipe"), machineId,
+                20, List.of(), List.of());
+        assertThat(runtime.craftingRuntime().start(recipe, 1L).isCrafting()).isTrue();
+        controller.syncRecipeRuntimeFailure(runtime.craftingRuntime());
+        assertThat(machineStatePackets(first)).hasSize(2);
+        assertThat(machineStatePackets(first).getLast().active()).isTrue();
+
+        runtime.craftingRuntime().activeRecipe().setTick(5);
+        controller.syncRecipeRuntimeFailure(runtime.craftingRuntime());
+        assertThat(machineStatePackets(first)).hasSize(2);
+        ServerPlayer later = player(level, controller.getBlockPos());
+        controller.sendClientStateBaseline(later);
+        assertThat(machineStatePackets(later)).singleElement()
+                .satisfies(packet -> assertThat(packet.tick()).isEqualTo(5));
+
+        runtime.craftingRuntime().invalidate();
+        controller.syncRecipeRuntimeFailure(runtime.craftingRuntime());
+        assertThat(machineStatePackets(first)).hasSize(3);
+        assertThat(machineStatePackets(first).getLast().active()).isFalse();
+        assertThat(machineStatePackets(later)).hasSize(2);
+    }
+
+    @Test
+    void disconnect_forgets_menu_and_tracking_while_handlers_remain_registered() throws Exception {
+        ResourceLocation machineId = MMCR.id("lazy_disconnect_observer");
+        MachineControllerBlockEntity controller = textController(machineId);
+        MachineControllerRuntime runtime = runtimeOf(controller);
+        ServerPlayer player = player((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(player), controller);
+        player.containerMenu = menu;
+        controller.sendClientStateBaseline(player);
+        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, menu));
+        AtomicInteger callbacks = new AtomicInteger();
+        textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> callbacks.incrementAndGet()));
+
+        ControllerSyncEvents.onPlayerLoggedOut(new PlayerEvent.PlayerLoggedOutEvent(player));
+        runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
+                MMCR.id("after_disconnect"), Component.literal("live"));
+        invokeSyncOpenText(controller);
+        DataStorage storage = new DataStorage();
+        runtime.publishDataStorages(Map.of(BlockPos.ZERO, storage));
+        storage.set("mode", DataValue.of("live"));
+        controller.onDataStorageChanged(storage);
+        ControllerScreenTextRegistry.apply(runtime.runtimeContext());
+
+        assertThat(textPackets(player)).hasSize(1);
+        assertThat(machineStatePackets(player)).hasSize(1);
+        assertThat(callbacks).hasValue(1);
+    }
+
+    @Test
+    void controller_unload_immediately_revokes_its_permit_and_forgets_observers() throws Exception {
+        MachineControllerBlockEntity controller = textController(MMCR.id("lazy_unload_cancel"));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+        coordinator.beginExecutionRound(level.getGameTime(), true);
+        coordinator.markControllerEligible(controller, level.getGameTime());
+        var permit = coordinator.controllerPermit(controller.getBlockPos());
+        long round = coordinator.executionRoundId();
+        assertThat(permit.eligible(round, level.getGameTime(), true)).isTrue();
+        ServerPlayer player = player(level, controller.getBlockPos());
+        controller.sendClientStateBaseline(player);
+        long lifecycle = controller.lifecycleEpoch();
+
+        controller.onChunkUnloaded();
+        controller.serverTick();
+
+        assertThat(controller.lifecycleEpoch()).isGreaterThan(lifecycle);
+        assertThat(permit.eligible(round, level.getGameTime(), true)).isFalse();
+        assertThat(machineStatePackets(player)).hasSize(1);
+        SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+    }
+
+    @Test
     void server_progress_reuses_owned_static_state_and_callbacks_read_batch_writes() throws Exception {
         ResourceLocation machineId = MMCR.id("shared_progress_batch");
         MachineControllerBlockEntity controller = factoryTextController(machineId);
@@ -266,7 +479,7 @@ class MachineControllerBlockEntityTest {
             assertSharedStaticState(progressed, before);
             assertThat(ownedUpgradeItems(progressed)).isSameAs(ownedUpgradeItems(before));
             assertThat(progressed.recipePresentation()).isSameAs(before.recipePresentation());
-            assertThat(controller.runtimeSnapshot()).isSameAs(before);
+            assertThat(controller.runtimeSnapshot()).isSameAs(progressed);
             progressed.upgradeItems().getFirst().setCount(64);
             assertThat(before.upgradeItems().getFirst().getCount()).isEqualTo(2);
             assertThat(progressed.upgradeItems().getFirst().getCount()).isEqualTo(2);
@@ -536,7 +749,8 @@ class MachineControllerBlockEntityTest {
             assertThat(workingId.get(runtime)).isSameAs(machine.id);
             assertThat(publishedId.get(runtime)).isSameAs(originalId);
             runtime.publishSnapshot();
-            assertThat(controller.runtimeSnapshot()).isSameAs(first);
+            assertThat(controller.runtimeSnapshot()).isSameAs(changed);
+            assertThat(publishedId.get(runtime)).isSameAs(originalId);
         } finally {
             runtime.endUpdateBatch();
         }
@@ -769,6 +983,7 @@ class MachineControllerBlockEntityTest {
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer player = testPlayer(level, controller.getBlockPos());
         setPlayers(level, List.of(player));
+        controller.sendClientStateBaseline(player);
         controller.onDataStorageChanged(storage);
 
         runtime.beginUpdateBatch();
@@ -798,29 +1013,35 @@ class MachineControllerBlockEntityTest {
         ServerLevel level = (ServerLevel) controller.getLevel();
         ServerPlayer first = player(level, BlockPos.ZERO);
         ServerPlayer later = player(level, BlockPos.ZERO);
-        setPlayers(level, List.of(first));
-        runtime.beginUpdateBatch();
-        runtime.endUpdateBatch();
-        assertThat(machineStatePackets(first)).hasSize(1);
-        var snapshot = controller.runtimeSnapshot();
         Field pending = PlayerChunkSender.class.getDeclaredField("pendingChunks");
         pending.setAccessible(true);
         LongSet pendingChunks = (LongSet) pending.get(later.connection.chunkSender);
         pendingChunks.add(new ChunkPos(BlockPos.ZERO).toLong());
         setPlayers(level, List.of(first, later));
+        assertThat(level.getChunkSource().chunkMap.isChunkTracked(first, 0, 0)).isTrue();
+        assertThat(level.getChunkSource().chunkMap.isChunkTracked(later, 0, 0)).isFalse();
+        ControllerSyncEvents.onControllerLoaded(controller);
+        runtime.beginUpdateBatch();
+        runtime.endUpdateBatch();
+        assertThat(machineStatePackets(first)).hasSize(1);
+        var snapshot = controller.runtimeSnapshot();
         runtime.beginUpdateBatch();
         runtime.endUpdateBatch();
         assertThat(machineStatePackets(later)).isEmpty();
         pendingChunks.clear();
+        assertThat(level.getChunkSource().chunkMap.isChunkTracked(later, 0, 0)).isTrue();
+        controller.sendClientStateBaseline(later);
         runtime.beginUpdateBatch();
         runtime.endUpdateBatch();
         assertThat(controller.runtimeSnapshot()).isSameAs(snapshot);
         assertThat(machineStatePackets(first)).hasSize(1);
         assertThat(machineStatePackets(later)).containsExactly(machineStatePackets(first).getFirst());
         setPlayers(level, List.of(first));
+        controller.forgetClientStateBaseline(later);
         runtime.beginUpdateBatch();
         runtime.endUpdateBatch();
         setPlayers(level, List.of(first, later));
+        controller.sendClientStateBaseline(later);
         runtime.beginUpdateBatch();
         runtime.endUpdateBatch();
         assertThat(machineStatePackets(later)).hasSize(2);
@@ -1078,7 +1299,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void level_post_batch_publishes_four_attached_lanes_once_with_immediately_live_epochs() throws Exception {
+    void level_post_batch_keeps_four_attached_lanes_live_and_projects_once_on_demand() throws Exception {
         MachineControllerBlockEntity controller = runtimeStateBatchFactory(MMCR.id("batched_factory_publication"));
         MachineControllerRuntime runtime = runtimeOf(controller);
         FactoryRuntime factory = runtime.factoryRuntime();
@@ -1098,14 +1319,14 @@ class MachineControllerBlockEntityTest {
                 assertThat(lane.versionsCurrent()).isTrue();
                 assertThat(controller.currentRuntimeSnapshot().factory().presentationLanes().get(index).tick())
                         .isEqualTo(1);
-                assertThat(controller.runtimeSnapshot()).isSameAs(published);
                 assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
             }
         });
 
-        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(1, 1, 1, 1);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
         assertThat(published.factory().presentationLanes())
                 .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(0, 0, 0, 0);
         assertThat(published.factory().lanes()).extracting(state -> state.tick()).containsExactly(0, 0, 0, 0);
@@ -1132,12 +1353,12 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void nested_level_post_scopes_only_publish_when_the_owner_exits() throws Exception {
+    void nested_level_post_scopes_keep_live_lanes_without_eager_publication() throws Exception {
         MachineControllerBlockEntity controller = runtimeStateBatchFactory(MMCR.id("nested_factory_publication"));
         MachineControllerRuntime runtime = runtimeOf(controller);
         List<CraftingRuntime> lanes = runtime.factoryRuntime().activeRuntimes();
         ServerLevel level = (ServerLevel) controller.getLevel();
-        ControllerRuntimeSnapshot published = controller.runtimeSnapshot();
+        controller.runtimeSnapshot();
         int publications = runtime.snapshotBuildCountForTesting();
 
         MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
@@ -1147,13 +1368,15 @@ class MachineControllerBlockEntityTest {
                 lanes.get(1).activeRecipe().setTick(1);
                 controller.syncRecipeRuntimeFailure(lanes.get(1));
             });
-            assertThat(controller.runtimeSnapshot()).isSameAs(published);
+            assertThat(controller.currentRuntimeSnapshot().factory().presentationLanes())
+                    .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(1, 1, 0, 0);
             assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
         });
 
-        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .extracting(FactoryRuntime.ThreadSnapshot::tick).containsExactly(1, 1, 0, 0);
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
     }
 
     @Test
@@ -1198,8 +1421,10 @@ class MachineControllerBlockEntityTest {
         MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
             lane.activeRecipe().setTick(2);
             controller.syncRecipeRuntimeFailure(lane);
-            assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(1);
+            assertThat(controller.currentRuntimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(2);
         });
+        assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
+        assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(2);
         assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 2);
         lane.activeRecipe().setTick(3);
         controller.syncRecipeRuntimeFailure(lane);
@@ -1213,7 +1438,7 @@ class MachineControllerBlockEntityTest {
         MachineControllerRuntime runtime = runtimeOf(controller);
         CraftingRuntime lane = runtime.factoryRuntime().activeRuntimes().getFirst();
         ServerLevel level = (ServerLevel) controller.getLevel();
-        ControllerRuntimeSnapshot published = controller.runtimeSnapshot();
+        controller.runtimeSnapshot();
         int publications = runtime.snapshotBuildCountForTesting();
 
         MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
@@ -1221,13 +1446,13 @@ class MachineControllerBlockEntityTest {
             controller.syncRecipeRuntimeFailure(lane);
             SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
             MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
-            assertThat(controller.runtimeSnapshot()).isSameAs(published);
+            assertThat(controller.currentRuntimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(1);
             assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
 
             MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
                 lane.activeRecipe().setTick(2);
                 controller.syncRecipeRuntimeFailure(lane);
-                assertThat(controller.runtimeSnapshot()).isSameAs(published);
+                assertThat(controller.currentRuntimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(2);
             });
             assertThat(controller.runtimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(2);
             assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications + 1);
@@ -1404,6 +1629,49 @@ class MachineControllerBlockEntityTest {
 
         assertThat(runtime.screenText().snapshot().lines()).isEmpty();
         assertThat(runtime.screenText().revision()).isGreaterThan(revision);
+    }
+
+    @Test
+    void reset_removes_a_faulty_storage_binding_without_capturing_its_old_presentation() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        // Keep this pattern independent of the registered test_cube compiled structure.
+        ResourceLocation machineId = MMCR.id("faulty_storage_reset_fixture");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        TestBootstrap.bindControllerForTesting(machineId);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO,
+                ModBlocks.controllerFor(machineId).get().defaultBlockState()
+                        .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        FaultyPresentationInputBus input = new FaultyPresentationInputBus(new BlockPos(1, 0, 0));
+        DynamicMachine machine = new DynamicMachine(machineId, "faulty reset",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0),
+                        new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))),
+                MachineControllerSpec.defaultsFor(machineId));
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, input);
+        assertThat(controller.currentRecipePoolId()).isEqualTo(machineId);
+        assertThat(controller.currentStructureSnapshot().configuredMachine()).isSameAs(machine);
+        assertThat(controller.currentStructureSnapshot().pattern().pattern()).containsKey(input.getBlockPos());
+        assertThat(controller.componentRuntime().components()).singleElement()
+                .satisfies(component -> assertThat(component.getContainer()).isSameAs(input));
+        ControllerRuntimeSnapshot before = controller.runtimeSnapshot();
+        assertThat(before.capabilityPresentations()).isNotEmpty();
+        assertThat(input.linkedControllerPositions()).contains(controller.getBlockPos());
+        input.broken = true;
+        controller.componentRuntime().markCapabilitySourceChanged(input.getBlockPos());
+        assertThatThrownBy(controller::runtimeSnapshot).isInstanceOf(IllegalStateException.class)
+                .hasMessage("broken old storage");
+        int reads = input.failedReads;
+
+        assertThatCode(controller::invalidateFormedStructure).doesNotThrowAnyException();
+
+        assertThat(input.failedReads).isEqualTo(reads);
+        assertThat(input.broken).isTrue();
+        assertThat(controller.currentStructureSnapshot().formed()).isFalse();
+        assertThat(controller.currentStructureSnapshot().configuredMachine()).isSameAs(machine);
+        assertThat(controller.componentRuntime().components()).isEmpty();
+        assertThat(input.linkedControllerPositions()).isEmpty();
+        assertThat(controller.runtimeSnapshot().capabilityPresentations()).isEmpty();
+        assertThat(before.structure().formed()).isTrue();
+        assertThat(before.capabilityPresentations()).isNotEmpty();
     }
 
     @Test
@@ -1659,6 +1927,7 @@ class MachineControllerBlockEntityTest {
         FactoryControllerMenu menu = new FactoryControllerMenu(1, new Inventory(player), controller, player);
         player.containerMenu = menu;
         setField(ServerLevel.class, level, "players", List.of(player));
+        controller.observeMenu(player, menu);
         assertThat(menu.machineName()).isEqualTo(firstMachine.displayNameKey());
 
         controller.invalidateFormedStructure();
@@ -2263,7 +2532,10 @@ class MachineControllerBlockEntityTest {
             assertThat(newCatalog.recipes()).containsExactly(replacementRecipe);
             assertThat(oldCatalog.recipes()).containsExactly(reloaded);
             assertThat((int) counter.invoke(runtime.factoryRuntime())).isEqualTo(before);
-            assertThat(controller.runtimeSnapshot()).isSameAs(oldSnapshot);
+            var liveSnapshot = controller.runtimeSnapshot();
+            assertThat(liveSnapshot.factory().laneLimit()).isEqualTo(16);
+            assertThat(oldSnapshot.factory().laneLimit()).isEqualTo(1);
+            assertThat(controller.currentRuntimeSnapshot()).isSameAs(liveSnapshot);
 
             Machine replacement = new DynamicMachine(machineId, "replacement recipe pool machine", new BlockArray(Map.of()));
             controller.setMachine(replacement);
@@ -2336,11 +2608,50 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.machineStatePacket()).isSameAs(first);
 
         assertThat(controller.selectRecipePool(secondPool)).isTrue();
-        assertThat(controller.runtimeSnapshot()).isSameAs(snapshot);
+        assertSharedStaticState(controller.runtimeSnapshot(), snapshot);
         var second = controller.machineStatePacket();
         assertThat(second).isNotSameAs(first);
         assertThat(second.recipePoolId()).isEqualTo(secondPool.toString());
         assertThat(controller.machineStatePacket()).isSameAs(second);
+
+        var runtime = controllerRuntime(controller);
+        runtime.beginUpdateBatch();
+        try {
+            assertThat(controller.selectRecipePool(firstPool)).isTrue();
+            var live = controller.machineStatePacket();
+            assertThat(live.recipePoolId()).isEqualTo(firstPool.toString());
+            assertThat(live).isNotSameAs(second);
+            assertThat(controller.machineStatePacket()).isSameAs(live);
+            assertThat(second.recipePoolId()).isEqualTo(secondPool.toString());
+        } finally {
+            runtime.endUpdateBatch();
+        }
+    }
+
+    @Test
+    void explicit_state_sender_resolves_removed_pool_before_capturing_active_work() throws Exception {
+        ResourceLocation machineId = MMCR.id("state_sender_pool_fallback");
+        ResourceLocation firstPool = MMCR.id("state_sender_pool_first");
+        ResourceLocation removedPool = MMCR.id("state_sender_pool_removed");
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool, removedPool)).build());
+        MachineControllerBlockEntity controller = textController(machineId);
+        assertThat(controller.selectRecipePool(removedPool)).isTrue();
+        CraftingRuntime crafting = controllerRuntime(controller).craftingRuntime();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("state_sender_pool_recipe"), removedPool,
+                20, List.of(), List.of());
+        assertThat(crafting.start(recipe, 1L).isCrafting()).isTrue();
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        ServerPlayer viewer = player((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
+
+        controller.sendMachineControllerState(viewer);
+
+        assertThat(crafting.active()).isFalse();
+        assertThat(machineStatePackets(viewer)).singleElement().satisfies(packet -> {
+            assertThat(packet.recipePoolId()).isEqualTo(firstPool.toString());
+            assertThat(packet.recipeName()).isEmpty();
+        });
     }
 
     private static MachineControllerRuntime controllerRuntime(MachineControllerBlockEntity controller) {
@@ -2874,6 +3185,7 @@ class MachineControllerBlockEntityTest {
                 List.of(), List.of(), List.of(), 0, 4);
         factory.tick(List.of(recipe), 1, 0L);
         assertThat(factory.activeRuntimes()).hasSize(4);
+        controller.syncRuntimeStateIfChanged();
         RuntimeTestFixtures.republish(controller);
         return controller;
     }
@@ -2925,6 +3237,29 @@ class MachineControllerBlockEntityTest {
         ResourceLocation id = MMCR.id(path);
         return new MachineLevel(id, MMCR.id("snapshot_level_type"), 1, new BlockPredicate.Any(),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY);
+    }
+
+    /** A bound port whose presentation storage stays faulty during teardown. @author howxu <dev@howxu.cn> */
+    private static final class FaultyPresentationInputBus extends ItemInputBusBlockEntity {
+        private boolean broken;
+        private int failedReads;
+        private final LongItemStorage storage = new LongItemStorage(1, 64L, null) {
+            @Override
+            public ItemStack getStackInSlot(int slot) {
+                if (broken) {
+                    failedReads++;
+                    throw new IllegalStateException("broken old storage");
+                }
+                return super.getStackInSlot(slot);
+            }
+        };
+
+        private FaultyPresentationInputBus(BlockPos pos) {
+            super(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+            storage.setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        }
+
+        @Override public LongItemStorage itemHandler() { return storage; }
     }
 
     /** @author howxu <dev@howxu.cn> */
@@ -3063,7 +3398,28 @@ class MachineControllerBlockEntityTest {
     }
 
     private static void setPlayers(ServerLevel level, List<ServerPlayer> players) throws Exception {
+        for (ServerPlayer previous : level.players()) {
+            if (!players.contains(previous)) {
+                if (previous.containerMenu instanceof MachineControllerMenu menu
+                        && level.getBlockEntity(menu.controllerPos()) instanceof MachineControllerBlockEntity controller) {
+                    controller.forgetMenu(previous, menu);
+                } else if (previous.containerMenu instanceof FactoryControllerMenu menu
+                        && level.getBlockEntity(menu.controllerPos()) instanceof MachineControllerBlockEntity controller) {
+                    controller.forgetMenu(previous, menu);
+                }
+                ControllerSyncEvents.forgetPlayer(previous);
+            }
+        }
         setField(ServerLevel.class, level, "players", players);
+        for (ServerPlayer player : players) {
+            if (player.containerMenu instanceof MachineControllerMenu menu
+                    && level.getBlockEntity(menu.controllerPos()) instanceof MachineControllerBlockEntity controller) {
+                controller.observeMenu(player, menu);
+            } else if (player.containerMenu instanceof FactoryControllerMenu menu
+                    && level.getBlockEntity(menu.controllerPos()) instanceof MachineControllerBlockEntity controller) {
+                controller.observeMenu(player, menu);
+            }
+        }
     }
 
     private static ServerPlayer testPlayer(ServerLevel level, BlockPos pos) throws Exception {

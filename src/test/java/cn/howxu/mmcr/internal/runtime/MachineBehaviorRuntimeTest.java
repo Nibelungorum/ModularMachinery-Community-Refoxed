@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
@@ -35,6 +36,7 @@ import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
 import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
 import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
 import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.api.machine.definition.TickBehaviorContext;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -46,6 +48,7 @@ import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -58,6 +61,7 @@ import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -68,6 +72,7 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.util.IOType;
@@ -87,11 +92,15 @@ import com.electronwill.nightconfig.core.CommentedConfig;
 import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -105,6 +114,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * @author howxu <dev@howxu.cn>
  */
 class MachineBehaviorRuntimeTest {
+    private ServerThreadTestScope serverThreadScope;
     private static final ResourceLocation TEST_MACHINE_ID = MMCR.id("test_cube");
 
     @BeforeAll
@@ -118,10 +128,19 @@ class MachineBehaviorRuntimeTest {
         ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
+    @BeforeEach
+    void installServerThread() throws Exception {
+        serverThreadScope = ServerThreadTestScope.open();
+    }
+
     @AfterEach
-    void cleanupRecipes() {
-        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        RecipeRegistry.clearForTesting();
+    void cleanupRecipes() throws Exception {
+        try {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+            RecipeRegistry.clearForTesting();
+        } finally {
+            if (serverThreadScope != null) serverThreadScope.close();
+        }
     }
 
     @Test
@@ -319,6 +338,362 @@ class MachineBehaviorRuntimeTest {
         assertThat(item(itemOutput.itemHandler(), 0).is(Items.IRON_NUGGET)).isTrue();
         assertThat(itemOutput.itemHandler().amount(0)).isEqualTo(1L);
         assertThat(fluidOutput.fluidHandler(null).getAmountAsLong()).isEqualTo(1_000);
+    }
+
+    @Test
+    void recipe_tick_contexts_are_fresh_and_isolate_outputs_in_both_execution_paths() {
+        for (boolean async : List.of(false, true)) {
+            List<RecipeTickContext> contexts = new ArrayList<>();
+            ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(1, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, output);
+            controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                    .recipeTick(context -> {
+                        contexts.add(context);
+                        assertThat(((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().getCount())
+                                .isEqualTo(1);
+                        ((MachineOutput.ItemOutput) context.outputs().getFirst()).stack().setCount(64);
+                    }).build()));
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("fresh_tick_context_" + async), TEST_MACHINE_ID,
+                    2, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(output(Items.IRON_NUGGET)));
+            assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+            int machineContexts = controller.behaviorContextBuildCountForTesting();
+
+            for (int tick = 0; tick < 2; tick++) {
+                if (async) {
+                    assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+                    assertThat(runtime.commitAsyncTick(null)).isTrue();
+                    assertThat(runtime.completeAsyncTickAfterInputs()).isTrue();
+                    runtime.completeAsyncTickAfterRecipe();
+                    runtime.flushAsyncScreenText();
+                } else {
+                    runtime.tick();
+                }
+            }
+
+            assertThat(contexts).hasSize(2);
+            assertThat(contexts.get(0)).isNotSameAs(contexts.get(1));
+            assertThat(contexts.get(0).machineContext()).isNotSameAs(contexts.get(1).machineContext());
+            assertThat(contexts).extracting(RecipeTickContext::currentTick).containsExactly(0, 1);
+            assertThat(runtime.recipeTickContextBuildCountForTesting()).isEqualTo(2);
+            assertThat(runtime.capabilityTickContextBuildCountForTesting()).isZero();
+            assertThat(controller.behaviorContextBuildCountForTesting()).isEqualTo(machineContexts + 2);
+            assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+            assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
+        }
+    }
+
+    @Test
+    void dynamic_tick_facets_are_detected_again_at_each_phase_in_both_execution_paths() {
+        for (boolean async : List.of(false, true)) {
+            for (int absentQueries : List.of(1, 2)) {
+                List<CapabilityTickContext> phases = new ArrayList<>();
+                MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+                DynamicTickCapability capability = new DynamicTickCapability(absentQueries, context -> {
+                    phases.add(context);
+                    return CapabilityTickResult.empty();
+                });
+                installTickCapability(controller, capability);
+                CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+                assertThat(runtime.start(RecipeTestSupport.create(MMCR.id("dynamic_tick_" + async + "_" + absentQueries),
+                        TEST_MACHINE_ID, 4, List.of(), List.of()), 1).isCrafting()).isTrue();
+                capability.queries.set(0);
+                if (async) {
+                    assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+                    assertThat(runtime.commitAsyncTick(null)).isTrue();
+                    assertThat(runtime.completeAsyncTickAfterInputs()).isTrue();
+                    runtime.completeAsyncTickAfterRecipe();
+                } else {
+                    runtime.tick();
+                }
+
+                if (absentQueries == 1) {
+                    assertThat(phases).extracting(CapabilityTickContext::phase).containsExactly(
+                            CapabilityTickPhase.BEFORE_RECIPE, CapabilityTickPhase.AFTER_INPUTS,
+                            CapabilityTickPhase.AFTER_RECIPE);
+                } else {
+                    assertThat(phases).extracting(CapabilityTickContext::phase).containsExactly(
+                            CapabilityTickPhase.AFTER_INPUTS, CapabilityTickPhase.AFTER_RECIPE);
+                }
+                assertThat(runtime.tickCount()).isEqualTo(1);
+                assertThat(runtime.recipeTickContextBuildCountForTesting()).isEqualTo(1);
+                assertThat(runtime.capabilityTickContextBuildCountForTesting()).isEqualTo(phases.size());
+                RecipeTickContext tickContext = phases.getFirst().recipeState();
+                assertThat(tickContext.currentTick()).isZero();
+                assertThat(phases).allSatisfy(context -> assertThat(context.recipeState()).isSameAs(tickContext));
+                assertThat(phases.getFirst()).isNotSameAs(phases.getLast());
+            }
+        }
+    }
+
+    @Test
+    void lifecycle_trace_keeps_callback_and_resource_commit_order_in_both_execution_paths() {
+        for (boolean async : List.of(false, true)) {
+            List<String> trace = new ArrayList<>();
+            ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+            ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+            EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(3, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, input, output, energy);
+            controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                    .beforeStart(context -> trace.add("start:" + controller.getLevel().getGameTime() + ":"
+                            + input.itemHandler().amount(0)))
+                    .recipeTick(context -> trace.add("tick:" + controller.getLevel().getGameTime() + ":"
+                            + context.currentTick() + ":" + energy.energyStorage().getAmountAsLong()))
+                    .beforeFinish(context -> trace.add("finish:" + controller.getLevel().getGameTime() + ":"
+                            + energy.energyStorage().getAmountAsLong() + ":" + output.itemHandler().amount(0)))
+                    .build()));
+            setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 2));
+            energy.energyStorage().setAmount(200L);
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("lifecycle_resource_trace_" + async), TEST_MACHINE_ID,
+                    2, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                    List.of(input(Items.IRON_INGOT), new EnergyRequirement(7), output(Items.IRON_NUGGET)));
+            LevelStub.setGameTime(controller.getLevel(), 0);
+            assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+            long afterStart = energy.energyStorage().getAmountAsLong();
+            assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+
+            for (int tick = 1; tick <= 2; tick++) {
+                LevelStub.setGameTime(controller.getLevel(), tick);
+                if (async) {
+                    assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+                    assertThat(runtime.tickCount()).isEqualTo(tick - 1);
+                    assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L * (tick - 1));
+                    assertThat(runtime.commitAsyncTick(null)).isTrue();
+                    assertThat(runtime.completeAsyncTickAfterInputs()).isTrue();
+                    runtime.completeAsyncTickAfterRecipe();
+                } else {
+                    runtime.tick();
+                }
+                assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L * tick);
+            }
+            assertThat(runtime.finishPending()).isTrue();
+            assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+            assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
+            LevelStub.setGameTime(controller.getLevel(), 3);
+            assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+
+            assertThat(trace).containsExactly("start:0:2", "tick:1:0:" + afterStart,
+                    "tick:2:1:" + (afterStart - 7L), "finish:2:" + (afterStart - 14L) + ":0", "start:3:1");
+            assertThat(input.itemHandler().amount(0)).isZero();
+        }
+    }
+
+    @Test
+    void async_facet_screen_text_flush_survives_discarding_the_tick_preparation() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        ResourceLocation lineId = MMCR.id("async_facet_status");
+        ControllerScreenTextState text = (ControllerScreenTextState) controller.recipeScreenText("base");
+        installTickCapability(controller, new TickCapability(context -> {
+            if (context.phase() == CapabilityTickPhase.AFTER_RECIPE) {
+                context.machineContext().screenText().replace(lineId, Component.literal("after"));
+            }
+            return CapabilityTickResult.empty();
+        }));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.setScreenText(text);
+        assertThat(runtime.start(RecipeTestSupport.create(MMCR.id("async_facet_screen_text"), TEST_MACHINE_ID,
+                4, List.of(), List.of()), 1).isCrafting()).isTrue();
+        text.append(ControllerScreenTextScope.OPERATION, lineId, Component.literal("before"));
+        int machineContexts = controller.behaviorContextBuildCountForTesting();
+        assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+        assertThat(runtime.commitAsyncTick(null)).isTrue();
+        assertThat(runtime.completeAsyncTickAfterInputs()).isTrue();
+        runtime.completeAsyncTickAfterRecipe();
+        runtime.flushAsyncScreenText();
+
+        assertThat(text.snapshot().lines()).singleElement()
+                .satisfies(line -> assertThat(line.text()).isEqualTo(Component.literal("after")));
+        assertThat(controller.behaviorContextBuildCountForTesting()).isEqualTo(machineContexts + 1);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void installed_callbacks_are_prepared_once_before_non_sync_resources_and_after_phases_follow_payment(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        energy.energyStorage().setAmount(100L);
+        var controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, energy);
+        List<String> trace = new ArrayList<>();
+        List<RecipeTickContext> contexts = new ArrayList<>();
+        controller.setMachine(machine(TEST_MACHINE_ID, RecipeBehavior.builder().recipeTick(context -> {
+            trace.add("recipe:" + context.currentTick());
+            contexts.add(context);
+        }).build()));
+        var members = new ArrayList<>(controller.componentRuntime().components());
+        members.add(new ProcessingComponent(null, new TickCapabilityHost(new TickCapability(context -> {
+            trace.add(context.phase().name() + ":" + context.recipeState().currentTick() + ":" + energy.energyStorage().getAmountAsLong());
+            return CapabilityTickResult.empty();
+        })), BlockPos.ZERO, BlockPos.ZERO, (String) null));
+        controller.componentRuntime().replaceComponents(members);
+        RuntimeTestFixtures.republish(controller);
+        var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.start(RecipeTestSupport.create(MMCR.id("installed_phase_boundary"), TEST_MACHINE_ID, 10,
+                List.of(new EnergyRequirement(7L)), List.of()), 1);
+        var installed = runtime.ensureInstalledProgram();
+        long afterStart = energy.energyStorage().getAmountAsLong();
+        for (int tick = 1; tick <= 2; tick++) {
+            trace.clear();
+            LevelStub.setGameTime(controller.getLevel(), tick);
+            if (mode != MachineWorkMode.SYNC) {
+                assertThat(runtime.prepareInstalledTick(tick)).isTrue();
+                assertThat(runtime.prepareInstalledTick(tick)).isTrue();
+                assertThat(trace).containsExactly("BEFORE_RECIPE:" + (tick - 1) + ":" + (afterStart - 7L * (tick - 1)),
+                        "recipe:" + (tick - 1));
+                assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L * (tick - 1));
+            }
+            assertThat(installed.tryAttempt(tick, tick)).isTrue();
+            assertThat(installed.advance()).isTrue();
+            assertThat(trace).containsExactly("BEFORE_RECIPE:" + (tick - 1) + ":" + (afterStart - 7L * (tick - 1)),
+                    "recipe:" + (tick - 1), "AFTER_INPUTS:" + (tick - 1) + ":" + (afterStart - 7L * tick),
+                    "AFTER_RECIPE:" + (tick - 1) + ":" + (afterStart - 7L * tick));
+        }
+        assertThat(contexts).hasSize(2);
+        assertThat(contexts.get(0)).isNotSameAs(contexts.get(1));
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void installed_after_failure_keeps_exactly_one_paid_final_grant_and_finish_retry_gate(MachineWorkMode mode) {
+        for (CapabilityTickPhase failingPhase : List.of(CapabilityTickPhase.AFTER_INPUTS, CapabilityTickPhase.AFTER_RECIPE)) {
+            ConfigTestSupport.setMachineWorkMode(mode);
+            var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+            energy.energyStorage().setAmount(100L);
+            var controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, energy);
+            var members = new ArrayList<>(controller.componentRuntime().components());
+            AtomicInteger afterAttempts = new AtomicInteger();
+            members.add(new ProcessingComponent(null, new TickCapabilityHost(new TickCapability(context -> {
+                if (context.phase() == failingPhase) {
+                    afterAttempts.incrementAndGet();
+                    return new CapabilityTickResult(List.of(), tickFailure(), false);
+                }
+                return CapabilityTickResult.empty();
+            })), BlockPos.ZERO, BlockPos.ZERO, (String) null));
+            controller.componentRuntime().replaceComponents(members);
+            RuntimeTestFixtures.republish(controller);
+            var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            runtime.start(RecipeTestSupport.create(MMCR.id("installed_final_failure_" + failingPhase.ordinal()),
+                    TEST_MACHINE_ID, 1, List.of(new EnergyRequirement(7L)), List.of()), 1);
+            var installed = runtime.ensureInstalledProgram();
+            long afterStart = energy.energyStorage().getAmountAsLong();
+            LevelStub.setGameTime(controller.getLevel(), 1);
+            if (mode != MachineWorkMode.SYNC) runtime.prepareInstalledTick(1);
+            assertThat(installed.tryAttempt(1, 1)).isTrue();
+            assertThat(installed.advance()).isTrue();
+            assertThat(runtime.finishPending()).isTrue();
+            assertThat(runtime.ledger().state().finalTickPaid()).isTrue();
+            assertThat(runtime.shouldRetryFinish()).isFalse();
+            assertThat(afterAttempts.get()).isEqualTo(1);
+            LevelStub.setGameTime(controller.getLevel(), 2);
+            runtime.tick();
+            runtime.finish();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+            assertThat(afterAttempts.get()).isEqualTo(1);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void installed_finish_runs_dynamic_callback_on_each_legal_attempt_with_fresh_context_and_no_final_repayment(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        energy.energyStorage().setAmount(100L);
+        var controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID, energy, output);
+        AtomicInteger attempts = new AtomicInteger();
+        List<MachineBehaviorContext> contexts = new ArrayList<>();
+        controller.setMachine(machine(TEST_MACHINE_ID, RecipeBehavior.builder().beforeFinish(context -> {
+            contexts.add(context.machineContext());
+            if (attempts.incrementAndGet() == 1) context.cancel();
+            else context.setOutputs(List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
+        }).build()));
+        var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.start(RecipeTestSupport.create(MMCR.id("installed_dynamic_finish"), TEST_MACHINE_ID, 1,
+                List.of(new EnergyRequirement(7L)),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1F))), 1L);
+        var execution = runtime.ensureInstalledProgram();
+        assertThat(execution.finishReady()).isTrue();
+        assertThat(execution.finishAttemptReady()).isFalse();
+        long afterStart = energy.energyStorage().getAmountAsLong();
+        LevelStub.setGameTime(controller.getLevel(), 1L);
+        if (mode != MachineWorkMode.SYNC) runtime.prepareInstalledTick(1L);
+        assertThat(execution.tryAttempt(1L, 1L)).isTrue();
+        assertThat(execution.advance()).isTrue();
+        assertThat(attempts.get()).isEqualTo(1);
+        assertThat(runtime.finishPending()).isTrue();
+        assertThat(execution.finishAttemptReady()).isFalse();
+        assertThat(runtime.ledger().state().finalTickPaid()).isTrue();
+        assertThat(output.itemHandler().amount(0)).isZero();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+        LevelStub.setGameTime(controller.getLevel(), 2L);
+        assertThat(execution.tryAttempt(2L, 2L)).isTrue();
+        assertThat(execution.advance()).isFalse();
+        assertThat(attempts.get()).isEqualTo(1);
+        LevelStub.setGameTime(controller.getLevel(), 11L);
+        assertThat(execution.finishAttemptReady()).isTrue();
+        assertThat(execution.tryAttempt(11L, 11L)).isTrue();
+        assertThat(execution.advance()).isTrue();
+        assertThat(runtime.active()).isFalse();
+        assertThat(attempts.get()).isEqualTo(2);
+        assertThat(contexts.get(0)).isNotSameAs(contexts.get(1));
+        assertThat(contexts.get(0).gameTime()).isEqualTo(1L);
+        assertThat(contexts.get(1).gameTime()).isEqualTo(11L);
+        assertThat(output.itemHandler().resource(0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L);
+        assertThat(execution.ledger().state().outputPaid()).isTrue();
+    }
+
+    @Test
+    void disappearing_tick_facet_clears_its_previous_failure_before_recipe_callback() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        AtomicBoolean available = new AtomicBoolean(true);
+        AtomicReference<CraftingRuntime> runtimeReference = new AtomicReference<>();
+        AtomicBoolean callbackSawClearedFailure = new AtomicBoolean();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder().recipeTick(context ->
+                callbackSawClearedFailure.set(runtimeReference.get().failure() == null)).build()));
+        TickCapability delegate = new TickCapability(context -> new CapabilityTickResult(List.of(), tickFailure(), false));
+        MachineCapability capability = new MachineCapability() {
+            @Override
+            public CapabilityType type() {
+                return delegate.type();
+            }
+
+            @Override
+            public CapabilityDirections directions() {
+                return delegate.directions();
+            }
+
+            @Override
+            public CapabilityView view() {
+                return delegate.view();
+            }
+
+            @Override
+            public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+                return available.get() ? delegate.facet(facetType) : Optional.empty();
+            }
+
+            @Override
+            public CapabilityOperation prepare(CapabilityRequest request) {
+                return delegate.prepare(request);
+            }
+        };
+        installTickCapability(controller, capability);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtimeReference.set(runtime);
+        assertThat(runtime.start(RecipeTestSupport.create(MMCR.id("disappearing_tick_failure"), TEST_MACHINE_ID,
+                4, List.of(), List.of()), 1).isCrafting()).isTrue();
+        runtime.tick();
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(callbackSawClearedFailure).isFalse();
+        available.set(false);
+
+        runtime.tick();
+
+        assertThat(callbackSawClearedFailure).isTrue();
+        assertThat(runtime.failure()).isNull();
+        assertThat(runtime.tickCount()).isEqualTo(1);
     }
 
     @Test
@@ -873,7 +1248,7 @@ class MachineBehaviorRuntimeTest {
         MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
-    private static void installTickCapability(MachineControllerBlockEntity controller, TickCapability capability) {
+    private static void installTickCapability(MachineControllerBlockEntity controller, MachineCapability capability) {
         TickCapabilityHost host = new TickCapabilityHost(capability);
         controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(null, host, BlockPos.ZERO,
                 BlockPos.ZERO, (String) null)));
@@ -884,6 +1259,49 @@ class MachineBehaviorRuntimeTest {
         return ExecutionStatus.blocked(MMCR.id("tick_failure"), MMCR.id("test"),
                 FailureOccurrence.at(BuiltinFailureReasons.PER_TICK, MMCR.id("test"), FailurePhase.PER_TICK,
                         null, null, Map.of()));
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class DynamicTickCapability implements MachineCapability, TickFacet {
+        private final AtomicInteger queries = new AtomicInteger();
+        private final int absentQueries;
+        private final TickCapability delegate;
+
+        private DynamicTickCapability(int absentQueries, Function<CapabilityTickContext, CapabilityTickResult> planner) {
+            this.absentQueries = absentQueries;
+            delegate = new TickCapability(planner);
+        }
+
+        @Override
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+            return facetType == TickFacet.class && queries.incrementAndGet() > absentQueries
+                    ? Optional.of(facetType.cast(this)) : Optional.empty();
+        }
+
+        @Override
+        public CapabilityType type() {
+            return delegate.type();
+        }
+
+        @Override
+        public CapabilityDirections directions() {
+            return delegate.directions();
+        }
+
+        @Override
+        public CapabilityView view() {
+            return delegate.view();
+        }
+
+        @Override
+        public CapabilityOperation prepare(CapabilityRequest request) {
+            return delegate.prepare(request);
+        }
+
+        @Override
+        public CapabilityTickResult plan(CapabilityTickContext context) {
+            return delegate.plan(context);
+        }
     }
 
     private record TickCapability(Function<CapabilityTickContext, CapabilityTickResult> planner)

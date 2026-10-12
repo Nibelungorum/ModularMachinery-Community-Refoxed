@@ -13,6 +13,7 @@ import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
+import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import net.minecraft.resources.ResourceLocation;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -22,6 +23,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -30,6 +32,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
+import java.util.function.ToIntFunction;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -43,7 +46,8 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     private final BlockPos controllerPos;
-    private final ControllerMenuState state;
+    private final DataSlot formed;
+    private final DataSlot redstonePaused;
     private final MachineControllerBlockEntity owner;
     private final ServerPlayer player;
     private final Level level;
@@ -53,6 +57,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
     private final ControllerMenuOpenData uiOpenData;
     private final @Nullable ControllerUiServerSession uiServerSession;
     private boolean playerInventoryVisible = true;
+    private @Nullable MachineStateSnapshot broadcastState;
 
     public FactoryControllerMenu(int containerId, Inventory inventory, MachineControllerBlockEntity owner, ServerPlayer player) {
         super(ModUIs.FACTORY_CONTROLLER.get(), containerId);
@@ -63,7 +68,10 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
         uiOpenData = ControllerMenuOpenData.forOwner(owner, level, Kind.FACTORY);
         uiServerSession = owner != null && owner.getLevel() != null && this.player != null
                 ? new ControllerUiServerSession(this, owner, this.player) : null;
-        state = new ControllerMenuState(this, owner);
+        formed = addStateSlot(owner, state -> state.formed() ? 1 : 0);
+        addStateSlot(owner, state -> state.active() ? 1 : 0);
+        redstonePaused = addStateSlot(owner, state -> state.redstonePaused() ? 1 : 0);
+        addStateSlot(owner, MachineStateSnapshot::parallelControllerCount);
         ControllerMenuState.addControllerPlayerSlots(this, inventory,
                 FACTORY_PLAYER_INVENTORY_X, FACTORY_PLAYER_INVENTORY_Y_OFFSET);
         snapshot = FactorySnapshot.empty();
@@ -87,8 +95,11 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
         this.uiOpenData = openData;
         this.uiServerSession = null;
         this.controllerPos = openData.pos();
-        state = new ControllerMenuState(this, null);
-        state.formed.set(openData.formed() ? 1 : 0);
+        formed = addStateSlot(null, state -> state.formed() ? 1 : 0);
+        addStateSlot(null, state -> state.active() ? 1 : 0);
+        redstonePaused = addStateSlot(null, state -> state.redstonePaused() ? 1 : 0);
+        addStateSlot(null, MachineStateSnapshot::parallelControllerCount);
+        formed.set(openData.formed() ? 1 : 0);
         ControllerMenuState.addControllerPlayerSlots(this, inventory,
                 FACTORY_PLAYER_INVENTORY_X, FACTORY_PLAYER_INVENTORY_Y_OFFSET);
         snapshot = FactorySnapshot.empty();
@@ -96,6 +107,31 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
 
     public static FactoryControllerMenu clientOpen(int containerId, Inventory inventory, FriendlyByteBuf buffer) {
         return new FactoryControllerMenu(containerId, inventory, ControllerMenuOpenData.read(buffer));
+    }
+
+    private DataSlot addStateSlot(@Nullable MachineControllerBlockEntity controller,
+                                  ToIntFunction<MachineStateSnapshot> getter) {
+        return addDataSlot(controller == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() {
+                MachineStateSnapshot state = broadcastState == null
+                        ? SYNC_RUNTIME.machineState(controller.runtimeSnapshot()) : broadcastState;
+                return getter.applyAsInt(state);
+            }
+            @Override public void set(int value) {}
+        });
+    }
+
+    @Override
+    protected DataSlot addDataSlot(DataSlot slot) {
+        if (uiServerSession == null) return super.addDataSlot(slot);
+        return super.addDataSlot(new DataSlot() {
+            private int lastValue;
+            @Override public int get() {
+                if (!uiServerSession.closed()) lastValue = slot.get();
+                return lastValue;
+            }
+            @Override public void set(int value) { slot.set(value); }
+        });
     }
 
     public static FactoryControllerMenu clientOpen(int containerId, Inventory inventory) {
@@ -144,8 +180,8 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
         BlockEntity blockEntity = level.getBlockEntity(controllerPos);
         return blockEntity instanceof MachineControllerBlockEntity controller ? controller : null;
     }
-    public boolean isFormed() { return snapshot.formed() || state.formed.get() != 0; }
-    public boolean isRedstonePaused() { return snapshot.paused() || state.redstonePaused.get() != 0; }
+    public boolean isFormed() { return snapshot.formed() || formed.get() != 0; }
+    public boolean isRedstonePaused() { return snapshot.paused() || redstonePaused.get() != 0; }
     public int activeThreadCount() { return snapshot.activeLaneCount(); }
     public int threadCount() { return snapshot.laneLimit(); }
     public long currentParallelism() {
@@ -207,19 +243,28 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
 
     @Override
     public void broadcastChanges() {
-        super.broadcastChanges();
-        if (uiServerSession != null) {
-            uiServerSession.broadcastChanges();
+        if (uiServerSession != null && uiServerSession.closed()) {
+            // Keep vanilla inventory/carried synchronization without querying controller DataSlots.
+            super.broadcastChanges();
             return;
         }
-        if (owner == null) return;
-        ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
-        if (!SYNC_RUNTIME.factoryControllerPresent(runtime)) return;
-        FactorySnapshot next = SYNC_RUNTIME.factoryState(runtime, owner.currentRecipePoolId());
-        applySnapshot(next);
-        if (player != null && !next.equals(lastSentSnapshot)) {
-            owner.sendFactoryControllerState(player);
-            lastSentSnapshot = next;
+        ControllerRuntimeSnapshot broadcastRuntime = owner == null ? null : owner.runtimeSnapshot();
+        try {
+            broadcastState = broadcastRuntime == null ? null : SYNC_RUNTIME.machineState(broadcastRuntime);
+            super.broadcastChanges();
+            if (uiServerSession != null) {
+                uiServerSession.broadcastChanges();
+                return;
+            }
+            if (owner == null || !SYNC_RUNTIME.factoryControllerPresent(broadcastRuntime)) return;
+            FactorySnapshot next = SYNC_RUNTIME.factoryState(broadcastRuntime, owner.currentRecipePoolId());
+            applySnapshot(next);
+            if (player != null && !next.equals(lastSentSnapshot)) {
+                owner.sendFactoryControllerState(player);
+                lastSentSnapshot = next;
+            }
+        } finally {
+            broadcastState = null;
         }
     }
 

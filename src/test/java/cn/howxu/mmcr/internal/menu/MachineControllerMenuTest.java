@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.PktMachineProgressPayload;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -75,6 +76,33 @@ class MachineControllerMenuTest {
         assertThat(menu.maxParallelism()).isEqualTo(8);
         assertThat(menu.factoryThreadCount()).isEqualTo(2);
         assertThat(menu.installedModuleCount()).isEqualTo(3);
+    }
+
+    @Test
+    void data_slots_share_one_committed_query_per_broadcast_but_live_reads_are_not_tick_cached() {
+        var controller = new CountingController();
+        var menu = new MachineControllerMenu(1, new Inventory(null), controller);
+        controller.queries = 0;
+        menu.broadcastChanges();
+        assertThat(controller.queries).isEqualTo(1);
+        menu.broadcastChanges();
+        assertThat(controller.queries).isEqualTo(2);
+        menu.activeRecipeTick();
+        assertThat(controller.queries).isEqualTo(3);
+    }
+
+    /** Counts the actual menu query boundary without altering runtime publication.
+     * @author howxu <dev@howxu.cn> */
+    private static final class CountingController extends MachineControllerBlockEntity {
+        private int queries;
+        private CountingController() {
+            super(BlockPos.ZERO, TestBootstrap.newController().getBlockState());
+        }
+        @Override public ControllerRuntimeSnapshot runtimeSnapshot() {
+            queries++;
+            return super.runtimeSnapshot();
+        }
+        @Override public ResourceLocation currentRecipePoolId() { return null; }
     }
 
     @Test

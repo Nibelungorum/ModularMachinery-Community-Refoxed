@@ -60,10 +60,21 @@ import java.util.Set;
  */
 public final class FactoryRuntime {
     public static final int MAX_LANES = 1024;
+    private static final Runnable NO_FINISH_CALLBACK = () -> { };
     private final List<FactoryRecipeThread> lanes = new ArrayList<>();
     private final Map<FactoryRecipeThread, ResourceLocation> startReservations = new IdentityHashMap<>();
+    private final Map<ResourceLocation, Integer> activeRecipeCounts = new LinkedHashMap<>();
+    private final Map<ResourceLocation, Integer> patternRecipeCounts = new HashMap<>();
+    private final Map<FactoryRecipeThread, LaneAccounting> laneAccounting = new IdentityHashMap<>();
+    private final Map<CraftingRuntime, FactoryRecipeThread> lanesByRuntime = new IdentityHashMap<>();
+    private final Map<FactoryRecipeThread, ExecutionStatus> laneFailures = new IdentityHashMap<>();
+    private final Set<FactoryRecipeThread> searchWaitingLanes = Collections.newSetFromMap(new IdentityHashMap<>());
+    private int accountingUpdatesForTesting;
+    private Runnable currentFinishCallback = NO_FINISH_CALLBACK;
+    private List<MachineRecipe> currentFinishCandidates = List.of();
     private final Set<FactoryRecipeThread> patternStartReservations = Collections.newSetFromMap(new IdentityHashMap<>());
     private int laneLimit = 1;
+    private boolean laneAdmissionPending;
     private long perThreadParallelLimit = 1L;
     private boolean paused;
     private long nextFactoryLaneId;
@@ -78,6 +89,7 @@ public final class FactoryRuntime {
     private long factoryStateEpoch;
     private int cachedActiveLaneCount;
     private long cachedSnapshotEpoch = Long.MIN_VALUE;
+    private long cachedSnapshotStructureVersion = Long.MIN_VALUE;
     private @Nullable FactorySnapshot cachedSnapshot;
     private final Map<FactoryRecipeThread, ControllerRecipePresentation> lanePresentationCaches = new IdentityHashMap<>();
     private final Map<FactoryRecipeThread, ThreadSnapshot> laneThreadSnapshots = new IdentityHashMap<>();
@@ -109,6 +121,7 @@ public final class FactoryRuntime {
         startReservations.clear();
         readyLanes.clear();
         pendingAsyncSearches.clear();
+        for (FactoryRecipeThread lane : lanes) refreshLaneAccounting(lane);
     }
 
     public void discardForRecipePoolChange() {
@@ -117,12 +130,13 @@ public final class FactoryRuntime {
         for (FactoryRecipeThread lane : lanes) {
             LaneObservation before = observe(lane);
             lane.discardForRecipePoolChange();
-            changed |= !before.equals(observe(lane));
+            changed |= !matchesObservation(lane, before);
         }
         startReservations.clear();
         patternStartReservations.clear();
         readyLanes.clear();
         pendingAsyncSearches.clear();
+        for (FactoryRecipeThread lane : lanes) refreshLaneAccounting(lane);
         clearCandidateCaches();
         failureDirty = true;
         recomputeFailureIfDirty();
@@ -150,6 +164,13 @@ public final class FactoryRuntime {
                                   long maxParallelism, long gameTime, Runnable onFinished) {
         long initialEpoch = factoryStateEpoch;
         if (paused || controller == null) return currentTickResult(initialEpoch, false);
+        currentFinishCallback = onFinished == null ? NO_FINISH_CALLBACK : onFinished;
+        currentFinishCandidates = candidates == null ? List.of() : candidates;
+        if (canTickInstalledLanes(maxParallelism)) {
+            for (FactoryRecipeThread lane : List.copyOf(lanes)) tickLane(lane, snapshot);
+            trimLanesToLimit();
+            return currentTickResult(initialEpoch, initialEpoch != factoryStateEpoch);
+        }
         if (candidates == null || maxParallelism <= 0L) {
             lanes.forEach(this::stopEmptyLanePrefetch);
         }
@@ -161,6 +182,9 @@ public final class FactoryRuntime {
         if (context == null) throw new IllegalArgumentException("context must not be null");
         long initialEpoch = factoryStateEpoch;
         if (paused || controller == null) return currentTickResult(initialEpoch, false);
+        currentFinishCallback = onFinished == null ? NO_FINISH_CALLBACK : onFinished;
+        currentFinishCandidates = context.orderedCandidates();
+        laneAdmissionPending = false;
 
         if (perThreadParallelLimit != context.maxParallelism()) {
             perThreadParallelLimit = context.maxParallelism();
@@ -171,28 +195,28 @@ public final class FactoryRuntime {
         long modifierVersion = context.snapshot().modifierVersion();
         long componentStateVersion = context.snapshot().stateVersion();
         long gameTime = context.gameTime();
-        Runnable finishCallback = onFinished == null ? () -> { } : onFinished;
         List<FactoryRecipeThread> laneSnapshot = List.copyOf(lanes);
-        Map<FactoryRecipeThread, LaneObservation> observations = new IdentityHashMap<>(laneSnapshot.size());
-        Map<ResourceLocation, Integer> analyzedActiveCounts = new HashMap<>(Math.max(16, laneSnapshot.size() * 2));
         boolean hasIdleLane = false;
         for (FactoryRecipeThread lane : laneSnapshot) {
-            observations.put(lane, observe(lane));
             if (!lane.isStartPending() && !lane.runtime().active()) startReservations.remove(lane);
             if (lane.runtime().active()) startReservations.remove(lane);
             lane.setFinishContinuation(() -> {
                 try {
-                    finishCallback.run();
+                    currentFinishCallback.run();
                 } finally {
                     // Releasing a shared lane may unblock output capacity for another lane.
                     controller.notifyResourceAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, null);
                     int laneIndex = lanes.indexOf(lane);
                     boolean withinLaneLimit = laneIndex >= 0 && laneIndex < laneLimit;
+                    FactorySearchContext restartContext = createSearchContext(controller.currentRuntimeSnapshot(),
+                            currentFinishCandidates, perThreadParallelLimit, currentGameTime());
+                    ControllerRuntimeSnapshot current = restartContext.snapshot();
                     boolean restarted = withinLaneLimit && (controller.activeWorkMode() == MachineWorkMode.ASYNC
-                            ? lane.prepareAsyncFinishRestart(context, context.orderedCandidates(), perThreadParallelLimit,
-                            structureVersion, capabilityVersion, modifierVersion, componentStateVersion)
-                            : lane.tryRestartLastRecipe(context, context.orderedCandidates(), perThreadParallelLimit,
-                            structureVersion, capabilityVersion, modifierVersion, componentStateVersion));
+                            ? lane.prepareAsyncFinishRestart(restartContext, restartContext.orderedCandidates(), perThreadParallelLimit,
+                            current.structure().version(), current.capabilityVersion(), current.modifierVersion(), current.stateVersion())
+                            : lane.tryRestartLastRecipe(restartContext, restartContext.orderedCandidates(), perThreadParallelLimit,
+                            current.structure().version(), current.capabilityVersion(), current.modifierVersion(), current.stateVersion()));
+                    refreshLaneAccounting(lane);
                     if (restarted) {
                         markLaneStateChanged();
                     }
@@ -201,14 +225,12 @@ public final class FactoryRuntime {
             });
             lane.setSearchGameTime(gameTime);
             lane.setSearchContextKey(searchContextKey(context, lane));
-            lane.tick(context.snapshot());
-            accumulateActiveRecipeCount(lane, analyzedActiveCounts);
+            tickLane(lane, context.snapshot());
             if (!pendingAsyncSearches.containsKey(lane) && !patternStartReservations.contains(lane) && lane.isIdle()) {
                 hasIdleLane = true;
             }
         }
-        LaneAnalysis analysis = new LaneAnalysis(observations, analyzedActiveCounts);
-        Map<ResourceLocation, Integer> activeCounts = analysis.activeRecipeCounts();
+        Map<ResourceLocation, Integer> activeCounts = activeRecipeCounts;
         trimLanesToLimit();
         if (laneSnapshot.size() != lanes.size()) {
             laneSnapshot = List.copyOf(lanes);
@@ -246,12 +268,12 @@ public final class FactoryRuntime {
                 boolean restarted = lane.tryRestartLastRecipe(context, available, perThreadParallelLimit, structureVersion,
                         capabilityVersion, modifierVersion, componentStateVersion);
                 if (restarted) {
-                    reserveStart(lane, true, activeCounts);
+                    reserveStart(lane, true);
                     readyThisTick.remove(lane);
                     continue;
                 }
                 searchAttemptsForTesting++;
-                reserveStart(lane, searchAndStartRecipe(lane, context, available, structureVersion), activeCounts);
+                reserveStart(lane, searchAndStartRecipe(lane, context, available, structureVersion));
                 readyThisTick.remove(lane);
             }
             while (lanes.size() < laneLimit && perThreadParallelLimit > 0) {
@@ -265,7 +287,7 @@ public final class FactoryRuntime {
                 lane.setSearchContextKey(key);
                 searchAttemptsForTesting++;
                 boolean started = searchAndStartRecipe(lane, context, available, structureVersion);
-                reserveStart(lane, started, activeCounts);
+                reserveStart(lane, started);
                 if (!started) break;
             }
         }
@@ -275,18 +297,10 @@ public final class FactoryRuntime {
             if (lane.isTimedOut()) removeLane(lane);
         }
         if (lanes.stream().noneMatch(lane -> lane.runtime().active() || lane.isStartPending())) {
-            CraftingRuntime baseRuntime = lanes.isEmpty() ? null : lanes.getFirst().runtime();
-            if (baseRuntime != null) baseRuntime.tickIdle();
+            tickIdleBaseRuntime(initialEpoch);
         }
         trimLanesToLimit();
         clearFinishedContinuations();
-        Set<FactoryRecipeThread> currentLanes = Collections.newSetFromMap(new IdentityHashMap<>(lanes.size()));
-        currentLanes.addAll(lanes);
-        for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : analysis.observations().entrySet()) {
-            if (currentLanes.contains(entry.getKey()) && !entry.getValue().equals(observe(entry.getKey()))) {
-                markLaneStateChanged();
-            }
-        }
         recomputeFailureIfDirty();
         int activeLaneCount = activeLaneCount();
         return new FactoryTickResult(activeLaneCount, failure,
@@ -323,6 +337,7 @@ public final class FactoryRuntime {
         }
         if (activeCounts.isEmpty() && startReservations.isEmpty() && patternStartReservations.isEmpty()) return;
         while (lanes.size() < laneLimit) {
+            if (filterAvailableCandidates(context.orderedCandidates(), activeCounts).isEmpty()) break;
             FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
             addLane(lane);
             if (!scheduleAsyncSearch(context, lane, activeCounts, level)
@@ -352,7 +367,7 @@ public final class FactoryRuntime {
         if (lane.tryRestartLastRecipe(context, candidates, perThreadParallelLimit,
                 context.snapshot().structure().version(), context.snapshot().capabilityVersion(),
                 context.snapshot().modifierVersion(), context.snapshot().stateVersion())) {
-            reserveStart(lane, true, activeCounts);
+            reserveStart(lane, true);
             markLaneStateChanged();
             return false;
         }
@@ -363,7 +378,7 @@ public final class FactoryRuntime {
             searchAttemptsForTesting++;
             boolean started = lane.startSearchResult(context, candidates, context.snapshot().structure().version(),
                     FactoryRecipeThread.search(context, candidates, context.snapshot().structure().version(), lane.runtime()));
-            reserveStart(lane, started, activeCounts);
+            reserveStart(lane, started);
             if (started) markLaneStateChanged();
             return false;
         }
@@ -419,7 +434,7 @@ public final class FactoryRuntime {
                             && !available.contains(result.result().recipe())) return false;
                     boolean started = lane.startSearchResult(request.context(), available,
                             request.context().snapshot().structure().version(), result);
-                    reserveStart(lane, started, activeCounts);
+                    reserveStart(lane, started);
                     if (started) markLaneStateChanged();
                     return true;
                 }, () -> validateAsyncSearchRequest(lane, request, catalogVersion, taskKey, level),
@@ -556,6 +571,7 @@ public final class FactoryRuntime {
                 } else {
                     if (coreCatalogVersion != catalogVersion || !lane.recipeSet().equals(recipes)) {
                         lane.replaceRecipeSet(recipes);
+                        refreshLaneAccounting(lane);
                         markLaneStateChanged();
                     }
                 }
@@ -596,7 +612,10 @@ public final class FactoryRuntime {
         for (FactoryRecipeThread lane : List.copyOf(lanes)) {
             if (lane.isBaseThread()) removeLane(lane);
         }
-        lanes.addFirst(FactoryRecipeThread.base(controller));
+        FactoryRecipeThread base = FactoryRecipeThread.base(controller);
+        lanes.addFirst(base);
+        lanesByRuntime.put(base.runtime(), base);
+        refreshLaneAccounting(base);
         markLaneStateChanged();
         return true;
     }
@@ -617,14 +636,14 @@ public final class FactoryRuntime {
             lane.invalidateForSmartInterfaceChange();
         }
         for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : observations.entrySet()) {
-            if (!entry.getValue().equals(observe(entry.getKey()))) markLaneStateChanged();
+            if (!matchesObservation(entry.getKey(), entry.getValue())) markLaneStateChanged();
         }
         recomputeFailureIfDirty();
     }
 
     public void wakeSearches(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
         if (reason == null) return;
-        for (FactoryRecipeThread lane : lanes) {
+        for (FactoryRecipeThread lane : searchWaitingLanes) {
             if (lane.matchesAvailability(reason, resource)) lane.wakeSearch();
         }
     }
@@ -642,11 +661,6 @@ public final class FactoryRuntime {
     }
 
     public int activeLaneCount() {
-        int count = 0;
-        for (FactoryRecipeThread lane : lanes) {
-            if (lane.runtime().active()) count++;
-        }
-        cachedActiveLaneCount = count;
         return cachedActiveLaneCount;
     }
 
@@ -718,7 +732,10 @@ public final class FactoryRuntime {
 
     public FactorySnapshot snapshot() {
         recomputeFailureIfDirty();
-        if (cachedSnapshot != null && cachedSnapshotEpoch == factoryStateEpoch) return cachedSnapshot;
+        StructureSnapshot structure = controller == null ? null : controller.currentStructureSnapshot();
+        long structureVersion = structure == null ? Long.MIN_VALUE : structure.version();
+        if (cachedSnapshot != null && cachedSnapshotEpoch == factoryStateEpoch
+                && cachedSnapshotStructureVersion == structureVersion) return cachedSnapshot;
         List<CraftingStateSnapshot> laneSnapshots = new ArrayList<>(lanes.size());
         List<ThreadSnapshot> presentationSnapshots = new ArrayList<>(laneLimit);
         int activeCount = 0;
@@ -729,15 +746,11 @@ public final class FactoryRuntime {
             if (lane.runtime().active()) activeCount++;
             presentationSnapshots.add(threadSnapshot(index, lane));
         }
-        cachedActiveLaneCount = activeCount;
         int matchedStage = 0;
         int stageCount = 1;
-        if (controller != null) {
-            ControllerRuntimeSnapshot runtimeSnapshot = controller.runtimeSnapshot();
-            matchedStage = runtimeSnapshot.structure().matchedStage();
-            Machine machine = runtimeSnapshot.structure().machine() == null
-                    ? runtimeSnapshot.structure().configuredMachine()
-                    : runtimeSnapshot.structure().machine();
+        if (structure != null) {
+            matchedStage = structure.matchedStage();
+            Machine machine = structure.machine() == null ? structure.configuredMachine() : structure.machine();
             if (machine != null) {
                 List<MachineStructureStage> stages = machine.structureStages();
                 stageCount = stages == null || stages.isEmpty() ? 1 : stages.size();
@@ -747,6 +760,7 @@ public final class FactoryRuntime {
                 activeCount, Math.max(1L, perThreadParallelLimit), paused, completeThreadSnapshots(presentationSnapshots), "", 0, failure,
                 List.of(), matchedStage, stageCount);
         cachedSnapshotEpoch = factoryStateEpoch;
+        cachedSnapshotStructureVersion = structureVersion;
         return cachedSnapshot;
     }
 
@@ -777,7 +791,7 @@ public final class FactoryRuntime {
     }
 
     public boolean contains(CraftingRuntime runtime) {
-        return lanes.stream().anyMatch(lane -> lane.runtime() == runtime);
+        return lanesByRuntime.containsKey(runtime);
     }
 
     /** Reserves an idle lane after its runtime has successfully planned the requested pattern inputs. */
@@ -787,8 +801,7 @@ public final class FactoryRuntime {
         EffectiveRecipe effective = effectiveRecipe(recipe);
         if (effective.recipeThreadLimit() > 0) {
             int activeForRecipe = activeRecipeCountFor(recipe.id());
-            long reservedForRecipe = patternStartReservations.stream()
-                    .filter(lane -> recipe.id().equals(lane.runtime().pendingPatternRecipeId())).count();
+            int reservedForRecipe = patternRecipeCounts.getOrDefault(recipe.id(), 0);
             long projected = activeForRecipe + 1L + reservedForRecipe;
             if (projected > effective.recipeThreadLimit()) return null;
         }
@@ -799,7 +812,12 @@ public final class FactoryRuntime {
         if (lanes.size() >= laneLimit) return null;
         FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
         PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities);
-        if (reservation == null) return null;
+        if (reservation == null) {
+            if (controller.getLevel() instanceof ServerLevel level) {
+                SharedIoCoordinator.get(level).forgetExecutionLane(lane.runtime(), lane.laneId());
+            }
+            return null;
+        }
         addLane(lane);
         return reservation;
     }
@@ -827,8 +845,12 @@ public final class FactoryRuntime {
         if (reservation == null) return;
         for (FactoryRecipeThread lane : lanes) {
             if (lane.runtime() != reservation.runtime()) continue;
+            if (!lane.runtime().releasePatternStart(reservation.preparedStart())) return;
             patternStartReservations.remove(lane);
-            lane.runtime().releasePatternStart();
+            if (!lane.runtime().active() && controller.getLevel() instanceof ServerLevel level) {
+                SharedIoCoordinator.get(level).releaseExecutionReservation(lane.runtime(), lane.laneId());
+            }
+            refreshLaneAccounting(lane);
             markLaneStateChanged();
             return;
         }
@@ -837,6 +859,7 @@ public final class FactoryRuntime {
     public boolean setLaneLimit(int laneLimit) {
         int normalized = Math.min(MAX_LANES, Math.max(1, laneLimit));
         if (this.laneLimit == normalized) return false;
+        if (normalized > this.laneLimit && lanes.size() < normalized) laneAdmissionPending = true;
         this.laneLimit = normalized;
         markLaneStateChanged();
         trimLanesToLimit();
@@ -960,7 +983,7 @@ public final class FactoryRuntime {
             lane.rebindCurrentVersions();
         }
         for (Map.Entry<FactoryRecipeThread, LaneObservation> entry : observations.entrySet()) {
-            if (!entry.getValue().equals(observe(entry.getKey()))) markLaneStateChanged();
+            if (!matchesObservation(entry.getKey(), entry.getValue())) markLaneStateChanged();
         }
     }
 
@@ -1088,7 +1111,7 @@ public final class FactoryRuntime {
 
     private boolean requiresFullTick(ControllerRuntimeSnapshot snapshot, List<MachineRecipe> candidates,
                                      long maxParallelism, long gameTime) {
-        if (perThreadParallelLimit != maxParallelism || !startReservations.isEmpty()
+        if (laneAdmissionPending || perThreadParallelLimit != maxParallelism || !startReservations.isEmpty()
                 || !patternStartReservations.isEmpty() || !readyLanes.isEmpty() || !pendingAsyncSearches.isEmpty()) {
             return true;
         }
@@ -1103,12 +1126,33 @@ public final class FactoryRuntime {
         return false;
     }
 
+    private boolean canTickInstalledLanes(long maxParallelism) {
+        if (laneAdmissionPending || lanes.isEmpty() || cachedActiveLaneCount != lanes.size() || perThreadParallelLimit != maxParallelism
+                || !startReservations.isEmpty() || !patternStartReservations.isEmpty()
+                || !pendingAsyncSearches.isEmpty() || !readyLanes.isEmpty()) return false;
+        for (FactoryRecipeThread lane : lanes) {
+            InstalledRecipeProgram execution = lane.runtime().installedProgram();
+            if (execution == null || !execution.current()) return false;
+        }
+        return true;
+    }
+
+    private void tickLane(FactoryRecipeThread lane, ControllerRuntimeSnapshot snapshot) {
+        LaneObservation before = observe(lane);
+        MachineRecipe recipe = lane.runtime().recipe();
+        lane.tick(snapshot);
+        if (!matchesObservation(lane, before) || recipe != lane.runtime().recipe()) {
+            markLaneStateChanged();
+        }
+    }
+
     private FactoryTickResult tickIdleBaseRuntime(long initialEpoch) {
-        CraftingRuntime baseRuntime = lanes.isEmpty() ? null : lanes.getFirst().runtime();
-        if (baseRuntime == null) return currentTickResult(initialEpoch, false);
-        CraftingStateSnapshot before = baseRuntime.snapshot();
-        CapabilityTickResult result = baseRuntime.tickIdle();
-        boolean changed = result.stateChanged() || !before.equals(baseRuntime.snapshot());
+        if (lanes.isEmpty()) return currentTickResult(initialEpoch, false);
+        FactoryRecipeThread base = lanes.getFirst();
+        LaneObservation before = observe(base);
+        CapabilityTickResult result = base.runtime().tickIdle();
+        boolean unchanged = matchesObservation(base, before);
+        boolean changed = result.stateChanged() || !unchanged;
         if (changed) markLaneStateChanged();
         return currentTickResult(initialEpoch, changed);
     }
@@ -1127,35 +1171,46 @@ public final class FactoryRuntime {
     }
 
     private Map<ResourceLocation, Integer> activeRecipeCounts() {
-        startReservations.entrySet().removeIf(entry -> !lanes.contains(entry.getKey())
-                || !entry.getKey().isStartPending() || entry.getKey().runtime().active());
-        Map<ResourceLocation, Integer> counts = new LinkedHashMap<>();
-        for (ResourceLocation recipeId : startReservations.values()) counts.merge(recipeId, 1, Integer::sum);
-        for (FactoryRecipeThread lane : lanes) {
-            if (lane.getStatus() == RecipeThread.Status.FAILED) continue;
-            MachineRecipe pendingRecipe = lane.getPendingStartRecipe();
-            if (pendingRecipe != null && !startReservations.containsKey(lane)) {
-                counts.merge(pendingRecipe.id(), 1, Integer::sum);
-            }
-            MachineRecipe activeRecipe = lane.runtime().recipe();
-            if (activeRecipe != null) counts.merge(activeRecipe.id(), 1, Integer::sum);
-        }
-        return counts;
+        return activeRecipeCounts;
     }
 
-    private void accumulateActiveRecipeCount(FactoryRecipeThread lane, Map<ResourceLocation, Integer> counts) {
-        ResourceLocation reservation = startReservations.get(lane);
-        if (reservation != null && !lane.isStartPending() && !lane.runtime().active()) {
-            startReservations.remove(lane);
-            reservation = null;
+    private void refreshLaneAccounting(FactoryRecipeThread lane) {
+        ExecutionStatus failure = lane.runtime().failure();
+        if (!Objects.equals(laneFailures.get(lane), failure)) {
+            if (failure == null) laneFailures.remove(lane);
+            else laneFailures.put(lane, failure);
+            markLaneStateChanged();
         }
-        if (reservation != null) counts.merge(reservation, 1, Integer::sum);
-        if (lane.getStatus() == RecipeThread.Status.FAILED) return;
-        MachineRecipe pendingRecipe = lane.getPendingStartRecipe();
-        if (pendingRecipe != null && reservation == null) counts.merge(pendingRecipe.id(), 1, Integer::sum);
-        MachineRecipe activeRecipe = lane.runtime().recipe();
-        if (activeRecipe != null) counts.merge(activeRecipe.id(), 1, Integer::sum);
+        boolean active = lane.runtime().active();
+        if (lane.isIdle()) searchWaitingLanes.add(lane);
+        else searchWaitingLanes.remove(lane);
+        MachineRecipe pending = lane.getPendingStartRecipe();
+        if (!lane.isStartPending() || active) startReservations.remove(lane);
+        ResourceLocation recipeId = lane.getStatus() == RecipeThread.Status.FAILED ? null
+                : active && lane.runtime().recipe() != null ? lane.runtime().recipe().id()
+                : pending != null ? pending.id() : startReservations.get(lane);
+        ResourceLocation patternId = patternStartReservations.contains(lane) ? lane.runtime().pendingPatternRecipeId() : null;
+        LaneAccounting previous = laneAccounting.get(lane);
+        if (previous != null && previous.active() == active && Objects.equals(previous.recipeId(), recipeId)
+                && Objects.equals(previous.patternRecipeId(), patternId)) return;
+        if (previous != null) {
+            decrementCount(activeRecipeCounts, previous.recipeId());
+            decrementCount(patternRecipeCounts, previous.patternRecipeId());
+            if (previous.active()) cachedActiveLaneCount--;
+        }
+        if (recipeId != null) activeRecipeCounts.merge(recipeId, 1, Integer::sum);
+        if (patternId != null) patternRecipeCounts.merge(patternId, 1, Integer::sum);
+        if (active) cachedActiveLaneCount++;
+        laneAccounting.put(lane, new LaneAccounting(recipeId, patternId, active));
+        accountingUpdatesForTesting++;
+        markLaneStateChanged();
     }
+
+    private static void decrementCount(Map<ResourceLocation, Integer> counts, ResourceLocation recipeId) {
+        if (recipeId != null) counts.computeIfPresent(recipeId, (ignored, count) -> count == 1 ? null : count - 1);
+    }
+
+    int accountingUpdatesForTesting() { return accountingUpdatesForTesting; }
 
     public int activeRecipeCountFor(ResourceLocation recipeId) {
         return activeRecipeCounts().getOrDefault(recipeId, 0);
@@ -1189,19 +1244,12 @@ public final class FactoryRuntime {
                 controller.componentRuntime().modifierList());
     }
 
-    private void reserveStart(FactoryRecipeThread lane, boolean started,
-                              Map<ResourceLocation, Integer> activeCounts) {
-        ResourceLocation previous = startReservations.remove(lane);
-        if (previous != null) {
-            activeCounts.computeIfPresent(previous, (ignored, count) -> count <= 1 ? null : count - 1);
-        }
-        if (!started) return;
+    private void reserveStart(FactoryRecipeThread lane, boolean started) {
+        startReservations.remove(lane);
         MachineRecipe pending = lane.getPendingStartRecipe();
-        ResourceLocation recipeId = pending == null || pending.id() == null
-                ? lane.runtime().recipe() == null ? null : lane.runtime().recipe().id() : pending.id();
-        if (recipeId == null) return;
-        if (pending != null) startReservations.put(lane, recipeId);
-        activeCounts.merge(recipeId, 1, Integer::sum);
+        if (started && pending != null) startReservations.put(lane, pending.id());
+        refreshLaneAccounting(lane);
+        if (started) markLaneStateChanged();
     }
 
     private void clearFinishedContinuations() {
@@ -1212,12 +1260,17 @@ public final class FactoryRuntime {
 
     private void addLane(FactoryRecipeThread lane) {
         lanes.add(lane);
+        lanesByRuntime.put(lane.runtime(), lane);
+        refreshLaneAccounting(lane);
         markLaneStateChanged();
     }
 
     private void removeLane(FactoryRecipeThread lane) {
         if (!lanes.contains(lane)) return;
         String laneId = lane.laneId();
+        if (controller != null && controller.getLevel() instanceof ServerLevel level) {
+            SharedIoCoordinator.get(level).forgetExecutionLane(lane.runtime(), laneId);
+        }
         lane.setFinishContinuation(null);
         pendingAsyncSearches.remove(lane);
         if (patternStartReservations.remove(lane)) lane.runtime().releasePatternStart();
@@ -1232,6 +1285,15 @@ public final class FactoryRuntime {
     }
 
     private void removeLaneState(FactoryRecipeThread lane) {
+        laneFailures.remove(lane);
+        searchWaitingLanes.remove(lane);
+        lanesByRuntime.remove(lane.runtime());
+        LaneAccounting previous = laneAccounting.remove(lane);
+        if (previous != null) {
+            decrementCount(activeRecipeCounts, previous.recipeId());
+            decrementCount(patternRecipeCounts, previous.patternRecipeId());
+            if (previous.active()) cachedActiveLaneCount--;
+        }
         startReservations.remove(lane);
         lanePresentationCaches.remove(lane);
         laneThreadSnapshots.remove(lane);
@@ -1239,11 +1301,10 @@ public final class FactoryRuntime {
 
     public void markLaneRuntimeChanged(CraftingRuntime runtime) {
         if (runtime == null) return;
-        for (FactoryRecipeThread lane : lanes) {
-            if (lane.runtime() == runtime) {
-                markLaneStateChanged();
-                return;
-            }
+        FactoryRecipeThread lane = lanesByRuntime.get(runtime);
+        if (lane != null) {
+            refreshLaneAccounting(lane);
+            markLaneStateChanged();
         }
     }
 
@@ -1252,15 +1313,23 @@ public final class FactoryRuntime {
         recomputeFailureIfDirty();
     }
 
+    /** Current aggregated failure without capturing lane or recipe presentation snapshots. */
+    public @Nullable ExecutionStatus failure() {
+        recomputeFailureIfDirty();
+        return failure;
+    }
+
     private void recomputeFailureIfDirty() {
         if (!failureDirty) return;
         failureDirty = false;
         ExecutionStatus next = null;
-        for (FactoryRecipeThread lane : lanes) {
-            ExecutionStatus laneFailure = lane.runtime().failure();
-            if (laneFailure != null) {
-                next = laneFailure;
-                break;
+        if (!laneFailures.isEmpty()) {
+            for (FactoryRecipeThread lane : lanes) {
+                ExecutionStatus laneFailure = laneFailures.get(lane);
+                if (laneFailure != null) {
+                    next = laneFailure;
+                    break;
+                }
             }
         }
         if (!Objects.equals(failure, next)) {
@@ -1290,10 +1359,17 @@ public final class FactoryRuntime {
                                                       List<MachineCapability> requestCapabilities) {
         if (patternStartReservations.contains(lane) || !lane.isIdle()
                 || !lane.candidatesFor(List.of(recipe)).contains(recipe)) return null;
+        SharedIoCoordinator coordinator = controller.getLevel() instanceof ServerLevel level
+                ? SharedIoCoordinator.get(level) : null;
+        if (coordinator != null && !coordinator.reserveExecution(lane.runtime(), lane.laneId())) return null;
         CraftingRuntime.PreparedStart prepared = lane.runtime()
                 .preparePatternStart(recipe, requestedParallelism, requestCapabilities);
-        if (prepared == null || !lane.runtime().reservePatternStart()) return null;
+        if (prepared == null || !lane.runtime().reservePatternStart()) {
+            if (coordinator != null) coordinator.releaseExecutionReservation(lane.runtime(), lane.laneId());
+            return null;
+        }
         patternStartReservations.add(lane);
+        refreshLaneAccounting(lane);
         markLaneStateChanged();
         return new PatternLane(lane.runtime(), lane.laneId(), prepared);
     }
@@ -1303,8 +1379,16 @@ public final class FactoryRuntime {
     }
 
     private LaneObservation observe(FactoryRecipeThread lane) {
+        refreshLaneAccounting(lane);
         return new LaneObservation(lane.runtime().observation(), lane.getStatus(), lane.isStartPending(),
                 lane.getPendingStartRecipe());
+    }
+
+    private boolean matchesObservation(FactoryRecipeThread lane, LaneObservation before) {
+        refreshLaneAccounting(lane);
+        return before.runtime().matches(lane.runtime()) && before.status() == lane.getStatus()
+                && before.startPending() == lane.isStartPending()
+                && Objects.equals(before.pendingRecipe(), lane.getPendingStartRecipe());
     }
 
     private FactoryTickResult currentTickResult(long initialEpoch, boolean laneStateChanged) {
@@ -1317,9 +1401,11 @@ public final class FactoryRuntime {
                                    boolean startPending, @Nullable MachineRecipe pendingRecipe) {
     }
 
-    private record LaneAnalysis(Map<FactoryRecipeThread, LaneObservation> observations,
-                                Map<ResourceLocation, Integer> activeRecipeCounts) {
-    }
+    /**
+     * One lane's contribution to the incremental factory counters.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record LaneAccounting(@Nullable ResourceLocation recipeId, @Nullable ResourceLocation patternRecipeId, boolean active) { }
 
     /** Immutable runtime-owned lane snapshot. */
     public record ThreadSnapshot(int index, String laneId, boolean baseThread, boolean coreThread, boolean active,

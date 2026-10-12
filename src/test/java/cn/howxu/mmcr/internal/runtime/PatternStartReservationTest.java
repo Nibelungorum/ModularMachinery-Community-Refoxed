@@ -1,7 +1,11 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -18,7 +22,10 @@ import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
+import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
@@ -27,26 +34,36 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -410,6 +427,332 @@ class PatternStartReservationTest {
 
         factory.clear();
         assertThat(baseReservation.commit()).isFalse();
+    }
+
+    @Test
+    void caller_owned_notification_throw_reports_payment_and_keeps_the_real_allocation() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("pattern_paid_throw");
+            PatternStartReservation reservation = fixture.reserve();
+            RecipeCommitLedger payment = fixture.runtime.ledger();
+            fixture.notification.set(() -> { throw new IllegalStateException("root notification"); });
+
+            assertThat(reservation.commit()).isTrue();
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.COMMITTED);
+            assertThat(reservation.rolledBack()).isFalse();
+            assertThat(fixture.afterCommit).hasValue(0);
+            fixture.assertPausedPayment(payment);
+            assertThat(reservation.commit()).isFalse();
+            reservation.close();
+            fixture.assertPausedPayment(payment);
+            fixture.runtime.invalidate();
+            assertThat(fixture.buffer.reserved()).isZero();
+            assertThat(fixture.buffer.idleExcess()).isEqualTo(4L);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void caller_owned_cancelled_payment_is_terminal_without_activation_or_after_commit(boolean notifyThrow) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("pattern_paid_cancel");
+            PatternStartReservation reservation = fixture.reserve();
+            RecipeCommitLedger payment = fixture.runtime.ledger();
+            fixture.notification.set(() -> {
+                fixture.runtime.invalidate();
+                if (notifyThrow) throw new IllegalStateException("cancelled root notification");
+            });
+
+            assertThat(reservation.commit()).isTrue();
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.COMMITTED);
+            assertThat(reservation.rolledBack()).isFalse();
+            assertThat(payment.state().paidAttempts()).isZero();
+            assertThat(fixture.runtime.active()).isFalse();
+            assertThat(fixture.afterCommit).hasValue(0);
+            reservation.close();
+            assertThat(reservation.commit()).isFalse();
+            fixture.assertCancelledPayment();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void old_paid_continuation_does_not_release_a_reentrant_new_pending_pattern(boolean notifyThrow) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("pattern_paid_reentrant");
+            PatternStartReservation old = fixture.reserve();
+            AtomicReference<PatternStartReservation> replacement = new AtomicReference<>();
+            AtomicReference<RecipeCommitLedger> replacementPayment = new AtomicReference<>();
+            fixture.notification.set(() -> {
+                fixture.runtime.invalidate();
+                replacement.set(fixture.reserve());
+                replacementPayment.set(fixture.runtime.ledger());
+                if (notifyThrow) throw new IllegalStateException("old root notification");
+            });
+
+            assertThat(old.commit()).isTrue();
+            old.close();
+            fixture.assertPendingReplacement(replacement.get(), replacementPayment.get());
+            assertThat(fixture.afterCommit).hasValue(0);
+            assertThat(replacement.get().commit()).isTrue();
+            fixture.assertReplacementPaid();
+        }
+    }
+
+    @Test
+    void ownership_write_failure_keeps_native_payment_and_does_not_invite_provider_replay() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("pattern_unpaid_failure");
+            PatternStartReservation reservation = fixture.reserve();
+            RecipeCommitLedger payment = fixture.runtime.ledger();
+
+            assertThat(reservation.commit(() -> { throw new IllegalStateException("native holder settlement"); }))
+                    .isTrue();
+            assertThat(reservation.rolledBack()).isFalse();
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.COMMITTED);
+            fixture.assertPausedPayment(payment, 1L);
+            assertThat(fixture.afterCommit).hasValue(0);
+            assertThat(reservation.commit()).isFalse();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void factory_old_paid_release_keeps_reentrant_lane_reservation_accounting(boolean notifyThrow) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("factory_pattern_reentrant");
+            FactoryRuntime factory = new FactoryRuntime();
+            factory.ensureBaseLane(fixture.controller);
+            List<MachineCapability> capabilities = List.of(new ItemBusCapability(fixture.inputs, IOType.INPUT));
+            FactoryRuntime.PatternLane oldLane = factory.reservePatternStart(fixture.recipe, 1L, capabilities);
+            assertThat(oldLane).isNotNull();
+            PatternStartReservation old = reservation(fixture.recipe, factory, oldLane)
+                    .afterCommit(fixture.afterCommit::incrementAndGet);
+            AtomicReference<FactoryRuntime.PatternLane> newLane = new AtomicReference<>();
+            AtomicReference<PatternStartReservation> replacement = new AtomicReference<>();
+            AtomicReference<RecipeCommitLedger> payment = new AtomicReference<>();
+            fixture.notification.set(() -> {
+                factory.cancelAsyncState();
+                newLane.set(factory.reservePatternStart(fixture.recipe, 1L, capabilities));
+                assertThat(newLane.get()).isNotNull();
+                replacement.set(reservation(fixture.recipe, factory, newLane.get())
+                        .afterCommit(fixture.afterCommit::incrementAndGet));
+                payment.set(newLane.get().runtime().ledger());
+                if (notifyThrow) throw new IllegalStateException("factory old root notification");
+            });
+
+            assertThat(old.commit()).isTrue();
+            old.close();
+            assertThat(oldLane.runtime()).isSameAs(newLane.get().runtime());
+            assertThat(newLane.get().runtime().pendingPatternRecipeId()).isEqualTo(fixture.recipe.id());
+            assertThat(newLane.get().runtime().ledger()).isSameAs(payment.get());
+            assertThat(payment.get().state().paidAttempts()).isZero();
+            assertThat(payment.get().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+            assertThat(factory.reservePatternStart(fixture.recipe, 1L, capabilities)).isNull();
+            assertThat(fixture.afterCommit).hasValue(0);
+            fixture.assertCancelledPayment();
+            assertThat(replacement.get().commit()).isTrue();
+            assertThat(newLane.get().runtime().active()).isTrue();
+            assertThat(fixture.inputs.amount(0)).isZero();
+            assertThat(fixture.network.amount()).isEqualTo(92L);
+            assertThat(fixture.buffer.reserved()).isEqualTo(4L);
+            assertThat(fixture.afterCommit).hasValue(notifyThrow ? 0 : 1);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void same_reservation_nested_commit_is_rejected_through_writes_and_root_notification(boolean notifyThrow) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("pattern_attempt_guard");
+            PatternStartReservation reservation = fixture.reserve();
+            AtomicInteger nestedWrites = new AtomicInteger();
+            AtomicInteger notifications = new AtomicInteger();
+            Runnable nestedCommit = () -> assertThat(reservation.commit(() -> nestedWrites.incrementAndGet()))
+                    .isFalse();
+            fixture.notification.set(() -> {
+                notifications.incrementAndGet();
+                nestedCommit.run();
+                if (notifyThrow) throw new IllegalStateException("guarded root notification");
+            });
+
+            assertThat(reservation.commit(nestedCommit)).isTrue();
+            assertThat(notifications).hasValue(1);
+            assertThat(nestedWrites).hasValue(0);
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.COMMITTED);
+            assertThat(reservation.rolledBack()).isFalse();
+            if (notifyThrow) fixture.assertPausedPayment(fixture.runtime.ledger());
+            else fixture.assertSinglePayment();
+            reservation.close();
+            assertThat(reservation.commit()).isFalse();
+            assertThat(fixture.networkCommits).hasValue(1);
+            assertThat(fixture.afterCommit).hasValue(1);
+
+            fixture.runtime.invalidate();
+            assertThat(fixture.reserve().commit()).isTrue();
+            assertThat(fixture.runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+            assertThat(fixture.inputs.amount(0)).isZero();
+            assertThat(fixture.network.amount()).isEqualTo(92L);
+            assertThat(fixture.networkCommits).hasValue(2);
+            assertThat(fixture.buffer.reserved()).isEqualTo(4L);
+            assertThat(fixture.afterCommit).hasValue(notifyThrow ? 1 : 2);
+        }
+    }
+
+    /** Shared real caller-owned payment boundary for single and multi-reservation tests.
+     * @author howxu <dev@howxu.cn>
+     */
+    static final class PaidPatternFixture {
+        final AtomicReference<Runnable> notification = new AtomicReference<>();
+        final AtomicInteger afterCommit = new AtomicInteger();
+        final AtomicInteger networkCommits = new AtomicInteger();
+        final FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        final LongValueStorage network = new LongValueStorage(100L, 100L, null);
+        final LongItemStorage inputs = new LongItemStorage(1, 64L, () -> {
+            // Native start commits prefetch before inputs; observe the actual final item mutation.
+            Runnable action = notification.getAndSet(null);
+            if (action != null) action.run();
+        });
+        final MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        final CraftingRuntime runtime;
+        final MachineRecipe recipe;
+
+        PaidPatternFixture(String name) {
+            network.setAmount(100L);
+            inputs.setContents(0, stack(Items.IRON_INGOT, 2), 2L);
+            var flux = new FluxEnergyInputCapability(buffer, "pattern", amount -> Optional.of(() -> {
+                networkCommits.incrementAndGet();
+                assertThat(network.extract(amount, false)).isEqualTo(amount);
+                return CapabilityResult.successful();
+            }));
+            var components = new ArrayList<>(controller.componentRuntime().components());
+            components.add(new ProcessingComponent(null, new PatternFluxHost(flux), BlockPos.ZERO, BlockPos.ZERO,
+                    (String) null));
+            controller.componentRuntime().replaceComponents(components);
+            formForPattern(controller, true);
+            runtime = RuntimeTestFixtures.craftingRuntime(controller);
+            recipe = MachineRecipe.fromCanonical(MMCR.id(name), MMCR.id("test_cube"), 2,
+                    List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(2L)), List.of(),
+                    List.of(), 0, 1, false, false, false, Set.of());
+            RecipeRegistry.registerStatic(recipe);
+        }
+
+        PatternStartReservation reserve() {
+            PatternStartReservation reservation = controller.reservePatternStart(PATTERN_PORT, List.of(),
+                    List.of(new ItemBusCapability(inputs, IOType.INPUT)));
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+            return reservation.afterCommit(afterCommit::incrementAndGet);
+        }
+
+        void assertPausedPayment(RecipeCommitLedger payment) {
+            assertPausedPayment(payment, 0L);
+        }
+
+        void assertPausedPayment(RecipeCommitLedger payment, long confirmedAttempts) {
+            assertThat(runtime.ledger()).isSameAs(payment);
+            assertThat(payment.state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+            assertThat(payment.state().paidAttempts()).isEqualTo(confirmedAttempts);
+            assertThat(inputs.amount(0)).isEqualTo(1L);
+            assertThat(network.amount()).isEqualTo(96L);
+            assertThat(buffer.amount()).isEqualTo(4L);
+            assertThat(buffer.reserved() + buffer.idleExcess()).isEqualTo(4L);
+            if (runtime.active()) assertAllocation();
+            var state = payment.state();
+            runtime.resume();
+            runtime.tick();
+            runtime.finish();
+            assertThat(payment.state()).isEqualTo(state);
+            assertThat(inputs.amount(0)).isEqualTo(1L);
+            assertThat(network.amount()).isEqualTo(96L);
+            assertThat(buffer.reserved() + buffer.idleExcess()).isEqualTo(4L);
+        }
+
+        void assertSinglePayment() {
+            assertThat(runtime.active()).isTrue();
+            assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+            assertThat(runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+            assertThat(inputs.amount(0)).isEqualTo(1L);
+            assertThat(network.amount()).isEqualTo(96L);
+            assertThat(networkCommits).hasValue(1);
+            assertThat(buffer.amount()).isEqualTo(4L);
+            assertThat(buffer.reserved()).isEqualTo(4L);
+            assertThat(buffer.idleExcess()).isZero();
+            assertThat(afterCommit).hasValue(1);
+            assertAllocation();
+        }
+
+        void assertCancelledPayment() {
+            assertThat(inputs.amount(0)).isEqualTo(1L);
+            assertThat(network.amount()).isEqualTo(96L);
+            assertThat(buffer.amount()).isEqualTo(4L);
+            assertThat(buffer.reserved()).isZero();
+            assertThat(buffer.idleExcess()).isEqualTo(4L);
+        }
+
+        void assertPendingReplacement(PatternStartReservation replacement, RecipeCommitLedger payment) {
+            assertThat(replacement.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+            assertThat(replacement.rolledBack()).isFalse();
+            assertThat(runtime.active()).isFalse();
+            assertThat(runtime.pendingPatternRecipeId()).isEqualTo(recipe.id());
+            assertThat(runtime.ledger()).isSameAs(payment);
+            assertThat(payment.state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+            assertThat(payment.state().paidAttempts()).isZero();
+            assertCancelledPayment();
+        }
+
+        void assertReplacementPaid() {
+            assertThat(runtime.active()).isTrue();
+            assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+            assertThat(runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+            assertThat(inputs.amount(0)).isZero();
+            assertThat(network.amount()).isEqualTo(92L);
+            assertThat(buffer.amount()).isEqualTo(8L);
+            assertThat(buffer.reserved()).isEqualTo(4L);
+            assertThat(buffer.idleExcess()).isEqualTo(4L);
+            assertThat(afterCommit).hasValue(1);
+            assertAllocation();
+        }
+
+        void assertSinglePaymentAfterSecondStart(int expectedCallbacks) {
+            assertThat(runtime.active()).isTrue();
+            assertThat(runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+            assertThat(inputs.amount(0)).isZero();
+            assertThat(network.amount()).isEqualTo(92L);
+            assertThat(networkCommits).hasValue(2);
+            assertThat(buffer.amount()).isEqualTo(8L);
+            assertThat(buffer.reserved()).isEqualTo(4L);
+            assertThat(buffer.idleExcess()).isEqualTo(4L);
+            assertThat(afterCommit).hasValue(expectedCallbacks);
+        }
+
+        private void assertAllocation() {
+            CompoundTag saved = new CompoundTag();
+            runtime.save(saved, HolderLookup.Provider.create(Stream.empty()));
+            var allocations = saved.getCompound("recipe").getCompound("data")
+                    .getList("prefetched_energy_allocations", 10);
+            assertThat(allocations.size()).isEqualTo(1);
+            assertThat(allocations.getCompound(0).getString("key")).isEqualTo("pattern");
+            assertThat(allocations.getCompound(0).getLong("amount")).isEqualTo(4L);
+        }
+    }
+
+    /** Exposes the real Flux facet through the controller's usual component boundary.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class PatternFluxHost extends BlockEntity implements CapabilityHost {
+        private final CapabilitySnapshot capabilities;
+
+        private PatternFluxHost(MachineCapability capability) {
+            this(RuntimeTestFixtures.energyInput(BlockPos.ZERO), capability);
+        }
+
+        private PatternFluxHost(BlockEntity entity, MachineCapability capability) {
+            super(entity.getType(), entity.getBlockPos(), entity.getBlockState());
+            capabilities = new CapabilitySnapshot(List.of(capability));
+        }
+
+        @Override
+        public CapabilitySnapshot capabilitySnapshot() { return capabilities; }
     }
 
     private static void formForPattern(MachineControllerBlockEntity controller, boolean linked) {

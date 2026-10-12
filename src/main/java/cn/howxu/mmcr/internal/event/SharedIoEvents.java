@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.network.NetworkServerState;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.minecraft.server.level.ServerLevel;
@@ -23,6 +24,13 @@ public final class SharedIoEvents {
     private SharedIoEvents() {
     }
 
+    public static void onLevelPreTick(LevelTickEvent.Pre event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            SharedIoCoordinator.get(level).beginExecutionRound(level.getGameTime(),
+                    level.tickRateManager().runsNormally());
+        }
+    }
+
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
             completeLevelTick(level);
@@ -30,17 +38,21 @@ public final class SharedIoEvents {
     }
 
     public static void completeLevelTick(ServerLevel level) {
+        IOPortBlockEntity.flushStorageChanges(level);
         ModuleConnectionCoordinator.tick(level);
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
         MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        sharedIo.drainReceiptAcknowledgements(level);
         long gameTime = level.getGameTime();
         sharedIo.beginLevelTick(gameTime);
         async.beginLevelTick(gameTime);
         MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
-            async.completeTick(() -> sharedIo.resolve(level));
-            sharedIo.resolve(level);
-            async.completeTick(() -> sharedIo.resolve(level));
+            async.completeTick(() -> sharedIo.resolvePost(level));
+            sharedIo.resolvePost(level);
+            async.completeTick(() -> sharedIo.resolvePost(level));
         });
+        IOPortBlockEntity.flushStorageChanges(level);
+        async.pumpReceiptDrains();
         if (level.getServer() != null) NetworkInterfaceBindingCoordinator.heartbeat(level);
     }
 

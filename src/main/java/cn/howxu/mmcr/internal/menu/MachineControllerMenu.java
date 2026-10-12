@@ -13,6 +13,7 @@ import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.OutputData;
 import cn.howxu.mmcr.internal.runtime.ui.ControllerUiServerSession;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ControllerSyncRuntime;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
@@ -64,6 +65,7 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
     private final ControllerMenuOpenData uiOpenData;
     private final @Nullable ControllerUiServerSession uiServerSession;
     private boolean playerInventoryVisible = true;
+    private @Nullable MachineStateSnapshot broadcastState;
 
     public MachineControllerMenu(int containerId, Inventory playerInv, MachineControllerBlockEntity owner) {
         super(ModUIs.MACHINE_CONTROLLER.get(), containerId);
@@ -111,9 +113,18 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
             @Override public int get() { return machineState(owner).activeFactoryThreadCount(); }
             @Override public void set(int value) {}
         });
-        this.installedModuleCount = ControllerMenuState.addInstalledModuleCountSlot(this, owner);
-        this.moduleConnected = ControllerMenuState.addModuleConnectedSlot(this, owner);
-        this.controllerRole = ControllerMenuState.addControllerRoleSlot(this, owner);
+        this.installedModuleCount = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return machineState(owner).installedModuleCount(); }
+            @Override public void set(int value) {}
+        });
+        this.moduleConnected = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return machineState(owner).moduleConnected() ? 1 : 0; }
+            @Override public void set(int value) {}
+        });
+        this.controllerRole = addDataSlot(owner == null ? DataSlot.standalone() : new DataSlot() {
+            @Override public int get() { return machineState(owner).controllerRole(); }
+            @Override public void set(int value) {}
+        });
         this.clientControllerRole = controllerRoleSyncValue(owner);
         this.clientMachineId = machineIdFor(owner);
         this.clientConnectedHostId = owner == null ? null
@@ -164,6 +175,19 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
 
     private void addControllerPlayerSlots(Inventory playerInv) {
         ControllerMenuState.addControllerPlayerSlots(this, playerInv);
+    }
+
+    @Override
+    protected DataSlot addDataSlot(DataSlot slot) {
+        if (uiServerSession == null) return super.addDataSlot(slot);
+        return super.addDataSlot(new DataSlot() {
+            private int lastValue;
+            @Override public int get() {
+                if (!uiServerSession.closed()) lastValue = slot.get();
+                return lastValue;
+            }
+            @Override public void set(int value) { slot.set(value); }
+        });
     }
 
     public MachineControllerMenu(int containerId, Inventory playerInv) {
@@ -382,18 +406,30 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
 
     @Override
     public void broadcastChanges() {
-        super.broadcastChanges();
-        if (uiServerSession != null) {
-            uiServerSession.broadcastChanges();
+        if (uiServerSession != null && uiServerSession.closed()) {
+            // Keep vanilla inventory/carried synchronization without querying controller DataSlots.
+            super.broadcastChanges();
             return;
         }
-        if (owner == null || serverPlayer == null) return;
-        PktMachineStatePayload next = PktMachineStatePayload.from(pos, owner.runtimeSnapshot(),
-                owner.currentRecipePoolId());
-        var update = PktMachineStatePayload.nextUpdate(next, lastSentSnapshot);
-        if (update == null) return;
-        serverPlayer.connection.send(new ClientboundCustomPayloadPacket(update));
-        lastSentSnapshot = next;
+        ControllerRuntimeSnapshot broadcastRuntime = owner == null ? null : owner.runtimeSnapshot();
+        try {
+            broadcastState = broadcastRuntime == null ? null
+                    : SYNC_RUNTIME.machineState(broadcastRuntime, owner.currentRecipePoolId());
+            super.broadcastChanges();
+            if (uiServerSession != null) {
+                uiServerSession.broadcastChanges();
+                return;
+            }
+            if (owner == null || serverPlayer == null) return;
+            PktMachineStatePayload next = PktMachineStatePayload.from(pos, broadcastRuntime,
+                    owner.currentRecipePoolId());
+            var update = PktMachineStatePayload.nextUpdate(next, lastSentSnapshot);
+            if (update == null) return;
+            serverPlayer.connection.send(new ClientboundCustomPayloadPacket(update));
+            lastSentSnapshot = next;
+        } finally {
+            broadcastState = null;
+        }
     }
 
     public void applyClientProgress(String recipeName, int tick, int totalTick) {
@@ -462,7 +498,8 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         return state == null ? resolvedControllerRole(0, controllerRole.get(), clientControllerRole) : state.controllerRole();
     }
 
-    private static MachineStateSnapshot machineState(MachineControllerBlockEntity controller) {
+    private MachineStateSnapshot machineState(MachineControllerBlockEntity controller) {
+        if (controller == owner && broadcastState != null) return broadcastState;
         return SYNC_RUNTIME.machineState(controller.runtimeSnapshot(), controller.currentRecipePoolId());
     }
 

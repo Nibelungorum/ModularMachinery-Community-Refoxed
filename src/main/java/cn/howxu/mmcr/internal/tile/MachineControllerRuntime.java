@@ -82,6 +82,9 @@ public final class MachineControllerRuntime {
     private long workingCraftingEpoch = Long.MIN_VALUE;
     private int snapshotBatchDepth;
     private boolean snapshotDirty = true;
+    private boolean buildingSnapshot;
+    private long tickStructureEpoch = Long.MIN_VALUE;
+    private int projectionBuildCountForTesting;
     private long publishedStructureEpoch = Long.MIN_VALUE;
     private long publishedCapabilityVersion = Long.MIN_VALUE;
     private long publishedCapabilityPresentationEpoch = Long.MIN_VALUE;
@@ -101,7 +104,7 @@ public final class MachineControllerRuntime {
         this.structure = new StructureRuntime(controller);
         this.craftingRuntime = new CraftingRuntime(controller, components);
         this.factoryRuntime = new FactoryRuntime();
-        publishSnapshot();
+        flushSnapshot();
     }
 
     public void serverTick(ServerLevel level, BlockPos controllerPos) {
@@ -125,6 +128,12 @@ public final class MachineControllerRuntime {
     }
 
     public ControllerRuntimeSnapshot snapshot() {
+        // Factory projection asks its controller for static metadata while it is being built.
+        if (buildingSnapshot) return publishedSnapshot;
+        controller.ensureFactoryRuntimeLoaded();
+        if (snapshotBatchDepth > 0) return currentSnapshot();
+        refreshCommittedCraftingState();
+        if (snapshotDirty || !epochsUnchanged()) flushSnapshot();
         return publishedSnapshot;
     }
 
@@ -214,7 +223,36 @@ public final class MachineControllerRuntime {
     }
 
     ControllerRuntimeSnapshot currentSnapshot() {
+        if (buildingSnapshot) return publishedSnapshot;
+        refreshCommittedCraftingState();
+        buildingSnapshot = true;
+        try {
+            return buildCurrentSnapshot();
+        } finally {
+            buildingSnapshot = false;
+        }
+    }
+
+    /** Internal execution reads static bindings without capturing changing progress or port contents. */
+    ControllerRuntimeSnapshot executionSnapshot() {
+        if (workingSnapshot != null && workingStaticStateUnchanged()
+                && workingSnapshot.maxParallelism() == components.maxParallelism(
+                workingSnapshot.structure().machine() == null ? workingSnapshot.structure().configuredMachine()
+                        : workingSnapshot.structure().machine())) return workingSnapshot;
+        return currentSnapshot();
+    }
+
+    private ControllerRuntimeSnapshot buildCurrentSnapshot() {
         if (workingSnapshot != null && workingEpochsUnchanged()) return workingSnapshot;
+        // Provider reads may commit reentrantly; stamp the capture's inputs, not its end state.
+        long structureEpoch = structure.stateEpoch();
+        long capabilityVersion = components.capabilityVersion();
+        long capabilityPresentationEpoch = components.capabilityPresentationEpoch();
+        long modifierVersion = components.modifierVersion();
+        long componentStateVersion = components.stateVersion();
+        long factoryEpoch = factoryRuntime.stateEpoch();
+        long craftingEpoch = craftingStateEpoch;
+        long dataStorageEpoch = dataStorageStateEpoch;
         StructureSnapshot structureSnapshot = structure.snapshot();
         FactorySnapshot factorySnapshot = factoryRuntime.snapshot();
         ControllerRecipePresentation recipePresentation = craftingRuntime.recipePresentation();
@@ -247,14 +285,15 @@ public final class MachineControllerRuntime {
                      recipePresentation);
             workingMachineId = machineId;
         }
-        workingStructureEpoch = structure.stateEpoch();
-        workingCapabilityVersion = components.capabilityVersion();
-        workingCapabilityPresentationEpoch = components.capabilityPresentationEpoch();
-        workingModifierVersion = components.modifierVersion();
-        workingComponentStateVersion = components.stateVersion();
-        workingFactoryEpoch = factoryRuntime.stateEpoch();
-        workingCraftingEpoch = craftingStateEpoch;
-        workingDataStorageStateEpoch = dataStorageStateEpoch;
+        workingStructureEpoch = structureEpoch;
+        workingCapabilityVersion = capabilityVersion;
+        workingCapabilityPresentationEpoch = capabilityPresentationEpoch;
+        workingModifierVersion = modifierVersion;
+        workingComponentStateVersion = componentStateVersion;
+        workingFactoryEpoch = factoryEpoch;
+        workingCraftingEpoch = craftingEpoch;
+        workingDataStorageStateEpoch = dataStorageEpoch;
+        projectionBuildCountForTesting++;
         return workingSnapshot;
     }
 
@@ -297,33 +336,43 @@ public final class MachineControllerRuntime {
         return snapshotBuildCountForTesting;
     }
 
+    int projectionBuildCountForTesting() {
+        return projectionBuildCountForTesting;
+    }
+
     boolean structureStateChangedSincePublication() {
-        return publishedStructureEpoch != structure.stateEpoch();
+        return tickStructureEpoch != structure.stateEpoch();
+    }
+
+    void acknowledgeTickStructureState() {
+        tickStructureEpoch = structure.stateEpoch();
+    }
+
+    CraftingStateSnapshot craftingState() {
+        return craftingState;
     }
 
     void publishSnapshot() {
         controller.ensureFactoryRuntimeLoaded();
+        // Mutations update epochs immediately. Full projection is owned by an actual query.
+    }
+
+    private void refreshCommittedCraftingState() {
         if (controller.getLevel() == null || !controller.getLevel().isClientSide()) refreshCraftingStateFromRuntime();
-        if (!snapshotDirty && epochsUnchanged()) return;
-        if (snapshotBatchDepth > 0) {
-            snapshotDirty = true;
-            return;
-        }
-        flushSnapshot();
     }
 
     private void flushSnapshot() {
         publishedSnapshot = currentSnapshot();
         publishedMachineId = workingMachineId;
-        publishedStructureEpoch = structure.stateEpoch();
-        publishedCapabilityVersion = components.capabilityVersion();
-        publishedCapabilityPresentationEpoch = components.capabilityPresentationEpoch();
-        publishedModifierVersion = components.modifierVersion();
-        publishedComponentStateVersion = components.stateVersion();
-        publishedFactoryEpoch = factoryRuntime.stateEpoch();
-        publishedCraftingEpoch = craftingStateEpoch;
-        publishedDataStorageStateEpoch = dataStorageStateEpoch;
-        snapshotDirty = false;
+        publishedStructureEpoch = workingStructureEpoch;
+        publishedCapabilityVersion = workingCapabilityVersion;
+        publishedCapabilityPresentationEpoch = workingCapabilityPresentationEpoch;
+        publishedModifierVersion = workingModifierVersion;
+        publishedComponentStateVersion = workingComponentStateVersion;
+        publishedFactoryEpoch = workingFactoryEpoch;
+        publishedCraftingEpoch = workingCraftingEpoch;
+        publishedDataStorageStateEpoch = workingDataStorageStateEpoch;
+        snapshotDirty = !epochsUnchanged();
         snapshotBuildCountForTesting++;
     }
 
@@ -403,6 +452,9 @@ public final class MachineControllerRuntime {
     private void refreshCraftingStateFromRuntime() {
         CraftingStateSnapshot current = craftingRuntime.snapshot();
         boolean contentChanged = !Objects.equals(craftingState.recipeId(), current.recipeId())
+                || craftingState.structureVersion() != structure.version()
+                || craftingState.capabilityVersion() != components.capabilityVersion()
+                || craftingState.modifierVersion() != components.modifierVersion()
                 || !Objects.equals(craftingState.failure(), current.failure())
                 || craftingState.tick() != current.tick()
                 || craftingState.totalTick() != current.totalTick()

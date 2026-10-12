@@ -6,8 +6,6 @@ import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeCatalog;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
-import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
@@ -80,7 +78,7 @@ public final class MachineRecipeThread extends RecipeThread {
         markRecipeFinished();
         MachineRecipe restartRecipe = consumeRestartRecipe(currentRecipeCatalog().recipes(),
                 controller.getMaxParallelism(), controller.currentRuntimeSnapshot().structure().version());
-        if (restartRecipe == null || !canRestartNow(restartRecipe)) return;
+        if (restartRecipe == null) return;
         if (controller.activeWorkMode() == MachineWorkMode.ASYNC) {
             enqueueAsyncFinishRestart(restartRecipe, controller.getMaxParallelism(),
                     controller.currentRuntimeSnapshot().structure().version(), null);
@@ -88,19 +86,6 @@ public final class MachineRecipeThread extends RecipeThread {
             startRecipe(restartRecipe, controller.getMaxParallelism(),
                     controller.currentRuntimeSnapshot().structure().version());
         }
-    }
-
-    private boolean canRestartNow(MachineRecipe recipe) {
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
-        Machine machine = currentMachine();
-        RecipeSearchResult result = new RecipeSearchTask(snapshot, machine.registryName(), controller.currentRecipePoolId(),
-                snapshot.structure().version(), controller.getMaxParallelism(), List.of(recipe),
-                controller.componentRuntime().capabilities()).compute();
-        if (result.success()) return true;
-        runtime.prepareAsyncStart(recipe, controller.getMaxParallelism());
-        runtime.flushAsyncScreenText();
-        onStartSearchFailed(result.failure());
-        return false;
     }
 
     @Override
@@ -124,6 +109,7 @@ public final class MachineRecipeThread extends RecipeThread {
         lastRecipeModifierVersion = snapshot.modifierVersion();
         lastRecipeComponentStateVersion = snapshot.stateVersion();
         lastRecipeCatalogVersion = currentRecipeCatalog().version();
+        installStartedProgram();
     }
 
     public void markRecipeFinished() {

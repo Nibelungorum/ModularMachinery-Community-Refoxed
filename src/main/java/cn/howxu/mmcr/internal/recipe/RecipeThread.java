@@ -19,6 +19,7 @@ import cn.howxu.mmcr.internal.async.AsyncContinuation;
 import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.runtime.InstalledRecipeProgram;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -27,6 +28,7 @@ import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Scheduling and event adapter for one crafting runtime.
@@ -70,6 +72,8 @@ public abstract class RecipeThread {
     private @Nullable RecipeStartContext.ExecutionSnapshot pendingAsyncStartExecution;
     private boolean asyncFinishPrepared;
     private boolean asyncTickCommitted;
+    private @Nullable MachineAsyncCoordinator.TaskKey programCompilationTask;
+    private @Nullable AtomicBoolean programCompilationValidity;
 
     protected RecipeThread(MachineControllerBlockEntity controller) {
         this(controller, new CraftingRuntime(controller, controller.componentRuntime()));
@@ -80,6 +84,7 @@ public abstract class RecipeThread {
         if (runtime == null) throw new IllegalArgumentException("runtime must not be null");
         this.controller = controller;
         this.runtime = runtime;
+        runtime.bindRecipeLane("base", this::completeInstalledAttempt);
     }
 
     public boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
@@ -245,6 +250,10 @@ public abstract class RecipeThread {
         ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())) return false;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
+        if (!reserveInstalledStart()) return false;
+        if (usesFullAsyncContinuation() && domain != null && runtime.restartProgramReady(next)) {
+            return enqueueAsyncFinishRestart(next, requestedParallelism, structureVersion, context);
+        }
         if (usesFullAsyncContinuation() && controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
             AsyncContinuation continuation = prepareAsyncStartContinuation(next, requestedParallelism, structureVersion,
                     context);
@@ -265,12 +274,115 @@ public abstract class RecipeThread {
         }
         CraftingStatus state = runtime.start(next, requestedParallelism);
         if (!state.isCrafting()) {
+            if (runtime.active()) installStartedProgram();
+            releaseInstalledStart();
             controller.clearRecipeScreenText(laneId());
             onStartFailed(searchContextKeyForStart());
             return false;
         }
         onStarted();
+        installStartedProgram();
         return true;
+    }
+
+    private boolean reserveInstalledStart() {
+        if (!(controller.getLevel() instanceof ServerLevel level)) return true;
+        SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+        if (coordinator.executionRoundId() == 0L) return true;
+        return qualifiedInstalledTick(level, coordinator) && coordinator.reserveExecution(runtime, laneId());
+    }
+
+    private void releaseInstalledStart() {
+        if (controller.getLevel() instanceof ServerLevel level) {
+            SharedIoCoordinator.get(level).releaseExecutionReservation(runtime, laneId());
+        }
+    }
+
+    private boolean qualifiedInstalledTick(ServerLevel level, SharedIoCoordinator coordinator) {
+        return !controller.isRemoved() && !controller.isRedstonePaused()
+                && controller.currentStructureSnapshot().formed() && controller.currentStructureSnapshot().structureAreaLoaded()
+                && level.getBlockEntity(controller.getBlockPos()) == controller
+                && coordinator.controllerPermit(controller.getBlockPos()).eligible(coordinator.executionRoundId(),
+                level.getGameTime(), level.tickRateManager().runsNormally());
+    }
+
+    protected final void installStartedProgram() {
+        if (!(controller.getLevel() instanceof ServerLevel level)) return;
+        SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+        if (coordinator.executionRoundId() == 0L || !qualifiedInstalledTick(level, coordinator)) return;
+        coordinator.reserveExecution(runtime, laneId());
+        if (usesFullAsyncContinuation() && runtime.installedProgram() == null && !runtime.restartProgramAuthorized()) {
+            requestProgramCompilation(level);
+            return;
+        }
+        InstalledRecipeProgram execution = runtime.ensureInstalledProgram();
+        if (execution != null) coordinator.install(execution, coordinator.controllerPermit(controller.getBlockPos()));
+    }
+
+    private void requestProgramCompilation(ServerLevel level) {
+        if (programCompilationTask != null) return;
+        CraftingRuntime.ProgramCompilation captured = runtime.captureProgramCompilation();
+        if (captured == null) return;
+        MachineAsyncCoordinator.TaskKey key = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
+                level.getGameTime(), controller.activeWorkMode(), "program/" + laneId(), controller.lifecycleEpoch());
+        programCompilationTask = key;
+        AtomicBoolean valid = new AtomicBoolean(true);
+        programCompilationValidity = valid;
+        MachineAsyncCoordinator.SubmissionResult submitted = MachineAsyncCoordinator.get(level).submitDetailed(key,
+                new ProgramCompilationContinuation(captured), (task, step) -> {
+                    if (programCompilationTask != task || controller.lifecycleEpoch() != task.lifecycleEpoch()
+                            || !(step instanceof CompiledInstall install)) return MainThreadStep.Result.success();
+                    // Only this main-thread continuation can bind live runtime/storage.
+                    InstalledRecipeProgram installed = runtime.installCompiledProgram(install.identity(), install.program());
+                    programCompilationTask = null;
+                    programCompilationValidity = null;
+                    if (installed != null) installStartedProgram();
+                    return MainThreadStep.Result.success();
+                }, new MachineAsyncCoordinator.TaskHooks(
+                        valid::get,
+                        (ignored, outcome) -> {
+                            if (programCompilationTask == key) {
+                                programCompilationTask = null;
+                                programCompilationValidity = null;
+                            }
+                        }));
+        if (submitted != MachineAsyncCoordinator.SubmissionResult.ACCEPTED) {
+            valid.set(false);
+            programCompilationTask = null;
+            programCompilationValidity = null;
+        }
+    }
+
+    /** Worker-owned values only. @author howxu <dev@howxu.cn> */
+    private record ProgramCompilationContinuation(CraftingRuntime.ProgramCompilation input) implements AsyncContinuation {
+        @Override
+        public Yield advance(AsyncExecutionContext context) {
+            CompiledRecipeProgram program = input.compile();
+            return Yield.mainThread(new CompiledInstall(input.identity(), program), ignored -> unused -> Yield.complete());
+        }
+    }
+
+    /** Main-thread installation boundary. @author howxu <dev@howxu.cn> */
+    private record CompiledInstall(CompiledRecipeProgram.ExecutionIdentity identity,
+                                   CompiledRecipeProgram program) implements MainThreadStep {
+        @Override
+        public Result execute() { return Result.success(); }
+    }
+
+    private void cancelProgramCompilation() {
+        MachineAsyncCoordinator.TaskKey key = programCompilationTask;
+        if (programCompilationValidity != null) programCompilationValidity.set(false);
+        programCompilationValidity = null;
+        programCompilationTask = null;
+        if (key != null && controller.getLevel() instanceof ServerLevel level) MachineAsyncCoordinator.get(level).cancel(key);
+    }
+
+    protected final void bindInstalledLane() {
+        runtime.bindRecipeLane(laneId(), this::completeInstalledAttempt);
+    }
+
+    private void completeInstalledAttempt() {
+        completeIfFinished(true);
     }
 
     protected @Nullable AsyncContinuation prepareAsyncStartContinuation(MachineRecipe next, long requestedParallelism,
@@ -308,6 +420,7 @@ public abstract class RecipeThread {
                                                                  long structureVersion,
                                                                  @Nullable FactorySearchContext context) {
         if (next == null || requestedParallelism <= 0 || pendingAsyncStart != null) return null;
+        if (!reserveInstalledStart()) return null;
         ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
         ResourceLocation recipePoolId = controller.currentRecipePoolId();
         if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())
@@ -357,6 +470,7 @@ public abstract class RecipeThread {
                     if (!isPendingStart(token, next) || runtime.active()) return 0L;
                     CraftingStatus state = runtime.start(next, requested, preparedStart);
                     if (!state.isCrafting()) {
+                        if (runtime.active()) installStartedProgram();
                         controller.clearRecipeScreenText(laneId());
                         RecipeSearchContextKey failureKey = pendingStartSearchContextKey;
                         clearPendingStart(token, next);
@@ -371,6 +485,7 @@ public abstract class RecipeThread {
                     if (!isPendingStart(token, next) || !runtime.active()) return;
                     clearPendingStart(token, next);
                     onStarted();
+                    installStartedProgram();
                     controller.syncRecipeRuntimeFailure(runtime);
                 },
                 () -> {
@@ -396,6 +511,7 @@ public abstract class RecipeThread {
             pendingAsyncStartExecution = null;
         }
         clearPendingStart(pending.token(), pending.recipe());
+        releaseInstalledStart();
         controller.clearRecipeScreenText(laneId());
         onStartFailed(failureKey);
         controller.syncRecipeRuntimeFailure(runtime);
@@ -498,6 +614,39 @@ public abstract class RecipeThread {
             controller.clearRecipeScreenText(laneId());
         }
         if (!runtime.active()) return;
+        if (controller.getLevel() instanceof ServerLevel level && controller.resourceDomain() != null) {
+            SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+            if (coordinator.executionRoundId() != 0L) {
+                if (!qualifiedInstalledTick(level, coordinator)) return;
+                InstalledRecipeProgram execution = runtime.installedProgram();
+                if (execution == null || !coordinator.refreshExecution(execution,
+                        coordinator.controllerPermit(controller.getBlockPos()))) {
+                    if (!runtime.versionsCurrent()) {
+                        boolean wasActive = runtime.active();
+                        runtime.invalidateForCatalogChange();
+                        completeIfFinished(wasActive);
+                        return;
+                    }
+                    if (tickPending) return;
+                    if (!runtime.finishPending() && usesFullAsyncContinuation() && runtime.installedProgram() == null
+                            && !runtime.restartProgramAuthorized()) {
+                        requestProgramCompilation(level);
+                        return;
+                    }
+                    execution = runtime.ensureInstalledProgram();
+                    if (execution == null) return;
+                    coordinator.reserveExecution(runtime, laneId());
+                    if (!coordinator.install(execution, coordinator.controllerPermit(controller.getBlockPos()))) return;
+                }
+                if (tickPending) return;
+                if (usesAsyncPlanning()) {
+                    if (!runtime.finishPending()) runtime.prepareInstalledTick(coordinator.executionRoundId());
+                } else {
+                    coordinator.executeInstalled(execution, level);
+                }
+                return;
+            }
+        }
         if (!usesAsyncPlanning()) {
             tickSynchronously();
             return;
@@ -980,7 +1129,7 @@ public abstract class RecipeThread {
     private void completeIfFinished(boolean wasActive) {
         clearPendingTick();
         if (wasActive && !runtime.active()) {
-            if (runtime.failure() == null) {
+            if (runtime.failure() == null && runtime.ledger().state().outputPaid()) {
                 controller.clearRecipeScreenText(laneId());
                 onRecipeFinished();
                 onFinished();
@@ -996,6 +1145,8 @@ public abstract class RecipeThread {
     }
 
     public void invalidate() {
+        cancelProgramCompilation();
+        releaseInstalledStart();
         runtime.invalidate();
         controller.clearRecipeScreenText(laneId());
         pendingAsyncStart = null;
@@ -1017,6 +1168,9 @@ public abstract class RecipeThread {
 
     /** Clears deferred async work without invalidating a recipe that may resume after a pause. */
     public void cancelAsyncState() {
+        cancelProgramCompilation();
+        runtime.cancelInstalledProgram();
+        releaseInstalledStart();
         pendingAsyncStart = null;
         pendingAsyncStartExecution = null;
         asyncFinishPrepared = false;

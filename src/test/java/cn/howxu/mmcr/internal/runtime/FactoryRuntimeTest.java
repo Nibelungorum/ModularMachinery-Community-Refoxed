@@ -21,6 +21,19 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.TickFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
+import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
@@ -38,9 +51,11 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -53,10 +68,13 @@ import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier.Reason;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -65,9 +83,12 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.flag.FeatureFlags;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
@@ -79,6 +100,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.nbt.CompoundTag;
 import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.fml.config.IConfigSpec;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import org.junit.jupiter.api.AfterEach;
@@ -87,6 +110,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -106,6 +130,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  */
 class FactoryRuntimeTest {
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
+    private ServerThreadTestScope serverThreadScope;
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -119,13 +144,18 @@ class FactoryRuntimeTest {
 
     @BeforeEach
     void bootstrapCapabilities() throws Exception {
+        serverThreadScope = ServerThreadTestScope.open();
         TestBootstrap.bootstrapCapabilities();
     }
 
     @AfterEach
-    void cleanup() {
-        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-        RecipeRegistry.clearForTesting();
+    void cleanup() throws Exception {
+        try {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+            RecipeRegistry.clearForTesting();
+        } finally {
+            if (serverThreadScope != null) serverThreadScope.close();
+        }
     }
 
     @Test
@@ -185,6 +215,122 @@ class FactoryRuntimeTest {
         assertThat(runtime.asyncSearchScansForTesting()).isEqualTo(searchScans);
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {1, 4})
+    void expanding_an_attached_installed_factory_admits_once_then_resumes_the_fast_path(int recipeThreadLimit)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_expansion_" + recipeThreadLimit),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, recipeThreadLimit);
+            RecipeRegistry.registerStatic(recipe);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            assertThat(controller.recipesForMachine()).containsExactly(recipe);
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRuntimes()).singleElement().satisfies(lane ->
+                    assertThat(lane.installedProgram()).isNotNull());
+            long scans = factory.asyncSearchScansForTesting();
+
+            setItem(controller.getFactoryController().itemHandler(), 0,
+                    new ItemStack(ModItems.THREAD_DISPERSER.get(), 3));
+            tickAttachedFactory(controller);
+
+            assertThat(factory.laneLimit()).isEqualTo(4);
+            assertThat(factory.activeLaneCount()).isEqualTo(recipeThreadLimit);
+            assertThat(factory.laneCount()).isEqualTo(recipeThreadLimit);
+            assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans + 1);
+            tickAttachedFactory(controller);
+            tickAttachedFactory(controller);
+            assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans + 1);
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
+    void attached_base_post_start_and_progress_update_factory_snapshots_without_manual_notification(MachineWorkMode mode)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_base_post_progress_" + mode.name().toLowerCase()),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of());
+            RecipeRegistry.registerStatic(recipe);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            tickAttachedFactory(controller);
+            CraftingRuntime base = factoryBaseRuntime(factory);
+            assertThat(base).isNotSameAs(controllerRuntime(controller).craftingRuntime());
+            assertThat(factory.activeRuntimes()).containsExactly(base);
+            assertThat(factory.activeLaneCount()).isEqualTo(1);
+            assertThat(factory.activeRecipeCountFor(recipe.id())).isEqualTo(1);
+            FactorySnapshot before = factory.snapshot();
+            int initialTick = base.tickCount();
+
+            for (int step = 0; step < 3; step++) {
+                tickAttachedFactory(controller);
+                FactorySnapshot after = factory.snapshot();
+                assertThat(after.lanes().getFirst().tick()).isEqualTo(base.tickCount());
+                assertThat(after.presentationLanes().getFirst().tick()).isEqualTo(base.tickCount());
+                assertThat(after).isSameAs(factory.snapshot());
+            }
+            assertThat(base.tickCount()).isGreaterThan(initialTick);
+            assertThat(before.lanes().getFirst().tick()).isEqualTo(initialTick);
+            assertThat(before.presentationLanes().getFirst().tick()).isEqualTo(initialTick);
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
+    void attached_base_post_cancellation_removes_factory_counts_and_publishes_failure(MachineWorkMode mode)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        CancellingInputBus input = new CancellingInputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = attachedFactoryController(input);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_base_post_cancel_" + mode.name().toLowerCase()),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(),
+                    0, 1, true, List.of(), List.of());
+            RecipeRegistry.registerStatic(recipe);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            tickAttachedFactory(controller);
+            CraftingRuntime base = factoryBaseRuntime(factory);
+            assertThat(base).isNotSameAs(controllerRuntime(controller).craftingRuntime());
+            assertThat(factory.activeRuntimes()).containsExactly(base);
+            assertThat(factory.activeLaneCount()).isEqualTo(1);
+            assertThat(factory.activeRecipeCountFor(recipe.id())).isEqualTo(1);
+            FactorySnapshot before = factory.snapshot();
+            assertThat(before.activeLaneCount()).isEqualTo(1);
+
+            input.cancelAfterInputs = true;
+            tickAttachedFactory(controller);
+
+            assertThat(base.active()).isFalse();
+            assertThat(base.failure()).isNotNull();
+            assertThat(factory.activeLaneCount()).isZero();
+            assertThat(factory.activeRecipeCountFor(recipe.id())).isZero();
+            FactorySnapshot after = factory.snapshot();
+            assertThat(after.active()).isFalse();
+            assertThat(after.failure()).isEqualTo(base.failure());
+            assertThat(after.presentationLanes().getFirst().failure()).isEqualTo(base.failure());
+            assertThat(before.activeLaneCount()).isEqualTo(1);
+            assertThat(before.failure()).isNull();
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
     @Test
     void validating_an_attached_lane_does_not_rebuild_four_lane_factory_state() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
@@ -210,6 +356,51 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void cancelling_one_attached_lane_updates_recipe_limits_once_without_recounting_other_lanes() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        MachineControllerBlockEntity controller = asyncFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        FactoryRuntime runtime = controllerFactoryRuntime(controller);
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(4);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("incremental_factory_accounting"), MMCR.id("test_cube"),
+                40, List.of(), List.of(), List.of(), 0, 4);
+        runtime.tick(List.of(recipe), 1L, 0L);
+        assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(4);
+        CraftingRuntime changed = runtime.activeRuntimes().getFirst();
+        int updates = runtime.accountingUpdatesForTesting();
+        changed.invalidate();
+        runtime.markLaneRuntimeChanged(changed);
+        assertThat(runtime.activeLaneCount()).isEqualTo(3);
+        assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(3);
+        assertThat(runtime.accountingUpdatesForTesting()).isEqualTo(updates + 1);
+        runtime.markLaneRuntimeChanged(changed);
+        assertThat(runtime.accountingUpdatesForTesting()).isEqualTo(updates + 1);
+        runtime.clear();
+        assertThat(runtime.activeLaneCount()).isZero();
+        assertThat(runtime.activeRecipeCountFor(recipe.id())).isZero();
+    }
+
+    @Test
+    void factory_metadata_observes_new_structure_without_recursing_through_a_lazy_controller_projection()
+            throws ReflectiveOperationException {
+        MachineControllerBlockEntity controller = stagedController(2);
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        FactorySnapshot before = factory.snapshot();
+        assertThat(before.matchedStage()).isEqualTo(2);
+        var reset = MachineControllerRuntime.class.getDeclaredMethod("resetStructure", Machine.class, boolean.class);
+        reset.setAccessible(true);
+        reset.invoke(controllerRuntime(controller), controller.currentStructureSnapshot().configuredMachine(), false);
+        assertThat(controller.currentStructureSnapshot().formed()).isFalse();
+        assertThat(controller.currentStructureSnapshot().matchedStage()).isZero();
+        FactorySnapshot after = factory.snapshot();
+        assertThat(after).isNotSameAs(before);
+        assertThat(after.matchedStage()).isZero();
+        assertThat(before.matchedStage()).isEqualTo(2);
+    }
+
+    @Test
     void advancing_one_attached_lane_reuses_the_other_three_crafting_and_thread_snapshots() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
         MachineControllerBlockEntity controller = asyncFactoryController(
@@ -227,6 +418,10 @@ class FactoryRuntimeTest {
         CraftingRuntime lane = runtime.activeRuntimes().getFirst();
         lane.activeRecipe().setTick(lane.tickCount() + 1);
         runtime.markLaneRuntimeChanged(lane);
+        int accountingUpdates = runtime.accountingUpdatesForTesting();
+        assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(4);
+        runtime.markLaneRuntimeChanged(lane);
+        assertThat(runtime.accountingUpdatesForTesting()).isEqualTo(accountingUpdates);
 
         assertThat(runtime.stateEpoch()).isGreaterThan(epoch);
         FactorySnapshot after = runtime.snapshot();
@@ -505,11 +700,34 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void idle_capability_failure_is_published_and_cleared_on_the_idle_fast_path() {
+        CancellingInputBus input = new CancellingInputBus(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        input.blockIdle = true;
+
+        FactoryTickResult blocked = runtime.tick(List.of(), 1, 0L);
+        assertThat(blocked.factoryFailure()).isNotNull();
+        FactorySnapshot before = runtime.snapshot();
+        assertThat(before.failure()).isEqualTo(blocked.factoryFailure());
+        assertThat(before.presentationLanes().getFirst().failure()).isEqualTo(blocked.factoryFailure());
+
+        input.blockIdle = false;
+        FactoryTickResult recovered = runtime.tick(List.of(), 1, 1L);
+        assertThat(recovered.factoryFailure()).isNull();
+        assertThat(recovered.snapshotChanged()).isTrue();
+        assertThat(runtime.snapshot().failure()).isNull();
+        assertThat(runtime.snapshot().presentationLanes().getFirst().failure()).isNull();
+        assertThat(before.failure()).isEqualTo(blocked.factoryFailure());
+    }
+
+    @Test
     void async_pending_start_is_not_active_before_shared_io_grants_it() {
         MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
-        FactoryRuntime runtime = new FactoryRuntime();
+        FactoryRuntime runtime = controllerFactoryRuntime(controller);
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_pending_limit"), MMCR.id("test_cube"),
@@ -646,7 +864,7 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void lowering_lane_limit_keeps_active_lanes_until_they_finish() {
+    void lowering_lane_limit_keeps_active_lanes_until_they_finish() throws ReflectiveOperationException {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
@@ -654,6 +872,9 @@ class FactoryRuntimeTest {
         MachineRecipe recipe = recipe("factory_remove", 2);
         runtime.tick(List.of(recipe), 1);
         CraftingRuntime removed = runtime.activeRuntimes().getLast();
+        assertThat(runtime.activeLaneCount()).isEqualTo(runtime.activeRuntimes().size());
+        assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(runtime.activeLaneCount());
+        int accountingUpdates = runtime.accountingUpdatesForTesting();
         runtime.snapshot();
         Map<FactoryRecipeThread, FactoryRuntime.ThreadSnapshot> cache = laneThreadSnapshots(runtime);
         FactoryRecipeThread removedLane = cache.keySet().stream()
@@ -661,6 +882,12 @@ class FactoryRuntimeTest {
         var opening = new ControllerMenuOpenData(UUID.randomUUID(), Level.OVERWORLD, controller.getBlockPos(),
                 MMCR.id("test_cube"), ControllerUiSnapshot.Kind.FACTORY, ControllerUiSnapshot.Role.NORMAL,
                 false, 0, Optional.empty(), List.of());
+        if (!ModUIs.FACTORY_CONTROLLER.isBound()) {
+            var holder = DeferredHolder.class.getDeclaredField("holder");
+            holder.setAccessible(true);
+            holder.set(ModUIs.FACTORY_CONTROLLER, Holder.direct(
+                    new MenuType<>(FactoryControllerMenu::clientOpen, FeatureFlags.VANILLA_SET)));
+        }
         var menu = new FactoryControllerMenu(3, new Inventory(null), opening);
         var protocols = new UiProtocolRegistration(List.of(opening.machineId()));
         protocols.freeze();
@@ -670,6 +897,7 @@ class FactoryRuntimeTest {
                 () -> { throw new AssertionError("Valid factory data must not close the menu"); });
         var capture = new ControllerUiSnapshotData.CaptureCache();
         var before = publishFactoryUi(controller, runtime, capture, menu, client, 1);
+        assertThat(runtime.accountingUpdatesForTesting()).isEqualTo(accountingUpdates);
 
         runtime.setLaneLimit(1);
 
@@ -1585,10 +1813,12 @@ class FactoryRuntimeTest {
 
         LevelStub.setGameTime(controller.getLevel(), 20L);
         setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
+        input.flushStorageChanges();
         long afterIron = controller.resourceAvailabilityEpoch();
 
         LevelStub.setGameTime(controller.getLevel(), 21L);
         setItem(input.itemHandler(), 0, new ItemStack(Items.GOLD_INGOT, 1));
+        input.flushStorageChanges();
 
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(afterIron + 1);
     }
@@ -1608,10 +1838,12 @@ class FactoryRuntimeTest {
         input.linkControllerAppearance(controller.getBlockPos(), null);
 
         input.itemHandler().forceInsert(0, new ItemStack(Items.IRON_INGOT), 1L, false);
+        input.flushStorageChanges();
         controller.notifiedResources.clear();
         controller.notifiedSources.clear();
 
         input.itemHandler().forceInsert(1, new ItemStack(Items.GOLD_INGOT), 1L, false);
+        input.flushStorageChanges();
 
         assertThat(controller.notifiedResources).hasSize(2)
                 .anySatisfy(resource -> assertThat((ItemStack) resource).matches(stack -> stack.is(Items.IRON_INGOT)))
@@ -1638,10 +1870,12 @@ class FactoryRuntimeTest {
 
         output.itemHandler().forceInsert(0, iron, 2L, false);
         output.itemHandler().forceInsert(1, gold, 2L, false);
+        output.flushStorageChanges();
         controller.notifiedOutputResources.clear();
         controller.notifiedOutputSources.clear();
 
         output.itemHandler().forceExtract(1, 1L, false);
+        output.flushStorageChanges();
 
         assertThat(controller.notifiedOutputResources).singleElement()
                 .satisfies(resource -> assertThat((ItemStack) resource).matches(stack -> stack.is(Items.GOLD_INGOT)));
@@ -1678,6 +1912,7 @@ class FactoryRuntimeTest {
         LevelStub.setGameTime(controller.getLevel(), 20L);
         long initial = controller.resourceAvailabilityEpoch();
         assertThat(capability.prepare(request).commit().success()).isTrue();
+        input.flushStorageChanges();
 
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial + 1);
     }
@@ -1692,6 +1927,10 @@ class FactoryRuntimeTest {
         long initial = controller.resourceAvailabilityEpoch();
 
         assertThat(handler.insertItem(0, new ItemStack(Items.IRON_INGOT), false).isEmpty()).isTrue();
+        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial);
+        input.flushStorageChanges();
+        assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial + 1L);
+        input.flushStorageChanges();
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(initial + 1L);
 
         assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
@@ -1706,6 +1945,7 @@ class FactoryRuntimeTest {
         ItemStack iron = new ItemStack(Items.IRON_INGOT);
         ItemStack gold = new ItemStack(Items.GOLD_INGOT);
         input.itemHandler().forceInsert(0, iron, 1L, false);
+        input.flushStorageChanges();
 
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
@@ -1728,6 +1968,7 @@ class FactoryRuntimeTest {
         LevelStub.setGameTime(controller.getLevel(), 3L);
         long beforeGoldInsertEpoch = controller.resourceAvailabilityEpoch();
         assertThat(input.itemHandler().forceInsert(1, gold, 1L, false)).isEqualTo(1L);
+        input.flushStorageChanges();
         assertThat(input.itemHandler().amount(1)).isEqualTo(1L);
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeGoldInsertEpoch + 1L);
         assertThat(runtime.threadSnapshots().get(1).lastFailureUnloc())
@@ -1746,6 +1987,7 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
         energy.linkControllerAppearance(controller.getBlockPos(), null);
         energy.energyStorage().setAmount(energy.energyStorage().getCapacityAsLong());
+        energy.flushStorageChanges();
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         MachineRecipe candidate = outputEnergyRecipe("factory_output_energy_port_wakeup");
@@ -1755,6 +1997,7 @@ class FactoryRuntimeTest {
         LevelStub.setGameTime(controller.getLevel(), 1L);
         long beforeReleaseEpoch = controller.resourceAvailabilityEpoch();
         assertThat(energy.energyStorage().forceExtract(1L, false)).isEqualTo(1L);
+        energy.flushStorageChanges();
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeReleaseEpoch + 1L);
         runtime.wakeSearches(Reason.OUTPUT_CAPACITY, new CapabilityType(EnergyRequirement.TYPE.id()));
         runtime.tick(List.of(candidate), 1, 1L);
@@ -1779,6 +2022,7 @@ class FactoryRuntimeTest {
         LevelStub.setGameTime(controller.getLevel(), 1L);
         long beforeInsertEpoch = controller.resourceAvailabilityEpoch();
         assertThat(energy.energyStorage().forceInsert(4L, false)).isEqualTo(4L);
+        energy.flushStorageChanges();
         assertThat(controller.resourceAvailabilityEpoch()).isEqualTo(beforeInsertEpoch + 1L);
         runtime.wakeSearches(Reason.ENERGY_AVAILABLE, new CapabilityType(EnergyRequirement.TYPE.id()));
         runtime.tick(List.of(candidate), 1, 2L);
@@ -1990,6 +2234,35 @@ class FactoryRuntimeTest {
         }
     }
 
+    /** Fails at the real paid Post phase to exercise cancellation publication. @author howxu <dev@howxu.cn> */
+    private static final class CancellingInputBus extends ItemInputBusBlockEntity implements MachineCapability, TickFacet {
+        private boolean cancelAfterInputs;
+        private boolean blockIdle;
+
+        private CancellingInputBus(BlockPos pos) {
+            super(pos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        }
+
+        @Override public CapabilitySnapshot capabilitySnapshot() { return new CapabilitySnapshot(List.of(this)); }
+        @Override public CapabilityType type() { return new CapabilityType(MMCR.id("factory_cancel_tick")); }
+        @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
+        @Override public CapabilityView view() { return CapabilityFactories.view(type(), directions(), Set.of(TickFacet.class)); }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) {
+            return () -> CapabilityResult.successful();
+        }
+
+        @Override
+        public CapabilityTickResult plan(CapabilityTickContext context) {
+            if (!(blockIdle && context.phase() == CapabilityTickPhase.IDLE)
+                    && !(cancelAfterInputs && context.phase() == CapabilityTickPhase.AFTER_INPUTS)) {
+                return CapabilityTickResult.empty();
+            }
+            return new CapabilityTickResult(List.of(), ExecutionStatus.blocked(type().id(), type().id(),
+                    FailureOccurrence.at(BuiltinFailureReasons.PER_TICK, type().id(), FailurePhase.PER_TICK,
+                            null, null, Map.of())), false);
+        }
+    }
+
     private static MachineControllerBlockEntity factoryController(String path) {
         ResourceLocation machineId = MMCR.id(path);
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
@@ -2045,6 +2318,31 @@ class FactoryRuntimeTest {
         return controller;
     }
 
+    private static MachineControllerBlockEntity attachedFactoryController(ItemInputBusBlockEntity input) {
+        ResourceLocation machineId = MMCR.id("factory_attached_fixture");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        FactorySchedulerBlockEntity scheduler = new FactorySchedulerBlockEntity(new BlockPos(-1, 0, 0),
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        BlockArray pattern = new BlockArray(Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(scheduler.getBlockState().getBlock()),
+                new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(input.getBlockState().getBlock())));
+        DynamicMachine machine = new DynamicMachine(machineId, "attached factory", pattern,
+                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
+                1, false, true, 1);
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, input);
+        assertThat(controller.currentStructureSnapshot().machine()).isSameAs(machine);
+        assertThat(controller.hasFactoryController()).isTrue();
+        assertThat(controller.getFactoryController()).isSameAs(scheduler);
+        assertThat(controller.componentRuntime().components()).extracting(ProcessingComponent::getContainer)
+                .contains(scheduler, input);
+        assertThat(controller.resourceDomain()).isNotNull();
+        StructureClaimRegistry claims = StructureClaimRegistry.get((ServerLevel) controller.getLevel());
+        assertThat(claims.ownersOf(scheduler.getBlockPos())).containsExactly(controller.getBlockPos());
+        assertThat(claims.ownersOf(input.getBlockPos())).containsExactly(controller.getBlockPos());
+        return controller;
+    }
+
     private static MachineControllerBlockEntity sharedFactoryController(ResourceLocation machineId,
                                                                          ResourceLocation coreRecipeId,
                                                                          IOPortBlockEntity output) {
@@ -2080,6 +2378,32 @@ class FactoryRuntimeTest {
 
     private static FactoryRuntime controllerFactoryRuntime(MachineControllerBlockEntity controller) {
         return controllerRuntime(controller).factoryRuntime();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static CraftingRuntime factoryBaseRuntime(FactoryRuntime factory) throws ReflectiveOperationException {
+        var field = FactoryRuntime.class.getDeclaredField("lanes");
+        field.setAccessible(true);
+        return ((List<FactoryRecipeThread>) field.get(factory)).stream()
+                .filter(FactoryRecipeThread::isBaseThread).findFirst().orElseThrow().runtime();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void installInlineFactoryCoordinator(ServerLevel level) throws ReflectiveOperationException {
+        var field = MachineAsyncCoordinator.class.getDeclaredField("COORDINATORS");
+        field.setAccessible(true);
+        ((Map<ServerLevel, MachineAsyncCoordinator>) field.get(null)).put(level,
+                MachineAsyncCoordinator.forTesting(Runnable::run));
+    }
+
+    private static void tickAttachedFactory(MachineControllerBlockEntity controller) {
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        RuntimeTestFixtures.advanceGameTime(level);
+        RuntimeTestFixtures.beginLevelTick(level, true);
+        controller.serverTick();
+        SharedIoEvents.completeLevelTick(level);
+        MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> SharedIoCoordinator.get(level).resolve(level));
+        MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
 
     @SuppressWarnings("unchecked")

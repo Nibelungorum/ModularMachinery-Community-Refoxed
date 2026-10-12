@@ -5,10 +5,12 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.heat.IHeatCapacitor;
+import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -46,6 +48,48 @@ class HeatCapabilityTest {
         assertThat(invokeCommit(facet, operation)).isTrue();
 
         assertThat(heat.get()).isEqualTo(1_050D);
+    }
+
+    @Test
+    void prepared_temperature_check_reads_live_heat_on_every_commit_without_consuming_it() throws Exception {
+        BasicHeatCapacitor capacitor = BasicHeatCapacitor.create(100D, () -> 10D, null);
+        HeatPortCapability capability = new HeatPortCapability(capacitor, IOType.INPUT);
+        AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
+        AsyncCapabilitySnapshot.Heat snapshot = (AsyncCapabilitySnapshot.Heat) invoke(facet,
+                "captureSnapshotOnServerThread");
+        AsyncCapabilityPlanner planner = (AsyncCapabilityPlanner) invoke(facet, "workerPlannerOnServerThread");
+        AsyncCapabilityOperation operation = planner.plan(snapshot, new AsyncCapabilityRequest.Heat(
+                capability.type().id(), 4L, 9D, true, 9L)).orElseThrow();
+
+        assertThat(invokeCommit(facet, operation)).isTrue();
+        assertThat(capacitor.getHeat()).isEqualTo(1_000D);
+
+        capacitor.handleHeat(-200D);
+        assertThat(invokeCommit(facet, operation)).isFalse();
+        assertThat(snapshot.temperature()).isEqualTo(10D);
+        assertThat(capacitor.getHeat()).isEqualTo(800D);
+
+        capacitor.handleHeat(100D);
+        assertThat(invokeCommit(facet, operation)).isTrue();
+        assertThat(capacitor.getHeat()).isEqualTo(900D);
+    }
+
+    @Test
+    void native_heat_and_energy_keep_successful_mutations_after_a_later_temperature_rejection() throws Exception {
+        BasicHeatCapacitor capacitor = BasicHeatCapacitor.create(100D, () -> 10D, null);
+        HeatPortCapability capability = new HeatPortCapability(capacitor, IOType.OUTPUT);
+        AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
+        AsyncCapabilityOperation operation = new AsyncCapabilityOperation.Heat(capability.type().id(),
+                50D, false, 50L);
+        LongValueStorage energy = new LongValueStorage(100L, 100L, null);
+        energy.setAmount(100L);
+
+        assertThat(energy.extract(7L, false)).isEqualTo(7L);
+        assertThat(invokeCommit(facet, operation)).isTrue();
+        var temperatureCheck = new AsyncCapabilityOperation.Heat(capability.type().id(), 11D, true, 11L);
+        assertThat(invokeCommit(facet, temperatureCheck)).isFalse();
+        assertThat(capacitor.getHeat()).isEqualTo(1_050D);
+        assertThat(energy.amount()).isEqualTo(93L);
     }
 
     private static IHeatCapacitor capacitor(AtomicReference<Double> heat, double capacity) {

@@ -12,6 +12,11 @@ import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyOutputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
@@ -22,6 +27,8 @@ import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
@@ -84,14 +91,103 @@ class FluxEnergyCapabilityTest {
 
     @Test
     void injectedPrefetchImmediatelyMarksLocalEnergyReserved() {
+        LongValueStorage network = new LongValueStorage(100L, 100L, null);
+        network.setAmount(100L);
         FluxEnergyBuffer buffer = new FluxEnergyBuffer();
         FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
-                requested -> Optional.of(() -> CapabilityResult.successful()));
+                requested -> Optional.of(() -> {
+                    assertThat(network.extract(requested, false)).isEqualTo(requested);
+                    return CapabilityResult.successful();
+                }));
         var plan = capability.planPrefetch(25L).orElseThrow();
 
         assertThat(plan.operation().commit().success()).isTrue();
         assertThat(buffer.amount()).isEqualTo(25L);
         assertThat(buffer.reserved()).isEqualTo(25L);
+        assertThat(network.amount()).isEqualTo(75L);
+    }
+
+    @Test
+    void failed_native_prefetch_retains_foreign_bridge_mutation_without_inventing_local_energy() {
+        LongValueStorage network = new LongValueStorage(100L, 100L, null);
+        network.setAmount(10L);
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
+                requested -> Optional.of(() -> {
+                    assertThat(network.extract(requested, false)).isEqualTo(10L);
+                    return CapabilityResult.failure(ExecutionStatus.blocked(
+                            BuiltinFailureReasons.MISSING_INPUT.id(), BuiltinFailureReasons.MISSING_INPUT.id(),
+                            FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT,
+                                    BuiltinFailureReasons.MISSING_INPUT.id(),
+                                    FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
+                }));
+        var plan = capability.planPrefetch(25L).orElseThrow();
+
+        assertThat(plan.operation().commit().success()).isFalse();
+
+        assertThat(network.amount()).isZero();
+        assertThat(buffer.amount()).isZero();
+        assertThat(buffer.reserved()).isZero();
+        assertThat(buffer.idleExcess()).isZero();
+    }
+
+    @Test
+    void prefetched_reservation_consumes_saves_restores_and_releases_without_network_reextraction() {
+        LongValueStorage network = new LongValueStorage(100L, 100L, null);
+        network.setAmount(100L);
+        AtomicLong bridgeCalls = new AtomicLong();
+        FluxEnergyInputCapability.ExactPrefetchBridge bridge = requested -> Optional.of(() -> {
+            bridgeCalls.incrementAndGet();
+            assertThat(network.extract(requested, false)).isEqualTo(requested);
+            return CapabilityResult.successful();
+        });
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input", bridge);
+        var plan = capability.planPrefetch(30L).orElseThrow();
+        assertThat(network.amount()).isEqualTo(100L);
+        assertThat(buffer.reserved()).isZero();
+        assertThat(plan.operation().commit().success()).isTrue();
+        assertThat(capability.consumeReservation(7L).success()).isTrue();
+        assertThat(buffer.reserved()).isEqualTo(23L);
+
+        CompoundTag output = new CompoundTag();
+        HolderLookup.Provider registries = HolderLookup.Provider.create(Stream.empty());
+        capability.save(output, registries);
+        FluxEnergyBuffer restoredBuffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability restored = new FluxEnergyInputCapability(restoredBuffer, "test-input", bridge);
+        restored.load(output, registries);
+        restored.restoreReservation(23L);
+        assertThat(restoredBuffer.amount()).isEqualTo(23L);
+        assertThat(restoredBuffer.reserved()).isEqualTo(23L);
+        assertThat(restoredBuffer.idleExcess()).isZero();
+        assertThat(restored.consumeReservation(7L).success()).isTrue();
+        assertThat(restored.releaseReservation(16L)).isEqualTo(16L);
+        assertThat(restoredBuffer.amount()).isEqualTo(16L);
+        assertThat(restoredBuffer.reserved()).isZero();
+        assertThat(restoredBuffer.idleExcess()).isEqualTo(16L);
+        assertThat(restored.releaseReservation(16L)).isZero();
+        assertThat(network.amount()).isEqualTo(70L);
+        assertThat(bridgeCalls).hasValue(1L);
+    }
+
+    @Test
+    void native_reservation_group_failure_keeps_consumption_and_the_previous_ordinary_commit() {
+        LongValueStorage ordinary = new LongValueStorage(100L, 100L, null);
+        ordinary.setAmount(100L);
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
+                requested -> Optional.of(() -> CapabilityResult.successful()));
+        var plan = capability.planPrefetch(20L).orElseThrow();
+        assertThat(plan.operation().commit().success()).isTrue();
+        assertThat(ordinary.extract(5L, false)).isEqualTo(5L);
+        FluxEnergyInputCapability missing = new FluxEnergyInputCapability(new FluxEnergyBuffer(), "missing-input");
+        assertThat(capability.consumeReservation(7L).success()).isTrue();
+        assertThat(missing.consumeReservation(1L).success()).isFalse();
+
+        assertThat(ordinary.amount()).isEqualTo(95L);
+        assertThat(buffer.amount()).isEqualTo(13L);
+        assertThat(buffer.reserved()).isEqualTo(13L);
+        assertThat(buffer.idleExcess()).isZero();
     }
 
     @Test

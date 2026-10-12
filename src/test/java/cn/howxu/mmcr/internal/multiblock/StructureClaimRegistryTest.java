@@ -3,12 +3,48 @@ package cn.howxu.mmcr.internal.multiblock;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StructureClaimRegistryTest {
+
+    @Test
+    void dense_controller_positions_keep_live_domains_through_merge_and_release() {
+        StructureClaimRegistry registry = new StructureClaimRegistry();
+        Map<BlockPos, StructureClaimRegistry.ResourceDomain> original = new LinkedHashMap<>();
+        for (int index = -32; index < 32; index++) {
+            // These distinct world positions collide under Vec3i.hashCode().
+            BlockPos position = new BlockPos(index * 961, -64, -index);
+            assertThat(registry.claim(position, List.of()).accepted()).isTrue();
+            original.put(position, registry.domainFor(position));
+        }
+        var query = new BlockPos.MutableBlockPos();
+        original.forEach((position, domain) -> {
+            assertThat(registry.domainFor(query.set(position))).isSameAs(domain);
+            assertThat(domain.controllers()).containsExactly(position);
+        });
+        BlockPos first = new BlockPos(-961, -64, 1);
+        BlockPos second = new BlockPos(961, -64, -1);
+        var claim = new StructureClaimRegistry.Claim(BlockPos.ZERO, ComponentClaimPolicy.SHARED_SERIALIZED);
+        registry.claim(first, List.of(claim));
+        registry.claim(second, List.of(claim));
+        var merged = registry.domainFor(first);
+        assertThat(registry.domainFor(query.set(second))).isSameAs(merged);
+        assertThat(merged.controllers()).containsExactlyInAnyOrder(first, second);
+        registry.release(second);
+        assertThat(registry.domainFor(query.set(second))).isNull();
+        assertThat(registry.domainFor(query.set(first)).generation()).isGreaterThan(merged.generation());
+        original.forEach((position, domain) -> {
+            if (!position.equals(first) && !position.equals(second)) {
+                assertThat(registry.domainFor(query.set(position))).isSameAs(domain);
+            }
+        });
+        assertThat(merged.controllers()).containsExactlyInAnyOrder(first, second);
+    }
 
     @Test
     void exclusiveConflictDoesNotLeavePartialClaims() {

@@ -3,12 +3,17 @@ package cn.howxu.mmcr.internal.async;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Receipt;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Acknowledgement;
+import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -59,6 +64,112 @@ public final class MachineAsyncCoordinator {
     private int remainingMainSteps;
     private int nextBatchOffset;
     private boolean completingFence;
+    private final Map<ExecutionDomain, ReceiptDrain> receiptDrains = new ConcurrentHashMap<>();
+    private final Map<ExecutionIdentity, Acknowledgement> receiptAcknowledgements = new ConcurrentHashMap<>();
+    private volatile boolean closed;
+
+    /**
+     * Level-local immutable resource domain identity.
+     * @author howxu <dev@howxu.cn>
+     */
+    public record ExecutionDomain(long id, long generation) { }
+
+    /** Coalesces only facts of the same execution; no world objects cross this boundary. */
+    public void publishReceipt(ExecutionDomain domain, Receipt receipt) {
+        if (closed) return;
+        receiptDrains.compute(domain, (ignored, current) -> {
+            ReceiptDrain drain = current == null ? new ReceiptDrain() : current;
+            synchronized (drain) {
+                if (closed) return null;
+                drain.pending.merge(receipt.identity(), receipt,
+                        (previous, next) -> next.sequence() > previous.sequence() ? next : previous);
+            }
+            return drain;
+        });
+    }
+
+    /** One outstanding executor segment per domain. Rejected work stays dirty until the next pump. */
+    public void pumpReceiptDrains() {
+        if (closed) return;
+        receiptDrains.forEach((domain, drain) -> {
+            receiptDrains.computeIfPresent(domain, (ignored, current) -> {
+                if (current != drain) return current;
+                synchronized (drain) {
+                    return !drain.queued.get() && drain.idle && drain.pending.isEmpty() ? null : drain;
+                }
+            });
+            if (receiptDrains.get(domain) == drain) scheduleReceiptDrain(drain);
+        });
+    }
+
+    public Acknowledgement pollReceiptAcknowledgement() {
+        for (Acknowledgement acknowledgement : receiptAcknowledgements.values()) {
+            if (receiptAcknowledgements.remove(acknowledgement.identity(), acknowledgement)) return acknowledgement;
+        }
+        return null;
+    }
+
+    private void scheduleReceiptDrain(ReceiptDrain drain) {
+        synchronized (drain) {
+            if (closed || drain.pending.isEmpty() || !drain.queued.compareAndSet(false, true)) return;
+        }
+        try {
+            executor.execute(() -> drainReceipts(drain));
+        } catch (RuntimeException exception) {
+            synchronized (drain) {
+                drain.queued.set(false);
+            }
+        }
+    }
+
+    private void drainReceipts(ReceiptDrain drain) {
+        List<Receipt> captured = new ArrayList<>();
+        boolean failed = false;
+        try {
+            if (closed) return;
+            for (Receipt receipt : drain.pending.values()) {
+                if (captured.size() == ServerConfig.asyncSharedIoWorksetEntries()) break;
+                if (drain.pending.remove(receipt.identity(), receipt)) captured.add(receipt);
+            }
+            for (Receipt receipt : captured) {
+                if (closed) return;
+                RecipeExecutionState state = drain.states.computeIfAbsent(receipt.identity(), RecipeExecutionState::new);
+                if (!state.accept(receipt)) continue;
+                if (receipt.terminal()) {
+                    Acknowledgement acknowledgement = new Acknowledgement(receipt.identity(),
+                            receipt.installedRevision(), receipt.sequence());
+                    receiptAcknowledgements.merge(receipt.identity(), acknowledgement, (current, next) ->
+                            next.installedRevision() > current.installedRevision()
+                                    || next.installedRevision() == current.installedRevision()
+                                    && next.sequence() > current.sequence() ? next : current);
+                    drain.states.remove(receipt.identity());
+                }
+            }
+        } catch (RuntimeException exception) {
+            failed = true;
+            for (Receipt receipt : captured) drain.pending.merge(receipt.identity(), receipt,
+                    (current, old) -> current.sequence() >= old.sequence() ? current : old);
+            MMCR.LOG.error("Execution receipt drain failed", exception);
+        } finally {
+            // Publications during a running drain remain pending. Never clear a later dirty fact.
+            synchronized (drain) {
+                drain.idle = drain.states.isEmpty();
+                drain.queued.set(false);
+            }
+            if (!failed && !closed && !drain.pending.isEmpty()) scheduleReceiptDrain(drain);
+        }
+    }
+
+    /**
+     * Mutable state belongs exclusively to this domain's serial executor segment.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ReceiptDrain {
+        private final Map<ExecutionIdentity, Receipt> pending = new ConcurrentHashMap<>();
+        private final Map<ExecutionIdentity, RecipeExecutionState> states = new HashMap<>();
+        private final AtomicBoolean queued = new AtomicBoolean();
+        private boolean idle = true;
+    }
 
     private MachineAsyncCoordinator(Executor executor) {
         this(executor, null, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
@@ -525,6 +636,9 @@ public final class MachineAsyncCoordinator {
     }
 
     private void cancelAll() {
+        closed = true;
+        receiptDrains.clear();
+        receiptAcknowledgements.clear();
         for (TickBatch batch : batches.values()) {
             for (Task task : List.copyOf(batch.tasks.values())) {
                 requestTermination(batch, task, new TaskOutcome.Cancelled("level unloaded"));

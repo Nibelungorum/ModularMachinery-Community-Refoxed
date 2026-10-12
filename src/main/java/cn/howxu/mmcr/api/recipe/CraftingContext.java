@@ -33,6 +33,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
@@ -147,6 +148,37 @@ public final class CraftingContext {
             else preparedRequirements.add(prepared);
         }
         return new AsyncRequirementPlanner.PreparedPlan(preparedRequirements, asyncCapabilities, fallback);
+    }
+
+    /** Captures pure stage rules on the main thread, discarding captured capability quantities. */
+    public Stage captureCompiledStage(List<MachineRequirement> requirements, long parallelism,
+                                      Map<Integer, OutputPolicy> outputPolicies) {
+        return prepareCompiledStage(requirements, parallelism, captureAsyncCapabilities(), outputPolicies);
+    }
+
+    /** Converts already captured values to persistent rules; probability sampling remains live. */
+    public static Stage prepareCompiledStage(List<MachineRequirement> requirements, long parallelism,
+                                             List<AsyncRequirementPlanner.Capability> asyncCapabilities,
+                                             Map<Integer, OutputPolicy> outputPolicies) {
+        if (requirements == null || parallelism <= 0L) {
+            throw new IllegalArgumentException("requirements must not be null and parallelism must be positive");
+        }
+        List<AsyncRequirementPlanner.Requirement> prepared = new ArrayList<>();
+        List<Integer> fallback = new ArrayList<>();
+        List<OutputPolicy> policies = new ArrayList<>(requirements.size());
+        for (int index = 0; index < requirements.size(); index++) {
+            MachineRequirement requirement = requirements.get(index);
+            boolean probabilisticOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
+                    && (requirement instanceof ItemRequirement item && item.chance() != 1F
+                    || requirement instanceof FluidRequirement fluid && fluid.chance() != 1F);
+            AsyncRequirementPlanner.Requirement description = probabilisticOutput ? null
+                    : prepareAsyncRequirement(index, requirement, parallelism, asyncCapabilities);
+            if (description == null) fallback.add(index);
+            else prepared.add(description);
+            policies.add(outputPolicies == null ? OutputPolicy.REQUIRE_FULL
+                    : outputPolicies.getOrDefault(index, OutputPolicy.REQUIRE_FULL));
+        }
+        return new Stage(prepared, fallback, policies);
     }
 
     public PlanningResult planInputs(MachineRecipe recipe, long parallelism,
@@ -303,6 +335,15 @@ public final class CraftingContext {
                                                  boolean allowPartialOutputs) {
         return planRequirements(requirements, requestedParallelism,
                 partialOutputPolicies(requirements, allowPartialOutputs));
+    }
+
+    /** Plans a captured stage at its installed parallelism, preserving original requirement indices. */
+    public PlanningResult planFixedRequirements(List<MachineRequirement> requirements, long parallelism,
+                                                Map<Integer, OutputPolicy> outputPolicies,
+                                                List<Integer> requirementIndexes) {
+        return new RequirementPlanner().planFixed(requirements, capabilities,
+                new PlanningContext(parallelism, 0, false, new PlanningReservations(), outputPolicies,
+                        reservationOwner), requirementIndexes);
     }
 
     public PlanningResult planRequirements(List<MachineRequirement> requirements, long parallelism,

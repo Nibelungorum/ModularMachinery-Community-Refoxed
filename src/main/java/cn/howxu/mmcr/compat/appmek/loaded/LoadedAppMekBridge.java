@@ -107,6 +107,11 @@ public final class LoadedAppMekBridge implements AppMekBridge {
 
     @Override public PatternRequest patternRequest(Object holders) {
         GenericStackInv request = AE2NativeAdapters.requestInventory((KeyCounter[]) holders, MekanismKeyType.TYPE);
+        return patternRequestFromInventory(request);
+    }
+
+    @Override public PatternRequest patternRequestFromInventory(Object inventory) {
+        GenericStackInv request = (GenericStackInv) inventory;
         MEChemicalCapability capability = new MEChemicalCapability(null, new InventoryChemicalHandler(request), CapabilityDirections.input(), false);
         return new PatternRequest() {
             @Override public List<MachineCapability> capabilities() { return List.of(capability); }

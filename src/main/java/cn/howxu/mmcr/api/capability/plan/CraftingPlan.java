@@ -9,12 +9,14 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import java.util.Set;
+import java.util.HashSet;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.IntPredicate;
+import java.util.function.BooleanSupplier;
 
 /**
  * Executes prepared native requirement operations in plan order.
@@ -34,6 +36,7 @@ public final class CraftingPlan {
     private final long parallelism;
     private final Map<Integer, RecipeModifier.IOType> directions;
     private @Nullable ExecutionStatus failure;
+    private final Set<Integer> nativeExecutedRequirements = new HashSet<>();
 
     public CraftingPlan(List<RequirementPlan> requirements, long parallelism) {
         this(requirements, parallelism, Map.of());
@@ -71,6 +74,43 @@ public final class CraftingPlan {
         Set<Integer> excluded = excludedRequirementIndexes == null ? Set.of() : excludedRequirementIndexes;
         return commit(requirementIndex -> directions.get(requirementIndex) == RecipeModifier.IOType.INPUT
                 && !excluded.contains(requirementIndex));
+    }
+
+    /** Runtime fencing for native effects. This method does not roll back completed operations. */
+    public boolean commitRuntime(Runnable beforeNativeExecution, BooleanSupplier executionValid) {
+        return commitRuntime(ignored -> true, beforeNativeExecution, executionValid);
+    }
+
+    public boolean commitInputsRuntime(Set<Integer> excludedRequirementIndexes, Runnable beforeNativeExecution,
+                                       BooleanSupplier executionValid) {
+        return commitRuntime(index -> directions.get(index) == RecipeModifier.IOType.INPUT
+                && !excludedRequirementIndexes.contains(index), beforeNativeExecution, executionValid);
+    }
+
+    /** Includes an in-flight native call: its result is uncertain during notification/save reentry. */
+    public boolean wasNativeExecuted(int requirementIndex) {
+        return nativeExecutedRequirements.contains(requirementIndex);
+    }
+
+    private boolean commitRuntime(IntPredicate selector, Runnable beforeNativeExecution,
+                                  BooleanSupplier executionValid) {
+        if (failure != null || !executionValid.getAsBoolean()) return false;
+        for (RequirementPlan requirement : requirements) {
+            if (!selector.test(requirement.requirementIndex())) continue;
+            for (CapabilityOperation operation : requirement.operations()) {
+                if (!executionValid.getAsBoolean()) return false;
+                nativeExecutedRequirements.add(requirement.requirementIndex());
+                beforeNativeExecution.run();
+                CapabilityResult result = operation.commit();
+                if (!executionValid.getAsBoolean()) return false;
+                if (result == null || !result.success()) {
+                    failure = result == null || result.status() == null
+                            ? UNSPECIFIED_OPERATION_FAILURE : result.status();
+                    return false;
+                }
+            }
+        }
+        return executionValid.getAsBoolean();
     }
 
     public boolean hasOperations(int requirementIndex) {

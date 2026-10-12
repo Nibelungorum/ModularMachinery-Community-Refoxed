@@ -239,6 +239,234 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void committed_source_revision_is_cheap_and_coalesces_alias_presentation_reads() {
+        BlockPos source = new BlockPos(9, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        CountingItemStorage shared = new CountingItemStorage(() -> runtime.markCapabilitySourceChanged(source));
+        MutableTestCapability provider = new MutableTestCapability("committed", shared);
+        CountingItemStorage unrelated = new CountingItemStorage();
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(source, List.of(provider, provider)), "source"),
+                component(new TestCapabilityHost(source.offset(1, 0, 0), List.of(provider)), "alias"),
+                component(new TestCapabilityHost(source.offset(2, 0, 0),
+                        List.of(new TestCapability("unrelated", unrelated))), "unrelated")));
+        var before = runtime.capabilityPresentations();
+        long version = runtime.capabilityVersion();
+        long revision = runtime.capabilityContentRevision();
+        shared.resetReads();
+        unrelated.resetReads();
+        provider.facetReads = 0;
+        provider.storageReads = 0;
+        ItemStack iron = new ItemStack(Items.IRON_INGOT);
+
+        for (int commit = 0; commit < 2; commit++) {
+            shared.forceInsert(0, iron, 5L, false);
+            assertThat(runtime.capabilityContentRevision()).isEqualTo(revision + commit + 1L);
+            runtime.markCapabilityPresentationChanged(source); // Immediate input retry invalidation.
+        }
+        assertThat(runtime.capabilityContentRevision()).isEqualTo(revision + 2L);
+        assertThat(provider.facetReads).isZero();
+        assertThat(provider.storageReads).isZero();
+        assertThat(shared.resourceReads).isZero();
+        assertThat(shared.amountReads).isZero();
+        shared.forceExtract(0, 4L, true);
+        assertThat(runtime.capabilityContentRevision()).isEqualTo(revision + 2L);
+        var after = runtime.capabilityPresentations();
+        assertThat(after.subList(0, 3)).allSatisfy(row -> assertThat(row.amount()).isEqualTo(10L));
+        assertThat(before.subList(0, 3)).allSatisfy(row -> assertThat(row.amount()).isZero());
+        assertThat(after.get(3)).isSameAs(before.get(3));
+        assertThat(shared.resourceReads).isEqualTo(3);
+        assertThat(shared.amountReads).isEqualTo(3);
+        assertThat(shared.capacityReads).isEqualTo(3);
+        assertThat(unrelated.amountReads).isZero();
+        assertThat(runtime.capabilityPresentations()).isSameAs(after);
+        assertThat(runtime.capabilityVersion()).isEqualTo(version);
+        runtime.markCapabilityPresentationChanged();
+        assertThat(runtime.capabilityContentRevision()).isEqualTo(revision + 2L);
+    }
+
+    @Test
+    void deferred_source_invalidation_keeps_historical_and_current_storage_aliases() {
+        BlockPos source = new BlockPos(8, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        CountingItemStorage original = new CountingItemStorage();
+        CountingItemStorage replacement = new CountingItemStorage();
+        MutableTestCapability provider = new MutableTestCapability("rebound", original);
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(source, List.of(provider)), "source"),
+                component(new TestCapabilityHost(source.offset(1, 0, 0),
+                        List.of(new TestCapability("old_alias", original))), "old_alias"),
+                component(new TestCapabilityHost(source.offset(2, 0, 0),
+                        List.of(new TestCapability("new_alias", replacement))), "new_alias")));
+        var before = runtime.capabilityPresentations();
+        original.setContents(0, new ItemStack(Items.IRON_INGOT), 19L);
+        replacement.setContents(0, new ItemStack(Items.GOLD_INGOT), 55L);
+        runtime.markCapabilitySourceChanged(source);
+        provider.storage = replacement;
+        runtime.markCapabilitySourceChanged(source);
+
+        assertThat(runtime.capabilityPresentations())
+                .extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(55L, 19L, 55L);
+        assertThat(before).allSatisfy(row -> assertThat(row.amount()).isZero());
+    }
+
+    @Test
+    void source_commit_during_capture_is_not_cached_as_the_new_revision() {
+        BlockPos source = new BlockPos(7, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        SwitchingItemStorage items = new SwitchingItemStorage();
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(source,
+                List.of(new TestCapability("reentrant", items))), "source")));
+        var before = runtime.capabilityPresentations();
+        items.setContents(0, new ItemStack(Items.IRON_INGOT), 10L);
+        runtime.markCapabilitySourceChanged(source);
+        items.afterRead = () -> {
+            items.setContents(0, new ItemStack(Items.IRON_INGOT), 20L);
+            runtime.markCapabilitySourceChanged(source);
+        };
+
+        var intermediate = runtime.capabilityPresentations();
+        assertThat(intermediate.getFirst().amount()).isEqualTo(10L);
+        var current = runtime.capabilityPresentations();
+        assertThat(current.getFirst().amount()).isEqualTo(20L);
+        assertThat(runtime.capabilityPresentations()).isSameAs(current);
+        assertThat(before.getFirst().amount()).isZero();
+        assertThat(intermediate.getFirst().amount()).isEqualTo(10L);
+    }
+
+    @Test
+    void a_failed_deferred_alias_resolution_preserves_the_source_for_retry() {
+        BlockPos source = new BlockPos(6, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        LongValueStorage original = new LongValueStorage(100, 100, () -> {});
+        LongValueStorage replacement = new LongValueStorage(100, 100, () -> {});
+        SplitStorageCapability provider = new SplitStorageCapability("retry", original, null);
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(source, List.of(provider)), "source"),
+                component(new TestCapabilityHost(source.offset(1, 0, 0),
+                        List.of(new TestCapability("old_alias", original))), "old_alias")));
+        var before = runtime.capabilityPresentations();
+        original.setAmount(19L);
+        replacement.setAmount(55L);
+        provider.valueStorage = replacement;
+        provider.beforeFacetRead = () -> { throw new IllegalStateException("broken source facet"); };
+        runtime.markCapabilitySourceChanged(source);
+
+        assertThatThrownBy(runtime::capabilityPresentations).isInstanceOf(IllegalStateException.class);
+        assertThat(runtime.capabilityPresentations())
+                .extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(55L, 19L);
+        assertThat(before).allSatisfy(row -> assertThat(row.amount()).isZero());
+    }
+
+    @Test
+    void a_permanently_broken_pending_source_can_be_removed_cleared_or_replaced_without_reading_it() {
+        for (String operation : List.of("remove", "clear", "replace")) {
+            BlockPos source = new BlockPos(5, 20, 30);
+            ComponentRuntime runtime = new ComponentRuntime();
+            SplitStorageCapability broken = new SplitStorageCapability("broken",
+                    new LongValueStorage(100, 100, () -> {}), null);
+            runtime.replaceComponents(List.of(component(new TestCapabilityHost(source, List.of(broken)), "broken")));
+            var before = runtime.capabilityPresentations();
+            broken.failFacetReads = true;
+            runtime.markCapabilitySourceChanged(source);
+            assertThatThrownBy(runtime::capabilityPresentations).isInstanceOf(IllegalStateException.class);
+            int reads = broken.facetReads;
+            LongValueStorage healthyStorage = new LongValueStorage(100, 100, () -> {});
+            healthyStorage.setAmount(37L);
+            TestCapability healthy = new TestCapability("healthy", healthyStorage);
+            ProcessingComponent replacement = component(new TestCapabilityHost(source, List.of(healthy)), "healthy");
+
+            switch (operation) {
+                case "remove" -> runtime.replaceComponents(List.of());
+                case "clear" -> runtime.clear();
+                case "replace" -> runtime.replaceComponents(List.of(replacement));
+                default -> throw new AssertionError(operation);
+            }
+
+            if (operation.equals("replace")) {
+                assertThat(runtime.components()).containsExactly(replacement);
+                assertThat(runtime.capabilities()).containsExactly(healthy);
+                assertThat(runtime.capabilityPresentations().getFirst().amount()).isEqualTo(37L);
+            } else {
+                assertThat(runtime.components()).isEmpty();
+                assertThat(runtime.capabilities()).isEmpty();
+                assertThat(runtime.capabilityPresentations()).isEmpty();
+            }
+            assertThat(broken.facetReads).isEqualTo(reads);
+            runtime.markCapabilitySourceChanged(source);
+            runtime.capabilityPresentations();
+            assertThat(broken.facetReads).isEqualTo(reads);
+            assertThat(before.getFirst().amount()).isZero();
+        }
+    }
+
+    @Test
+    void removing_a_broken_pending_source_refreshes_retained_historical_and_current_aliases() {
+        BlockPos source = new BlockPos(4, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        LongValueStorage original = new LongValueStorage(100, 100, () -> {});
+        LongValueStorage replacement = new LongValueStorage(100, 100, () -> {});
+        SplitStorageCapability broken = new SplitStorageCapability("broken", original, null);
+        MutableTestCapability currentAlias = new MutableTestCapability("current_alias", replacement);
+        ProcessingComponent historical = component(new TestCapabilityHost(source.offset(1, 0, 0),
+                List.of(new TestCapability("historical_alias", original))), "historical");
+        ProcessingComponent current = component(new TestCapabilityHost(source.offset(2, 0, 0),
+                List.of(currentAlias)), "current");
+        runtime.replaceComponents(List.of(historical, current,
+                component(new TestCapabilityHost(source, List.of(broken)), "broken")));
+        var before = runtime.capabilityPresentations();
+        original.setAmount(19L);
+        replacement.setAmount(55L);
+        broken.valueStorage = replacement;
+        broken.failFacetReads = true;
+        runtime.markCapabilitySourceChanged(source);
+        int reads = broken.facetReads;
+
+        runtime.replaceComponents(List.of(historical, current));
+
+        var after = runtime.capabilityPresentations();
+        assertThat(after).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(19L, 55L);
+        assertThat(after.get(0)).isNotSameAs(before.get(0));
+        assertThat(after.get(1)).isNotSameAs(before.get(1));
+        assertThat(runtime.capabilityPresentations()).isSameAs(after);
+        assertThat(broken.facetReads).isEqualTo(reads);
+        assertThat(before).allSatisfy(row -> assertThat(row.amount()).isZero());
+    }
+
+    @Test
+    void repeated_pending_invalidation_failures_retry_when_the_retained_facet_recovers() {
+        BlockPos source = new BlockPos(3, 20, 30);
+        ComponentRuntime runtime = new ComponentRuntime();
+        LongValueStorage original = new LongValueStorage(100, 100, () -> {});
+        LongValueStorage replacement = new LongValueStorage(100, 100, () -> {});
+        SplitStorageCapability provider = new SplitStorageCapability("retry", original, null);
+        runtime.replaceComponents(List.of(
+                component(new TestCapabilityHost(source, List.of(provider)), "source"),
+                component(new TestCapabilityHost(source.offset(1, 0, 0),
+                        List.of(new TestCapability("historical_alias", original))), "historical"),
+                component(new TestCapabilityHost(source.offset(2, 0, 0),
+                        List.of(new TestCapability("current_alias", replacement))), "current")));
+        var before = runtime.capabilityPresentations();
+        original.setAmount(19L);
+        replacement.setAmount(55L);
+        provider.valueStorage = replacement;
+        provider.failFacetReads = true;
+        runtime.markCapabilitySourceChanged(source);
+        assertThatThrownBy(runtime::capabilityPresentations).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(runtime::capabilityPresentations).isInstanceOf(IllegalStateException.class);
+
+        provider.failFacetReads = false;
+        var after = runtime.capabilityPresentations();
+        assertThat(after).extracting(ControllerRuntimeSnapshot.CapabilityPresentation::amount)
+                .containsExactly(55L, 19L, 55L);
+        assertThat(runtime.capabilityPresentations()).isSameAs(after);
+        assertThat(before).allSatisfy(row -> assertThat(row.amount()).isZero());
+    }
+
+    @Test
     void local_presentation_refresh_reuses_other_rows_without_reading_their_storage() {
         CountingItemStorage items = new CountingItemStorage();
         items.setContents(0, new ItemStack(Items.IRON_INGOT), 12);
@@ -1388,7 +1616,11 @@ class ComponentRuntimeTest {
         private int capacityReads;
 
         private CountingItemStorage() {
-            super(1, 100L, () -> {});
+            this(() -> {});
+        }
+
+        private CountingItemStorage(Runnable onChange) {
+            super(1, 100L, onChange);
         }
 
         @Override
@@ -1586,6 +1818,8 @@ class ComponentRuntimeTest {
     private static final class SplitStorageCapability implements MachineCapability {
         private final TestCapability delegate;
         private Runnable beforeFacetRead;
+        private boolean failFacetReads;
+        private int facetReads;
         private CapabilityStorage valueStorage;
         private IItemHandler resourceStorage;
         private final ValueFacet<CapabilityStorage> valueFacet = () -> valueStorage;
@@ -1610,6 +1844,8 @@ class ComponentRuntimeTest {
 
         @Override
         public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+            facetReads++;
+            if (failFacetReads) throw new IllegalStateException("broken source facet");
             Runnable action = beforeFacetRead;
             beforeFacetRead = null;
             if (action != null) action.run();

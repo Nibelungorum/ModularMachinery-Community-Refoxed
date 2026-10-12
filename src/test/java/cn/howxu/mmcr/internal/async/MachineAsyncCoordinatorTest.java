@@ -3,6 +3,8 @@ package cn.howxu.mmcr.internal.async;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.AsyncCraftingExecution;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Receipt;
+import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import net.minecraft.core.BlockPos;
@@ -27,6 +29,48 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 class MachineAsyncCoordinatorTest {
+
+    @Test
+    void receipt_drain_coalesces_one_execution_and_retains_both_terminal_identities() {
+        Queue<Runnable> workers = new ArrayDeque<>();
+        var coordinator = MachineAsyncCoordinator.forTesting(workers::add);
+        var domain = new MachineAsyncCoordinator.ExecutionDomain(1L, 2L);
+        var first = new ExecutionIdentity(1L, 1L, "base", 1L);
+        var second = new ExecutionIdentity(1L, 1L, "base", 2L);
+        coordinator.publishReceipt(domain, new Receipt(first, 1L, 0L, 0, 0L, false, null));
+        coordinator.pumpReceiptDrains();
+        coordinator.publishReceipt(domain, new Receipt(first, 1L, 4L, 3, 3L, true, null));
+        coordinator.publishReceipt(domain, new Receipt(second, 2L, 0L, 0, 0L, true, null));
+        coordinator.pumpReceiptDrains();
+        assertThat(workers).hasSize(1);
+        workers.remove().run();
+        var acknowledgements = List.of(coordinator.pollReceiptAcknowledgement(),
+                coordinator.pollReceiptAcknowledgement());
+        assertThat(acknowledgements).extracting(ack -> ack.identity()).containsExactlyInAnyOrder(first, second);
+        assertThat(acknowledgements).filteredOn(ack -> ack.identity().equals(first))
+                .extracting(ack -> ack.sequence()).containsExactly(4L);
+        assertThat(coordinator.pollReceiptAcknowledgement()).isNull();
+    }
+
+    @Test
+    void saturated_receipt_worker_retries_without_computing_on_the_pump_thread() {
+        Queue<Runnable> workers = new ArrayDeque<>();
+        AtomicBoolean saturated = new AtomicBoolean(true);
+        var coordinator = MachineAsyncCoordinator.forTesting(command -> {
+            if (saturated.get()) throw new RejectedExecutionException();
+            workers.add(command);
+        });
+        var identity = new ExecutionIdentity(1L, 1L, "base", 1L);
+        coordinator.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(1L, 1L),
+                new Receipt(identity, 1L, 0L, 0, 0L, true, null));
+        coordinator.pumpReceiptDrains();
+        assertThat(coordinator.pollReceiptAcknowledgement()).isNull();
+        saturated.set(false);
+        coordinator.pumpReceiptDrains();
+        assertThat(coordinator.pollReceiptAcknowledgement()).isNull();
+        workers.remove().run();
+        assertThat(coordinator.pollReceiptAcknowledgement().identity()).isEqualTo(identity);
+    }
 
     @Test
     void continuation_receives_the_work_mode_from_its_task_key() {

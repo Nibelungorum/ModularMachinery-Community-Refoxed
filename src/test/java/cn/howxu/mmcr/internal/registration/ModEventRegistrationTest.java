@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration;
 import cn.howxu.mmcr.internal.api.facade.ui.UiProtocolAdapters;
 import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
@@ -44,6 +48,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -54,6 +59,7 @@ import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.neoforged.bus.api.Event;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -65,6 +71,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.ChunkWatchEvent;
@@ -130,10 +137,11 @@ class ModEventRegistrationTest {
                 BlockEvent.FluidPlaceBlockEvent.class, BlockEvent.BreakEvent.class, EntityJoinLevelEvent.class,
                 ChunkEvent.Unload.class,
                 ChunkEvent.Load.class, ChunkWatchEvent.Sent.class, ChunkWatchEvent.UnWatch.class,
-                LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class,
+                LevelTickEvent.Pre.class, LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class,
                 ServerAboutToStartEvent.class, ServerStoppedEvent.class,
                 AddReloadListenerEvent.class, OnDatapackSyncEvent.class,
-                PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class);
+                PlayerEvent.PlayerChangedDimensionEvent.class, PlayerContainerEvent.Open.class,
+                PlayerContainerEvent.Close.class, PlayerEvent.PlayerLoggedOutEvent.class, RegisterCommandsEvent.class);
 
         modBus.fireAll();
         gameBus.fireAll();
@@ -144,10 +152,40 @@ class ModEventRegistrationTest {
                         BlockEvent.EntityMultiPlaceEvent.class, BlockEvent.FluidPlaceBlockEvent.class,
                         BlockEvent.BreakEvent.class, EntityJoinLevelEvent.class, ChunkEvent.Unload.class, ChunkEvent.Load.class,
                         ChunkWatchEvent.Sent.class, ChunkWatchEvent.UnWatch.class,
-                        LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class, ServerAboutToStartEvent.class,
+                        LevelTickEvent.Pre.class, LevelTickEvent.Post.class, ServerTickEvent.Post.class, LevelEvent.Unload.class, ServerAboutToStartEvent.class,
                         ServerStoppedEvent.class,
                         AddReloadListenerEvent.class, OnDatapackSyncEvent.class,
-                        PlayerEvent.PlayerChangedDimensionEvent.class, RegisterCommandsEvent.class));
+                        PlayerEvent.PlayerChangedDimensionEvent.class, PlayerContainerEvent.Open.class,
+                        PlayerContainerEvent.Close.class, PlayerEvent.PlayerLoggedOutEvent.class, RegisterCommandsEvent.class));
+    }
+
+    @Test
+    void production_pre_listener_uses_tick_rate_manager_and_advances_frozen_rounds() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, new DynamicMachine(MMCR.id("test_cube"), "pre listener",
+                new BlockArray(Map.of())));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        try {
+            RecordingBus gameBus = new RecordingBus();
+            ModEventRegistration.registerListeners(new RecordingBus(), gameBus, ModEventRegistration.EventHandlers.production());
+            SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+            gameBus.fire(LevelTickEvent.Pre.class, new LevelTickEvent.Pre(() -> true, level));
+            long first = coordinator.executionRoundId();
+            coordinator.markControllerEligible(controller.getBlockPos(), level.getGameTime());
+            var permit = coordinator.controllerPermit(controller.getBlockPos());
+            assertThat(permit.eligible(first, level.getGameTime(), true)).isTrue();
+
+            level.tickRateManager().setFrozen(true);
+            level.tickRateManager().tick();
+            gameBus.fire(LevelTickEvent.Pre.class, new LevelTickEvent.Pre(() -> true, level));
+            long frozen = coordinator.executionRoundId();
+            coordinator.markControllerEligible(controller.getBlockPos(), level.getGameTime());
+
+            assertThat(frozen).isGreaterThan(first);
+            assertThat(permit.eligible(frozen, level.getGameTime(), true)).isFalse();
+        } finally {
+            ModEventRegistration.EventHandlers.production().levelUnload().accept(new LevelEvent.Unload(level));
+        }
     }
 
     @Test
@@ -351,7 +389,8 @@ class ModEventRegistrationTest {
                  recording(invoked, BlockEvent.BreakEvent.class), recording(invoked, EntityJoinLevelEvent.class),
                  recording(invoked, ChunkEvent.Unload.class),
                  recording(invoked, ChunkEvent.Load.class), recording(invoked, ChunkWatchEvent.Sent.class),
-                 recording(invoked, ChunkWatchEvent.UnWatch.class), recording(invoked, LevelTickEvent.Post.class),
+                 recording(invoked, ChunkWatchEvent.UnWatch.class), recording(invoked, LevelTickEvent.Pre.class),
+                 recording(invoked, LevelTickEvent.Post.class),
                 recording(invoked, ServerTickEvent.Post.class),
                 recording(invoked, LevelEvent.Unload.class), recording(invoked, ServerAboutToStartEvent.class),
                 recording(invoked, ServerStoppedEvent.class),
@@ -359,6 +398,9 @@ class ModEventRegistrationTest {
                  recording(invoked, AddReloadListenerEvent.class),
                 recording(invoked, OnDatapackSyncEvent.class),
                 recording(invoked, PlayerEvent.PlayerChangedDimensionEvent.class),
+                recording(invoked, PlayerContainerEvent.Open.class),
+                recording(invoked, PlayerContainerEvent.Close.class),
+                recording(invoked, PlayerEvent.PlayerLoggedOutEvent.class),
                 recording(invoked, RegisterCommandsEvent.class));
     }
 
@@ -381,6 +423,7 @@ class ModEventRegistrationTest {
 
         @Override
         public <T extends Event> void add(Class<T> eventType, Consumer<T> listener) {
+            assertThat(listeners).doesNotContainKey(eventType);
             listeners.put(eventType, listener);
         }
 

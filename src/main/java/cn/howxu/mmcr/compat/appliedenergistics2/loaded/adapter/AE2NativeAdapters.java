@@ -12,12 +12,15 @@ import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.internal.capability.NativeReservationAccess;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.ListTag;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -61,17 +64,38 @@ public final class AE2NativeAdapters {
     }
 
     public static GenericStackInv requestInventory(KeyCounter[] holders, AEKeyType type) {
+        return createRequestInventory(holders, type);
+    }
+
+    /** One physical material inventory for an entire accepted batch, including foreign AE key types. */
+    public static GenericStackInv requestInventory(KeyCounter[] holders) {
+        return createRequestInventory(holders, null);
+    }
+
+    /** A proposal's input quota backed by the batch inventory, not another copy of its materials. */
+    public static GenericStackInv requestInventoryView(GenericStackInv inventory, long parallelism, long batchSize) {
+        return new RequestInventoryView(inventory, parallelism, batchSize);
+    }
+
+    /** Restores owned return materials without imposing normal item stack-size limits. */
+    public static GenericStackInv restoreRequestInventory(ListTag saved, HolderLookup.Provider registries) {
+        GenericStackInv inventory = new UnboundedRequestInventory(saved.size());
+        inventory.readFromTag(saved, registries);
+        return inventory;
+    }
+
+    private static GenericStackInv createRequestInventory(KeyCounter[] holders, @Nullable AEKeyType type) {
         List<GenericStack> stacks = new ArrayList<>();
         for (KeyCounter holder : holders) {
             for (var entry : holder) {
                 AEKey key = entry.getKey();
-                if (type.equals(key.getType()) && entry.getLongValue() > 0L) {
+                if ((type == null || type.equals(key.getType())) && entry.getLongValue() > 0L) {
                     stacks.add(new GenericStack(key, entry.getLongValue()));
                 }
             }
         }
         GenericStackInv inventory = new UnboundedRequestInventory(stacks.size());
-        inventory.setCapacity(type, Long.MAX_VALUE);
+        if (type != null) inventory.setCapacity(type, Long.MAX_VALUE);
         inventory.beginBatch();
         try {
             for (int slot = 0; slot < stacks.size(); slot++) inventory.setStack(slot, stacks.get(slot));
@@ -148,6 +172,54 @@ public final class AE2NativeAdapters {
 
     private static int amount(long value) {
         return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, value));
+    }
+
+    /**
+     * Keeps prepared lane allocations separate while every debit updates the sole material owner.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class RequestInventoryView extends GenericStackInv {
+        private final GenericStackInv inventory;
+        private final long[] remaining;
+
+        private RequestInventoryView(GenericStackInv inventory, long parallelism, long batchSize) {
+            super(null, Mode.STORAGE, inventory.size());
+            this.inventory = inventory;
+            remaining = new long[inventory.size()];
+            for (int slot = 0; slot < inventory.size(); slot++) {
+                var scaled = BigInteger.valueOf(inventory.getAmount(slot))
+                        .multiply(BigInteger.valueOf(parallelism))
+                        .divideAndRemainder(BigInteger.valueOf(batchSize));
+                if (scaled[1].signum() != 0) throw new IllegalArgumentException("Pattern inputs cannot be split exactly");
+                remaining[slot] = scaled[0].longValueExact();
+            }
+        }
+
+        @Override public GenericStack getStack(int slot) {
+            GenericStack stack = inventory.getStack(slot);
+            long amount = stack == null ? 0L : Math.min(stack.amount(), remaining[slot]);
+            return amount > 0L ? new GenericStack(stack.what(), amount) : null;
+        }
+
+        @Override public AEKey getKey(int slot) {
+            GenericStack stack = getStack(slot);
+            return stack == null ? null : stack.what();
+        }
+
+        @Override public long getAmount(int slot) {
+            GenericStack stack = getStack(slot);
+            return stack == null ? 0L : stack.amount();
+        }
+
+        @Override public long getMaxAmount(AEKey key) { return inventory.getMaxAmount(key); }
+        @Override public boolean canInsert() { return false; }
+
+        @Override public long extract(int slot, AEKey key, long amount, Actionable mode) {
+            long extracted = inventory.extract(slot, key, Math.min(amount, remaining[slot]), mode);
+            if (mode == Actionable.MODULATE) remaining[slot] -= extracted;
+            return extracted;
+        }
     }
 
     private static final class UnboundedRequestInventory extends GenericStackInv {

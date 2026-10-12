@@ -49,11 +49,13 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 /**
  * Owns the effective component, modifier, level, link, module, and capability state of a controller.
@@ -81,6 +83,8 @@ public final class ComponentRuntime {
     private long stateVersion;
     private long componentPresentationEpoch;
     private long capabilityPresentationEpoch;
+    private long capabilityContentRevision;
+    private final Set<BlockPos> pendingCapabilitySources = new LinkedHashSet<>();
     private long levelVersion;
     private long cachedComponentPresentationEpoch = Long.MIN_VALUE;
     private List<ControllerRuntimeSnapshot.ComponentPresentation> cachedComponentPresentations = List.of();
@@ -147,6 +151,12 @@ public final class ComponentRuntime {
         capabilitySourceIndices = nextSources;
         capabilityAliasIndices = nextAliases;
         capabilityProviderIndices = List.copyOf(nextProviders);
+        if (!pendingCapabilitySources.isEmpty()) {
+            // Removed facets need not be readable. Conservatively retain all historical/current alias invalidation.
+            for (CapabilityPresentationSegment segment : capabilityPresentationSegments) segment.dirty = true;
+            pendingCapabilitySources.clear();
+            cachedCapabilityPresentationEpoch = Long.MIN_VALUE;
+        }
         if (presentationsChanged) {
             capabilityPresentationEpoch++;
             cachedCapabilityPresentations = List.of();
@@ -177,31 +187,55 @@ public final class ComponentRuntime {
      * Plans each tick facet in snapshot order and commits the resulting native operations.
      */
     public CapabilityTickResult executeTickPhase(CapabilityTickContext context) {
+        return executeTickPhase(context, () -> true);
+    }
+
+    /** Stops invalidated execution work between native operations; completed effects remain applied. */
+    public CapabilityTickResult executeTickPhase(CapabilityTickContext context, BooleanSupplier executionValid) {
+        return executeTickPhase(context, executionValid, () -> { });
+    }
+
+    /** The runtime records uncertainty before a native callback can save or replace its execution. */
+    public CapabilityTickResult executeTickPhase(CapabilityTickContext context, BooleanSupplier executionValid,
+                                                Runnable beforeNativeExecution) {
         Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(executionValid, "executionValid");
+        Objects.requireNonNull(beforeNativeExecution, "beforeNativeExecution");
         List<CapabilityOperation> operations = new ArrayList<>();
         boolean stateChanged = false;
         for (MachineCapability capability : context.capabilitySnapshot().capabilities()) {
+            if (!executionValid.getAsBoolean()) return CapabilityTickResult.empty();
             TickFacet facet = capability.facet(TickFacet.class).orElse(null);
             if (facet == null) continue;
+            if (!executionValid.getAsBoolean()) return CapabilityTickResult.empty();
             CapabilityTickResult result = Objects.requireNonNull(facet.plan(context), "tick facet result");
+            if (!executionValid.getAsBoolean()) return CapabilityTickResult.empty();
             operations.addAll(result.operations());
             stateChanged |= result.stateChanged();
             if (result.failure() != null) {
                 return new CapabilityTickResult(operations, result.failure(), stateChanged);
             }
         }
+        if (!executionValid.getAsBoolean()) return CapabilityTickResult.empty();
         if (operations.isEmpty()) {
             if (stateChanged) markCapabilityPresentationChanged();
             return new CapabilityTickResult(operations, null, stateChanged);
         }
-        for (CapabilityOperation operation : operations) {
-            CapabilityResult result = operation.commit();
-            if (result == null || !result.success()) {
-                ExecutionStatus failure = result == null || result.status() == null
-                        ? UNSPECIFIED_TICK_OPERATION_FAILURE : result.status();
-                return new CapabilityTickResult(operations, failure, stateChanged);
+        {
+            for (CapabilityOperation operation : operations) {
+                if (!executionValid.getAsBoolean()) return CapabilityTickResult.empty();
+                beforeNativeExecution.run();
+                CapabilityResult result = operation.commit();
+                if (!executionValid.getAsBoolean()) return CapabilityTickResult.empty();
+                if (result == null || !result.success()) {
+                    ExecutionStatus failure = result == null || result.status() == null
+                            ? UNSPECIFIED_TICK_OPERATION_FAILURE : result.status();
+                    return new CapabilityTickResult(operations, failure, stateChanged);
+                }
             }
+            if (!executionValid.getAsBoolean()) return CapabilityTickResult.empty();
         }
+        if (!executionValid.getAsBoolean()) return CapabilityTickResult.empty();
         if (stateChanged) markCapabilityPresentationChanged();
         return new CapabilityTickResult(operations, null, stateChanged);
     }
@@ -224,13 +258,15 @@ public final class ComponentRuntime {
 
     public List<ControllerRuntimeSnapshot.CapabilityPresentation> capabilityPresentations() {
         if (cachedCapabilityPresentationEpoch == capabilityPresentationEpoch) return cachedCapabilityPresentations;
+        long epoch = capabilityPresentationEpoch;
+        invalidatePendingCapabilitySources();
         List<ControllerRuntimeSnapshot.CapabilityPresentation> snapshots = new ArrayList<>(capabilities.size());
         for (CapabilityPresentationSegment segment : capabilityPresentationSegments) {
             if (segment.dirty) segment.refresh();
             snapshots.addAll(segment.rows);
         }
         cachedCapabilityPresentations = List.copyOf(snapshots);
-        cachedCapabilityPresentationEpoch = capabilityPresentationEpoch;
+        cachedCapabilityPresentationEpoch = epoch;
         return cachedCapabilityPresentations;
     }
 
@@ -252,6 +288,30 @@ public final class ComponentRuntime {
 
     public long capabilityPresentationEpoch() {
         return capabilityPresentationEpoch;
+    }
+
+    /** Advances only for committed source content, never for presentation requests or rollback. */
+    public long capabilityContentRevision() {
+        return capabilityContentRevision;
+    }
+
+    /** Cheap immediate invalidation; current and historical storage aliases resolve on demand. */
+    public void markCapabilitySourceChanged(BlockPos sourcePos) {
+        capabilityContentRevision++;
+        capabilityPresentationEpoch++;
+        pendingCapabilitySources.add(sourcePos.immutable());
+    }
+
+    private void invalidatePendingCapabilitySources() {
+        if (pendingCapabilitySources.isEmpty()) return;
+        List<BlockPos> sources = List.copyOf(pendingCapabilitySources);
+        pendingCapabilitySources.clear();
+        try {
+            for (BlockPos source : sources) invalidateCapabilitySource(source);
+        } catch (RuntimeException exception) {
+            pendingCapabilitySources.addAll(sources);
+            throw exception;
+        }
     }
 
     public boolean replaceModifiers(Map<String, List<MachineModifier>> modifiers) {
@@ -394,12 +454,18 @@ public final class ComponentRuntime {
 
     /** Invalidates the occurrences at an absolute source position, including aliases at other hosts. */
     public void markCapabilityPresentationChanged(@Nullable BlockPos sourcePos) {
+        capabilityPresentationEpoch++;
+        // Input retry and availability notifications must not expand the same committed source eagerly.
+        if (pendingCapabilitySources.contains(sourcePos)) return;
+        invalidateCapabilitySource(sourcePos);
+    }
+
+    private void invalidateCapabilitySource(@Nullable BlockPos sourcePos) {
         List<Integer> indices = sourcePos == null ? null : capabilitySourceIndices.get(sourcePos);
         if (indices == null) {
-            markCapabilityPresentationChanged();
+            for (CapabilityPresentationSegment segment : capabilityPresentationSegments) segment.dirty = true;
             return;
         }
-        capabilityPresentationEpoch++;
         if (indices.size() == 1) {
             CapabilityPresentationSegment seed = capabilityPresentationSegments.get(indices.getFirst());
             CapabilityStorage publishedStorage = seed.storage;

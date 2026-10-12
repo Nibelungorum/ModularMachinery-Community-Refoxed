@@ -69,6 +69,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.ChunkWatchEvent;
@@ -124,6 +125,7 @@ public final class ModEventRegistration {
         gameBus.add(ChunkEvent.Load.class, handlers.chunkLoaded());
         gameBus.add(ChunkWatchEvent.Sent.class, handlers.chunkSent());
         gameBus.add(ChunkWatchEvent.UnWatch.class, handlers.chunkUnWatch());
+        gameBus.add(LevelTickEvent.Pre.class, handlers.levelPreTick());
         gameBus.add(LevelTickEvent.Post.class, handlers.levelTick());
         gameBus.add(ServerTickEvent.Post.class, handlers.serverTick());
         gameBus.add(LevelEvent.Unload.class, handlers.levelUnload());
@@ -132,6 +134,9 @@ public final class ModEventRegistration {
         gameBus.add(AddReloadListenerEvent.class, handlers.reloadListeners());
         gameBus.add(OnDatapackSyncEvent.class, handlers.datapackSync());
         gameBus.add(PlayerEvent.PlayerChangedDimensionEvent.class, handlers.playerChangedDimension());
+        gameBus.add(PlayerContainerEvent.Open.class, handlers.menuOpened());
+        gameBus.add(PlayerContainerEvent.Close.class, handlers.menuClosed());
+        gameBus.add(PlayerEvent.PlayerLoggedOutEvent.class, handlers.playerLoggedOut());
         gameBus.add(RegisterCommandsEvent.class, handlers.commands());
     }
 
@@ -260,6 +265,7 @@ public final class ModEventRegistration {
             Consumer<ChunkEvent.Load> chunkLoaded,
             Consumer<ChunkWatchEvent.Sent> chunkSent,
             Consumer<ChunkWatchEvent.UnWatch> chunkUnWatch,
+            Consumer<LevelTickEvent.Pre> levelPreTick,
             Consumer<LevelTickEvent.Post> levelTick,
             Consumer<ServerTickEvent.Post> serverTick,
             Consumer<LevelEvent.Unload> levelUnload,
@@ -269,6 +275,9 @@ public final class ModEventRegistration {
             Consumer<AddReloadListenerEvent> reloadListeners,
             Consumer<OnDatapackSyncEvent> datapackSync,
             Consumer<PlayerEvent.PlayerChangedDimensionEvent> playerChangedDimension,
+            Consumer<PlayerContainerEvent.Open> menuOpened,
+            Consumer<PlayerContainerEvent.Close> menuClosed,
+            Consumer<PlayerEvent.PlayerLoggedOutEvent> playerLoggedOut,
             Consumer<RegisterCommandsEvent> commands) {
         static EventHandlers production() {
             return new EventHandlers(
@@ -284,18 +293,29 @@ public final class ModEventRegistration {
                     StructureDirtyEvents::onChunkLoaded,
                     ControllerSyncEvents::onChunkSent,
                     ControllerSyncEvents::onChunkUnWatch,
+                    SharedIoEvents::onLevelPreTick,
                     SharedIoEvents::onLevelTick,
                     SharedIoEvents::onServerTick,
-                    SharedIoEvents::onLevelUnload,
+                    event -> {
+                        ControllerSyncEvents.forgetLevel(event.getLevel());
+                        SharedIoEvents.onLevelUnload(event);
+                    },
                     RuntimeContentServerBridge::onServerAboutToStart,
                     event -> {
+                        ControllerSyncEvents.clear();
                         NetworkServerState.discard(event.getServer());
                         RuntimeContentServerBridge.onServerStopped(event);
                     },
                     ModEventRegistration::onDefaultDataComponentsBound,
                     MachineRecipeDataReloadListener::register,
                     RuntimeContentSync::onDatapackSync,
-                    event -> syncPlayer(event.getEntity()),
+                    event -> {
+                        ControllerSyncEvents.onPlayerChangedDimension(event);
+                        syncPlayer(event.getEntity());
+                    },
+                    ControllerSyncEvents::onMenuOpen,
+                    ControllerSyncEvents::onMenuClose,
+                    ControllerSyncEvents::onPlayerLoggedOut,
                     ModEventRegistration::registerCommands);
         }
     }

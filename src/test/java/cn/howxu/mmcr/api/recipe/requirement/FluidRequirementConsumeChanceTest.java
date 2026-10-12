@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -106,6 +107,54 @@ class FluidRequirementConsumeChanceTest {
 
         assertThat(plan.successful()).isTrue();
         assertThat(plan.maxParallelism()).isEqualTo(1L);
+    }
+
+    @Test
+    void partial_consumption_reuses_the_same_decisions_for_reservations_materialization_and_retry() {
+        LongFluidStorage storage = new LongFluidStorage(3_200L, null);
+        storage.setFluid(new FluidStack(Fluids.WATER, 3_200));
+        FluidHatchCapability capability = new FluidHatchCapability(storage, IOType.INPUT);
+        FluidRequirement requirement = new FluidRequirement(RecipeModifier.IOType.INPUT, water, 100,
+                FluidStack.EMPTY, 1F, of(), 0.5F);
+        RequirementPlan plan = new FluidRequirementHandler().plan(requirement, List.of(capability),
+                new PlanningContext(32L, 0));
+        assertThat(plan.successful()).isTrue();
+
+        PlanningReservations reserved = new PlanningReservations();
+        assertThat(plan.reserve(32L, reserved)).isNull();
+        long remaining = reserved.fluidAmount(storage, 0);
+        assertThat(storage.getAmountAsLong()).isEqualTo(3_200L);
+
+        for (int attempt = 0; attempt < 3; attempt++) {
+            PlanningReservations materializedReservations = new PlanningReservations();
+            RequirementPlan materialized = plan.materialize(32L, materializedReservations, null);
+            assertThat(materialized.successful()).isTrue();
+            assertThat(materializedReservations.fluidAmount(storage, 0)).isEqualTo(remaining);
+            assertThat(storage.getAmountAsLong()).isEqualTo(3_200L);
+        }
+
+        RequirementPlan materialized = plan.materialize(32L, new PlanningReservations(), null);
+        for (CapabilityOperation operation : materialized.operations()) {
+            assertThat(operation.commit().success()).isTrue();
+        }
+        assertThat(storage.getAmountAsLong()).isEqualTo(remaining);
+    }
+
+    @Test
+    void zero_consumption_still_requires_live_fluid_to_be_present() {
+        LongFluidStorage storage = new LongFluidStorage(2_000L, null);
+        FluidHatchCapability capability = new FluidHatchCapability(storage, IOType.INPUT);
+        FluidRequirement requirement = newRequirement(RecipeModifier.IOType.INPUT, 0F);
+        FluidRequirementHandler handler = new FluidRequirementHandler();
+
+        assertThat(handler.plan(requirement, List.of(capability), emptyContext()).successful()).isFalse();
+        storage.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        RequirementPlan plan = handler.plan(requirement, List.of(capability), emptyContext());
+        assertThat(plan.successful()).isTrue();
+        assertThat(plan.materialize(1L, new PlanningReservations(), null).operations()).isEmpty();
+        assertThat(storage.getAmountAsLong()).isEqualTo(1_000L);
+        storage.clearContent();
+        assertThat(handler.plan(requirement, List.of(capability), emptyContext()).successful()).isFalse();
     }
 
     private static FluidRequirement newRequirement(RecipeModifier.IOType io, float consumeChance) {

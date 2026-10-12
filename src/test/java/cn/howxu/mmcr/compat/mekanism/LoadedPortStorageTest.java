@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.stream.Stream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -63,6 +64,24 @@ class LoadedPortStorageTest {
         IChemicalTank tank = LoadedPortStorage.normalChemicalTank(64_000L, listener());
 
         assertThat(insert(tank, chemical("oxygen", false), 1_000)).isEqualTo(1_000);
+    }
+
+    @Test
+    void native_chemical_simulation_preserves_storage_and_execution_notifies_immediately() {
+        AtomicInteger changes = new AtomicInteger();
+        IChemicalTank tank = LoadedPortStorage.normalChemicalTank(64_000L, changes::incrementAndGet);
+        ChemicalStack resource = chemical("native_oxygen", false).copyWithAmount(1_000L);
+
+        assertThat(tank.insert(resource, Action.SIMULATE, AutomationType.INTERNAL).isEmpty()).isTrue();
+        assertThat(tank.getStored()).isZero();
+        assertThat(changes).hasValue(0);
+
+        assertThat(tank.insert(resource, Action.EXECUTE, AutomationType.INTERNAL).isEmpty()).isTrue();
+        assertThat(tank.getStored()).isEqualTo(1_000L);
+        assertThat(changes).hasValue(1);
+        assertThat(tank.extract(300L, Action.SIMULATE, AutomationType.INTERNAL).getAmount()).isEqualTo(300L);
+        assertThat(tank.getStored()).isEqualTo(1_000L);
+        assertThat(changes).hasValue(1);
     }
 
     @Test

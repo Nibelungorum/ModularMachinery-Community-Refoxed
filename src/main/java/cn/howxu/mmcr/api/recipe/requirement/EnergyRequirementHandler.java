@@ -88,6 +88,22 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
                         allowPartialOutput, false)));
     }
 
+    /** Materializes exactly the requested parallelism without searching for an energy maximum. */
+    public RequirementPlan.OperationPlan planFixed(EnergyRequirement requirement,
+                                                   List<MachineCapability> candidates,
+                                                   PlanningContext context) {
+        if (requirement.fePerTick() <= 0L) {
+            return new RequirementPlan.OperationPlan(List.of(), null);
+        }
+        boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
+        List<MachineCapability> plannedCapabilities = insert
+                ? RequirementHandlerSupport.prioritizedOutputCapabilities(candidates) : candidates;
+        IOType direction = IOType.valueOf(requirement.io().name());
+        boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
+        return planOperations(requirement, plannedCapabilities, context.requestedParallelism(), context,
+                context.reservations(), insert, direction, partial, true);
+    }
+
     @Override
     public List<ResourceWakeup> resourceWakeups(EnergyRequirement requirement) {
         CapabilityType type = new CapabilityType(requirement.type().id());

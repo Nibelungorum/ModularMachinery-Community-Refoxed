@@ -311,6 +311,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     protected void tick() {
         super.tick();
+        craftingMachine.flushPendingReturns();
         long currentAmount = returnInventoryAmount();
         if (currentAmount < observedReturnInventoryAmount) onNativeReturnInventoryDrained();
         observedReturnInventoryAmount = currentAmount;
@@ -327,6 +328,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     public void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
         super.saveAdditional(output, registries);
         mainNode.saveToNBT(output);
+        craftingMachine.savePendingReturns(output, registries);
         logic.writeToNBT(output, registries);
     }
 
@@ -337,6 +339,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
             super.loadAdditional(input, registries);
             mainNode.loadFromNBT(input);
             logic.readFromNBT(input, registries);
+            craftingMachine.loadPendingReturns(input, registries);
         } finally {
             endLoadingAdditional();
         }
@@ -369,6 +372,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     public void dropContents() {
         if (level == null || level.isClientSide()) return;
         List<ItemStack> drops = new ArrayList<>();
+        craftingMachine.addPendingDrops(drops);
         logic.addDrops(drops);
         for (ItemStack stack : drops) {
             Block.popResource(level, worldPosition, stack);

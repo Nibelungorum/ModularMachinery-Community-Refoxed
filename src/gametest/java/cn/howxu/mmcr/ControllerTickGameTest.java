@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
@@ -60,6 +61,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Blocks;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 
 import java.util.ArrayList;
 import java.lang.reflect.Field;
@@ -138,6 +140,11 @@ public class ControllerTickGameTest {
         ServerPlayer observer = observer(helper);
         observer.containerMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
         helper.getLevel().players().add(observer);
+        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(observer, observer.containerMenu));
+        helper.assertTrue(screenTextPackets(observer) == 1
+                        && lastScreenTextPacket(observer).controllerPos().equals(controllerPos)
+                        && lastScreenTextPacket(observer).lines().isEmpty(),
+                "Menu Open sends one empty baseline before the first callback text");
         helper.runAtTickTime(10, () -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed after bounded scan");
             int payloadsBeforeFirst = screenTextPackets(observer);
@@ -180,6 +187,8 @@ public class ControllerTickGameTest {
                             && lastScreenTextPacket(observer).lines().isEmpty()
                             && ControllerScreenTextCache.linesAt(controllerPos).isEmpty(),
                     "reset clears controller-scoped text and synchronizes the empty snapshot");
+            ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(observer, observer.containerMenu));
+            observer.containerMenu = observer.inventoryMenu;
             helper.getLevel().players().remove(observer);
             helper.succeed();
         });
@@ -235,6 +244,11 @@ public class ControllerTickGameTest {
         observer.containerMenu = new MachineControllerMenu(1, new Inventory(helper.makeMockPlayer(GameType.SURVIVAL)), controller);
         level.players().add(observer);
         ControllerScreenTextCache.clear(controllerPos);
+        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(observer, observer.containerMenu));
+        helper.assertTrue(screenTextPackets(observer) == 1
+                        && lastScreenTextPacket(observer).controllerPos().equals(controllerPos)
+                        && lastScreenTextPacket(observer).lines().isEmpty(),
+                "Menu Open sends one empty baseline before recipe hooks");
 
         helper.runAfterDelay(2, () -> {
             invokeHooks.set(true);
@@ -284,6 +298,8 @@ public class ControllerTickGameTest {
                 controller.serverTick();
                 helper.assertTrue(!controller.isRedstonePaused(), "removing redstone resumes the recipe machine");
 
+                ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(observer, observer.containerMenu));
+                observer.containerMenu = observer.inventoryMenu;
                 level.players().remove(observer);
                 level.setChunkForced(crossChunk.x, crossChunk.z, false);
                 MachineControllerBlockEntity.markStructureChunkUnloaded(level, crossChunk);
@@ -305,6 +321,14 @@ public class ControllerTickGameTest {
                                         && controller.structureSnapshot().formed()
                                         && controller.structureSnapshot().structureAreaLoaded(),
                                 "formed recipe machine recovers after its critical area is loaded");
+                        int reopeningPackets = screenTextPackets(observer);
+                        observer.containerMenu = new MachineControllerMenu(2, new Inventory(observer), controller);
+                        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(observer, observer.containerMenu));
+                        helper.assertTrue(screenTextPackets(observer) == reopeningPackets + 1
+                                        && lastScreenTextPacket(observer).controllerPos().equals(controllerPos)
+                                        && lastScreenTextPacket(observer).revision() == screenTextSnapshot(controller).revision()
+                                        && lastScreenTextPacket(observer).lines().equals(screenTextSnapshot(controller).lines()),
+                                "Recovery Open sends exactly one current baseline before the next hook callback");
                         invokeHooks.set(true);
                         int restoredPackets = screenTextPackets(observer);
                         controller.serverTick();
@@ -315,6 +339,8 @@ public class ControllerTickGameTest {
                         applyLastScreenTextPacket(observer);
                         helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "post"),
                                 "recovered hook text reaches the client cache");
+                        ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(observer, observer.containerMenu));
+                        observer.containerMenu = observer.inventoryMenu;
                         level.players().remove(observer);
                         helper.succeed();
                     });

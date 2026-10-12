@@ -6,10 +6,15 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -36,6 +41,9 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.test.RecipeTestSupport;
@@ -63,6 +71,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Field;
@@ -70,8 +80,12 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
+import java.util.ArrayDeque;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -172,6 +186,223 @@ class RecipeThreadTest {
             SharedIoCoordinator.discard(level);
             StructureClaimRegistry.discard(level);
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void attached_installed_lane_uses_the_mode_boundary_and_runs_while_receipt_workers_are_stopped(MachineWorkMode mode)
+            throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ResourceLocation fixtureId = MMCR.id("thread_installed_attached_" + mode.name().toLowerCase(Locale.ROOT));
+        RuntimeTestFixtures.registerRecipePool(fixtureId);
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        Machine original = controller.structureSnapshot().configuredMachine();
+        var portComponents = controller.componentRuntime().components();
+        controller.setFormed(false);
+        RuntimeTestFixtures.formStructureWithComponents(controller, new Machine() {
+            public ResourceLocation registryName() { return fixtureId; }
+            public BlockArray pattern() {
+                return new BlockArray(Map.of(BlockPos.ZERO,
+                        new BlockPredicate.OfBlock(controller.getBlockState().getBlock())));
+            }
+            public MachineControllerSpec controller() { return original.controller(); }
+            public boolean hasFactory() { return true; }
+        }, energy);
+        controller.componentRuntime().replaceComponents(portComponents);
+        attachFactoryScheduler(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        var workers = new ArrayDeque<Runnable>();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(workers::add));
+        try {
+            energy.energyStorage().setAmount(1000L);
+            FactoryRecipeThread thread = attachedBaseLane(controller);
+            assertThat(controller.hasFactoryController()).isTrue();
+            assertThat(thread.runtime()).isNotSameAs(RuntimeTestFixtures.craftingRuntime(controller));
+            var recipe = RecipeTestSupport.create(MMCR.id("installed_attached_mode"), fixtureId,
+                    200, List.of(new EnergyRequirement(7L)), List.of());
+            RecipeRegistry.registerStatic(recipe);
+            assertThat(thread.runtime().start(recipe, 1L).isCrafting()).isTrue();
+            var installed = thread.runtime().ensureInstalledProgram();
+            long afterStart = energy.energyStorage().getAmountAsLong();
+            for (int tick = 1; tick <= 12; tick++) {
+                RuntimeTestFixtures.advanceGameTime(level);
+                RuntimeTestFixtures.beginLevelTick(level, true);
+                controller.serverTick();
+                thread.tick(); // Reentrant lane dispatch must not prepare or commit twice.
+                assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart
+                        - 7L * (mode == MachineWorkMode.SYNC ? tick : tick - 1));
+                assertThat(thread.tickPendingForTesting()).isFalse();
+                SharedIoCoordinator.get(level).executeInstalled(level);
+                SharedIoCoordinator.get(level).executeInstalled(level);
+                assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 7L * tick);
+                assertThat(thread.runtime().tickCount()).isEqualTo(tick);
+                assertThat(thread.runtime().installedProgram()).isSameAs(installed);
+            }
+            var async = MachineAsyncCoordinator.get(level);
+            async.pumpReceiptDrains();
+            assertReceiptWorkersOnly(async, workers);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("shortRecipeModes")
+    void short_installed_recipes_finish_and_restart_at_new_parallelism_before_receipt_workers_run(MachineWorkMode mode,
+                                                                                                  boolean factory)
+            throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ResourceLocation fixtureId = MMCR.id("thread_installed_short_" + mode.name().toLowerCase(Locale.ROOT)
+                + (factory ? "_factory" : "_normal"));
+        RuntimeTestFixtures.registerRecipePool(fixtureId);
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        ItemOutputBusBlockEntity output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy, output);
+        Machine original = controller.structureSnapshot().configuredMachine();
+        var portComponents = controller.componentRuntime().components();
+        controller.setFormed(false);
+        RuntimeTestFixtures.formStructureWithComponents(controller, new Machine() {
+            public ResourceLocation registryName() { return fixtureId; }
+            public BlockArray pattern() {
+                return new BlockArray(Map.of(BlockPos.ZERO,
+                        new BlockPredicate.OfBlock(controller.getBlockState().getBlock())));
+            }
+            public MachineControllerSpec controller() { return original.controller(); }
+            public boolean hasFactory() { return factory; }
+            public boolean parallelizable() { return true; }
+            public long maxParallelism() { return 16L; }
+        }, energy, output);
+        controller.componentRuntime().replaceComponents(portComponents);
+        RuntimeTestFixtures.republish(controller);
+        if (factory) attachFactoryScheduler(controller);
+        var parallel = new ParallelControllerBlockEntity(ParallelTier.PLUS, new BlockPos(3, 0, 0),
+                ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get().defaultBlockState());
+        RuntimeTestFixtures.replaceBlockEntity(controller, parallel);
+        var members = new ArrayList<>(controller.componentRuntime().components());
+        members.add(new ProcessingComponent(null, parallel, parallel.getBlockPos(), parallel.getBlockPos(), (String) null));
+        controller.componentRuntime().replaceComponents(members);
+        RuntimeTestFixtures.republish(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        var workers = new ArrayDeque<Runnable>();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(workers::add));
+        try {
+            RecipeThread thread;
+            if (factory) {
+                thread = attachedBaseLane(controller);
+                assertThat(controller.hasFactoryController()).isTrue();
+                assertThat(thread.runtime()).isNotSameAs(RuntimeTestFixtures.craftingRuntime(controller));
+            } else {
+                Field threadField = MachineControllerBlockEntity.class.getDeclaredField("normalRecipeThread");
+                threadField.setAccessible(true);
+                thread = (MachineRecipeThread) threadField.get(controller);
+            }
+            var recipe = RecipeTestSupport.create(MMCR.id("installed_short_worker_stopped"), fixtureId, 2,
+                    List.of(new EnergyRequirement(7L), new ItemRequirement(RecipeModifier.IOType.OUTPUT,
+                            Ingredient.of(Items.GOLD_NUGGET), 1, new ItemStack(Items.GOLD_NUGGET))),
+                    List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)),
+                    List.of(), 0, 1, false, true, List.of(), false, Set.of());
+            RecipeRegistry.registerStatic(recipe);
+            energy.energyStorage().setAmount(21L);
+            assertThat(RecipeRegistry.getRecipe(recipe.id())).isSameAs(recipe);
+            assertThat(thread.runtime().start(recipe, 16L).isCrafting())
+                    .as("start failure: %s", thread.runtime().failure()).isTrue();
+            thread.onStarted();
+            thread.runtime().ensureInstalledProgram();
+            assertThat(thread.runtime().parallelism()).isEqualTo(3L);
+            for (int tick = 1; tick <= 4; tick++) {
+                energy.energyStorage().setAmount(tick == 2 ? 91L : tick == 4 ? 70L : 1000L);
+                RuntimeTestFixtures.advanceGameTime(level);
+                RuntimeTestFixtures.beginLevelTick(level, true);
+                controller.serverTick();
+                SharedIoCoordinator.get(level).executeInstalled(level);
+                SharedIoCoordinator.get(level).executeInstalled(level);
+                assertThat(thread.tickPendingForTesting()).isFalse();
+                if (tick == 1) {
+                    assertThat(thread.runtime().tickCount()).isEqualTo(1);
+                    assertThat(output.itemHandler().amount(0)).isZero();
+                } else if (tick == 2) {
+                    assertThat(output.itemHandler().amount(0)).isEqualTo(3L);
+                    assertThat(thread.runtime().active()).isTrue();
+                    assertThat(thread.runtime().parallelism()).isEqualTo(10L);
+                    assertThat(thread.runtime().tickCount()).isZero();
+                    assertThat(energy.energyStorage().getAmountAsLong()).isZero();
+                } else if (tick == 3) {
+                    assertThat(thread.runtime().tickCount()).isEqualTo(1);
+                    assertThat(output.itemHandler().amount(0)).isEqualTo(3L);
+                } else {
+                    assertThat(output.itemHandler().amount(0)).isEqualTo(13L);
+                    assertThat(output.itemHandler().resource(0).is(Items.GOLD_NUGGET)).isTrue();
+                    assertThat(thread.runtime().active()).isFalse();
+                    assertThat(energy.energyStorage().getAmountAsLong()).isZero();
+                }
+            }
+            // Two unacknowledged executions may finish; the bounded receipt protocol then backpressures a third start.
+            energy.energyStorage().setAmount(1000L);
+            assertThat(SharedIoCoordinator.get(level).reserveExecution(thread.runtime(), thread.asyncLaneId())).isFalse();
+            MachineAsyncCoordinator.get(level).pumpReceiptDrains();
+            assertReceiptWorkersOnly(MachineAsyncCoordinator.get(level), workers);
+            assertThat(workers).isNotEmpty();
+            while (!workers.isEmpty()) workers.remove().run();
+            SharedIoCoordinator.get(level).drainReceiptAcknowledgements(level);
+            assertThat(SharedIoCoordinator.get(level).reserveExecution(thread.runtime(), thread.asyncLaneId())).isTrue();
+            SharedIoCoordinator.get(level).releaseExecutionReservation(thread.runtime(), thread.asyncLaneId());
+            if (mode == MachineWorkMode.ASYNC) {
+                // Exercise the generic idle restart entry too, with the matching template and workers stopped again.
+                if (thread instanceof MachineRecipeThread normal) normal.markRecipeFinished();
+                RuntimeTestFixtures.advanceGameTime(level);
+                RuntimeTestFixtures.beginLevelTick(level, true);
+                controller.serverTick();
+                SharedIoCoordinator.get(level).executeInstalled(level);
+                assertThat(thread.runtime().active()).isTrue();
+                assertThat(thread.isStartPending()).isFalse();
+                assertThat(thread.runtime().parallelism()).isEqualTo(16L);
+                assertThat(thread.runtime().tickCount()).isZero();
+                assertThat(thread.runtime().installedProgram()).isNotNull();
+                assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(1000L - 16L * 7L);
+                assertThat(output.itemHandler().amount(0)).isEqualTo(13L);
+            }
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    private static Stream<Arguments> shortRecipeModes() {
+        return Stream.of(MachineWorkMode.values()).flatMap(mode -> Stream.of(Arguments.of(mode, false), Arguments.of(mode, true)));
+    }
+
+    private static void assertReceiptWorkersOnly(MachineAsyncCoordinator coordinator, ArrayDeque<Runnable> workers)
+            throws ReflectiveOperationException {
+        Field tasksField = MachineAsyncCoordinator.class.getDeclaredField("tasks");
+        tasksField.setAccessible(true);
+        assertThat((Map<?, ?>) tasksField.get(coordinator)).isEmpty();
+        Field drainsField = MachineAsyncCoordinator.class.getDeclaredField("receiptDrains");
+        drainsField.setAccessible(true);
+        int queued = 0;
+        for (Object drain : ((Map<?, ?>) drainsField.get(coordinator)).values()) {
+            Field queuedField = drain.getClass().getDeclaredField("queued");
+            queuedField.setAccessible(true);
+            if (((AtomicBoolean) queuedField.get(drain)).get()) queued++;
+        }
+        assertThat(workers).hasSize(queued);
+    }
+
+    private static void attachFactoryScheduler(MachineControllerBlockEntity controller) {
+        var scheduler = new FactorySchedulerBlockEntity(new BlockPos(4, 0, 0),
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        RuntimeTestFixtures.replaceBlockEntity(controller, scheduler);
+        var members = new ArrayList<>(controller.componentRuntime().components());
+        members.add(new ProcessingComponent(null, scheduler, scheduler.getBlockPos(), scheduler.getBlockPos(), (String) null));
+        controller.componentRuntime().replaceComponents(members);
+        RuntimeTestFixtures.republish(controller);
     }
 
     @ParameterizedTest
@@ -488,7 +719,9 @@ class RecipeThreadTest {
         factory.ensureBaseLane(controller);
         Field lanesField = FactoryRuntime.class.getDeclaredField("lanes");
         lanesField.setAccessible(true);
-        return ((List<FactoryRecipeThread>) lanesField.get(factory)).getFirst();
+        FactoryRecipeThread base = ((List<FactoryRecipeThread>) lanesField.get(factory)).getFirst();
+        assertThat(base.runtime()).isNotSameAs(RuntimeTestFixtures.craftingRuntime(controller));
+        return base;
     }
 
     private static MachineControllerBlockEntity controllerWithPorts(IOPortBlockEntity... ports) {

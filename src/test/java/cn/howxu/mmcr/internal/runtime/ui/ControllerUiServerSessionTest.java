@@ -15,7 +15,12 @@ import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
 import cn.howxu.mmcr.api.machine.definition.TickBehavior;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
+import cn.howxu.mmcr.internal.menu.ControllerMenuOpenData;
+import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.network.ui.ControllerUiRequestDispatcher.RequestWindow;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
@@ -26,19 +31,29 @@ import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.runtime.ui.ControllerUiServerSession.MachineBinding;
 import cn.howxu.mmcr.internal.runtime.ui.ControllerUiServerSession.ProviderContext;
 import cn.howxu.mmcr.internal.runtime.ui.ControllerUiServerSession.ProviderState;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,7 +75,7 @@ class ControllerUiServerSessionTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
-        // An identity-only callback argument. No player/world/menu method is invoked by these pure tests.
+        // Provider callbacks only need an identity; CleanupMenu attaches the player to its owner's server level.
         Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
         field.setAccessible(true);
         player = (ServerPlayer) ((sun.misc.Unsafe) field.get(null)).allocateInstance(ServerPlayer.class);
@@ -75,6 +90,162 @@ class ControllerUiServerSessionTest {
         assertThat(changed.formed()).isTrue();
         assertThat(bound.matches(changed, A)).isFalse();
         assertThat(bound.matches(structure(a, a, true, 3), B)).isFalse();
+    }
+
+    @Test
+    void direct_close_immediately_forgets_both_indices_and_repeated_close_keeps_a_new_opening() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(
+                ResourceLocation.parse("mmcr:test_cube"), BlockPos.ZERO);
+        CleanupMenu first = new CleanupMenu(controller, player);
+        CleanupMenu later = new CleanupMenu(controller, player);
+        Map<?, ?> reverse = observerMap(ControllerSyncEvents.class, null, "MENUS");
+        Map<?, ?> local = observerMap(MachineControllerBlockEntity.class, controller, "menuObservers");
+        try {
+            player.containerMenu = first;
+            ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, first));
+            assertThat(reverse.containsKey(player)).isTrue();
+            assertThat(local.get(player)).isSameAs(first);
+            first.session.close();
+            assertThat(reverse.containsKey(player)).isFalse();
+            assertThat(local.containsKey(player)).isFalse();
+            assertThat(first.session.active()).isFalse();
+            assertThat(first.session.pollSnapshot()).isEmpty();
+
+            player.containerMenu = later;
+            ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, later));
+            Object opening = reverse.get(player);
+            assertThat(opening).isNotNull();
+            first.session.close();
+            assertThat(reverse.get(player)).isSameAs(opening);
+            assertThat(local.get(player)).isSameAs(later);
+            assertThat(later.session.active()).isTrue();
+            assertThat(player.containerMenu).isSameAs(later);
+        } finally {
+            first.session.close();
+            later.session.close();
+            player.containerMenu = null;
+        }
+    }
+
+    @Test
+    void late_close_of_replaced_session_preserves_current_opening_with_the_same_container_id() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(
+                ResourceLocation.parse("mmcr:test_cube"), BlockPos.ZERO);
+        CleanupMenu first = new CleanupMenu(controller, player);
+        CleanupMenu later = new CleanupMenu(controller, player);
+        Map<?, ?> reverse = observerMap(ControllerSyncEvents.class, null, "MENUS");
+        Map<?, ?> local = observerMap(MachineControllerBlockEntity.class, controller, "menuObservers");
+        try {
+            player.containerMenu = first;
+            ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, first));
+            player.containerMenu = later;
+            ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, later));
+            Object opening = reverse.get(player);
+            assertThat(opening).isNotNull();
+            first.session.close();
+            assertThat(reverse.get(player)).isSameAs(opening);
+            assertThat(local.get(player)).isSameAs(later);
+            assertThat(later.session.active()).isTrue();
+            assertThat(player.containerMenu).isSameAs(later);
+            later.session.close();
+            assertThat(reverse.containsKey(player)).isFalse();
+            assertThat(local.containsKey(player)).isFalse();
+        } finally {
+            first.session.close();
+            later.session.close();
+            player.containerMenu = null;
+        }
+    }
+
+    private static Map<?, ?> observerMap(Class<?> type, Object target, String name) throws Exception {
+        Field field = type.getDeclaredField(name);
+        field.setAccessible(true);
+        return (Map<?, ?>) field.get(target);
+    }
+
+    @Test
+    void direct_close_cleans_a_local_observer_without_a_reverse_index_entry() throws Exception {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(
+                ResourceLocation.parse("mmcr:test_cube"), BlockPos.ZERO);
+        CleanupMenu menu = new CleanupMenu(controller, player);
+        Map<?, ?> reverse = observerMap(ControllerSyncEvents.class, null, "MENUS");
+        Map<?, ?> local = observerMap(MachineControllerBlockEntity.class, controller, "menuObservers");
+        try {
+            player.containerMenu = menu;
+            controller.observeMenu(player, menu);
+            assertThat(reverse.containsKey(player)).isFalse();
+            assertThat(local.get(player)).isSameAs(menu);
+
+            menu.session.close();
+
+            assertThat(local.containsKey(player)).isFalse();
+            assertThat(menu.session.closed()).isTrue();
+            assertThat(menu.session.pollSnapshot()).isEmpty();
+        } finally {
+            menu.session.close();
+            player.containerMenu = null;
+        }
+    }
+
+    /** Close fixture with complete session fields and exact world/menu identities, without encoding.
+     * @author howxu <dev@howxu.cn> */
+    private static final class CleanupMenu extends AbstractContainerMenu implements ControllerUiMenu {
+        private final ControllerMenuOpenData openData;
+        private final ControllerUiServerSession session;
+
+        private CleanupMenu(MachineControllerBlockEntity owner, ServerPlayer player) throws Exception {
+            super(null, 7);
+            Field unsafeField = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeField.setAccessible(true);
+            sun.misc.Unsafe unsafe = (sun.misc.Unsafe) unsafeField.get(null);
+            if (owner.getLevel() == null) {
+                CleanupLevel level = (CleanupLevel) unsafe.allocateInstance(CleanupLevel.class);
+                level.owner = owner;
+                Field dimension = Level.class.getDeclaredField("dimension");
+                dimension.setAccessible(true);
+                dimension.set(level, Level.OVERWORLD);
+                owner.setLevel(level);
+            }
+            ServerLevel level = (ServerLevel) owner.getLevel();
+            Field playerLevel = Entity.class.getDeclaredField("level");
+            playerLevel.setAccessible(true);
+            playerLevel.set(player, level);
+            openData = ControllerMenuOpenData.forOwner(owner, level, Kind.NORMAL);
+            ResourceLocation physicalId = ((MachineControllerBlock) owner.getBlockState().getBlock()).machineId();
+            session = (ControllerUiServerSession) unsafe.allocateInstance(ControllerUiServerSession.class);
+            // Keep protocol registration's global construction latch untouched in this cleanup-only fixture.
+            for (var entry : Map.ofEntries(Map.entry("menu", this), Map.entry("owner", owner),
+                    Map.entry("player", player), Map.entry("level", level), Map.entry("openData", openData),
+                    Map.entry("machineBinding", MachineBinding.bind(owner.runtimeSnapshot().structure(), physicalId)),
+                    Map.entry("protocols", ControllerUiServerSession.currentProtocols()),
+                    Map.entry("requests", new RequestWindow()), Map.entry("textSnapshots", Map.of()),
+                    Map.entry("providerStates", new LinkedHashMap<>()), Map.entry("active", true)).entrySet()) {
+                Field field = ControllerUiServerSession.class.getDeclaredField(entry.getKey());
+                field.setAccessible(true);
+                field.set(session, entry.getValue());
+            }
+        }
+
+        @Override public ControllerMenuOpenData uiOpenData() { return openData; }
+        @Override public ControllerUiServerSession uiServerSession() { return session; }
+        @Override public boolean playerInventoryVisible() { return true; }
+        @Override public void setPlayerInventoryVisible(boolean visible) {}
+        @Override public ItemStack quickMoveStack(Player player, int index) { return ItemStack.EMPTY; }
+        @Override public boolean stillValid(Player player) { return true; }
+    }
+
+    /** Minimal server world for the production session's exact owner lookup.
+     * @author howxu <dev@howxu.cn> */
+    private static final class CleanupLevel extends ServerLevel {
+        private MachineControllerBlockEntity owner;
+
+        private CleanupLevel() {
+            super(null, null, null, null, Level.OVERWORLD, null, false, 0L, List.of(), false);
+        }
+
+        @Override public BlockEntity getBlockEntity(BlockPos pos) {
+            return owner.getBlockPos().equals(pos) ? owner : null;
+        }
     }
 
     @Test
@@ -201,6 +372,23 @@ class ControllerUiServerSessionTest {
         closedInEncoder.onEncode = () -> closedInEncoder.open = false;
         assertThat(closedInEncoder.capture(closedInEncoder.registration(ignored -> {}, ignored -> {}))).isNull();
         assertThat(closedInEncoder.encodings).hasValue(1);
+    }
+
+    @Test
+    void new_viewer_provider_state_captures_its_own_baseline_even_at_the_same_author_revision() {
+        ProviderFixture first = new ProviderFixture();
+        var registration = first.registration(ignored -> {}, ignored -> {});
+        assertThat(first.capture(registration)).containsExactly(7);
+        assertThat(first.capture(registration)).isNull();
+        ProviderFixture later = new ProviderFixture();
+        assertThat(later.capture(registration)).containsExactly(7);
+        assertThat(later.capture(registration)).isNull();
+        assertThat(first.snapshots).hasValue(2);
+        assertThat(first.encodings).hasValue(2);
+        first.open = false;
+        assertThat(first.capture(registration)).isNull();
+        assertThat(first.snapshots).hasValue(2);
+        assertThat(first.encodings).hasValue(2);
     }
 
     @Test

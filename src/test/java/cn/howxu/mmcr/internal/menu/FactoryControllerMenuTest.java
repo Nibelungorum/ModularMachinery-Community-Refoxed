@@ -4,6 +4,9 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import net.minecraft.resources.ResourceLocation;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Arrays;
@@ -43,6 +46,33 @@ class FactoryControllerMenuTest {
 
         menu.applySnapshot(snapshot(0));
         assertThat(menu.selectedThreadIndex()).isZero();
+    }
+
+    @Test
+    void factory_data_slots_share_one_committed_query_per_broadcast_and_release_it_afterward() {
+        var controller = new CountingController();
+        var menu = new FactoryControllerMenu(1, new Inventory(null), controller);
+        controller.queries = 0;
+        menu.broadcastChanges();
+        assertThat(controller.queries).isEqualTo(1);
+        menu.broadcastChanges();
+        assertThat(controller.queries).isEqualTo(2);
+        menu.isRedstonePaused();
+        assertThat(controller.queries).isEqualTo(3);
+    }
+
+    /** Counts the actual menu query boundary without altering runtime publication.
+     * @author howxu <dev@howxu.cn> */
+    private static final class CountingController extends MachineControllerBlockEntity {
+        private int queries;
+        private CountingController() {
+            super(BlockPos.ZERO, TestBootstrap.newController().getBlockState());
+        }
+        @Override public ControllerRuntimeSnapshot runtimeSnapshot() {
+            queries++;
+            return super.runtimeSnapshot();
+        }
+        @Override public ResourceLocation currentRecipePoolId() { return null; }
     }
 
     @Test

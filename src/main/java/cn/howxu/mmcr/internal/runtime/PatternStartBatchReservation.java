@@ -12,11 +12,13 @@ public final class PatternStartBatchReservation implements AutoCloseable {
     public enum Status {
         UNAVAILABLE,
         RESERVED,
+        /** Holder ownership accepted; native partial payments are quarantined instead of replayed. */
         COMMITTED
     }
 
     private final List<PatternStartReservation> reservations;
     private Status status;
+    private boolean committing;
 
     private PatternStartBatchReservation(Status status, List<PatternStartReservation> reservations) {
         this.status = status;
@@ -45,16 +47,46 @@ public final class PatternStartBatchReservation implements AutoCloseable {
         return reservations;
     }
 
-    public boolean commit() {
-        if (status != Status.RESERVED) return false;
-        for (PatternStartReservation reservation : reservations) {
-            if (reservation.commitPlan()) continue;
-            rollback();
-            return false;
+    /** Native execution already owns this proposal, including an in-flight notification/save window. */
+    public boolean ownershipAccepted() {
+        return status == Status.COMMITTED || reservations.stream().anyMatch(PatternStartReservation::paid);
+    }
+
+    public boolean commit() { return commit(() -> { }); }
+
+    public boolean commit(Runnable ownershipWrites) {
+        Objects.requireNonNull(ownershipWrites, "ownershipWrites");
+        if (committing || status != Status.RESERVED) return false;
+        committing = true;
+        int acquired = 0;
+        boolean accepted = false;
+        try {
+            for (PatternStartReservation reservation : reservations) {
+                if (!reservation.beginCommitAttempt()) return false;
+                acquired++;
+            }
+            if (!reservations.stream().allMatch(PatternStartReservation::preflight)) return false;
+            for (PatternStartReservation reservation : reservations) {
+                if (!reservation.commitPlan()) {
+                    accepted |= reservation.paid();
+                    if (!accepted) { rollback(); return false; }
+                    reservations.forEach(PatternStartReservation::pauseAfterNotificationFailure);
+                    break;
+                }
+                accepted = true;
+            }
+            status = Status.COMMITTED;
+            try { ownershipWrites.run(); }
+            catch (RuntimeException exception) { reservations.forEach(PatternStartReservation::pauseAfterNotificationFailure); }
+            for (PatternStartReservation reservation : reservations) {
+                if (reservation.paid()) reservation.activate();
+                else reservation.rollback();
+            }
+            return true;
+        } finally {
+            for (int index = 0; index < acquired; index++) reservations.get(index).endCommitAttempt();
+            committing = false;
         }
-        reservations.forEach(PatternStartReservation::activate);
-        status = Status.COMMITTED;
-        return true;
     }
 
     public void rollback() {

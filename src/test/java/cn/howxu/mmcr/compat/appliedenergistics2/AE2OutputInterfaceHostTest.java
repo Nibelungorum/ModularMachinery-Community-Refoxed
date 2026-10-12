@@ -147,6 +147,7 @@ class AE2OutputInterfaceHostTest {
         host.getLogic().getReturnInv().setStack(0, new GenericStack(gold, 2L));
         host.serverTick();
         host.linkControllerAppearance(controller.getBlockPos(), null);
+        host.flushStorageChanges(); // Publish the occupied return inventory baseline before draining it.
         controller.notifiedOutputResources.clear();
         controller.notifiedOutputSources.clear();
 
@@ -164,6 +165,9 @@ class AE2OutputInterfaceHostTest {
 
         host.serverTick();
 
+        assertThat(controller.notifiedOutputResources).isEmpty();
+        assertThat(controller.notifiedOutputSources).isEmpty();
+        host.flushStorageChanges();
         assertThat(controller.notifiedOutputResources).singleElement().satisfies(resource ->
                 assertThat(AEItemKey.of((ItemStack) resource)).isEqualTo(gold));
         assertThat(controller.notifiedOutputSources).containsExactly(host.getBlockPos());
