@@ -425,5 +425,7 @@ class ControllerExecutionBoundaryTest {
 
         @Override
         public LongItemStorage itemHandler() { return storage; }
+        @Override
+        public LongItemStorage nativeItemHandler() { return storage; }
     }
 }

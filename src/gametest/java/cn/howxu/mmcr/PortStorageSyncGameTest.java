@@ -1,15 +1,6 @@
 package cn.howxu.mmcr;
 
-import cn.howxu.mmcr.api.capability.CapabilityDirections;
-import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
-import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.capability.CapabilityView;
-import cn.howxu.mmcr.api.capability.MachineCapability;
-import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
-import cn.howxu.mmcr.api.capability.facet.SyncFacet;
-import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
-import cn.howxu.mmcr.api.capability.sync.CapabilitySyncRegistry;
 import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
@@ -32,6 +23,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -42,10 +34,9 @@ import cn.howxu.mmcr.internal.storage.LongItemStorage;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
-/** Real registry-backed port baselines and shared viewer encoding.
+/** Real registry-backed port baselines, shared snapshots and native wire round trips.
  * @author howxu <dev@howxu.cn>
  */
 public final class PortStorageSyncGameTest {
@@ -55,57 +46,57 @@ public final class PortStorageSyncGameTest {
         helper.setBlock(relative, state);
         var port = new CountingPort(helper.absolutePos(relative), state);
         helper.getLevel().setBlockEntity(port);
-        BlockPos replicaPos = relative.offset(2, 0, 0);
-        helper.setBlock(replicaPos, state);
-        ExtendedItemBusBlockEntity replica = helper.getBlockEntity(replicaPos);
+        port.capabilitySnapshot(); // Bind the native handler before measuring subsequent snapshot reads.
         var first = player(helper);
         var second = player(helper);
+        var replica = new ExtendedItemMenu(99, new Inventory(first), port.getBlockPos(), port.kind().id(),
+                port.nativeItemHandler().getSlots());
         ItemStack iron = new ItemStack(Items.IRON_INGOT);
         try {
             insert(helper, port, iron, 7L);
             open(helper, port, first);
             open(helper, port, second);
-            helper.assertTrue(packets(first).size() == 1 && packets(second).size() == 1 && port.encodes == 2,
-                    "Each actual menu open encodes and delivers one item baseline");
+            helper.assertTrue(packets(first).size() == 1 && packets(second).size() == 1,
+                    "Each actual menu open delivers one native item baseline");
             var initial = packets(first).getFirst();
             assertContents(helper, initial, port, replica, iron, 7L);
             assertContents(helper, packets(second).getFirst(), port, replica, iron, 7L);
 
             insert(helper, port, iron, 10L);
             insert(helper, port, iron, 10L);
-            helper.assertTrue(packets(first).size() == 1 && packets(second).size() == 1 && port.encodes == 2,
-                    "Committed mutations defer delivery and encoding until flush");
+            helper.assertTrue(packets(first).size() == 1 && packets(second).size() == 1,
+                    "Committed mutations defer delivery until flush");
             port.captures = 0;
-            port.encodes = 0;
+            port.nativeSnapshots = 0;
             port.flushStorageChanges();
-            helper.assertTrue(port.captures == 2 && port.encodes == 1
+            helper.assertTrue(port.captures == 1 && port.nativeSnapshots == 1
                             && packets(first).size() == 2 && packets(second).size() == 2,
-                    "Two viewers share exactly one production item codec encode after the availability capture");
+                    "Two viewers share one native payload snapshot after the availability capture");
             var shared = packets(first).getLast();
             helper.assertTrue(shared == packets(second).getLast() && shared != initial,
                     "Both viewer deliveries reuse the same final payload object");
             assertContents(helper, shared, port, replica, iron, 27L);
             assertContents(helper, initial, port, replica, iron, 7L);
             port.flushStorageChanges();
-            helper.assertTrue(port.captures == 2 && port.encodes == 1
+            helper.assertTrue(port.captures == 1 && port.nativeSnapshots == 1
                             && packets(first).size() == 2 && packets(second).size() == 2,
-                    "A clean repeated flush does no snapshot, codec or delivery work");
+                    "A clean repeated flush does no snapshot or delivery work");
 
             first.closeContainer();
             second.closeContainer();
             insert(helper, port, iron, 10L);
             port.captures = 0;
-            port.encodes = 0;
+            port.nativeSnapshots = 0;
             port.flushStorageChanges();
-            helper.assertTrue(port.captures == 1 && port.encodes == 0
+            helper.assertTrue(port.captures == 1 && port.nativeSnapshots == 0
                             && packets(first).size() == 2 && packets(second).size() == 2,
-                    "Closed viewers are pruned; viewerless flush only captures availability and never encodes");
+                    "Closed viewers are pruned; viewerless flush only captures availability without a native payload snapshot");
 
             open(helper, port, first);
-            helper.assertTrue(port.captures == 2 && port.encodes == 1
+            helper.assertTrue(port.nativeSnapshots > 0
                             && packets(first).size() == 3 && packets(second).size() == 2
                             && packets(first).getLast() != shared,
-                    "Late reopen encodes a fresh baseline after viewerless publication");
+                    "Late reopen captures a fresh native baseline after viewerless publication");
             assertContents(helper, packets(first).getLast(), port, replica, iron, 37L);
             assertContents(helper, shared, port, replica, iron, 27L);
         } finally {
@@ -133,18 +124,20 @@ public final class PortStorageSyncGameTest {
     }
 
     private static void assertContents(GameTestHelper helper, PktPortStorageSyncPayload payload, CountingPort port,
-                                       ExtendedItemBusBlockEntity replica, ItemStack resource, long amount) {
+                                       ExtendedItemMenu replica, ItemStack resource, long amount) {
         var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
         try {
             PktPortStorageSyncPayload.STREAM_CODEC.encode(buffer, payload);
             var decoded = PktPortStorageSyncPayload.STREAM_CODEC.decode(buffer);
             helper.assertTrue(buffer.readableBytes() == 0 && decoded.pos().equals(port.getBlockPos())
-                            && decoded.kind().equals(port.kind().id()) && decoded.entries().size() == 1,
-                    "Recorded port payload round-trips its target and single item capability entry");
-            CapabilitySyncRegistry.decode(replica.capabilitySnapshot(), decoded.entries().getFirst(), buffer);
-            helper.assertTrue(ItemStack.isSameItemSameComponents(resource, replica.itemHandler().getStackInSlot(0))
-                            && ((LongItemStorage) replica.itemHandler()).amount(0) == amount,
-                    "Production item codec decodes the real registered item and committed amount " + amount);
+                            && decoded.kind().equals(port.kind().id()) && decoded.itemEntries().size() == 1
+                            && decoded.fluidEntries().isEmpty(),
+                    "Recorded native port payload round-trips its target and single item entry");
+            replica.applySnapshot(decoded);
+            var entry = replica.entries().getFirst();
+            helper.assertTrue(entry.slot() == 0 && ItemStack.isSameItemSameComponents(resource, entry.resource())
+                            && entry.amount() == amount && entry.capacity() >= entry.amount(),
+                    "Production menu applies the real registered resource and committed long amount " + amount);
         } finally {
             buffer.release();
         }
@@ -165,47 +158,23 @@ public final class PortStorageSyncGameTest {
                 .filter(PktPortStorageSyncPayload.class::isInstance).map(PktPortStorageSyncPayload.class::cast).toList();
     }
 
-    /** Counts snapshot access separately from real sync facet encoding.
+    /** Counts availability capture separately from actual native payload reads.
      * @author howxu <dev@howxu.cn>
      */
     private static final class CountingPort extends ExtendedItemBusBlockEntity {
         private int captures;
-        private int encodes;
-        private CapabilitySnapshot counted;
+        private int nativeSnapshots;
 
         private CountingPort(BlockPos pos, BlockState state) { super(pos, state); }
 
         @Override
         public CapabilitySnapshot capabilitySnapshot() {
             captures++;
-            if (counted == null) {
-                var snapshot = super.capabilitySnapshot();
-                counted = new CapabilitySnapshot(snapshot.capabilities().stream()
-                        .map(capability -> (MachineCapability) new CountingCapability(capability, this)).toList(),
-                        snapshot.additionalFacets());
-            }
-            return counted;
+            return super.capabilitySnapshot();
         }
-    }
-
-    /** Delegates every facet to the real capability, counting only the production sync encoder.
-     * @author howxu <dev@howxu.cn>
-     */
-    private record CountingCapability(MachineCapability delegate, CountingPort port) implements MachineCapability, SyncFacet {
-        @Override public CapabilityType type() { return delegate.type(); }
-        @Override public CapabilityDirections directions() { return delegate.directions(); }
-        @Override public CapabilityView view() { return delegate.view(); }
-        @Override public int outputPriority() { return delegate.outputPriority(); }
-        @Override public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
-        @Override public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) {
-            return type == SyncFacet.class ? Optional.of(type.cast(this)) : delegate.facet(type);
-        }
-        @Override public void encode(RegistryFriendlyByteBuf buffer) {
-            port.encodes++;
-            delegate.facet(SyncFacet.class).orElseThrow().encode(buffer);
-        }
-        @Override public void decode(RegistryFriendlyByteBuf buffer) {
-            delegate.facet(SyncFacet.class).orElseThrow().decode(buffer);
+        @Override public LongItemStorage nativeItemHandler() {
+            nativeSnapshots++;
+            return super.nativeItemHandler();
         }
     }
 

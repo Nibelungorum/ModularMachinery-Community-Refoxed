@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.compat.create.StressSession;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.port.MachinePort;
@@ -355,7 +356,20 @@ public final class StressInterfaceGameTest {
         helper.setBlock(SHAFT, axis(AllBlocks.SHAFT.get(), Direction.Axis.Z));
         helper.setBlock(MOTOR, AllBlocks.ENCASED_FAN.get().defaultBlockState()
                 .setValue(DirectionalBlock.FACING, Direction.SOUTH));
-        ControllerRig machine = controller(helper, "create_stress_grace_pause_machine", StressInterfaceKind.OUTPUT);
+        ControllerRig assembled = controller(helper, "create_stress_grace_pause_machine", StressInterfaceKind.OUTPUT);
+        // Keep the native five-tick grace observable without an asynchronous finish queue consuming its window.
+        assembled.controller().setRemoved();
+        MachineControllerBlockEntity synchronous = new MachineControllerBlockEntity(
+                assembled.controller().getBlockPos(), assembled.controller().getBlockState()) {
+            @Override public MachineWorkMode activeWorkMode() { return MachineWorkMode.SYNC; }
+        };
+        synchronous.setLevel(helper.getLevel());
+        helper.getLevel().setBlockEntity(synchronous);
+        synchronous.onLoad();
+        synchronous.setMachine(MachineRegistry.getMachine(assembled.id()));
+        synchronous.setStructureCheckIntervalForTesting(1);
+        synchronous.requestImmediateStructureCheck();
+        ControllerRig machine = new ControllerRig(assembled.id(), synchronous, assembled.items(), assembled.products());
         ResourceLocation recipeId = MMCR.id("create_stress_grace_pause_recipe");
         if (!RecipeRegistry.containsStatic(recipeId)) {
             RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(recipeId)
@@ -366,20 +380,28 @@ public final class StressInterfaceGameTest {
         StressOutputBlockEntity output = helper.getBlockEntity(PORT);
         KineticBlockEntity fan = helper.getBlockEntity(MOTOR);
         BlockPos pausePos = new BlockPos(3, 1, 1);
-        AtomicBoolean lateStop = new AtomicBoolean();
+        AtomicLong coastingAt = new AtomicLong();
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(machine.controller().structureSnapshot().formed(),
                         "Pause fixture forms before receiving its single input batch"))
                 .thenExecute(() -> machine.items().nativeItemHandler().setStackInSlot(0, new ItemStack(Items.COAL)))
                 .thenWaitUntil(() -> helper.assertTrue(products(machine) == 1 && output.getGeneratedSpeed() == -16F,
                         "Completed idle recipe leaves its native generator coasting"))
-                .thenExecute(() -> helper.setBlock(pausePos, Blocks.LEVER.defaultBlockState()
-                        .setValue(LeverBlock.FACE, AttachFace.WALL).setValue(LeverBlock.FACING, Direction.EAST)
-                        .setValue(LeverBlock.POWERED, true)))
-                .thenWaitUntil(() -> {
-                    boolean paused = machine.controller().isRedstonePaused();
-                    if (paused && (output.getGeneratedSpeed() != 0F || fan.getSpeed() != 0F)) lateStop.set(true);
-                    helper.assertTrue(paused, "Idle controller detects its redstone pause");
-                    helper.assertTrue(!lateStop.get(), "The first observed pause immediately revokes completed-recipe grace");
+                .thenExecute(() -> coastingAt.set(helper.getLevel().getGameTime()))
+                .thenExecuteAfter(1, () -> {
+                    long elapsed = helper.getLevel().getGameTime() - coastingAt.get();
+                    helper.assertTrue(elapsed > 0L && elapsed < 5L && output.getGeneratedSpeed() == -16F
+                                    && fan.getSpeed() == -16F && facet(output).state().baseContribution() == 8D,
+                            "Native generation and dependants coast across a real world tick inside the five-tick deadline");
+                    helper.setBlock(pausePos, Blocks.LEVER.defaultBlockState()
+                            .setValue(LeverBlock.FACE, AttachFace.WALL).setValue(LeverBlock.FACING, Direction.EAST)
+                            .setValue(LeverBlock.POWERED, true));
+                    helper.assertTrue(helper.getLevel().getDirectSignalTo(helper.absolutePos(CONTROLLER)) > 0,
+                            "Real lever supplies the controller's direct redstone pause signal before grace expires");
+                    machine.controller().serverTick();
+                    helper.assertTrue(machine.controller().isRedstonePaused() && output.getGeneratedSpeed() == 0F
+                                    && fan.getSpeed() == 0F && facet(output).state().baseContribution() == 0D
+                                    && products(machine) == 1 && machine.items().nativeItemHandler().getStackInSlot(0).isEmpty(),
+                            "The first synchronous pause action revokes completed-recipe grace and native rotation immediately");
                 }).thenSucceed();
     }
 

@@ -269,9 +269,15 @@ public final class FluxNetworkPointHandler extends FluxPointHandler {
     }
 
     public boolean commitCandidate(long amount) {
+        return commitCandidate(amount, () -> { });
+    }
+
+    /** Publishes this plan's native ownership before the content notification can save/cancel it. */
+    public boolean commitCandidate(long amount, Runnable acquired) {
         if (amount <= 0L || tentative < amount || mBuffer - reserved < amount) return false;
         tentative -= amount;
         reserved += amount;
+        acquired.run();
         changed();
         return true;
     }

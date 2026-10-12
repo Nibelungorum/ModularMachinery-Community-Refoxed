@@ -38,6 +38,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
 import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
@@ -50,6 +51,7 @@ import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.create.StressRequirementHandler;
 import cn.howxu.mmcr.compat.create.StressSession;
 import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
@@ -103,7 +105,7 @@ public final class CraftingRuntime {
     private static final Map<MachineControllerBlockEntity, Long> CONTROLLER_IDS = new WeakHashMap<>();
     private final MachineControllerBlockEntity controller;
     private final ComponentRuntime components;
-    private final StressSession stressSession = new StressSession();
+    private StressSession stressSession = new StressSession();
     private final long controllerIdentity;
     private String laneId = "base";
     private Runnable installedCompletion = () -> { };
@@ -197,6 +199,7 @@ public final class CraftingRuntime {
     private static final String PREFETCH_ALLOCATION_KEY = "key";
     private static final String PREFETCH_ALLOCATION_AMOUNT = "amount";
     private static final String PREFETCH_BATCH_AMOUNT = "batch_amount";
+    private static final String PREFETCH_UNCERTAIN_AMOUNT = "uncertain_amount";
     private static final String PREFETCH_TICK_CONSUMED_KEY = "prefetched_energy_tick_consumed";
 
     public CraftingRuntime(MachineControllerBlockEntity controller, ComponentRuntime components) {
@@ -464,7 +467,7 @@ public final class CraftingRuntime {
             return false;
         }
         if (!commitStressOutputs(controller.executionRuntimeSnapshot())) {
-            payment.pauseAfterCommitFailure();
+            if (payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
             return false;
         }
         payment.markResourcePaid(recipe.getTick(), recipe.needsFinishCommit());
@@ -521,8 +524,22 @@ public final class CraftingRuntime {
                 ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()) : result.failure();
         RecipeCommitLedger payment = ledger;
         TickAttempt attempt = tickAttempt;
-        if (result.plan().commitRuntime(payment::beginNativeExecution, () -> attempt == null
-                ? installedProgram != null && installedProgram.current() : attemptCurrent(attempt))) return null;
+        ActiveMachineRecipe recipe = activeRecipe;
+        RecipeCommitLedger.State admission = payment.state();
+        StressSession owner = stressSession;
+        List<MachineRequirement> originalRequirements = effectiveRequirements;
+        try {
+            if (result.plan().commitRuntime(payment::beginNativeExecution, () -> attempt == null
+                    ? installedProgram != null && installedProgram.current() : attemptCurrent(attempt))) {
+                if (!hasOrdinaryNativeEffects(result.plan(), originalRequirements)) payment.completePrefetchDebit(admission);
+                return null;
+            }
+        } catch (RuntimeException exception) {
+            if (!settleStressOnlyFailure(result.plan(), originalRequirements, payment, admission, owner)) throw exception;
+            logTickFailure("stress_input_commit", controller.executionRuntimeSnapshot(), recipe.getRecipe(), exception);
+            return failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of());
+        }
+        settleStressOnlyFailure(result.plan(), originalRequirements, payment, admission, owner);
         return result.plan().failure() == null ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of())
                 : result.plan().failure();
     }
@@ -614,8 +631,8 @@ public final class CraftingRuntime {
             waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
             return false;
         }
-        if (!attemptCurrent(attempt)) return false;
-        if (rejected == null) return true;
+        if (!attemptIdentityCurrent(attempt)) return false;
+        if (rejected == null) return attemptCurrent(attempt);
         // Per-allocation credit already records every successful debit. Retry only unpaid credit.
         waiting(rejected, false);
         return false;
@@ -678,9 +695,11 @@ public final class CraftingRuntime {
 
     /** Prepares a pattern start without consuming resources or occupying this runtime. */
     public @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
-                                                       List<MachineCapability> requestCapabilities) {
+                                                        List<MachineCapability> requestCapabilities) {
         if (recipe == null || requestedParallelism <= 0 || active() || errorPaused() || patternStartReserved
                 || pendingPatternStart != null) return null;
+        RecipeCommitLedger preparationPayment = ledger;
+        long lifecycle = controller.lifecycleEpoch();
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         if (!recipeBelongsToMachine(recipe)
                 || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
@@ -720,8 +739,12 @@ public final class CraftingRuntime {
         List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
         PlanningResult result = planStartInputs(context(runtime, requestCapabilities), requirements, facets,
                 effectiveParallelism);
+        if (ledger != preparationPayment || lifecycle != controller.lifecycleEpoch() || active() || patternStartReserved) return null;
         CraftingPlan plan = result.plan();
-        if (!result.successful() || plan == null) return null;
+        if (!result.successful() || plan == null) {
+            restoreFailure(result.failure() == null ? missingInputStatus() : result.failure());
+            return null;
+        }
         for (RecipeEnergyPrefetchFacet facet : facets) {
             facet.onRecipeSearchStarted(this);
             facet.onRecipeSearchCandidate(this, true);
@@ -813,12 +836,20 @@ public final class CraftingRuntime {
         }
         pendingPaymentStart = prepared;
         RecipeCommitLedger payment = ledger;
-        ExecutionStatus commitFailure = commitPreparedStart(prepared);
-        if (commitFailure == null) return true;
-        if (ledger != payment) return false;
-        quarantineNativeStart(prepared, payment);
-        fail(commitFailure);
-        return false;
+        long lifecycle = controller.lifecycleEpoch();
+        try {
+            ExecutionStatus commitFailure = commitPreparedStart(prepared);
+            if (commitFailure == null) return true;
+            if (ledger != payment || lifecycle != controller.lifecycleEpoch()) return false;
+            quarantineNativeStart(prepared, payment);
+            fail(commitFailure);
+            return false;
+        } finally {
+            // External Pattern callers retain this frame independently of the runtime's current slot.
+            if (ledger != payment || lifecycle != controller.lifecycleEpoch() || pendingPaymentStart != prepared) {
+                releasePreparedPrefetches(prepared);
+            }
+        }
     }
 
     /** The caller retains this journal through notifications, even if cancellation replaces the runtime ledger. */
@@ -838,26 +869,25 @@ public final class CraftingRuntime {
             pendingPrefetchStart = null;
         }
         for (PreparedPrefetch prefetch : prepared.prefetches()) {
-            if (prefetch.committed) {
-                prefetch.facet().releaseReservation(prefetch.plan().amount());
-                prefetch.committed = false;
-            } else {
-                prefetch.facet().restoreReservation(prefetch.plan().amount());
+            if (prefetch.released || prefetch.transferred || prefetch.inFlight) continue;
+            long acquired = prefetch.confirmedAmount();
+            // An opaque throwing operation cannot authorize releasing somebody else's reservation.
+            if (acquired < 0L) continue;
+            prefetch.released = true;
+            try {
+                if (acquired > 0L && prefetch.facet().releaseReservation(acquired) != acquired) prefetch.releaseFailed = true;
+                if (acquired < prefetch.plan().amount()) prefetch.facet().restoreReservation(prefetch.plan().amount() - acquired);
+            } catch (RuntimeException exception) {
+                prefetch.releaseFailed = true;
+                MMCR.LOG.warn("Failed to release native start ownership: controller={} key={}",
+                        controller.getBlockPos(), prefetch.reservationKey(), exception);
             }
         }
     }
 
     private void releasePaidStartPrefetches(PreparedStart prepared) {
-        if (pendingPrefetchStart == null || pendingPrefetchStart.prepared() != prepared) return;
-        pendingPrefetchStart = null;
-        for (PreparedPrefetch prefetch : prepared.prefetches()) {
-            try {
-                prefetch.facet().releaseReservation(prefetch.plan().amount());
-            } catch (RuntimeException exception) {
-                MMCR.LOG.warn("Failed to release committed start energy: controller={} key={}",
-                        controller.getBlockPos(), prefetch.reservationKey(), exception);
-            }
-        }
+        if (pendingPrefetchStart != null && pendingPrefetchStart.prepared() == prepared) pendingPrefetchStart = null;
+        releasePreparedPrefetches(prepared);
     }
 
     private void discardPatternStart(PreparedStart prepared) {
@@ -932,6 +962,11 @@ public final class CraftingRuntime {
         private final RecipeEnergyPrefetchFacet facet;
         private final RecipeEnergyPrefetchFacet.PrefetchPlan plan;
         private boolean committed;
+        private boolean attempted;
+        private boolean inFlight;
+        private boolean released;
+        private boolean releaseFailed;
+        private boolean transferred;
 
         PreparedPrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet,
                          RecipeEnergyPrefetchFacet.PrefetchPlan plan) {
@@ -945,6 +980,13 @@ public final class CraftingRuntime {
         RecipeEnergyPrefetchFacet facet() { return facet; }
 
         RecipeEnergyPrefetchFacet.PrefetchPlan plan() { return plan; }
+
+        long confirmedAmount() {
+            if (released || !attempted) return 0L;
+            long amount = plan.committedAmount().getAsLong();
+            if (amount == -1L && committed) return plan.amount();
+            return amount >= 0L && amount <= plan.amount() ? amount : -1L;
+        }
     }
 
     /** Owns start reservations until activation or cancellation, independently of a replacement ledger.
@@ -956,7 +998,7 @@ public final class CraftingRuntime {
         return start(recipe, requestedParallelism, null);
     }
 
-    /** Executes the start behavior callback before a shared-IO transaction is requested. */
+    /** Executes the start behavior callback before shared-IO native admission is requested. */
     public @Nullable RecipeStartContext.ExecutionSnapshot prepareAsyncStart(MachineRecipe recipe, long requestedParallelism) {
         if (recipe == null || requestedParallelism <= 0 || active() || patternStartReserved) return null;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
@@ -1069,7 +1111,7 @@ public final class CraftingRuntime {
         } finally {
             if (pendingPaymentStart == prepared) pendingPaymentStart = null;
             if (!committed) {
-                releaseStressContributions();
+                if (payment == ledger && lifecycle == controller.lifecycleEpoch()) releaseStressContributions();
                 releasePreparedPrefetches(prepared);
             }
         }
@@ -1279,7 +1321,7 @@ public final class CraftingRuntime {
         }
     }
 
-    /** Commits worker-planned native operations inside the shared-IO arbitration transaction. */
+    /** Commits worker-planned operations under shared-IO arbitration; native prefixes are not rolled back. */
     public boolean commitAsyncTick(AsyncRequirementPlanner.PlanResult planned) {
         if (attemptExecuting) return false;
         attemptExecuting = true;
@@ -1305,7 +1347,7 @@ public final class CraftingRuntime {
         return commitAsyncTickPlan(planned, preparation.runtime());
     }
 
-    /** Runs the AFTER_INPUTS capability phase after the shared-IO transaction has committed. */
+    /** Runs AFTER_INPUTS only after native resource payment has been confirmed. */
     public boolean completeAsyncTickAfterInputs() {
         if (attemptExecuting) return false;
         attemptExecuting = true;
@@ -1496,10 +1538,13 @@ public final class CraftingRuntime {
     }
 
     private CraftingStatus completeFinish() {
+        ActiveMachineRecipe completingRecipe = activeRecipe;
+        RecipeCommitLedger payment = ledger;
         restartRecipe = activeRecipe == null ? null : activeRecipe.getRecipe();
         cancelInstalledProgram();
         if (activeRecipe != null) activeRecipe.applyTickGrant(true, true, currentGameTime());
-        releaseActivePrefetches();
+        releaseActivePrefetches(true);
+        if (activeRecipe != completingRecipe || ledger != payment) return status;
         activeRecipe = null;
         startPlan = null;
         finishPlan = null;
@@ -1513,7 +1558,7 @@ public final class CraftingRuntime {
         return status;
     }
 
-    /** Executes the finish behavior callback before a shared-IO output transaction is requested. */
+    /** Executes the finish behavior callback before shared-IO native output admission is requested. */
     public boolean prepareAsyncFinish() {
         if (finishExecuting) return false;
         if (!active() || errorPaused() || ledger.state().outputPaid() || !versionsCurrent() || !activeRecipe.isFinishPending()
@@ -1611,8 +1656,14 @@ public final class CraftingRuntime {
             result = components.executeTickPhase(new CapabilityTickContext(
                     capabilityGameTime(), phase,
                     recipeTickContext, activeRecipe.getParallelism(), new CapabilitySnapshot(components.capabilities()),
-                    recipeTickContext.machineContext()), () -> preparationCurrent(preparation), payment::beginNativeExecution);
-            if (!preparationCurrent(preparation)) return false;
+                    recipeTickContext.machineContext()), () -> preparationCurrent(preparation),
+                    () -> { if (phase == CapabilityTickPhase.BEFORE_RECIPE) payment.beginNativeExecution(); });
+            // AFTER operations never erase the already confirmed ordinary payment or granted progress.
+            if (!preparationCurrent(preparation)) {
+                if (phase == CapabilityTickPhase.BEFORE_RECIPE
+                        && payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
+                return false;
+            }
             if (result.failure() != null && payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) {
                 payment.pauseAfterCommitFailure();
             } else payment.completePrefetchDebit(admission);
@@ -1648,8 +1699,12 @@ public final class CraftingRuntime {
 
     /** Identity checks only; never substitutes for live validation across an execution boundary. */
     private boolean attemptBound(@Nullable TickAttempt attempt) {
+        return attemptIdentityCurrent(attempt) && !errorPaused();
+    }
+
+    private boolean attemptIdentityCurrent(@Nullable TickAttempt attempt) {
         return attempt != null && tickAttempt == attempt && activeRecipe == attempt.recipe() && ledger == attempt.payment()
-                && controller.lifecycleEpoch() == attempt.lifecycleEpoch() && !controller.isRemoved() && !errorPaused()
+                && controller.lifecycleEpoch() == attempt.lifecycleEpoch() && !controller.isRemoved()
                 && installedProgram == attempt.installed();
     }
 
@@ -1814,7 +1869,9 @@ public final class CraftingRuntime {
     }
 
     public boolean shouldRetryFinish() {
-        return activeRecipe != null && activeRecipe.shouldRetryFinish(currentGameTime());
+        return activeRecipe != null && !errorPaused() && !ledger.state().outputPaid()
+                && ledger.state().phase() != RecipeCommitLedger.Phase.UNCERTAIN
+                && activeRecipe.shouldRetryFinish(currentGameTime());
     }
 
     public void recordSearchFailure(@Nullable ExecutionStatus nextFailure) {
@@ -1841,15 +1898,18 @@ public final class CraftingRuntime {
     }
 
     public void invalidate() {
-        releaseStressContributions();
-        releaseStartSlot();
+        PreparedStart oldPaymentStart = pendingPaymentStart;
+        PreparedStart oldPatternStart = pendingPatternStart;
+        StressSession oldStress = stressSession;
+        // Detach the cancelled identity before any native release/owner callback can start its successor.
+        pendingPaymentStart = null;
+        pendingPatternStart = null;
+        stressSession = new StressSession();
         cancelInstalledProgram();
         ledger = new RecipeCommitLedger();
         restartRecipe = null;
         restartRule = null;
         restartProgramAuthorized = false;
-        releasePatternStart();
-        releaseActivePrefetches();
         activeRecipe = null;
         startPlan = null;
         finishPlan = null;
@@ -1861,6 +1921,20 @@ public final class CraftingRuntime {
         patternStartReserved = false;
         failure = null;
         status = CraftingStatus.IDLE;
+        try {
+            releaseStartSlot();
+        } finally {
+            try {
+                releaseActivePrefetches();
+            } finally {
+                try {
+                    if (oldPatternStart != null) releasePreparedPrefetches(oldPatternStart);
+                    if (oldPaymentStart != null && oldPaymentStart != oldPatternStart) releasePreparedPrefetches(oldPaymentStart);
+                } finally {
+                    oldStress.cancel();
+                }
+            }
+        }
     }
 
     public void invalidateForSmartInterfaceChange() {
@@ -1874,6 +1948,20 @@ public final class CraftingRuntime {
     public void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
                         long restoredStructureVersion, long restoredCapabilityVersion,
                         long restoredModifierVersion, long restoredComponentStateVersion) {
+        RecipeCommitLedger restoredPayment = new RecipeCommitLedger();
+        if (restored != null) restoredPayment.settleTick(restored.getTick(), restored.isFinishPending());
+        if (restored != null && restored.getDataCompound().getBoolean("native_start_uncertain")) {
+            restoredPayment.pauseAfterCommitFailure();
+        }
+        restore(restored, domain, restoredStructureVersion, restoredCapabilityVersion,
+                restoredModifierVersion, restoredComponentStateVersion, restoredPayment);
+        if (activeRecipe == restored && ledger == restoredPayment) publishPrefetchOwners();
+    }
+
+    private void restore(ActiveMachineRecipe restored, @Nullable StructureClaimRegistry.ResourceDomain domain,
+                         long restoredStructureVersion, long restoredCapabilityVersion,
+                         long restoredModifierVersion, long restoredComponentStateVersion,
+                         RecipeCommitLedger restoredPayment) {
         releaseStressContributions();
         if (restored == null || restored.getRecipe() == null) {
             failLoad();
@@ -1905,14 +1993,13 @@ public final class CraftingRuntime {
                 return;
             }
         }
+        ledger = restoredPayment;
         if (!restorePrefetches(restored, requirements)) {
             failLoad();
             return;
         }
         activeRecipe = restored;
         cancelInstalledProgram();
-        ledger = new RecipeCommitLedger();
-        ledger.settleTick(restored.getTick(), restored.isFinishPending());
         startPlan = null;
         finishPlan = null;
         resourceDomain = domain;
@@ -1945,7 +2032,6 @@ public final class CraftingRuntime {
         activeRecipe.setInputConsumptionPlan(new ActiveMachineRecipe.InputConsumptionPlan(consumedBatches));
         status = CraftingStatus.working();
         failure = null;
-        publishPrefetchOwners();
     }
 
     public void rebindCurrentVersions() {
@@ -2031,9 +2117,9 @@ public final class CraftingRuntime {
                 input.contains("structure_version") ? input.getLong("structure_version") : Long.MIN_VALUE,
                 input.contains("capability_version") ? input.getLong("capability_version") : Long.MIN_VALUE,
                 input.contains("modifier_version") ? input.getLong("modifier_version") : Long.MIN_VALUE,
-                input.contains("component_state_version") ? input.getLong("component_state_version") : Long.MIN_VALUE);
-        if (active()) {
-            ledger = restoredLedger;
+                input.contains("component_state_version") ? input.getLong("component_state_version") : Long.MIN_VALUE,
+                restoredLedger);
+        if (activeRecipe == loaded.recipe() && ledger == restoredLedger) {
             if (restoredUpgradeContentRevision != Long.MIN_VALUE) {
                 upgradeContentRevision = restoredUpgradeContentRevision;
             }
@@ -2041,6 +2127,7 @@ public final class CraftingRuntime {
             if (errorPaused() && failure == null) {
                 restoreFailure(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
             }
+            publishPrefetchOwners();
         }
     }
 
@@ -2068,22 +2155,30 @@ public final class CraftingRuntime {
 
     /** Only a pre-commit Create power check may retain the lane's previous input contributions. */
     private CraftingStatus waiting(@Nullable ExecutionStatus nextFailure, boolean allowInputRetention) {
+        ActiveMachineRecipe recipe = activeRecipe;
+        RecipeCommitLedger payment = ledger;
+        StressSession owner = stressSession;
         failure = nextFailure == null
                 ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
         boolean retainInput = allowInputRetention && isPowerWait(failure);
         if (asyncTickPreparation != null) asyncTickPowerWait = retainInput;
-        if (retainInput) stressSession.releaseOutputs();
-        else releaseStressContributions();
-        if (activeRecipe != null && activeRecipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
-            releaseStressContributions();
+        if (retainInput) owner.releaseOutputs();
+        else owner.releaseAll();
+        if (activeRecipe != recipe || ledger != payment) return status;
+        if (recipe != null && recipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
             cancelInstalledProgram();
-            releaseActivePrefetches();
             activeRecipe = null;
             startPlan = null;
             finishPlan = null;
             clearEffectiveRecipe();
             resourceDomain = null;
+            stressSession = new StressSession();
+            try {
+                releaseActivePrefetches();
+            } finally {
+                owner.cancel();
+            }
         }
         return status;
     }
@@ -2119,7 +2214,8 @@ public final class CraftingRuntime {
     }
 
     private CraftingStatus fail(@Nullable ExecutionStatus nextFailure) {
-        releaseStressContributions();
+        // An unpaid idle restart rejection must not revoke the completed recipe's native output grace.
+        if (active() || pendingPaymentStart != null) releaseStressContributions();
         releaseStartSlot();
         failure = nextFailure == null
                 ? failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()) : nextFailure;
@@ -2236,8 +2332,18 @@ public final class CraftingRuntime {
     private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared) {
         RecipeCommitLedger payment = ledger;
         long lifecycle = controller.lifecycleEpoch();
+        StressSession startingStress = stressSession;
+        ActiveMachineRecipe startingRecipe = new ActiveMachineRecipe(prepared.recipe().source(),
+                prepared.plan().parallelism(), prepared.effective());
+        ExecutionIdentity identity = new ExecutionIdentity(controllerIdentity, lifecycle, laneId,
+                NEXT_EXECUTION_ID.incrementAndGet());
+        SharedIoCoordinator coordinator = controller.getLevel() instanceof ServerLevel level
+                && SharedIoCoordinator.get(level).executionRoundId() != 0L ? SharedIoCoordinator.get(level) : null;
+        Runnable beforeNative = payment::beginNativeExecution;
+        boolean complete = false;
+        boolean prefetchException = false;
         pendingPrefetchStart = new PendingPrefetchStart(prepared, payment, lifecycle);
-        Set<Integer> airInputIndexes = new HashSet<>();
+        Set<Integer> airInputIndexes = new LinkedHashSet<>();
         List<MachineRequirement> requirements = prepared.effective().requirements();
         PlanningReservations reservations = new PlanningReservations();
         for (int index = 0; index < requirements.size(); index++) {
@@ -2249,14 +2355,30 @@ public final class CraftingRuntime {
             }
         }
         try {
+            // Reject a missing delivery slot before any requirement is recorded as entering native execution.
+            if (coordinator != null && !coordinator.beginExecutionAdmission(this, laneId, identity, payment, startingRecipe)) {
+                return failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RECIPE_START,
+                        Map.of("reason", "admission_slot"));
+            }
             for (PreparedPrefetch prefetch : prepared.prefetches()) {
-                payment.beginNativeExecution();
-                CapabilityResult result = prefetch.plan().operation().commit();
-                if (result == null || !result.success()) {
+                if (payment != ledger || lifecycle != controller.lifecycleEpoch() || pendingPaymentStart != prepared) return missingInputStatus();
+                beforeNative.run();
+                prefetch.attempted = true;
+                prefetch.inFlight = true;
+                CapabilityResult result;
+                try {
+                    result = prefetch.plan().operation().commit();
+                    prefetch.committed = result != null && result.success();
+                } catch (RuntimeException exception) {
+                    prefetchException = true;
+                    throw exception;
+                } finally {
+                    prefetch.inFlight = false;
+                }
+                if (result == null || !result.success() || prefetch.confirmedAmount() != prefetch.plan().amount()) {
                     payment.pauseAfterCommitFailure();
                     return result == null || result.status() == null ? missingInputStatus() : result.status();
                 }
-                prefetch.committed = true;
                 if (payment != ledger || lifecycle != controller.lifecycleEpoch()) return missingInputStatus();
             }
             // Recheck live Air after prefetch callbacks, before any ordinary startup input.
@@ -2266,28 +2388,53 @@ public final class CraftingRuntime {
                         components.capabilities(), new PlanningContext(prepared.plan().parallelism(), index, false, reservations));
                 if (!result.success()) return result.status();
             }
-            if (!prepared.plan().commitInputsRuntime(airInputIndexes, payment::beginNativeExecution,
+            if (!prepared.plan().commitInputsRuntime(airInputIndexes, beforeNative,
                     () -> payment == ledger && lifecycle == controller.lifecycleEpoch()
                             && pendingPaymentStart == prepared)) {
                 if (payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
                 return prepared.plan().failure() == null ? missingInputStatus() : prepared.plan().failure();
             }
             payment.markResourcePaid(0, false);
-            ExecutionIdentity identity = new ExecutionIdentity(controllerIdentity, lifecycle, laneId,
-                    NEXT_EXECUTION_ID.incrementAndGet());
-            acceptedRecipe = new ActiveMachineRecipe(prepared.recipe().source(), prepared.plan().parallelism(), prepared.effective());
-            if (controller.getLevel() instanceof ServerLevel level && SharedIoCoordinator.get(level).executionRoundId() != 0L
-                    && !SharedIoCoordinator.get(level).acceptExecution(this, laneId, identity, payment, acceptedRecipe)) {
+            acceptedRecipe = startingRecipe;
+            if (coordinator != null && !coordinator.acceptExecution(this, laneId, identity, payment, startingRecipe)) {
                 payment.pauseAfterCommitFailure();
                 return missingInputStatus();
             }
+            complete = true;
             return null;
         } catch (RuntimeException exception) {
             payment.pauseAfterCommitFailure();
             throw exception;
         } finally {
-            if (payment.state().phase() != RecipeCommitLedger.Phase.RESOURCE_PAID) releaseStressContributions();
+            try {
+                if (!complete && !prefetchException && payment.state().paidAttempts() == 0L
+                        && payment == ledger && lifecycle == controller.lifecycleEpoch()
+                        && pendingPaymentStart == prepared && !hasOrdinaryNativeEffects(prepared.plan(), requirements)
+                        && prepared.prefetches().stream().allMatch(prefetch -> !prefetch.inFlight
+                                && !prefetch.transferred && prefetch.confirmedAmount() >= 0L)) {
+                    // These are known owner-scoped holds, not an irreversible ordinary resource prefix.
+                    startingStress.releaseAll();
+                    releasePreparedPrefetches(prepared);
+                    if (prepared.prefetches().stream().noneMatch(prefetch -> prefetch.releaseFailed)) {
+                        payment.settleReleasedStart();
+                    }
+                } else if (payment == ledger && lifecycle == controller.lifecycleEpoch()
+                        && payment.state().phase() != RecipeCommitLedger.Phase.RESOURCE_PAID) startingStress.releaseAll();
+            } finally {
+                if (coordinator != null) coordinator.endExecutionAdmission(identity);
+            }
         }
+    }
+
+    private static boolean hasOrdinaryNativeEffects(CraftingPlan plan, List<MachineRequirement> requirements) {
+        for (var requirementPlan : plan.requirements()) {
+            int index = requirementPlan.requirementIndex();
+            if (!plan.wasNativeExecuted(index)) continue;
+            if (index < 0 || index >= requirements.size()
+                    || !(requirements.get(index) instanceof StressRequirement stress)
+                    || !(RequirementHandlerRegistry.handlerFor(stress.type()) instanceof StressRequirementHandler)) return true;
+        }
+        return false;
     }
 
     private void quarantineNativeStart(PreparedStart prepared, RecipeCommitLedger payment) {
@@ -2301,6 +2448,8 @@ public final class CraftingRuntime {
         captureVersions(prepared.runtime());
         activeRecipe.getDataCompound().putBoolean("native_start_uncertain", true);
         presentationEpoch++;
+        if (pendingPrefetchStart != null && pendingPrefetchStart.prepared() == prepared) pendingPrefetchStart = null;
+        activatePrefetches(prepared.prefetches(), effectiveRequirements, prepared.plan().parallelism());
     }
 
     private boolean reserveStartSlot() {
@@ -2337,20 +2486,30 @@ public final class CraftingRuntime {
         }
         saved.setInputConsumptionPlan(new ActiveMachineRecipe.InputConsumptionPlan(consumed));
         if (ledger.state().phase() != RecipeCommitLedger.Phase.RESOURCE_PAID) saved.getDataCompound().putBoolean("native_start_uncertain", true);
-        if (!prepared.prefetches().isEmpty() && ledger.state().phase() == RecipeCommitLedger.Phase.RESOURCE_PAID) {
-            Map<String, Long> allocations = new LinkedHashMap<>();
+        if (!prepared.prefetches().isEmpty()) {
+            Map<String, StoredPrefetch> allocations = new LinkedHashMap<>();
             for (PreparedPrefetch prefetch : prepared.prefetches()) {
-                allocations.merge(prefetch.reservationKey(), prefetch.plan().amount(), SaturatingLong::add);
+                if (!prefetch.attempted || prefetch.released) continue;
+                long confirmed = prefetch.confirmedAmount();
+                if (confirmed == 0L) continue;
+                long amount = Math.max(0L, confirmed);
+                long uncertain = confirmed < 0L ? prefetch.plan().amount() : 0L;
+                StoredPrefetch old = allocations.get(prefetch.reservationKey());
+                allocations.put(prefetch.reservationKey(), new StoredPrefetch(prefetch.reservationKey(),
+                        Math.addExact(old == null ? 0L : old.amount(), amount),
+                        Math.addExact(old == null ? 0L : old.batchAmount(), prefetch.plan().amount()),
+                        Math.addExact(old == null ? 0L : old.uncertainAmount(), uncertain)));
             }
             ListTag tags = new ListTag();
-            allocations.forEach((key, amount) -> {
+            allocations.forEach((key, allocation) -> {
                 CompoundTag tag = new CompoundTag();
                 tag.putString(PREFETCH_ALLOCATION_KEY, key);
-                tag.putLong(PREFETCH_ALLOCATION_AMOUNT, amount);
-                tag.putLong(PREFETCH_BATCH_AMOUNT, amount);
+                tag.putLong(PREFETCH_ALLOCATION_AMOUNT, allocation.amount());
+                tag.putLong(PREFETCH_BATCH_AMOUNT, allocation.batchAmount());
+                if (allocation.uncertainAmount() > 0L) tag.putLong(PREFETCH_UNCERTAIN_AMOUNT, allocation.uncertainAmount());
                 tags.add(tag);
             });
-            saved.getDataCompound().put(PREFETCH_ALLOCATIONS_KEY, tags);
+            if (!tags.isEmpty()) saved.getDataCompound().put(PREFETCH_ALLOCATIONS_KEY, tags);
         }
         output.putBoolean("active", true);
         ledger.save(output);
@@ -2374,11 +2533,17 @@ public final class CraftingRuntime {
                                     long parallelism) {
         Map<String, ActivePrefetch> allocations = new LinkedHashMap<>();
         for (PreparedPrefetch prefetch : prefetches) {
+            if (!prefetch.attempted || prefetch.released || prefetch.transferred) continue;
+            long confirmed = prefetch.confirmedAmount();
+            if (confirmed == 0L) continue;
+            long amount = Math.max(0L, confirmed);
+            long uncertain = confirmed < 0L ? prefetch.plan().amount() : 0L;
             ActivePrefetch existing = allocations.get(prefetch.reservationKey());
-            long remaining = existing == null ? prefetch.plan().amount()
-                    : Math.addExact(existing.remaining(), prefetch.plan().amount());
+            long remaining = Math.addExact(existing == null ? 0L : existing.remaining(), amount);
+            long batch = Math.addExact(existing == null ? 0L : existing.batchAmount(), prefetch.plan().amount());
             allocations.put(prefetch.reservationKey(), new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(),
-                    remaining, remaining));
+                    remaining, batch, Math.addExact(existing == null ? 0L : existing.uncertainAmount(), uncertain)));
+            prefetch.transferred = true;
         }
         activePrefetches = List.copyOf(allocations.values());
         prefetchedEnergyPerTick = prefetchedEnergyPerTick(requirements, parallelism);
@@ -2390,18 +2555,24 @@ public final class CraftingRuntime {
     }
 
     private void publishPrefetchOwners() {
+        ActiveMachineRecipe recipe = activeRecipe;
+        RecipeCommitLedger payment = ledger;
+        List<ActivePrefetch> owned = activePrefetches;
         Map<String, Long> remainingByKey = new LinkedHashMap<>();
         Set<RecipeEnergyPrefetchFacet> facets = new LinkedHashSet<>(prefetchFacets(List.of()));
-        for (ActivePrefetch prefetch : activePrefetches) {
+        for (ActivePrefetch prefetch : owned) {
             remainingByKey.put(prefetch.reservationKey(), prefetch.remaining());
             facets.add(prefetch.facet());
         }
         for (RecipeEnergyPrefetchFacet facet : facets) {
-            facet.onRecipeReservationChanged(this, remainingByKey.getOrDefault(facet.reservationKey(), 0L), this::invalidate);
-            long nextBatch = activePrefetches.stream()
+            if (activeRecipe != recipe || ledger != payment || activePrefetches != owned) return;
+            facet.onRecipeReservationChanged(this, remainingByKey.getOrDefault(facet.reservationKey(), 0L),
+                    () -> { if (activeRecipe == recipe && ledger == payment) invalidate(); });
+            if (activeRecipe != recipe || ledger != payment || activePrefetches != owned) return;
+            long nextBatch = owned.stream()
                     .filter(prefetch -> prefetch.reservationKey().equals(facet.reservationKey()))
                     .mapToLong(ActivePrefetch::batchAmount).findFirst().orElse(0L);
-            facet.onRecipeContinuationRequested(this, nextBatch);
+            facet.onRecipeContinuationRequested(this, errorPaused() ? 0L : nextBatch);
         }
     }
 
@@ -2419,6 +2590,8 @@ public final class CraftingRuntime {
         prefetchedEnergyTickConsumed = 0L;
         prefetchedEnergyConsumedTick = -1;
         CompoundTag data = restored.getDataCompound();
+        boolean partialStart = data.getBoolean("native_start_uncertain");
+        if (partialStart && (!errorPaused() || restored.getTick() != 0 || restored.isFinishPending())) return false;
         if (!data.contains(PREFETCH_ALLOCATIONS_KEY)) {
             return !data.getBoolean(PREFETCH_RESERVATION_KEY);
         }
@@ -2436,7 +2609,11 @@ public final class CraftingRuntime {
             long batchAmount = allocation.contains(PREFETCH_BATCH_AMOUNT)
                     ? allocation.getLong(PREFETCH_BATCH_AMOUNT) : -1L;
             if (allocation.contains(PREFETCH_BATCH_AMOUNT) && batchAmount < amount) return false;
-            allocations.add(new StoredPrefetch(reservationKey, amount, batchAmount));
+            long uncertain = allocation.contains(PREFETCH_UNCERTAIN_AMOUNT)
+                    ? allocation.getLong(PREFETCH_UNCERTAIN_AMOUNT) : 0L;
+            if (uncertain < 0L || uncertain > 0L && !partialStart
+                    || uncertain > 0L && (batchAmount < 0L || uncertain > batchAmount - amount)) return false;
+            allocations.add(new StoredPrefetch(reservationKey, amount, batchAmount, uncertain));
         }
         if (allocations.isEmpty()) return false;
 
@@ -2470,7 +2647,7 @@ public final class CraftingRuntime {
                 return false;
             }
         }
-        if (allocationTotal != remaining) return false;
+        if (partialStart ? allocationTotal > remaining : allocationTotal != remaining) return false;
         long batchTotal = 0L;
         boolean legacy = false;
         try {
@@ -2482,7 +2659,7 @@ public final class CraftingRuntime {
         } catch (ArithmeticException exception) {
             return false;
         }
-        if (batchTotal > total || !legacy && batchTotal != total) return false;
+        if (batchTotal > total || !partialStart && !legacy && batchTotal != total) return false;
         long unassigned = total - batchTotal;
         try {
             for (StoredPrefetch allocation : allocations) {
@@ -2494,7 +2671,7 @@ public final class CraftingRuntime {
                     unassigned = 0L;
                 }
                 ActivePrefetch restoredPrefetch = new ActivePrefetch(allocation.reservationKey(), facet,
-                        allocation.amount(), batchAmount);
+                        allocation.amount(), batchAmount, allocation.uncertainAmount());
                 restoredPrefetches.add(restoredPrefetch);
                 if (allocation.amount() > 0L) facet.restoreReservation(allocation.amount());
             }
@@ -2523,6 +2700,7 @@ public final class CraftingRuntime {
             allocation.putString(PREFETCH_ALLOCATION_KEY, prefetch.reservationKey());
             allocation.putLong(PREFETCH_ALLOCATION_AMOUNT, prefetch.remaining());
             allocation.putLong(PREFETCH_BATCH_AMOUNT, prefetch.batchAmount());
+            if (prefetch.uncertainAmount() > 0L) allocation.putLong(PREFETCH_UNCERTAIN_AMOUNT, prefetch.uncertainAmount());
             allocations.add(allocation);
         }
         data.put(PREFETCH_ALLOCATIONS_KEY, allocations);
@@ -2554,21 +2732,25 @@ public final class CraftingRuntime {
     }
 
     private @Nullable ExecutionStatus consumePrefetchedEnergy() {
-        if (prefetchedEnergyConsumedTick != activeRecipe.getTick()) {
-            prefetchedEnergyConsumedTick = activeRecipe.getTick();
+        ActiveMachineRecipe consumingRecipe = activeRecipe;
+        RecipeCommitLedger payment = ledger;
+        TickAttempt attempt = tickAttempt;
+        long lifecycle = controller.lifecycleEpoch();
+        List<ActivePrefetch> owned = activePrefetches;
+        if (prefetchedEnergyConsumedTick != consumingRecipe.getTick()) {
+            prefetchedEnergyConsumedTick = consumingRecipe.getTick();
             prefetchedEnergyTickConsumed = 0L;
         }
         long remaining = Math.min(prefetchedEnergyPerTick - prefetchedEnergyTickConsumed, prefetchedEnergyRemaining);
         if (remaining <= 0L) return null;
-        List<ActivePrefetch> updated = new ArrayList<>(activePrefetches);
+        List<ActivePrefetch> updated = new ArrayList<>(owned);
         for (int index = 0; index < updated.size() && remaining > 0L; index++) {
+            if (!prefetchConsumptionCurrent(consumingRecipe, payment, attempt, lifecycle, owned)) return missingInputStatus();
             ActivePrefetch prefetch = updated.get(index);
             long consumed = Math.min(remaining, prefetch.remaining());
             if (consumed <= 0L) continue;
             CapabilityResult result;
-            RecipeCommitLedger payment = ledger;
             RecipeCommitLedger.State admission = payment.state();
-            ActiveMachineRecipe consumingRecipe = activeRecipe;
             LongValueStorage observed = prefetch.facet() instanceof MachineCapability capability
                     ? CapabilityFactories.valueStorage(capability, LongValueStorage.class) : null;
             long beforeAmount = observed == null ? 0L : observed.amount();
@@ -2576,11 +2758,14 @@ public final class CraftingRuntime {
             try {
                 result = prefetch.facet().consumeReservation(consumed);
             } catch (RuntimeException exception) {
-                payment.pauseAfterCommitFailure();
                 logTickFailure("prefetch_consume", controller.currentRuntimeSnapshot(), consumingRecipe.getRecipe(), exception);
-                return failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of());
+                // Use the same actual local-debit observation as a negative result. Unknown outcomes remain paused.
+                result = CapabilityResult.failure(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
             }
-            if (activeRecipe != consumingRecipe || ledger != payment) return missingInputStatus();
+            if (!prefetchConsumptionCurrent(consumingRecipe, payment, attempt, lifecycle, owned)) {
+                if (payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
+                return missingInputStatus();
+            }
             if (result == null || !result.success()) {
                 // A negative result is not a rollback. An observable completed debit still owns tick credit.
                 long moved = observed == null ? -1L : beforeAmount - observed.amount();
@@ -2591,12 +2776,15 @@ public final class CraftingRuntime {
                         updated.set(index, new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(),
                                 prefetch.remaining() - moved, prefetch.batchAmount()));
                         activePrefetches = List.copyOf(updated);
+                        owned = activePrefetches;
                         prefetchedEnergyRemaining -= moved;
                         prefetchedEnergyTickConsumed += moved;
                     }
                     payment.completePrefetchDebit(admission);
                     if (moved > 0L) prefetch.facet().onRecipeReservationChanged(this,
-                            prefetch.remaining() - moved, this::invalidate);
+                            prefetch.remaining() - moved,
+                            () -> { if (activeRecipe == consumingRecipe && ledger == payment) invalidate(); });
+                    if (!prefetchConsumptionCurrent(consumingRecipe, payment, attempt, lifecycle, owned)) return missingInputStatus();
                 }
                 return result == null || result.status() == null
                         ? failure(BuiltinFailureReasons.MISSING_INPUT, FailurePhase.PER_TICK, Map.of()) : result.status();
@@ -2605,14 +2793,25 @@ public final class CraftingRuntime {
                     prefetch.remaining() - consumed, prefetch.batchAmount()));
             // Publish each successful debit before visiting the next allocation, which may fail.
             activePrefetches = List.copyOf(updated);
+            owned = activePrefetches;
             prefetchedEnergyRemaining -= consumed;
             prefetchedEnergyTickConsumed += consumed;
             payment.completePrefetchDebit(admission);
-            prefetch.facet().onRecipeReservationChanged(this, prefetch.remaining() - consumed, this::invalidate);
+            prefetch.facet().onRecipeReservationChanged(this, prefetch.remaining() - consumed,
+                    () -> { if (activeRecipe == consumingRecipe && ledger == payment) invalidate(); });
+            if (!prefetchConsumptionCurrent(consumingRecipe, payment, attempt, lifecycle, owned)) return missingInputStatus();
             remaining -= consumed;
         }
         if (remaining > 0L) return missingInputStatus();
         return null;
+    }
+
+    private boolean prefetchConsumptionCurrent(ActiveMachineRecipe recipe, RecipeCommitLedger payment,
+                                               @Nullable TickAttempt attempt, long lifecycle,
+                                               List<ActivePrefetch> owned) {
+        return activeRecipe == recipe && ledger == payment && activePrefetches == owned
+                && controller.lifecycleEpoch() == lifecycle && !controller.isRemoved()
+                && (attempt == null || attemptCurrent(attempt));
     }
 
     private void releaseActivePrefetches() {
@@ -2620,17 +2819,31 @@ public final class CraftingRuntime {
     }
 
     private void releaseActivePrefetches(boolean keepContinuation) {
-        if (!keepContinuation) stopEnergyPrefetch();
         List<ActivePrefetch> prefetches = activePrefetches;
+        ActiveMachineRecipe recipe = activeRecipe;
+        RecipeCommitLedger payment = ledger;
+        Set<RecipeEnergyPrefetchFacet> facets = new LinkedHashSet<>(prefetchFacets(List.of()));
+        for (ActivePrefetch prefetch : prefetches) facets.add(prefetch.facet());
         activePrefetches = List.of();
         prefetchedEnergyPerTick = 0L;
         prefetchedEnergyRemaining = 0L;
         prefetchedEnergyTickConsumed = 0L;
         prefetchedEnergyConsumedTick = -1;
+        if (!keepContinuation) for (RecipeEnergyPrefetchFacet facet : facets) {
+            if (activeRecipe != recipe || ledger != payment) break;
+            try {
+                facet.onRecipeContinuationRequested(this, 0L);
+            } catch (RuntimeException exception) {
+                MMCR.LOG.warn("Failed to withdraw recipe continuation: controller={}", controller.getBlockPos(), exception);
+            }
+        }
         for (ActivePrefetch prefetch : prefetches) {
             try {
                 if (prefetch.remaining() > 0L) prefetch.facet().releaseReservation(prefetch.remaining());
-                prefetch.facet().onRecipeReservationChanged(this, 0L, this::invalidate);
+                if (activeRecipe == recipe && ledger == payment) {
+                    prefetch.facet().onRecipeReservationChanged(this, 0L,
+                            () -> { if (activeRecipe == recipe && ledger == payment) invalidate(); });
+                }
             } catch (RuntimeException exception) {
                 MMCR.LOG.warn("Failed to release prefetched recipe energy: controller={} key={}",
                         controller.getBlockPos(), prefetch.reservationKey(), exception);
@@ -2661,26 +2874,50 @@ public final class CraftingRuntime {
         RecipeCommitLedger payment = ledger;
         ActiveMachineRecipe recipe = activeRecipe;
         if (!consumePaidPrefetch(payment)) return false;
+        RecipeCommitLedger.State admission = payment.state();
+        StressSession owner = stressSession;
+        List<MachineRequirement> originalRequirements = effectiveRequirements;
         try {
             if (!plan.commitRuntime(payment::beginNativeExecution, () -> attemptCurrent(attempt))) {
-                if (payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
-                if (ledger == payment) waiting(plan.failure(), false);
+                if (!settleStressOnlyFailure(plan, originalRequirements, payment, admission, owner)
+                        && payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
+                if (attemptIdentityCurrent(attempt)) waiting(plan.failure(), false);
                 return false;
             }
             if (!attemptCurrent(attempt)) return false;
+            if (!hasOrdinaryNativeEffects(plan, originalRequirements)) payment.completePrefetchDebit(admission);
             if (!commitStressOutputs(controller.executionRuntimeSnapshot())) {
-                payment.pauseAfterCommitFailure();
+                if (!settleStressOnlyFailure(plan, originalRequirements, payment, admission, owner)) payment.pauseAfterCommitFailure();
                 return false;
             }
             payment.markResourcePaid(recipe.getTick(), recipe.needsFinishCommit());
             return attemptCurrent(attempt);
         } catch (RuntimeException exception) {
-            pausePaymentFailure(payment, -1L, exception);
+            if (settleStressOnlyFailure(plan, originalRequirements, payment, admission, owner)) {
+                logTickFailure("stress_input_commit", controller.executionRuntimeSnapshot(), recipe.getRecipe(), exception);
+                if (attemptIdentityCurrent(attempt)) waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
+            } else pausePaymentFailure(payment, -1L, exception);
             return false;
         }
     }
 
+    private boolean settleStressOnlyFailure(CraftingPlan plan, List<MachineRequirement> requirements, RecipeCommitLedger payment,
+                                            RecipeCommitLedger.State admission, StressSession owner) {
+        if (hasOrdinaryNativeEffects(plan, requirements)) return false;
+        owner.releaseAll();
+        payment.completePrefetchDebit(admission);
+        return payment.state().phase() == admission.phase();
+    }
+
     private boolean commitStressOutputs(ControllerRuntimeSnapshot runtime) {
+        TickAttempt attempt = tickAttempt;
+        RecipeCommitLedger payment = ledger;
+        ActiveMachineRecipe recipe = activeRecipe;
+        if (!attemptCurrent(attempt)) return false;
+        StressSession owner = stressSession;
+        RecipeCommitLedger.State admission = payment.state();
+        List<MachineRequirement> originalRequirements = effectiveRequirements;
+        CraftingPlan plan = null;
         List<MachineRequirement> source = perTickRequirements();
         List<MachineRequirement> outputs = new ArrayList<>();
         List<Integer> indexes = new ArrayList<>();
@@ -2691,22 +2928,30 @@ public final class CraftingRuntime {
         }
         if (outputs.isEmpty()) return true;
         try {
-            PlanningResult result = context(runtime).planFixedRequirements(outputs, activeRecipe.getParallelism(),
+            PlanningResult result = context(runtime).planFixedRequirements(outputs, recipe.getParallelism(),
                     Map.of(), indexes);
-            CraftingPlan plan = result.plan();
-            if (!result.successful() || plan == null || plan.parallelism() < activeRecipe.getParallelism()) {
+            if (!attemptCurrent(attempt)) return false;
+            plan = result.plan();
+            if (!result.successful() || plan == null || plan.parallelism() < recipe.getParallelism()) {
                 waiting(result.failure(), false);
                 return false;
             }
-            if (!plan.commitRuntime(ledger::beginNativeExecution, () -> attemptCurrent(tickAttempt))) {
-                ledger.pauseAfterCommitFailure();
-                waiting(plan.failure(), false);
+            if (!plan.commitRuntime(payment::beginNativeExecution, () -> attemptCurrent(attempt))) {
+                if (!settleStressOnlyFailure(plan, originalRequirements, payment, admission, owner)) payment.pauseAfterCommitFailure();
+                if (activeRecipe == recipe && ledger == payment && tickAttempt == attempt
+                        && controller.lifecycleEpoch() == attempt.lifecycleEpoch()) waiting(plan.failure(), false);
                 return false;
             }
-            return true;
+            payment.completePrefetchDebit(admission);
+            return attemptCurrent(attempt);
         } catch (RuntimeException exception) {
-            logTickFailure("stress_output_commit", runtime, activeRecipe.getRecipe(), exception);
-            waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
+            if ((plan == null || !settleStressOnlyFailure(plan, originalRequirements, payment, admission, owner))
+                    && payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
+            logTickFailure("stress_output_commit", runtime, recipe.getRecipe(), exception);
+            if (activeRecipe == recipe && ledger == payment && tickAttempt == attempt
+                    && controller.lifecycleEpoch() == attempt.lifecycleEpoch()) {
+                waiting(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()), false);
+            }
             return false;
         }
     }
@@ -2751,7 +2996,7 @@ public final class CraftingRuntime {
                 }
             }
             if (!commitStressOutputs(runtime)) {
-                payment.pauseAfterCommitFailure();
+                if (payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
                 return false;
             }
             if (!attemptCurrent(attempt)) return false;
@@ -3012,10 +3257,14 @@ public final class CraftingRuntime {
     private record TickAttempt(ActiveMachineRecipe recipe, RecipeCommitLedger payment,
                                @Nullable InstalledRecipeProgram installed, long lifecycleEpoch) { }
 
-    private record StoredPrefetch(String reservationKey, long amount, long batchAmount) {
+    private record StoredPrefetch(String reservationKey, long amount, long batchAmount, long uncertainAmount) {
     }
 
-    private record ActivePrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet, long remaining, long batchAmount) {
+    private record ActivePrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet, long remaining,
+                                  long batchAmount, long uncertainAmount) {
+        private ActivePrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet, long remaining, long batchAmount) {
+            this(reservationKey, facet, remaining, batchAmount, 0L);
+        }
     }
 
     private static String failureUnloc(ExecutionStatus status) {

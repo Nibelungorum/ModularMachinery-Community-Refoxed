@@ -188,13 +188,13 @@ class ControllerStateSyncTest {
                 null, CraftingStatus.working(), null, true, 1, 20, 3L, 8L, Map.of());
         CompoundTag first = new CompoundTag();
         MachineControllerDataProvider.INSTANCE.appendServerData(first, accessor);
-        assertThat(first.getInt("tick")).contains(1);
-        assertThat(first.getInt("totalTick")).contains(20);
-        assertThat(first.getLong("parallelism")).contains(3L);
+        assertThat(first.getInt("tick")).isEqualTo(1);
+        assertThat(first.getInt("totalTick")).isEqualTo(20);
+        assertThat(first.getLong("parallelism")).isEqualTo(3L);
         controller.applyClientProgress("mmcr:recipe", 7, 20);
         CompoundTag later = new CompoundTag();
         MachineControllerDataProvider.INSTANCE.appendServerData(later, accessor);
-        assertThat(later.getInt("tick")).contains(7);
+        assertThat(later.getInt("tick")).isEqualTo(7);
         assertThat(later.getInt("totalTick")).isEqualTo(first.getInt("totalTick"));
         assertThat(later.getLong("parallelism")).isEqualTo(first.getLong("parallelism"));
     }

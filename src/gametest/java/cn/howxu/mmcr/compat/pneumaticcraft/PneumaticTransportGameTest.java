@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.compat.pneumaticcraft.PneumaticAirFacet;
 import cn.howxu.mmcr.compat.pneumaticcraft.loaded.AirPortBlockEntity;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
 import io.netty.buffer.Unpooled;
@@ -157,6 +158,7 @@ public final class PneumaticTransportGameTest {
                                 "Sync scenario includes true external overpressure at the changed effective volume");
                     }
                     current.observeAirChanges();
+                    IOPortBlockEntity.flushStorageChanges(helper.getLevel());
                     observer.flush();
                     helper.assertTrue(observer.updates(current.getBlockPos()).size() == 1,
                             "Actual observer sends a vanilla BE packet for a signed native air change");
@@ -187,6 +189,7 @@ public final class PneumaticTransportGameTest {
                     observer.clear();
                     current.airHandler().setBaseVolume(current.airHandler().getVolume() + 3_000);
                     current.observeAirChanges();
+                    IOPortBlockEntity.flushStorageChanges(helper.getLevel());
                     observer.flush();
                     helper.assertTrue(observer.updates(current.getBlockPos()).size() == 1,
                             "Volume-only observation actually sends a vanilla packet without air or menu changes");
@@ -196,6 +199,7 @@ public final class PneumaticTransportGameTest {
                             "Volume-only receive preserves signed air and updates derived pressure and capacity");
                     observer.clear();
                     current.observeAirChanges();
+                    IOPortBlockEntity.flushStorageChanges(helper.getLevel());
                     observer.flush();
                     helper.assertTrue(observer.updates(current.getBlockPos()).isEmpty(), "Unchanged observations send no duplicate packet");
 
@@ -210,9 +214,11 @@ public final class PneumaticTransportGameTest {
                             "Legitimate server persistence restores signed extrema and effective volume without sync guards or clamping");
                     assertFailure(helper, stale.validate(0L, io == IOType.OUTPUT, 0F), AirFailureReasons.UNAVAILABLE);
                     assertSharedViews(helper, current);
+                    IOPortBlockEntity.flushStorageChanges(helper.getLevel());
                     observer.flush();
                     observer.clear();
                     current.observeAirChanges();
+                    IOPortBlockEntity.flushStorageChanges(helper.getLevel());
                     observer.flush();
                     helper.assertTrue(observer.updates(current.getBlockPos()).isEmpty(), "Disk loading establishes a baseline without sync sends");
                 }
@@ -326,9 +332,11 @@ public final class PneumaticTransportGameTest {
         helper.assertTrue(controller.wakeups.isEmpty(), "Loaded baselines do not publish availability events");
         air(helper, input, Direction.EAST).addAir(10_000);
         tickNative(helper, input);
+        input.linkControllerAppearance(controller.getBlockPos(), null);
         assertWakeup(helper, controller, input, ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE);
         input.observeAirChanges();
         tickNative(helper, input);
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
         helper.assertTrue(controller.wakeups.size() == 1, "Observation and a second unchanged native tick do not duplicate wakeups");
 
         controller.wakeups.clear();
@@ -343,6 +351,7 @@ public final class PneumaticTransportGameTest {
         controller.wakeups.clear();
         air(helper, output, Direction.WEST).addAir(-1_000);
         tickNative(helper, output);
+        output.linkControllerAppearance(controller.getBlockPos(), null);
         assertWakeup(helper, controller, output, ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY);
         controller.wakeups.clear();
         output.linkControllerAppearance(controller.getBlockPos(), null);
@@ -356,11 +365,13 @@ public final class PneumaticTransportGameTest {
         controller.wakeups.clear();
         try (var observer = trackingObserver(helper, output.getBlockPos())) {
             helper.assertTrue(output.airCapability().apply(1_000L, true, 0F).success(), "Recipe mutation uses the same observation baseline");
+            IOPortBlockEntity.flushStorageChanges(helper.getLevel());
             observer.flush();
             helper.assertTrue(observer.updates(output.getBlockPos()).size() == 1,
                     "Successful recipe mutation actually dispatches the same vanilla tracking-client update");
             observer.clear();
             output.observeAirChanges();
+            IOPortBlockEntity.flushStorageChanges(helper.getLevel());
             observer.flush();
             helper.assertTrue(observer.updates(output.getBlockPos()).isEmpty(), "Recipe apply and follow-up observation do not double-send");
             helper.assertTrue(controller.wakeups.isEmpty(), "Filling output reduces space and does not emit capacity wakeups");
@@ -369,6 +380,7 @@ public final class PneumaticTransportGameTest {
         var saved = output.saveWithoutMetadata(helper.getLevel().registryAccess());
         output.loadWithComponents(saved, helper.getLevel().registryAccess());
         output.observeAirChanges();
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
         helper.assertTrue(controller.wakeups.isEmpty(), "Loading signed air establishes a baseline without publishing wakeups");
         helper.succeed();
     }
@@ -444,6 +456,7 @@ public final class PneumaticTransportGameTest {
 
     private static void assertWakeup(GameTestHelper helper, RecordingController controller,
                                      AirPortBlockEntity port, ResourceAvailabilityNotifier.Reason reason) {
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
         helper.assertTrue(controller.wakeups.size() == 1 && controller.wakeups.getFirst().reason() == reason
                         && PneumaticIds.AIR.equals(controller.wakeups.getFirst().resource())
                         && port.getBlockPos().equals(controller.wakeups.getFirst().sourcePos()),

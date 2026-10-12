@@ -2,9 +2,11 @@ package cn.howxu.mmcr.api.capability.facet;
 
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 
 /**
  * Provides an optional prefetch reservation for recipe energy inputs.
@@ -85,16 +87,38 @@ public interface RecipeEnergyPrefetchFacet extends CapabilityFacet {
     default void onPatternPrefetchCancelled() { }
 
     /**
-     * A positive prefetched amount and its transaction-aware operation.
+     * A positive prefetched amount and its native operation. The optional ownership observation
+     * reports this plan's acquired reservation, before external notifications; -1 means unknown.
      *
      * @param amount prefetched amount
      * @param operation operation that applies the prefetch
      * @author howxu <dev@howxu.cn>
      */
     record PrefetchPlan(long amount, CapabilityOperation operation) {
+        /** Attaches a read-only per-plan proof without changing the original record components. */
+        public PrefetchPlan(long amount, CapabilityOperation operation, LongSupplier committedAmount) {
+            this(amount, new OwnershipOperation(operation, committedAmount));
+        }
+
         public PrefetchPlan {
             if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
             Objects.requireNonNull(operation, "operation");
+        }
+
+        public LongSupplier committedAmount() {
+            return operation instanceof OwnershipOperation owned ? owned.proof() : () -> -1L;
+        }
+
+        /** Delegates the real native command; the proof has no write or rollback authority.
+         * @author howxu <dev@howxu.cn>
+         */
+        private record OwnershipOperation(CapabilityOperation delegate, LongSupplier proof) implements NativeCapabilityOperation {
+            private OwnershipOperation {
+                Objects.requireNonNull(delegate, "operation");
+                Objects.requireNonNull(proof, "committedAmount");
+            }
+
+            @Override public CapabilityResult commit() { return delegate.commit(); }
         }
     }
 }

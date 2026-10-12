@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -783,6 +784,9 @@ class FluxNetworksRuntimeLifecycleTest {
         @Override public CapabilityDirections directions() { return point.capability().directions(); }
         @Override public CapabilityView view() { return point.capability().view(); }
         @Override public CapabilityOperation prepare(CapabilityRequest request) { return point.capability().prepare(request); }
+        @Override public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) {
+            return type == RecipeEnergyPrefetchFacet.class ? Optional.of(type.cast(this)) : point.capability().facet(type);
+        }
         @Override public String reservationKey() { return point.capability().reservationKey(); }
         @Override public Optional<PrefetchPlan> planPrefetch(long requested) {
             return point.capability().planPrefetch(Math.min(requested, point.handler().availableForPrefetch()));

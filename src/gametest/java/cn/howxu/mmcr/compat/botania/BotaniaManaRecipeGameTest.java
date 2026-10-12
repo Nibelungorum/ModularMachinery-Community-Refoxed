@@ -28,6 +28,7 @@ import cn.howxu.mmcr.internal.recipe.EffectiveRecipeSet;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
@@ -138,7 +139,12 @@ public final class BotaniaManaRecipeGameTest {
             fixture.firstInput().tickMana();
             helper.assertTrue(fixture.inputAmount() == 300, "Pool ticker transfers the tablet mana into real storage");
             helper.assertTrue(mana(tablet) == 0, "Pool ticker drains the native tablet exactly once");
-            helper.assertTrue(lane.canSearch(searchTime, key), "Real input change emits INPUT_AVAILABLE immediately");
+            IOPortBlockEntity.flushStorageChanges(helper.getLevel());
+            helper.assertTrue(lane.canSearch(searchTime, key), "Flushed real input change emits matching INPUT_AVAILABLE");
+            long epoch = fixture.controller().resourceAvailabilityEpoch();
+            IOPortBlockEntity.flushStorageChanges(helper.getLevel());
+            helper.assertTrue(fixture.controller().resourceAvailabilityEpoch() == epoch && mana(tablet) == 0,
+                    "Clean repeated flush neither republishes availability nor drains the tablet again");
             factory.tick(List.of(recipe(helper, RECIPE_ID)), 1, searchTime);
             helper.assertTrue(lane.runtime().active(), "Woken search starts in the controller-local synchronous fixture");
             helper.assertTrue(lane.runtime().parallelism() == 1, "Woken search commits a single batch");
@@ -172,6 +178,7 @@ public final class BotaniaManaRecipeGameTest {
 
         var factory = fixture.factory();
         factory.ensureBaseLane(fixture.controller());
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
         long searchTime = helper.getLevel().getGameTime() - 1;
         // Save the blocked normal execution while the independent factory base lane searches for output space.
         CompoundTag saved = new CompoundTag();
@@ -198,7 +205,8 @@ public final class BotaniaManaRecipeGameTest {
             int extracted = mana(tablet);
             helper.assertTrue(extracted >= 100, "Native item charging frees enough output capacity for the blocked batch");
             helper.assertTrue(fixture.outputAmount() + extracted == blockedAmount, "Native item charging conserves mana");
-            helper.assertTrue(lane.canSearch(searchTime, key), "Native item charging immediately emits matching OUTPUT_CAPACITY");
+            IOPortBlockEntity.flushStorageChanges(helper.getLevel());
+            helper.assertTrue(lane.canSearch(searchTime, key), "Flushed native item charging emits matching OUTPUT_CAPACITY");
             makeFinishEligible(helper, crafting);
             crafting.finish();
             helper.assertTrue(!crafting.active() && fixture.inputAmount() == 0

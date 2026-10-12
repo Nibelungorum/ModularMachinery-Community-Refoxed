@@ -271,7 +271,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                     amount += slotAmount;
                     slots.add(new SlotAvailability(slotResource, slotAmount));
                     if (slotAmount > 0L && !isEmptyNativeResource(nativeResource)) {
-                        resources.add(slotResource);
+                        if (!containsNativeResource(resources, slotResource)) resources.add(slotResource);
                         if (resource == null) resource = slotResource;
                     }
                 }
@@ -304,7 +304,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 }
                 continue;
             }
-            boolean resourceChanged = previous != null && !resources.equals(previousResources);
+            boolean resourceChanged = previous != null && (resources.size() != previousResources.size()
+                    || resources.stream().anyMatch(current -> !containsNativeResource(previousResources, current)));
             if (amount > previousAmount && capability.directions().supports(IOType.INPUT)) {
                 ResourceAvailabilityNotifier.Reason reason = valueStorage != null || energyStorage != null
                                 ? ResourceAvailabilityNotifier.Reason.ENERGY_AVAILABLE
@@ -312,7 +313,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                 for (Object available : resources) failure = notifyControllers(reason, available, failure);
             } else if (resourceChanged && capability.directions().supports(IOType.INPUT)) {
                 for (Object available : resources) {
-                    if (!previousResources.contains(available)) {
+                    if (!containsNativeResource(previousResources, available)) {
                         failure = notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, available, failure);
                     }
                 }
@@ -327,7 +328,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                     if (previousSlot.amount() <= 0L || previousSlot.resource() == null) continue;
                     boolean amountReleased = currentSlot.amount() < previousSlot.amount();
                     boolean resourceReleased = !sameNativeResource(previousSlot.resource(), currentSlot.resource());
-                    if ((amountReleased || resourceReleased) && notified.add(previousSlot.resource())) {
+                    if ((amountReleased || resourceReleased) && !containsNativeResource(notified, previousSlot.resource())) {
+                        notified.add(previousSlot.resource());
                         failure = notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY,
                                 previousSlot.resource(), failure);
                     }
@@ -342,6 +344,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private static boolean isEmptyNativeResource(Object resource) {
         return resource instanceof ItemStack itemStack && itemStack.isEmpty()
                 || resource instanceof FluidStack fluidStack && fluidStack.isEmpty();
+    }
+
+    private static boolean containsNativeResource(List<Object> resources, Object resource) {
+        return resources.stream().anyMatch(existing -> sameNativeResource(existing, resource));
     }
 
     private static boolean sameNativeResource(Object first, Object second) {

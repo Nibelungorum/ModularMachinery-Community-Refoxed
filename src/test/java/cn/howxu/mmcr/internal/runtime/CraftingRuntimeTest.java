@@ -740,7 +740,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void finish_capability_operation_exception_uses_the_retry_gate() {
+    void unknown_native_finish_exception_stays_paused_even_after_output_recovers() {
         ThrowingItemOutputBus output = new ThrowingItemOutputBus(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
         CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
@@ -754,12 +754,24 @@ class CraftingRuntimeTest {
         assertThat(runtime.finishPending()).isTrue();
         assertThat(runtime.failure()).isNotNull();
         assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.FINISH);
+        assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+        RecipeCommitLedger.State isolated = runtime.ledger().state();
+        int calls = output.storage.insertCalls;
+        assertThat(calls).isEqualTo(1);
         assertThat(runtime.shouldRetryFinish()).isFalse();
 
+        output.storage.throwOnInsert = false;
         LevelStub.setGameTime(controller.getLevel(), 10);
-        assertThat(runtime.shouldRetryFinish()).isTrue();
+        assertThat(runtime.shouldRetryFinish()).isFalse();
+        runtime.resume();
         assertThatCode(runtime::finish).doesNotThrowAnyException();
         assertThat(runtime.shouldRetryFinish()).isFalse();
+        runtime.tick();
+        assertThat(runtime.prepareAsyncFinish()).isFalse();
+        assertThat(runtime.ledger().state()).isEqualTo(isolated);
+        assertThat(runtime.ledger().state().outputPaid()).isFalse();
+        assertThat(output.storage.insertCalls).isEqualTo(calls);
+        assertThat(output.storage.amount(0)).isZero();
     }
 
     @ParameterizedTest
@@ -820,6 +832,8 @@ class CraftingRuntimeTest {
                 ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState()) {
             @Override
             public LongItemStorage itemHandler() { return storage; }
+            @Override
+            public LongItemStorage nativeItemHandler() { return storage; }
         };
         var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), output);
         var runtime = new CraftingRuntime(controller, controller.componentRuntime());
@@ -1071,6 +1085,8 @@ class CraftingRuntimeTest {
         runtime.finish();
         assertThat(runtime.active()).isTrue();
         assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.WAITING_FINISH);
+        assertThat(runtime.shouldRetryFinish()).isFalse();
         int progress = runtime.tickCount();
         LevelStub.setGameTime(controller.getLevel(), 3);
         runtime.tick();
@@ -1079,6 +1095,7 @@ class CraftingRuntimeTest {
         assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterStart - 14L);
         setItem(output.itemHandler(), 0, ItemStack.EMPTY);
         LevelStub.setGameTime(controller.getLevel(), 12);
+        assertThat(runtime.shouldRetryFinish()).isTrue();
         assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
         assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
         assertThat(input.itemHandler().amount(0)).isZero();
@@ -1444,7 +1461,7 @@ class CraftingRuntimeTest {
     }
 
     @Test
-    void prefetchCommitFailureRollsBackEarlierInputOperationsAndPreservesItsStatus() {
+    void prefetch_rejection_before_native_payment_preserves_inputs_and_its_status() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
         PrefetchNetworkCapability network = new PrefetchNetworkCapability(6L, true);
@@ -1465,6 +1482,7 @@ class CraftingRuntimeTest {
         assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
         assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
         assertThat(network.reserved()).isZero();
+        assertThat(network.extracted()).isZero();
     }
 
     @Test
@@ -2679,18 +2697,23 @@ class CraftingRuntimeTest {
             long accepted = Math.min(Math.max(0L, requestedAmount), Math.max(0L, storage.amount() - planned));
             if (accepted <= 0L) return Optional.empty();
             planned += accepted;
+            long[] acquired = {0L};
             return Optional.of(new PrefetchPlan(accepted, () -> {
-                long extracted = storage.extract(accepted, false);
-                if (extracted != accepted) return CapabilityResult.failure(ExecutionStatus.blocked(type.id(), type.id(),
-                        FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, type.id(),
-                                FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
                 if (failCommit) return CapabilityResult.failure(ExecutionStatus.blocked(type.id(), type.id(),
                         FailureOccurrence.at(BuiltinFailureReasons.MISSING_ENERGY, type.id(),
                                 FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
+                long extracted = storage.extract(accepted, false);
+                if (extracted != accepted) {
+                    acquired[0] = extracted == 0L ? 0L : -1L; // A partial foreign debit is not a reservation proof.
+                    return CapabilityResult.failure(ExecutionStatus.blocked(type.id(), type.id(),
+                            FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, type.id(),
+                                    FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
+                }
                 planned -= accepted;
                 reserved += accepted;
+                acquired[0] = accepted;
                 return CapabilityResult.successful();
-            }));
+            }, () -> acquired[0]));
         }
 
         @Override
@@ -2806,13 +2829,17 @@ class CraftingRuntimeTest {
     }
 
     private static final class ThrowingItemStorage extends LongItemStorage {
+        private int insertCalls;
+        private boolean throwOnInsert = true;
         private ThrowingItemStorage() {
             super(1, 100L, () -> {});
         }
 
         @Override
         public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
-            throw new IllegalStateException("expected finish capability operation failure");
+            insertCalls++;
+            if (throwOnInsert) throw new IllegalStateException("expected finish capability operation failure");
+            return super.insertItem(slot, stack, simulate);
         }
     }
 }

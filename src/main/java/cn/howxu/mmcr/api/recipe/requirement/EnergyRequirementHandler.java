@@ -95,6 +95,9 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
         if (requirement.fePerTick() <= 0L) {
             return new RequirementPlan.OperationPlan(List.of(), null);
         }
+        if (candidates.stream().anyMatch(capability -> capability.facet(EnergyStorageFacet.class).isPresent())) {
+            return NativeRequirementPlanning.energyFixed(requirement, candidates, context);
+        }
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
         List<MachineCapability> plannedCapabilities = insert
                 ? RequirementHandlerSupport.prioritizedOutputCapabilities(candidates) : candidates;

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.capability.storage;
 
+import java.util.function.LongConsumer;
+
 /**
  * Long-backed value storage with capacity and per-operation transfer limits.
  *
@@ -37,7 +39,14 @@ public final class LongValueStorage implements CapabilityStorage {
     }
 
     public long insert(long requested, boolean simulate) {
-        return insertInternal(requested, simulate, true, true);
+        return insertInternal(requested, simulate, true, true, null);
+    }
+
+    /** Publishes native acquisition bookkeeping after the actual credit and before its notification.
+     * This observation does not roll back the credit if either callback throws.
+     */
+    public long insert(long requested, LongConsumer acquired) {
+        return insertInternal(requested, false, true, true, acquired);
     }
 
     public long extract(long requested, boolean simulate) {
@@ -51,12 +60,14 @@ public final class LongValueStorage implements CapabilityStorage {
         onChange.run();
     }
 
-    private long insertInternal(long requested, boolean simulate, boolean limited, boolean notify) {
+    private long insertInternal(long requested, boolean simulate, boolean limited, boolean notify,
+                                LongConsumer acquired) {
         if (requested <= 0) return 0L;
         long allowed = limited ? Math.min(requested, transferLimit) : requested;
         long moved = Math.min(allowed, capacity - amount);
         if (!simulate && moved > 0) {
             amount += moved;
+            if (acquired != null) acquired.accept(moved);
             if (notify) onChange.run();
         }
         return moved;

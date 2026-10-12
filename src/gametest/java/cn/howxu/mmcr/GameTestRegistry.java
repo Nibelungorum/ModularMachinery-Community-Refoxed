@@ -416,6 +416,16 @@ public final class GameTestRegistry {
                 helper -> new AppMekPatternGameTest().rejectedPatternPreservesInputHolders(helper));
         register(event, "appmek_factory_chemical_batch", 200,
                 helper -> new AppMekPatternGameTest().batchPatternAccountsForChemicalInputsAcrossLanes(helper));
+        register(event, "appmek_native_batch_cancel_ownership", 200,
+                helper -> new AppMekPatternGameTest().nativeBatchNotificationBoundary(helper, false));
+        register(event, "appmek_native_batch_throw_ownership", 200,
+                helper -> new AppMekPatternGameTest().nativeBatchNotificationBoundary(helper, true));
+        register(event, "appmek_native_pending_checkpoint", 200,
+                helper -> new AppMekPatternGameTest().nativeBatchPendingCheckpoint(helper, false));
+        register(event, "appmek_native_pending_drops", 200,
+                helper -> new AppMekPatternGameTest().nativeBatchPendingCheckpoint(helper, true));
+        register(event, "appmek_native_return_notification_checkpoint", 200,
+                helper -> new AppMekPatternGameTest().nativeBatchReturnNotificationCheckpoint(helper));
         register(event, "appmek_long_pattern_output_matching", 100,
                 helper -> new AppMekPatternGameTest().chemicalPatternOutputMatchingPreservesLongAmounts(helper));
         register(event, "appmek_all_me_kinds", 100,

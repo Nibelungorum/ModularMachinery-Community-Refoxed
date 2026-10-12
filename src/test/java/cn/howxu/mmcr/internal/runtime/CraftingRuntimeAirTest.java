@@ -233,6 +233,34 @@ class CraftingRuntimeAirTest {
     }
 
     @Test
+    void post_prefetch_pressure_check_preserves_sparse_original_air_order_before_startup_items() {
+        var items = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        items.itemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        AirCapability air = new AirCapability(IOType.INPUT, 110);
+        air.volume = 10;
+        PrefetchCapability prefetch = new PrefetchCapability(2L);
+        prefetch.onReserve = () -> air.air = 100;
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), items);
+        attach(controller, prefetch, air);
+        List<MachineRequirement> requirements = new ArrayList<>();
+        requirements.add(itemInput());
+        requirements.add(new EnergyRequirement(2L));
+        requirements.add(AirRequirement.input(10L, 0F)); // original index 2
+        for (int index = 3; index < 17; index++) {
+            requirements.add(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                    new ItemStack(Items.GOLD_INGOT), 0F, List.of()));
+        }
+        requirements.add(AirRequirement.input(0L, 10F)); // original index 17, same physical air handler
+        CraftingRuntime runtime = runtime(controller);
+        assertThat(runtime.start(recipe("sparse_pressure_checkpoint", 1, requirements), 1L).isCrafting()).isFalse();
+        assertThat(runtime.failure().reason()).isEqualTo(AirFailureReasons.INSUFFICIENT_PRESSURE);
+        assertThat(items.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(air.air).isEqualTo(100);
+        assertThat(air.applyCalls).isZero();
+        assertThat(runtime.tickCount()).isZero();
+    }
+
+    @Test
     void prefetchAndPatternStartKeepOriginalAirAndItemIndexes() {
         var items = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         ItemStack stack = new ItemStack(Items.IRON_INGOT, 2);
@@ -697,6 +725,7 @@ class CraftingRuntimeAirTest {
     private static final class AirCapability implements MachineCapability, CapabilityView, PneumaticAirFacet {
         private final IOType direction;
         private int air;
+        private int volume = 100;
         private int applyCalls;
         private int validateCalls;
         private long moved;
@@ -709,7 +738,7 @@ class CraftingRuntimeAirTest {
         @Override public Set<Class<? extends CapabilityFacet>> facets() { return Set.of(PneumaticAirFacet.class); }
         @Override public CapabilityOperation prepare(CapabilityRequest request) { throw new UnsupportedOperationException(); }
         @Override public Object queryIdentity() { return this; }
-        @Override public AirState state() { return new AirState(BlockPos.ZERO, air, 100, 20F, 25F); }
+        @Override public AirState state() { return new AirState(BlockPos.ZERO, air, volume, 20F, 25F); }
         @Override public CapabilityResult validate(long amount, boolean insert, float minPressure) {
             validateCalls++;
             onValidate.run();

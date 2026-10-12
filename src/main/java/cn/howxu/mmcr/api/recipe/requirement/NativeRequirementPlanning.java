@@ -196,6 +196,15 @@ final class NativeRequirementPlanning {
                 insert ? RequirementHandlerSupport.scaled(output.getAmount(), parallelism) : 0L);
     }
 
+    static RequirementPlan.OperationPlan energyFixed(EnergyRequirement requirement, List<MachineCapability> capabilities,
+                                                     PlanningContext context) {
+        boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
+        List<MachineCapability> ordered = insert
+                ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
+        return energyOperations(requirement, ordered, context, context.requestedParallelism(), insert,
+                insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL, context.reservations(), true);
+    }
+
     private static RequirementPlan.OperationPlan energyOperations(EnergyRequirement requirement, List<MachineCapability> capabilities,
                                                                      PlanningContext context, long parallelism,
                                                                       boolean insert, boolean partial,

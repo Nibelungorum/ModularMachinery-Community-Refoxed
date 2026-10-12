@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInputBlockEntity;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkOutputBlockEntity;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
@@ -133,6 +134,8 @@ public final class FluxNetworksGameTestFixtures {
     public static void form(GameTestHelper helper, MachineControllerBlockEntity controller) {
         controller.requestImmediateStructureCheck();
         controller.tickStructure(helper.getLevel(), controller.getBlockPos());
+        // Restore and native network cycles are settled explicitly by the recipe test.
+        SharedIoCoordinator.get(helper.getLevel()).markControllerEligible(controller, helper.getLevel().getGameTime());
         helper.assertTrue(controller.currentStructureSnapshot().formed()
                         && controller.runtimeSnapshot().linkedPortPositions().contains(controller.getBlockPos().west())
                         && controller.runtimeSnapshot().linkedPortPositions().contains(controller.getBlockPos().east()),

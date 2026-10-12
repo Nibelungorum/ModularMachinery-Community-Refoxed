@@ -12,7 +12,9 @@ import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInputBlockEntity;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -24,6 +26,8 @@ import sonar.fluxnetworks.common.device.TileFluxStorage;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksGameTestFixtures.*;
 
@@ -350,13 +354,28 @@ public final class FluxNetworksRecipeGameTest {
 
     private static void warmAndStart(GameTestHelper helper, CraftingRuntime runtime, MachineRecipe recipe,
                                      int parallelism, FluxNetwork network) {
+        awaitReceiptCapacity(helper, runtime);
         runtime.start(recipe, parallelism);
         if (!runtime.active()) {
             network.onEndServerTick();
             runtime.start(recipe, parallelism);
         }
         helper.assertTrue(runtime.active() && runtime.parallelism() == parallelism,
-                "Explicit native cycle supplies the whole budget before the actual runtime admits the batch");
+                "Explicit native cycle supplies the whole budget before the actual runtime admits the batch: recipe="
+                        + recipe.id() + " failure=" + runtime.failure() + " ledger=" + runtime.ledger().state());
+    }
+
+    private static void awaitReceiptCapacity(GameTestHelper helper, CraftingRuntime runtime) {
+        var coordinator = SharedIoCoordinator.get(helper.getLevel());
+        var async = MachineAsyncCoordinator.get(helper.getLevel());
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        // Explicit Flux cycles do not run Level Post. Pump real immutable receipt consumers before reusing a lane.
+        while (!coordinator.reserveExecution(runtime, "base")) {
+            async.pumpReceiptDrains();
+            coordinator.drainReceiptAcknowledgements(helper.getLevel());
+            helper.assertTrue(System.nanoTime() < deadline, "Actual terminal receipt ACK releases the native lane's delivery capacity");
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1));
+        }
     }
 
     private static void settle(GameTestHelper helper, CraftingRuntime runtime) {

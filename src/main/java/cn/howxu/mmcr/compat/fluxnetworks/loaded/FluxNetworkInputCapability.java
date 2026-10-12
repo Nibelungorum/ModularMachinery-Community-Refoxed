@@ -71,10 +71,9 @@ public final class FluxNetworkInputCapability implements MachineCapability, Scal
         boolean[] committed = {false};
         return Optional.of(new PrefetchPlan(accepted, (NativeCapabilityOperation) () -> {
             reservationKey();
-            if (committed[0] || !handler.commitCandidate(accepted)) return failure(BuiltinFailureReasons.MISSING_INPUT);
-            committed[0] = true;
+            if (committed[0] || !handler.commitCandidate(accepted, () -> committed[0] = true)) return failure(BuiltinFailureReasons.MISSING_INPUT);
             return CapabilityResult.successful();
-        }));
+        }, () -> committed[0] ? accepted : 0L));
     }
 
     @Override

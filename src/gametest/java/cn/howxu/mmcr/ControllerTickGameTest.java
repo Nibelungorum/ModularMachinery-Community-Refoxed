@@ -24,8 +24,11 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
+import cn.howxu.mmcr.internal.event.ControllerUiEvents;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
 import cn.howxu.mmcr.internal.network.PktControllerScreenTextPayload;
+import cn.howxu.mmcr.internal.network.ui.PktControllerUiSnapshotPayload;
+import cn.howxu.mmcr.internal.network.ui.ControllerUiPayloadCodec;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.tile.DataStorageBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -225,7 +228,7 @@ public class ControllerTickGameTest {
                             if (!invokeHooks.get()) return;
                             postCalls.incrementAndGet();
                             context.screenText().append(ControllerScreenTextScope.CONTROLLER,
-                                    MMCR.id("recipe_hook_status"), Component.literal("post"));
+                                    MMCR.id("recipe_hook_status"), Component.literal(postCalls.get() == 1 ? "post" : "post recovered"));
                         })
                         .build());
 
@@ -321,25 +324,41 @@ public class ControllerTickGameTest {
                                         && controller.structureSnapshot().formed()
                                         && controller.structureSnapshot().structureAreaLoaded(),
                                 "formed recipe machine recovers after its critical area is loaded");
-                        int reopeningPackets = screenTextPackets(observer);
-                        observer.containerMenu = new MachineControllerMenu(2, new Inventory(observer), controller);
+                        int reopeningPackets = uiSnapshotPackets(observer).size();
+                        observer.setPos(controllerPos.getX() + 0.5, controllerPos.getY(), controllerPos.getZ() + 0.5);
+                        MachineControllerMenu recoveryMenu = new MachineControllerMenu(2, new Inventory(observer), controller);
+                        observer.containerMenu = recoveryMenu;
                         ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(observer, observer.containerMenu));
-                        helper.assertTrue(screenTextPackets(observer) == reopeningPackets + 1
-                                        && lastScreenTextPacket(observer).controllerPos().equals(controllerPos)
-                                        && lastScreenTextPacket(observer).revision() == screenTextSnapshot(controller).revision()
-                                        && lastScreenTextPacket(observer).lines().equals(screenTextSnapshot(controller).lines()),
+                        ControllerUiEvents.opened(new PlayerContainerEvent.Open(observer, observer.containerMenu));
+                        var baseline = decodeUiSnapshot(observer);
+                        var baselineText = baseline.snapshotData().lines();
+                        var currentText = screenTextSnapshot(controller).lines();
+                        helper.assertTrue(recoveryMenu.uiServerSession().active()
+                                        && uiSnapshotPackets(observer).size() == reopeningPackets + 1
+                                        && baseline.containerId() == recoveryMenu.containerId
+                                        && baseline.sessionId().equals(recoveryMenu.uiOpenData().sessionId())
+                                        && baseline.snapshotData().controllerPos().equals(controllerPos)
+                                        && baselineText.size() == currentText.size() && baselineText.size() == 1
+                                        && baselineText.getFirst().id().equals(currentText.getFirst().lineId())
+                                        && baselineText.getFirst().text().equals(currentText.getFirst().text()),
                                 "Recovery Open sends exactly one current baseline before the next hook callback");
                         invokeHooks.set(true);
-                        int restoredPackets = screenTextPackets(observer);
+                        int restoredPackets = uiSnapshotPackets(observer).size();
                         controller.serverTick();
+                        recoveryMenu.broadcastChanges();
                         helper.assertTrue(preCalls.get() == 2 && postCalls.get() == 2,
                                 "loaded formed recipe machine invokes hooks after area recovery");
-                        helper.assertTrue(screenTextPackets(observer) == restoredPackets + 1,
-                                "recovered hook text sends a controller payload");
-                        applyLastScreenTextPacket(observer);
-                        helper.assertTrue(hasText(ControllerScreenTextCache.linesAt(controllerPos), "post"),
-                                "recovered hook text reaches the client cache");
+                        var recovered = decodeUiSnapshot(observer);
+                        helper.assertTrue(uiSnapshotPackets(observer).size() == restoredPackets + 1
+                                        && recovered.sessionId().equals(baseline.sessionId())
+                                        && recovered.revision() > baseline.revision()
+                                        && recovered.snapshotData().lines().size() == 1
+                                        && recovered.snapshotData().lines().getFirst().id().equals(MMCR.id("recipe_hook_status"))
+                                        && recovered.snapshotData().lines().getFirst().text().getString().equals("post recovered")
+                                        && baseline.snapshotData().lines().getFirst().text().getString().equals("post"),
+                                "Recovered hook text round-trips through the actual UI codec without changing the opening baseline");
                         ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(observer, observer.containerMenu));
+                        ControllerUiEvents.closed(new PlayerContainerEvent.Close(observer, observer.containerMenu));
                         observer.containerMenu = observer.inventoryMenu;
                         level.players().remove(observer);
                         helper.succeed();
@@ -575,6 +594,21 @@ public class ControllerTickGameTest {
                 )
                         && payload instanceof PktControllerScreenTextPayload)
                 .count();
+    }
+
+    private static List<PktControllerUiSnapshotPayload> uiSnapshotPackets(ServerPlayer player) {
+        return ((RecordingConnection) player.connection).packets.stream()
+                .filter(ClientboundCustomPayloadPacket.class::isInstance)
+                .map(packet -> ((ClientboundCustomPayloadPacket) packet).payload())
+                .filter(PktControllerUiSnapshotPayload.class::isInstance)
+                .map(PktControllerUiSnapshotPayload.class::cast).toList();
+    }
+
+    private static PktControllerUiSnapshotPayload decodeUiSnapshot(ServerPlayer player) {
+        byte[] bytes = ControllerUiPayloadCodec.encodeBounded(PktControllerUiSnapshotPayload.STREAM_CODEC,
+                uiSnapshotPackets(player).getLast(), player.level().registryAccess(), ControllerUiPayloadCodec.SNAPSHOT_LIMIT);
+        return ControllerUiPayloadCodec.decodeExact(PktControllerUiSnapshotPayload.STREAM_CODEC, bytes,
+                player.level().registryAccess(), ControllerUiPayloadCodec.SNAPSHOT_LIMIT);
     }
 
     private static PktControllerScreenTextPayload lastScreenTextPacket(ServerPlayer player) {

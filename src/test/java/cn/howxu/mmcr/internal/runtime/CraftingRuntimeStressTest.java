@@ -66,6 +66,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
@@ -76,6 +78,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -379,6 +382,12 @@ class CraftingRuntimeStressTest {
         assertThat(runtime.active()).isFalse();
         assertThat(input.baseStress()).isZero();
 
+        input.failOnApply = 0;
+        assertThat(runtime.start(recipe(20, List.of(stressInput(), stressInput())), 1).isCrafting()).isTrue();
+        assertThat(input.baseStress()).isEqualTo(16D);
+        runtime.invalidate();
+        assertThat(input.baseStress()).isZero();
+
         StressCapability output = new StressCapability(IOType.OUTPUT);
         controller = controller(output);
         runtime = new CraftingRuntime(controller, controller.componentRuntime());
@@ -553,6 +562,64 @@ class CraftingRuntimeStressTest {
         assertThat(output.baseStress()).isZero();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"direct", "installed", "async-fallback"})
+    void stress_output_replacement_keeps_new_payment_inputs_and_contributions(String entry) {
+        for (boolean throwAfterReplacement : new boolean[] {false, true}) {
+            StressCapability oldInput = new StressCapability(IOType.INPUT, List.of("old"));
+            StressCapability newInput = new StressCapability(IOType.INPUT, List.of("new"));
+            StressCapability output = new StressCapability(IOType.OUTPUT);
+            ItemInputBusBlockEntity items = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+            items.itemHandler().setContents(0, new ItemStack(Items.IRON_INGOT, 2), 2L);
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), items);
+            attach(controller, oldInput, newInput, output);
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            ItemRequirement consume = new ItemRequirement(RecipeModifier.IOType.INPUT,
+                    Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY);
+            assertThat(runtime.start(recipe(20, List.of(consume,
+                    StressRequirement.input(8, 32, List.of("old")), stressOutput())), 1L).isCrafting()).isTrue();
+            RecipeCommitLedger oldPayment = runtime.ledger();
+            MachineRecipe replacement = recipe(20, List.of(consume, StressRequirement.input(8, 32, List.of("new"))));
+            AtomicReference<RecipeCommitLedger> replacementPayment = new AtomicReference<>();
+            output.onApply = () -> {
+                output.onApply = () -> { };
+                runtime.invalidate();
+                assertThat(runtime.start(replacement, 1L).isCrafting()).isTrue();
+                replacementPayment.set(runtime.ledger());
+                if (throwAfterReplacement) throw new IllegalStateException("old stress apply notification");
+            };
+            LevelStub.setGameTime(controller.getLevel(), 1L);
+            switch (entry) {
+                case "direct" -> runtime.tick();
+                case "installed" -> {
+                    var installed = runtime.ensureInstalledProgram();
+                    assertThat(runtime.prepareInstalledTick(1L)).isTrue();
+                    assertThat(installed.tryAttempt(1L, 1L)).isTrue();
+                    installed.advance();
+                }
+                case "async-fallback" -> {
+                    assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+                    if (runtime.commitAsyncTick(null)) {
+                        runtime.completeAsyncTickAfterInputs();
+                        runtime.completeAsyncTickAfterRecipe();
+                    }
+                }
+                default -> throw new AssertionError(entry);
+            }
+            assertThat(runtime.active()).isTrue();
+            assertThat(runtime.ledger()).isSameAs(replacementPayment.get()).isNotSameAs(oldPayment);
+            assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+            assertThat(runtime.failure()).isNull();
+            assertThat(runtime.tickCount()).isZero();
+            assertThat(items.itemHandler().amount(0)).isZero();
+            assertThat(oldInput.baseStress()).isZero();
+            assertThat(output.baseStress()).isZero();
+            assertThat(newInput.baseStress()).isEqualTo(8D);
+            assertThat(newInput.indexes(newInput.onlyOwner())).containsExactly(1);
+            runtime.invalidate();
+        }
+    }
+
     @Test
     void realFeShortageReleasesAllStressAndRecoveryReacquiresOnSyncAndAsyncFallback() {
         for (boolean async : List.of(false, true)) {
@@ -665,8 +732,10 @@ class CraftingRuntimeStressTest {
             runtime.resume();
         }
         int firstApplies = (migrate ? newInput : oldInput).applyCalls;
+        int[] hookCommits = {0};
         hook.onCommit = () -> {
-            items.itemHandler().extractItem(0, 1, false);
+            hookCommits[0]++;
+            assertThat(items.itemHandler().extractItem(0, 1, false).getCount()).isEqualTo(1);
             secondInput.actualRpm = 0;
         };
         assertThat(runTick(runtime, controller, async)).isFalse();
@@ -682,16 +751,37 @@ class CraftingRuntimeStressTest {
         assertThat(secondInput.baseStress()).isZero();
         assertThat(output.baseStress()).isZero();
         assertThat(items.itemHandler().amount(0)).isZero();
-        hook.onCommit = () -> { };
+        assertThat(hookCommits[0]).isEqualTo(1);
+        assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+        RecipeCommitLedger.State isolated = runtime.ledger().state();
+        int progress = runtime.tickCount();
+        int failedFirstApplies = (migrate ? newInput : oldInput).applyCalls;
+        int failedSecondApplies = secondInput.applyCalls;
         oldInput.actualRpm = 64;
         newInput.actualRpm = 0;
         secondInput.actualRpm = 64;
-        assertThat(runTick(runtime, controller, async)).isTrue();
-        assertThat(oldInput.indexes(owner)).containsExactly(1);
-        assertThat(secondInput.indexes(owner)).containsExactly(3);
-        assertThat(output.indexes(owner)).containsExactly(4);
+        items.itemHandler().setContents(0, stack, 1L);
+        LevelStub.setGameTime(controller.getLevel(), controller.getLevel().getGameTime() + 20L);
+        runtime.resume();
+        runtime.tick();
+        assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNull();
+        runtime.finish();
+        assertThat(runtime.ledger().state()).isEqualTo(isolated);
+        assertThat(runtime.tickCount()).isEqualTo(progress);
+        assertThat(items.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(hookCommits[0]).isEqualTo(1);
+        assertThat((migrate ? newInput : oldInput).applyCalls).isEqualTo(failedFirstApplies);
+        assertThat(secondInput.applyCalls).isEqualTo(failedSecondApplies);
+        assertThat(oldInput.indexes(owner)).isEmpty();
+        assertThat(newInput.indexes(owner)).isEmpty();
+        assertThat(secondInput.indexes(owner)).isEmpty();
+        assertThat(output.indexes(owner)).isEmpty();
         assertThat(oldInput.indexes(otherOwner)).containsExactly(0);
-        assertThat(oldInput.baseStress()).isEqualTo(16D);
+        assertThat(otherLane.active()).isTrue();
+        assertThat(oldInput.baseStress()).isEqualTo(8D);
+        assertThat(newInput.baseStress()).isZero();
+        assertThat(secondInput.baseStress()).isZero();
+        assertThat(output.baseStress()).isZero();
         runtime.invalidate();
         otherLane.invalidate();
     }

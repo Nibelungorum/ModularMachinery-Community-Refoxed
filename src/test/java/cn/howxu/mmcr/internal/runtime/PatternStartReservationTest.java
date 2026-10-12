@@ -556,7 +556,8 @@ class PatternStartReservationTest {
             assertThat(fixture.inputs.amount(0)).isZero();
             assertThat(fixture.network.amount()).isEqualTo(92L);
             assertThat(fixture.buffer.reserved()).isEqualTo(4L);
-            assertThat(fixture.afterCommit).hasValue(notifyThrow ? 0 : 1);
+            // Only the old payment notification throws; the replacement successfully activates.
+            assertThat(fixture.afterCommit).hasValue(1);
         }
     }
 
@@ -576,7 +577,12 @@ class PatternStartReservationTest {
                 if (notifyThrow) throw new IllegalStateException("guarded root notification");
             });
 
-            assertThat(reservation.commit(nestedCommit)).isTrue();
+            AtomicInteger ownershipWrites = new AtomicInteger();
+            assertThat(reservation.commit(() -> {
+                ownershipWrites.incrementAndGet();
+                nestedCommit.run();
+            })).isTrue();
+            assertThat(ownershipWrites).hasValue(1);
             assertThat(notifications).hasValue(1);
             assertThat(nestedWrites).hasValue(0);
             assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.COMMITTED);
@@ -586,7 +592,8 @@ class PatternStartReservationTest {
             reservation.close();
             assertThat(reservation.commit()).isFalse();
             assertThat(fixture.networkCommits).hasValue(1);
-            assertThat(fixture.afterCommit).hasValue(1);
+            assertThat(ownershipWrites).hasValue(1);
+            assertThat(fixture.afterCommit).hasValue(notifyThrow ? 0 : 1);
 
             fixture.runtime.invalidate();
             assertThat(fixture.reserve().commit()).isTrue();

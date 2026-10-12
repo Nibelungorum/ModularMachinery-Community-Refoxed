@@ -65,11 +65,13 @@ class HeatCapabilityTest {
         assertThat(capacitor.getHeat()).isEqualTo(1_000D);
 
         capacitor.handleHeat(-200D);
+        capacitor.update();
         assertThat(invokeCommit(facet, operation)).isFalse();
         assertThat(snapshot.temperature()).isEqualTo(10D);
         assertThat(capacitor.getHeat()).isEqualTo(800D);
 
         capacitor.handleHeat(100D);
+        capacitor.update();
         assertThat(invokeCommit(facet, operation)).isTrue();
         assertThat(capacitor.getHeat()).isEqualTo(900D);
     }
@@ -87,6 +89,7 @@ class HeatCapabilityTest {
         assertThat(energy.extract(7L, false)).isEqualTo(7L);
         assertThat(invokeCommit(facet, operation)).isTrue();
         var temperatureCheck = new AsyncCapabilityOperation.Heat(capability.type().id(), 11D, true, 11L);
+        capacitor.update();
         assertThat(invokeCommit(facet, temperatureCheck)).isFalse();
         assertThat(capacitor.getHeat()).isEqualTo(1_050D);
         assertThat(energy.amount()).isEqualTo(93L);

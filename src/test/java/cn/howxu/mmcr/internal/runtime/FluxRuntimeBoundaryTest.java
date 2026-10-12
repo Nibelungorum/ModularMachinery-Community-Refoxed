@@ -22,6 +22,8 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
+import cn.howxu.mmcr.compat.appliedflux.loaded.FluxEnergyTicker;
+import appeng.api.networking.ticking.TickRateModulation;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
@@ -46,6 +48,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -54,6 +58,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -160,6 +165,10 @@ class FluxRuntimeBoundaryTest {
         assertThat(fixture.second.buffer.reserved()).isEqualTo(6L);
         assertThat(fixture.first.releaseCalls).isZero();
         assertThat(fixture.second.releaseCalls).isZero();
+        assertThat(fixture.first.networkCommits).isEqualTo(1);
+        assertThat(fixture.second.networkCommits).isEqualTo(1);
+        assertThat(fixture.first.network.amount()).isEqualTo(96L);
+        assertThat(fixture.second.network.amount()).isEqualTo(94L);
         fixture.assertNoReplay(fixture.runtime);
         fixture.runtime.invalidate();
         fixture.assertReleased(4L, 6L);
@@ -325,10 +334,231 @@ class FluxRuntimeBoundaryTest {
         assertThat(fixture.second.releaseCalls).isEqualTo(duration == 1 ? 0 : 1);
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void uncertain_start_checkpoint_restores_fresh_native_ports_and_releases_the_owned_prefix_once(boolean secondKey) {
+        Fixture original = new Fixture(2);
+        AtomicReference<CompoundTag> checkpoint = new AtomicReference<>();
+        ObservedFlux boundary = secondKey ? original.second : original.first;
+        boundary.notification.set(() -> {
+            checkpoint.set(original.saveAll());
+            throw new IllegalStateException("checkpoint inside native start reservation");
+        });
+        original.start(false);
+        CompoundTag saved = checkpoint.get();
+        assertThat(saved).isNotNull();
+        assertThat(CraftingRuntime.requiresTopologyForLoad(saved.getCompound("runtime"))).isTrue();
+        assertThat(allocations(saved.getCompound("runtime")).get("first")).isEqualTo(4L);
+        assertThat(allocations(saved.getCompound("runtime")).getOrDefault("second", 0L)).isEqualTo(secondKey ? 6L : 0L);
+
+        Fixture fresh = new Fixture(2, false);
+        CraftingRuntime restored = fresh.restore(saved);
+        fresh.assertNoReplay(restored);
+        assertThat(fresh.first.buffer.reserved()).isEqualTo(4L);
+        assertThat(fresh.second.buffer.reserved()).isEqualTo(secondKey ? 6L : 0L);
+        restored.invalidate();
+        restored.invalidate();
+        fresh.assertReleased(4L, secondKey ? 6L : 0L);
+        assertThat(fresh.first.releaseCalls).isEqualTo(1);
+        assertThat(fresh.second.releaseCalls).isEqualTo(secondKey ? 1 : 0);
+        assertThat(fresh.first.networkCommits).isZero();
+        assertThat(fresh.second.networkCommits).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void restored_payment_is_visible_during_owner_publication_save_and_pause(boolean waitingFinish) {
+        Fixture original = new Fixture(waitingFinish ? 1 : 2);
+        assertThat(original.start(false)).isTrue();
+        if (waitingFinish) {
+            for (int slot = 0; slot < original.output.itemHandler().size(); slot++) {
+                original.output.itemHandler().setContents(slot, new ItemStack(Items.COBBLESTONE), 64L);
+            }
+            assertThat(original.attempt(MachineWorkMode.SYNC).advance()).isTrue();
+            assertThat(original.runtime.finishPending()).isTrue();
+        } else {
+            original.ordinaryNotification.set(() -> { throw new IllegalStateException("native ordinary notification"); });
+            assertThat(original.attempt(MachineWorkMode.SYNC).advance()).isFalse();
+        }
+        CompoundTag checkpoint = original.saveAll();
+        RecipeCommitLedger.State expected = original.runtime.ledger().state();
+        Fixture fresh = new Fixture(waitingFinish ? 1 : 2, false);
+        AtomicReference<CompoundTag> reentrantSave = new AtomicReference<>();
+        AtomicReference<RecipeCommitLedger> observedPayment = new AtomicReference<>();
+        // Include a zero-balance published key: finish ownership publication must also see the final ledger.
+        fresh.first.ownerNotification.set(owner -> {
+            assertThat(owner.ledger().state()).isEqualTo(expected);
+            observedPayment.set(owner.ledger());
+            owner.pause();
+            reentrantSave.set(save(owner));
+            owner.tick();
+            assertThat(owner.ledger().state()).isEqualTo(expected);
+        });
+        CraftingRuntime restored = fresh.restore(checkpoint);
+        assertThat(observedPayment.get()).isSameAs(restored.ledger());
+        assertThat(reentrantSave.get()).isNotNull();
+        assertThat(restored.ledger().state()).isEqualTo(expected);
+        long ordinary = fresh.ordinary.getAmountAsLong();
+        var secondReload = new CraftingRuntime(fresh.controller, fresh.controller.componentRuntime());
+        secondReload.load(reentrantSave.get(), null, LOOKUP);
+        assertThat(secondReload.ledger().state()).isEqualTo(expected);
+        secondReload.tick();
+        assertThat(fresh.ordinary.getAmountAsLong()).isEqualTo(ordinary);
+        assertThat(fresh.first.consumeCalls).isZero();
+        assertThat(fresh.second.consumeCalls).isZero();
+        if (waitingFinish) assertThat(secondReload.finishPending()).isTrue();
+        else fresh.assertNoReplay(secondReload);
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void native_prefetch_owner_replacement_stops_the_old_debit_loop_at_each_key(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        for (boolean lastKey : new boolean[] {false, true}) {
+            Fixture fixture = new Fixture(2, !lastKey);
+            assertThat(fixture.start(false)).isTrue();
+            RecipeCommitLedger oldPayment = fixture.runtime.ledger();
+            AtomicReference<RecipeCommitLedger> replacementPayment = new AtomicReference<>();
+            AtomicReference<Map<String, Long>> replacementAllocations = new AtomicReference<>();
+            (lastKey ? fixture.second : fixture.first).ownerNotification.set(owner -> {
+                owner.invalidate();
+                assertThat(owner.start(fixture.recipe, 1L).isCrafting()).isTrue();
+                replacementPayment.set(owner.ledger());
+                replacementAllocations.set(allocations(save(owner)));
+            });
+            assertThat(fixture.attempt(mode).advance()).isFalse();
+            assertThat(fixture.runtime.active()).isTrue();
+            assertThat(fixture.runtime.ledger()).isSameAs(replacementPayment.get()).isNotSameAs(oldPayment);
+            assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+            assertThat(fixture.runtime.failure()).isNull();
+            assertThat(fixture.runtime.tickCount()).isZero();
+            assertThat(fixture.first.consumeCalls).isEqualTo(1);
+            assertThat(fixture.second.consumeCalls).isEqualTo(lastKey ? 1 : 0);
+            assertThat(allocations(save(fixture.runtime))).isEqualTo(replacementAllocations.get())
+                    .isEqualTo(Map.of("first", 4L, "second", 6L));
+            assertThat(save(fixture.runtime).getCompound("recipe").getCompound("data")
+                    .getLong("prefetched_energy_tick_consumed")).isZero();
+            assertThat(fixture.ordinary.getAmountAsLong()).isZero();
+            assertThat(fixture.first.buffer.reserved()).isEqualTo(4L);
+            assertThat(fixture.second.buffer.reserved()).isEqualTo(6L);
+        }
+    }
+
     private static CompoundTag save(CraftingRuntime runtime) {
         var output = new CompoundTag();
         runtime.save(output, LOOKUP);
         return output;
+    }
+
+    @ParameterizedTest
+    @CsvSource({"save,false", "save,true", "throw,false", "throw,true", "cancel,false", "cancel,true",
+            "cancel-throw,false", "cancel-throw,true"})
+    void native_appflux_buffer_notification_publishes_owned_checkpoint_before_save_throw_or_cancel(
+            String action, boolean pattern) {
+        Fixture original = new Fixture(2, true, 10_000L, 15_000L);
+        AtomicReference<CompoundTag> checkpoint = new AtomicReference<>();
+        original.first.storageNotification.set(() -> {
+            assertThat(original.first.buffer.amount()).isEqualTo(20_000L);
+            assertThat(original.first.buffer.reserved()).isEqualTo(20_000L);
+            assertThat(original.first.buffer.idleExcess()).isZero();
+            checkpoint.set(original.saveAll());
+            assertThat(allocations(checkpoint.get().getCompound("runtime"))).containsEntry("first", 20_000L);
+            if (action.startsWith("cancel")) original.runtime.invalidate();
+            if (action.endsWith("throw")) throw new IllegalStateException("native buffer onChange");
+        });
+        // The callback belongs to the actual local storage, before delegate.commit() can return.
+        original.start(pattern);
+        assertThat(checkpoint.get()).isNotNull();
+        assertThat(checkpoint.get().getLong("first_network") + checkpoint.get().getCompound("first").getLong("amount"))
+                .isEqualTo(40_000L);
+        assertThat(checkpoint.get().getLong("second_network") + checkpoint.get().getCompound("second").getLong("amount"))
+                .isEqualTo(60_000L);
+        assertThat(original.first.networkCommits).isEqualTo(1);
+        if (!action.equals("save")) assertThat(original.second.networkCommits).isZero();
+        if (action.startsWith("cancel")) {
+            assertThat(original.runtime.active()).isFalse();
+            assertThat(original.first.buffer.reserved()).isZero();
+            assertThat(original.first.buffer.idleExcess()).isEqualTo(20_000L);
+            assertThat(original.first.releaseCalls).isEqualTo(1);
+            original.runtime.invalidate();
+            assertThat(original.first.releaseCalls).isEqualTo(1);
+        } else if (action.equals("throw")) {
+            assertThat(original.first.buffer.reserved()).isEqualTo(20_000L);
+            original.assertNoReplay(original.runtime);
+        }
+
+        Fixture fresh = new Fixture(2, false, 10_000L, 15_000L);
+        CraftingRuntime restored = fresh.restore(checkpoint.get());
+        fresh.assertNoReplay(restored);
+        assertThat(fresh.first.buffer.reserved()).isEqualTo(20_000L);
+        assertThat(fresh.second.buffer.amount()).isZero();
+        restored.invalidate();
+        restored.invalidate();
+        fresh.assertReleased(20_000L, 0L);
+        assertThat(fresh.first.releaseCalls).isEqualTo(1);
+        assertThat(fresh.second.releaseCalls).isZero();
+        assertThat(FluxEnergyTicker.input(true, FluxEnergyBuffer.IDLE_DELAY_TICKS, fresh.first.buffer, null))
+                .isEqualTo(TickRateModulation.SLOWER);
+        assertThat(fresh.first.buffer.isIdleReady()).isTrue();
+        assertThat(fresh.first.networkCommits).isZero();
+        assertThat(fresh.second.networkCommits).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"throw", "replacement", "replacement-throw"})
+    void continuation_zero_notification_cleans_detached_old_reservations_once_without_touching_replacement(String action) {
+        Fixture fixture = new Fixture(2);
+        assertThat(fixture.start(false)).isTrue();
+        RecipeCommitLedger oldPayment = fixture.runtime.ledger();
+        AtomicReference<RecipeCommitLedger> replacementPayment = new AtomicReference<>();
+        fixture.first.continuationNotification.set(owner -> {
+            if (action.startsWith("replacement")) {
+                assertThat(owner.start(fixture.recipe, 1L).isCrafting()).isTrue();
+                replacementPayment.set(owner.ledger());
+            }
+            if (action.endsWith("throw")) throw new IllegalStateException("continuation zero notification");
+        });
+        try {
+            fixture.runtime.invalidate();
+        } catch (IllegalStateException exception) {
+            // Propagation is permitted only after cleanup; swallowing the notification is not the assertion.
+            assertThat(exception).hasMessage("continuation zero notification");
+        }
+        assertThat(fixture.first.releaseCalls).isEqualTo(1);
+        assertThat(fixture.second.releaseCalls).isEqualTo(1);
+        assertThat(fixture.first.released).isEqualTo(4L);
+        assertThat(fixture.second.released).isEqualTo(6L);
+        if (action.startsWith("replacement")) {
+            assertThat(fixture.runtime.active()).isTrue();
+            assertThat(fixture.runtime.ledger()).isSameAs(replacementPayment.get()).isNotSameAs(oldPayment);
+            assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+            assertThat(fixture.runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+            assertThat(fixture.runtime.failure()).isNull();
+            assertThat(fixture.runtime.tickCount()).isZero();
+            assertThat(allocations(save(fixture.runtime))).isEqualTo(Map.of("first", 4L, "second", 6L));
+            assertThat(save(fixture.runtime).getCompound("recipe").getCompound("data")
+                    .getLong("prefetched_energy_tick_consumed")).isZero();
+            assertThat(fixture.first.consumeCalls).isZero();
+            assertThat(fixture.second.consumeCalls).isZero();
+            assertThat(fixture.first.buffer.reserved()).isEqualTo(4L);
+            assertThat(fixture.second.buffer.reserved()).isEqualTo(6L);
+            assertThat(fixture.first.buffer.idleExcess()).isEqualTo(4L);
+            assertThat(fixture.second.buffer.idleExcess()).isEqualTo(6L);
+            assertThat(fixture.first.network.amount() + fixture.first.buffer.amount()).isEqualTo(100L);
+            assertThat(fixture.second.network.amount() + fixture.second.buffer.amount()).isEqualTo(100L);
+            fixture.runtime.invalidate();
+            fixture.runtime.invalidate();
+            fixture.assertReleased(8L, 12L);
+            assertThat(fixture.first.releaseCalls).isEqualTo(2);
+            assertThat(fixture.second.releaseCalls).isEqualTo(2);
+        } else {
+            assertThat(fixture.runtime.active()).isFalse();
+            fixture.runtime.invalidate();
+            fixture.assertReleased(4L, 6L);
+            assertThat(fixture.first.releaseCalls).isEqualTo(1);
+            assertThat(fixture.second.releaseCalls).isEqualTo(1);
+        }
+        assertThat(fixture.ordinary.getAmountAsLong()).isZero();
     }
 
     private static Map<String, Long> allocations(CompoundTag saved) {
@@ -357,8 +587,16 @@ class FluxRuntimeBoundaryTest {
         private final MachineRecipe recipe;
 
         private Fixture(int duration) {
-            first = new ObservedFlux("first", 2L * duration);
-            second = new ObservedFlux("second", 3L * duration);
+            this(duration, true);
+        }
+
+        private Fixture(int duration, boolean registerRecipe) {
+            this(duration, registerRecipe, 2L, 3L);
+        }
+
+        private Fixture(int duration, boolean registerRecipe, long firstPerTick, long secondPerTick) {
+            first = new ObservedFlux("first", firstPerTick * duration);
+            second = new ObservedFlux("second", secondPerTick * duration);
             var components = new ArrayList<>(controller.componentRuntime().components());
             components.add(new ProcessingComponent(null, new TestCapabilityHost(List.of(first, second,
                     new EnergyHatchCapability(ordinary, IOType.OUTPUT))), BlockPos.ZERO, BlockPos.ZERO, (String) null));
@@ -366,10 +604,10 @@ class FluxRuntimeBoundaryTest {
             RuntimeTestFixtures.republish(controller);
             runtime = RuntimeTestFixtures.craftingRuntime(controller);
             recipe = RecipeTestSupport.create(MMCR.id("flux_boundary_" + duration), MACHINE, duration,
-                    List.of(new EnergyRequirement(2L), new EnergyRequirement(3L),
+                    List.of(new EnergyRequirement(firstPerTick), new EnergyRequirement(secondPerTick),
                             new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 7L)),
                     List.of(new ItemStack(Items.IRON_NUGGET)));
-            RecipeRegistry.registerStatic(recipe);
+            if (registerRecipe) RecipeRegistry.registerStatic(recipe);
         }
 
         private boolean start(boolean pattern) {
@@ -433,6 +671,8 @@ class FluxRuntimeBoundaryTest {
             long secondAmount = second.buffer.amount();
             int firstCalls = first.consumeCalls;
             int secondCalls = second.consumeCalls;
+            int firstNetworkCalls = first.networkCommits;
+            int secondNetworkCalls = second.networkCommits;
             assertThat(owner.active()).isTrue();
             assertThat(paid.phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
             owner.resume();
@@ -448,8 +688,8 @@ class FluxRuntimeBoundaryTest {
             assertThat(first.consumeCalls).isEqualTo(firstCalls);
             assertThat(second.consumeCalls).isEqualTo(secondCalls);
             assertThat(output.itemHandler().amount(0)).isZero();
-            assertThat(first.networkCommits).isEqualTo(1);
-            assertThat(second.networkCommits).isEqualTo(1);
+            assertThat(first.networkCommits).isEqualTo(firstNetworkCalls);
+            assertThat(second.networkCommits).isEqualTo(secondNetworkCalls);
         }
 
         private CompoundTag saveAll() {
@@ -462,6 +702,8 @@ class FluxRuntimeBoundaryTest {
             output.put("first", firstTag);
             output.put("second", secondTag);
             output.putLong("ordinary", ordinary.getAmountAsLong());
+            output.putLong("first_network", first.network.amount());
+            output.putLong("second_network", second.network.amount());
             return output;
         }
 
@@ -469,6 +711,8 @@ class FluxRuntimeBoundaryTest {
             first.delegate.load(saved.getCompound("first"), LOOKUP);
             second.delegate.load(saved.getCompound("second"), LOOKUP);
             ordinary.setAmount(saved.getLong("ordinary"));
+            first.network.setAmount(saved.getLong("first_network"));
+            second.network.setAmount(saved.getLong("second_network"));
             var restored = new CraftingRuntime(controller, controller.componentRuntime());
             restored.load(saved.getCompound("runtime"), null, LOOKUP);
             assertThat(restored.active()).isTrue();
@@ -487,8 +731,11 @@ class FluxRuntimeBoundaryTest {
      */
     private static final class ObservedFlux implements MachineCapability, RecipeEnergyPrefetchFacet {
         private final AtomicReference<Runnable> notification = new AtomicReference<>();
-        private final FluxEnergyBuffer buffer = new FluxEnergyBuffer();
-        private final LongValueStorage network = new LongValueStorage(100L, 100L, null);
+        private final AtomicReference<Runnable> storageNotification = new AtomicReference<>();
+        private final AtomicReference<Consumer<CraftingRuntime>> ownerNotification = new AtomicReference<>();
+        private final AtomicReference<Consumer<CraftingRuntime>> continuationNotification = new AtomicReference<>();
+        private final FluxEnergyBuffer buffer = new FluxEnergyBuffer(() -> notifyOnce(storageNotification));
+        private final LongValueStorage network;
         private final FluxEnergyInputCapability delegate;
         private final FluxEnergyInputCapability missing = new FluxEnergyInputCapability(new FluxEnergyBuffer(), "missing");
         private int networkCommits;
@@ -498,7 +745,9 @@ class FluxRuntimeBoundaryTest {
         private boolean rejectConsumption;
 
         private ObservedFlux(String key, long exactAmount) {
-            network.setAmount(100L);
+            long capacity = Math.max(100L, 2L * exactAmount);
+            network = new LongValueStorage(capacity, capacity, null);
+            network.setAmount(capacity);
             delegate = new FluxEnergyInputCapability(buffer, key, requested -> {
                 if (requested != exactAmount) return Optional.empty();
                 return Optional.of(() -> {
@@ -522,7 +771,7 @@ class FluxRuntimeBoundaryTest {
                 CapabilityResult result = plan.operation().commit();
                 if (result.success()) notifyOnce(notification);
                 return result;
-            }));
+            }, plan.committedAmount()));
         }
         @Override public void restoreReservation(long amount) { delegate.restoreReservation(amount); }
         @Override public long releaseReservation(long amount) {
@@ -537,8 +786,15 @@ class FluxRuntimeBoundaryTest {
             return delegate.consumeReservation(amount);
         }
         @Override public void onRecipeReservationChanged(Object owner, long remaining, Runnable cancelOwner) {
+            Consumer<CraftingRuntime> callback = ownerNotification.getAndSet(null);
+            if (callback != null) callback.accept((CraftingRuntime) owner);
             // Observe the real runtime's already-published per-key native payment credit.
             if (consumeCalls > 0) notifyOnce(notification);
+        }
+        @Override public void onRecipeContinuationRequested(Object owner, long amount) {
+            if (amount != 0L) return;
+            Consumer<CraftingRuntime> callback = continuationNotification.getAndSet(null);
+            if (callback != null) callback.accept((CraftingRuntime) owner);
         }
     }
 

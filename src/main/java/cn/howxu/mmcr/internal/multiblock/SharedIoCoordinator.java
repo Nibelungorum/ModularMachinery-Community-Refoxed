@@ -304,7 +304,10 @@ public final class SharedIoCoordinator {
         for (ExecutionSlot slot : records.slots) if (slot.reservedOwner == owner) return true;
         for (ExecutionSlot slot : records.slots) {
             if (slot.acceptedOwner != null) {
-                if (slot.pendingAcceptance) return slot.acceptedOwner == owner && !slot.cancelRequested;
+                if (slot.pendingAcceptance) {
+                    if (slot.cancelRequested) continue;
+                    return slot.acceptedOwner == owner;
+                }
                 if (slot.ledger.state().outputPaid() || slot.acceptedOwner.ledger() != slot.ledger
                         || slot.acceptedOwner.activeRecipe() != slot.recipe
                         || slot.acceptedOwner.controller().isRemoved()
@@ -352,6 +355,28 @@ public final class SharedIoCoordinator {
     /** Binds confirmed native start facts before compilation can be queued. */
     public boolean acceptExecution(CraftingRuntime owner, String laneId, ExecutionIdentity identity,
                                    RecipeCommitLedger ledger, ActiveMachineRecipe recipe) {
+        ExecutionSlot slot = receiptSlots.get(identity);
+        if (slot == null) {
+            if (!beginExecutionAdmission(owner, laneId, identity, ledger, recipe)) return false;
+            slot = receiptSlots.get(identity);
+        }
+        if (slot.acceptedOwner != owner || slot.ledger != ledger || slot.recipe != recipe) return false;
+        slot.pendingAcceptance = false;
+        if (slot.cancelRequested || owner.ledger() != ledger || owner.controller().isRemoved()
+                || identity.lifecycleEpoch() != owner.controller().lifecycleEpoch()) {
+            terminateExecution(slot);
+            return false;
+        }
+        publishExecution(slot, false);
+        return true;
+    }
+
+    /** Retains the admitted identity through native notification cancellation, without confirming payment. */
+    public boolean beginExecutionAdmission(CraftingRuntime owner, String laneId, ExecutionIdentity identity,
+                                           RecipeCommitLedger ledger, ActiveMachineRecipe recipe) {
+        ExecutionSlot pending = receiptSlots.get(identity);
+        if (pending != null) return pending.pendingAcceptance && !pending.cancelRequested
+                && pending.acceptedOwner == owner && pending.ledger == ledger;
         if (closed || !(owner.controller().getLevel() instanceof ServerLevel level)) return false;
         LaneRecords records = laneBinding(owner.controller().getBlockPos(), laneId);
         StructureClaimRegistry.ResourceDomain domain = owner.controller().resourceDomain();
@@ -366,17 +391,23 @@ public final class SharedIoCoordinator {
             slot.domain = new DomainKey(domain.id(), domain.generation());
             slot.receiptDomain = new MachineAsyncCoordinator.ExecutionDomain(domain.id(), domain.generation());
             slot.level = new WeakReference<>(level);
-            slot.pendingAcceptance = false;
+            slot.pendingAcceptance = true;
             slot.cancelRequested = false;
             slot.revision = ++records.revision;
             records.latestIdentity = identity;
             receiptSlots.put(identity, slot);
-            if (owner.ledger() != ledger || owner.controller().isRemoved()
-                    || identity.lifecycleEpoch() != owner.controller().lifecycleEpoch()) terminateExecution(slot);
-            else publishExecution(slot, false);
             return true;
         }
         return false;
+    }
+
+    /** Unwinds a failed/cancelled native admission using only its old identity and payment facts. */
+    public void endExecutionAdmission(ExecutionIdentity identity) {
+        ExecutionSlot slot = receiptSlots.get(identity);
+        if (slot == null || !slot.pendingAcceptance) return;
+        slot.pendingAcceptance = false;
+        if (slot.ledger.state().phase() == RecipeCommitLedger.Phase.READY) closeExecution(slot);
+        else terminateExecution(slot);
     }
 
     /** Refreshes a stable binding without reserving or installing another delivery slot. */

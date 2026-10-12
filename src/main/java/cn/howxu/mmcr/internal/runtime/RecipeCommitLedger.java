@@ -75,6 +75,12 @@ public final class RecipeCommitLedger {
                 state.tick(), state.finalTickPaid(), state.outputPaid());
     }
 
+    /** All start effects were owner-scoped reservations and have been released; no ordinary payment occurred. */
+    void settleReleasedStart() {
+        if (state.paidAttempts() != 0L || state.finalTickPaid() || state.outputPaid()) return;
+        state = new State(Phase.READY, state.sequence(), 0L, 0, false, false);
+    }
+
     /** Writes the optional child into the owning runtime/lane's output. */
     public void save(CompoundTag output) {
         State saved = state;

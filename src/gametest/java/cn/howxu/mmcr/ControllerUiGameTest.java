@@ -80,6 +80,7 @@ import com.mojang.authlib.GameProfile;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.NonNullList;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.network.Connection;
@@ -94,7 +95,6 @@ import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerSynchronizer;
-import net.minecraft.world.inventory.RemoteSlot;
 import net.minecraft.world.level.block.state.BlockState;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
@@ -455,13 +455,13 @@ public final class ControllerUiGameTest {
         OUTPUT_CALLBACK.set(probe);
         try {
             ControllerUiEvents.opened(event);
-        } catch (GameTestException failure) {
+        } catch (GameTestAssertException failure) {
             throw failure;
         } catch (RuntimeException failure) {
-            var assertion = helper.assertionException(Component.literal("Built-in codec opening failed: " + stage
+            var assertion = new GameTestAssertException("Built-in codec opening failed: " + stage
                     + " / fired=" + probe.fired + " / encodes=" + probe.encodes + " / decodes=" + probe.decodes
                     + " / " + failure.getClass().getSimpleName() + ": " + failure.getMessage()
-                    + " / stack=" + List.of(failure.getStackTrace())));
+                    + " / stack=" + List.of(failure.getStackTrace()));
             assertion.initCause(failure);
             throw assertion;
         } finally {
@@ -661,7 +661,7 @@ public final class ControllerUiGameTest {
     private static final class InventorySync implements ContainerSynchronizer {
         private int slots, carriedChanges;
         private ItemStack lastSlot = ItemStack.EMPTY, lastCarried = ItemStack.EMPTY;
-        @Override public void sendInitialData(AbstractContainerMenu menu, List<ItemStack> items, ItemStack carried, int[] data) {}
+        @Override public void sendInitialData(AbstractContainerMenu menu, NonNullList<ItemStack> items, ItemStack carried, int[] data) {}
         @Override public void sendSlotChange(AbstractContainerMenu menu, int slot, ItemStack item) {
             slots++;
             lastSlot = item.copy();
@@ -671,11 +671,6 @@ public final class ControllerUiGameTest {
             lastCarried = item.copy();
         }
         @Override public void sendDataChange(AbstractContainerMenu menu, int id, int value) {}
-        @Override public RemoteSlot createSlot() {
-            return new RemoteSlot.Synchronized(component -> {
-                throw new AssertionError("Inventory fixture receives no client hash updates");
-            });
-        }
     }
 
     public static void requestStorage(GameTestHelper helper) {
@@ -1244,7 +1239,7 @@ public final class ControllerUiGameTest {
                     "New session baseline starts at already committed progress");
             var closed = first.uiServerSession();
             player.closeContainer();
-            var chunkPos = ChunkPos.containing(pos);
+            var chunkPos = new ChunkPos(pos);
             var chunk = helper.getLevel().getChunkSource().getChunkNow(chunkPos.x, chunkPos.z);
             helper.assertTrue(chunk != null, "Nearby observer's controller chunk is loaded");
             ControllerSyncEvents.onChunkSent(new ChunkWatchEvent.Sent(player, chunk, helper.getLevel()));

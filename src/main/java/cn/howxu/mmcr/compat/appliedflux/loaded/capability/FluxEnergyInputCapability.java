@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.function.LongConsumer;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -105,21 +106,27 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
     @Override
     public Optional<PrefetchPlan> planPrefetch(long requestedAmount) {
         if (requestedAmount <= 0L || prefetchBridge == null) return Optional.empty();
-        return prefetchBridge.planExactExtract(requestedAmount).map(operation -> new PrefetchPlan(requestedAmount,
-                (NativeCapabilityOperation) () -> commitPrefetch(operation, requestedAmount)));
+        return prefetchBridge.planExactExtract(requestedAmount).map(operation -> {
+            long[] acquired = {0L};
+            return new PrefetchPlan(requestedAmount,
+                    (NativeCapabilityOperation) () -> commitPrefetch(operation, requestedAmount,
+                            amount -> acquired[0] = amount), () -> acquired[0]);
+        });
     }
 
     @Override public void restoreReservation(long amount) { }
     @Override public long releaseReservation(long amount) { return buffer.releaseReservation(amount); }
     @Override public CapabilityResult consumeReservation(long amount) { return extractLocal(amount); }
 
-    private CapabilityResult commitPrefetch(CapabilityOperation operation, long requestedAmount) {
+    private CapabilityResult commitPrefetch(CapabilityOperation operation, long requestedAmount, LongConsumer acquired) {
         if (requestedAmount > buffer.storage().capacity() - buffer.amount()) return failure(BuiltinFailureReasons.MISSING_INPUT);
+        // A foreign command may mutate before throwing; zero local reservation is not proof of zero network debit.
+        acquired.accept(-1L);
         CapabilityResult result = operation.commit();
-        if (result == null || !result.success() || buffer.insert(requestedAmount) != requestedAmount) {
+        if (result == null || !result.success()) {
             return result == null ? failure(BuiltinFailureReasons.MISSING_INPUT) : result;
         }
-        buffer.reserve(requestedAmount);
+        if (buffer.acquireReservation(requestedAmount, acquired) != requestedAmount) return failure(BuiltinFailureReasons.MISSING_INPUT);
         return CapabilityResult.successful();
     }
 

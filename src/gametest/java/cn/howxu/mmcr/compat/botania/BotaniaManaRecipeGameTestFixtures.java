@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.compat.botania.loaded.ManaPortBlockEntity;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
@@ -20,6 +21,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ServerLevelData;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -67,6 +69,8 @@ public final class BotaniaManaRecipeGameTestFixtures {
                             List<ManaPortBlockEntity> ports) {
         controller.requestImmediateStructureCheck();
         controller.tickStructure(helper.getLevel(), controller.getBlockPos());
+        // This fixture drives recipe steps explicitly; qualify without an automatic catalog search.
+        SharedIoCoordinator.get(helper.getLevel()).markControllerEligible(controller, helper.getLevel().getGameTime());
         helper.assertTrue(controller.currentStructureSnapshot().formed()
                         && ports.stream().allMatch(port -> port.linkedControllerPositions().contains(controller.getBlockPos()))
                         && controller.componentRuntime().capabilities().stream()
@@ -105,10 +109,23 @@ public final class BotaniaManaRecipeGameTestFixtures {
         long inputBefore = fixture.inputAmount();
         long outputBefore = fixture.outputAmount();
         int remaining = runtime.totalTick() - runtime.tickCount();
-        for (int step = 0; step < remaining && !runtime.finishPending(); step++) {
-            runtime.tick();
-            helper.assertTrue(fixture.inputAmount() == inputBefore && fixture.outputAmount() == outputBefore,
-                    "Progress preserves start-only consumption and completion-only output");
+        long gameTime = helper.getLevel().getGameTime();
+        try {
+            for (int step = 0; step < remaining && !runtime.finishPending(); step++) {
+                // Installed factory lanes accept at most one grant per game time, even with explicit ticking.
+                ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(gameTime + step + 1);
+                runtime.tick();
+                helper.assertTrue(fixture.inputAmount() == inputBefore && fixture.outputAmount() == outputBefore,
+                        "Progress preserves start-only consumption and completion-only output");
+                if (runtime.installedProgram() != null) {
+                    int tick = runtime.tickCount();
+                    runtime.tick();
+                    helper.assertTrue(runtime.tickCount() == tick,
+                            "Repeated same-time installed ticking cannot grant another progress step");
+                }
+            }
+        } finally {
+            ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(gameTime);
         }
         helper.assertTrue(runtime.active() && runtime.finishPending(), "Active recipe reaches its finish boundary");
     }

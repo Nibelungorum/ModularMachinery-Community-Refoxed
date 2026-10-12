@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedflux.loaded.storage;
 
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import java.util.function.LongConsumer;
 import net.minecraft.nbt.CompoundTag;
 
 /**
@@ -73,11 +74,19 @@ public final class FluxEnergyBuffer {
     }
 
     public long insert(long requested) {
-        long inserted = storage.insert(requested, false);
-        if (inserted <= 0L) return 0L;
-        idleExcess = saturatingAdd(idleExcess, inserted);
-        resetIdleTicks();
-        return inserted;
+        return storage.insert(requested, inserted -> {
+            idleExcess = saturatingAdd(idleExcess, inserted);
+            resetIdleTicks();
+        });
+    }
+
+    /** Acquires the actual local credit for this plan before exposing it to external notifications. */
+    public long acquireReservation(long requested, LongConsumer acquired) {
+        return storage.insert(requested, inserted -> {
+            reserved += inserted;
+            resetIdleTicks();
+            acquired.accept(inserted);
+        });
     }
 
     public long releaseReservation(long requested) {

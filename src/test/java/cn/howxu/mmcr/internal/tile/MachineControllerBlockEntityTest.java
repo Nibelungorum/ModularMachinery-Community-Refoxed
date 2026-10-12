@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.LevelStub;
+import com.mojang.authlib.GameProfile;
+import io.netty.channel.embedded.EmbeddedChannel;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
@@ -108,13 +110,17 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.server.network.ServerCommonPacketListenerImpl;
 import net.minecraft.server.network.PlayerChunkSender;
 import net.minecraft.server.level.ChunkMap;
+import net.minecraft.server.level.PlayerMap;
 import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerPlayer;
@@ -124,6 +130,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -154,6 +161,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -341,25 +349,43 @@ class MachineControllerBlockEntityTest {
         MachineControllerRuntime runtime = runtimeOf(controller);
         runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
                 MMCR.id("observer_line"), Component.literal("baseline"));
+        setField(Level.class, controller.getLevel(), "registryAccess",
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         ServerPlayer player = player((ServerLevel) controller.getLevel(), controller.getBlockPos());
         MachineControllerMenu first = new MachineControllerMenu(1, new Inventory(player), controller);
         player.containerMenu = first;
         ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, first));
-        assertThat(textPackets(player)).hasSize(1);
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, first));
+        assertThat(uiSnapshots(player)).singleElement().satisfies(packet -> {
+            assertThat(packet.sessionId()).isEqualTo(first.uiOpenData().sessionId());
+            assertThat(packet.snapshotData().lines()).singleElement()
+                    .satisfies(line -> assertThat(line.text().getString()).isEqualTo("baseline"));
+        });
         MachineControllerMenu later = new MachineControllerMenu(2, new Inventory(player), controller);
         player.containerMenu = later;
         ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, later));
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, later));
         ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(player, first));
-        assertThat(textPackets(player)).hasSize(2);
+        ControllerUiEvents.closed(new PlayerContainerEvent.Close(player, first));
+        assertThat(first.uiServerSession().closed()).isTrue();
+        assertThat(later.uiServerSession().active()).isTrue();
+        assertThat(uiSnapshots(player)).hasSize(2);
+        assertThat(uiSnapshots(player).getLast().sessionId()).isEqualTo(later.uiOpenData().sessionId());
+        assertThat(uiSnapshots(player).getLast().snapshotData().lines()).hasSize(1);
 
         runtime.screenText().clear(ControllerScreenTextScope.CONTROLLER);
         invokeSyncOpenText(controller);
-        assertThat(textPackets(player)).hasSize(3);
+        later.broadcastChanges();
+        assertThat(uiSnapshots(player)).hasSize(3);
+        assertThat(uiSnapshots(player).getLast().snapshotData().lines()).isEmpty();
         ControllerSyncEvents.onMenuClose(new PlayerContainerEvent.Close(player, later));
+        ControllerUiEvents.closed(new PlayerContainerEvent.Close(player, later));
         runtime.screenText().append(ControllerScreenTextScope.CONTROLLER,
                 MMCR.id("closed_line"), Component.literal("closed"));
         invokeSyncOpenText(controller);
-        assertThat(textPackets(player)).hasSize(3);
+        later.broadcastChanges();
+        assertThat(uiSnapshots(player)).hasSize(3);
+        assertThat(later.uiServerSession().closed()).isTrue();
     }
 
     @Test
@@ -397,11 +423,15 @@ class MachineControllerBlockEntityTest {
         ResourceLocation machineId = MMCR.id("lazy_disconnect_observer");
         MachineControllerBlockEntity controller = textController(machineId);
         MachineControllerRuntime runtime = runtimeOf(controller);
+        setField(Level.class, controller.getLevel(), "registryAccess",
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         ServerPlayer player = player((ServerLevel) controller.getLevel(), controller.getBlockPos());
         MachineControllerMenu menu = new MachineControllerMenu(1, new Inventory(player), controller);
         player.containerMenu = menu;
         controller.sendClientStateBaseline(player);
         ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, menu));
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, menu));
+        assertThat(uiSnapshots(player)).hasSize(1);
         AtomicInteger callbacks = new AtomicInteger();
         textRegistrations.add(ControllerScreenTextRegistry.register(machineId, context -> callbacks.incrementAndGet()));
 
@@ -415,7 +445,9 @@ class MachineControllerBlockEntityTest {
         controller.onDataStorageChanged(storage);
         ControllerScreenTextRegistry.apply(runtime.runtimeContext());
 
-        assertThat(textPackets(player)).hasSize(1);
+        menu.broadcastChanges();
+        assertThat(uiSnapshots(player)).hasSize(1);
+        assertThat(menu.uiServerSession().closed()).isTrue();
         assertThat(machineStatePackets(player)).hasSize(1);
         assertThat(callbacks).hasValue(1);
     }
@@ -1018,8 +1050,8 @@ class MachineControllerBlockEntityTest {
         LongSet pendingChunks = (LongSet) pending.get(later.connection.chunkSender);
         pendingChunks.add(new ChunkPos(BlockPos.ZERO).toLong());
         setPlayers(level, List.of(first, later));
-        assertThat(level.getChunkSource().chunkMap.isChunkTracked(first, 0, 0)).isTrue();
-        assertThat(level.getChunkSource().chunkMap.isChunkTracked(later, 0, 0)).isFalse();
+        assertThat(level.getChunkSource().chunkMap.getPlayers(new ChunkPos(0, 0), false)).contains(first);
+        assertThat(level.getChunkSource().chunkMap.getPlayers(new ChunkPos(0, 0), false)).doesNotContain(later);
         ControllerSyncEvents.onControllerLoaded(controller);
         runtime.beginUpdateBatch();
         runtime.endUpdateBatch();
@@ -1029,7 +1061,7 @@ class MachineControllerBlockEntityTest {
         runtime.endUpdateBatch();
         assertThat(machineStatePackets(later)).isEmpty();
         pendingChunks.clear();
-        assertThat(level.getChunkSource().chunkMap.isChunkTracked(later, 0, 0)).isTrue();
+        assertThat(level.getChunkSource().chunkMap.getPlayers(new ChunkPos(0, 0), false)).contains(later);
         controller.sendClientStateBaseline(later);
         runtime.beginUpdateBatch();
         runtime.endUpdateBatch();
@@ -1902,7 +1934,7 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
-    void formation_batch_sends_the_final_factory_snapshot_to_an_open_menu() throws Exception {
+    void formation_batch_closes_old_opening_and_reopen_observes_final_factory_snapshot() throws Exception {
         ResourceLocation firstMachineId = MMCR.id("factory_menu_first");
         ResourceLocation secondMachineId = MMCR.id("factory_menu_second");
         BlockArray pattern = new BlockArray(Map.of(new BlockPos(1, 0, 0),
@@ -1923,20 +1955,38 @@ class MachineControllerBlockEntityTest {
         RuntimeTestFixtures.republish(controller);
 
         ServerLevel level = (ServerLevel) controller.getLevel();
+        setField(Level.class, level, "registryAccess",
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
         ServerPlayer player = testPlayer(level, controller.getBlockPos());
         FactoryControllerMenu menu = new FactoryControllerMenu(1, new Inventory(player), controller, player);
         player.containerMenu = menu;
         setField(ServerLevel.class, level, "players", List.of(player));
-        controller.observeMenu(player, menu);
+        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, menu));
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, menu));
         assertThat(menu.machineName()).isEqualTo(firstMachine.displayNameKey());
+        assertThat(uiSnapshots(player)).singleElement()
+                .satisfies(packet -> assertThat(packet.snapshotData().machineId()).isEqualTo(firstMachineId));
 
         controller.invalidateFormedStructure();
         controller.setMachine(secondMachine);
         controller.serverTick();
 
         assertThat(controller.structureSnapshot().formed()).isTrue();
-        assertThat(menu.isFormed()).isTrue();
-        assertThat(menu.machineName()).isEqualTo(secondMachine.displayNameKey());
+        menu.broadcastChanges();
+        assertThat(menu.uiServerSession().closed()).isTrue();
+        assertThat(uiSnapshots(player)).hasSize(1);
+        FactoryControllerMenu reopened = new FactoryControllerMenu(2, new Inventory(player), controller, player);
+        player.containerMenu = reopened;
+        ControllerSyncEvents.onMenuOpen(new PlayerContainerEvent.Open(player, reopened));
+        ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, reopened));
+        assertThat(reopened.isFormed()).isTrue();
+        assertThat(reopened.machineName()).isEqualTo(secondMachine.displayNameKey());
+        assertThat(uiSnapshots(player)).hasSize(2);
+        assertThat(uiSnapshots(player).getLast().sessionId()).isEqualTo(reopened.uiOpenData().sessionId())
+                .isNotEqualTo(menu.uiOpenData().sessionId());
+        assertThat(uiSnapshots(player).getLast().snapshotData().machineId()).isEqualTo(secondMachineId);
+        assertThat(uiSnapshots(player).getLast().snapshotData().machineName().getString())
+                .isEqualTo(secondMachine.displayNameKey());
     }
 
     @Test
@@ -3260,6 +3310,7 @@ class MachineControllerBlockEntityTest {
         }
 
         @Override public LongItemStorage itemHandler() { return storage; }
+        @Override public LongItemStorage nativeItemHandler() { return storage; }
     }
 
     /** @author howxu <dev@howxu.cn> */
@@ -3336,6 +3387,14 @@ class MachineControllerBlockEntityTest {
                 .toList();
     }
 
+    private static List<PktControllerUiSnapshotPayload> uiSnapshots(ServerPlayer player) {
+        return ((TestConnection) player.connection).packets.stream()
+                .filter(ClientboundCustomPayloadPacket.class::isInstance)
+                .map(packet -> ((ClientboundCustomPayloadPacket) packet).payload())
+                .filter(PktControllerUiSnapshotPayload.class::isInstance)
+                .map(PktControllerUiSnapshotPayload.class::cast).toList();
+    }
+
     private static List<PktMachineStatePayload> machineStatePackets(ServerPlayer player) {
         return ((TestConnection) player.connection).packets.stream()
                 .filter(packet -> packet instanceof ClientboundCustomPayloadPacket)
@@ -3382,24 +3441,49 @@ class MachineControllerBlockEntityTest {
 
     private static ServerPlayer player(ServerLevel level, BlockPos pos) throws Exception {
         ServerPlayer player = (ServerPlayer) unsafe().allocateInstance(ServerPlayer.class);
+        Field counter = Entity.class.getDeclaredField("ENTITY_COUNTER");
+        counter.setAccessible(true);
+        player.setId(((AtomicInteger) counter.get(null)).incrementAndGet());
+        UUID uuid = UUID.randomUUID();
+        player.setUUID(uuid);
+        setField(Player.class, player, "gameProfile", new GameProfile(uuid, "mmcr-fixture-" + player.getId()));
         setField(Entity.class, player, "level", level);
         setField(Entity.class, player, "position", Vec3.atCenterOf(pos));
+        Inventory inventory = new Inventory(player);
+        setField(Player.class, player, "inventory", inventory);
+        InventoryMenu inventoryMenu = new InventoryMenu(inventory, true, player);
+        setField(Player.class, player, "inventoryMenu", inventoryMenu);
+        player.containerMenu = inventoryMenu;
         TestConnection connection = (TestConnection) unsafe().allocateInstance(TestConnection.class);
         connection.packets = new ArrayList<>();
+        Connection nativeConnection = new Connection(PacketFlow.SERVERBOUND);
+        new EmbeddedChannel(nativeConnection);
+        setField(ServerCommonPacketListenerImpl.class, connection, "connection", nativeConnection);
         setField(ServerGamePacketListenerImpl.class, connection, "chunkSender", new PlayerChunkSender(true));
         player.connection = connection;
         player.setChunkTrackingView(ChunkTrackingView.of(new ChunkPos(pos), 4));
-        if (level.getChunkSource() == null) {
-            var source = (ServerChunkCache) unsafe().allocateInstance(ServerChunkCache.class);
-            setField(ServerChunkCache.class, source, "chunkMap", unsafe().allocateInstance(ChunkMap.class));
-            setField(ServerLevel.class, level, "chunkSource", source);
-        }
+        initializeTracking(level);
         return player;
     }
 
+    private static void initializeTracking(ServerLevel level) throws Exception {
+        if (level.getChunkSource() == null) {
+            var source = (ServerChunkCache) unsafe().allocateInstance(ServerChunkCache.class);
+            var chunkMap = (ChunkMap) unsafe().allocateInstance(ChunkMap.class);
+            setField(ChunkMap.class, chunkMap, "playerMap", new PlayerMap());
+            setField(ServerChunkCache.class, source, "chunkMap", chunkMap);
+            setField(ServerLevel.class, level, "chunkSource", source);
+        }
+    }
+
     private static void setPlayers(ServerLevel level, List<ServerPlayer> players) throws Exception {
+        initializeTracking(level);
+        Field playerMapField = ChunkMap.class.getDeclaredField("playerMap");
+        playerMapField.setAccessible(true);
+        PlayerMap playerMap = (PlayerMap) playerMapField.get(level.getChunkSource().chunkMap);
         for (ServerPlayer previous : level.players()) {
             if (!players.contains(previous)) {
+                playerMap.removePlayer(previous);
                 if (previous.containerMenu instanceof MachineControllerMenu menu
                         && level.getBlockEntity(menu.controllerPos()) instanceof MachineControllerBlockEntity controller) {
                     controller.forgetMenu(previous, menu);
@@ -3412,6 +3496,7 @@ class MachineControllerBlockEntityTest {
         }
         setField(ServerLevel.class, level, "players", players);
         for (ServerPlayer player : players) {
+            playerMap.addPlayer(player, false);
             if (player.containerMenu instanceof MachineControllerMenu menu
                     && level.getBlockEntity(menu.controllerPos()) instanceof MachineControllerBlockEntity controller) {
                 controller.observeMenu(player, menu);

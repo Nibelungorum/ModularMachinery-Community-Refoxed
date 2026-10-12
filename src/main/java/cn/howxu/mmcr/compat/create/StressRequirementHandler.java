@@ -159,13 +159,14 @@ public final class StressRequirementHandler implements RequirementHandler<Stress
 
     private static CapabilityResult commit(StressRequirement requirement, PlanningContext context,
                                             StressSession session, List<Allocation> allocations) {
-        if (session == null) return commitFailure(requirement, context, CreateFailureReasons.MISSING_RECIPE_SCOPE);
+        if (session == null || session.cancelled()) return commitFailure(requirement, context, CreateFailureReasons.MISSING_RECIPE_SCOPE);
         if (!CreateBridge.get().available()) return commitFailure(requirement, context, CreateFailureReasons.CREATE_UNAVAILABLE);
         FailureReason failure = preflight(requirement, context.requirementIndex(), session, allocations);
         if (failure != null) return commitFailure(requirement, context, failure);
         session.beginCommit(context.requirementIndex());
         try {
             for (Allocation allocation : allocations) {
+                if (session.cancelled()) return commitFailure(requirement, context, CreateFailureReasons.MISSING_RECIPE_SCOPE);
                 if (requirement.io() == RecipeModifier.IOType.INPUT
                         && allocation.facet().networkIdentity() != allocation.network()) {
                     session.release(context.requirementIndex());
@@ -174,6 +175,7 @@ public final class StressRequirementHandler implements RequirementHandler<Stress
                 session.track(allocation.facet(), context.requirementIndex(), requirement.io());
                 CapabilityResult result = allocation.facet().apply(session, context.requirementIndex(), allocation.baseStress(),
                         requirement.io() == RecipeModifier.IOType.OUTPUT ? requirement.rpm() : 0D);
+                if (session.cancelled()) return commitFailure(requirement, context, CreateFailureReasons.MISSING_RECIPE_SCOPE);
                 if (!result.success()) {
                     session.release(context.requirementIndex());
                     return result;

@@ -13,11 +13,13 @@ import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.compat.pneumaticcraft.loaded.AirInterfaceKind;
 import cn.howxu.mmcr.compat.pneumaticcraft.loaded.AirPortBlockEntity;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
@@ -82,8 +84,13 @@ public final class PneumaticRecipeGameTest {
         helper.assertTrue(waitKey != null && !wait.canSearch(searchTime, waitKey),
                 "Insufficient native pressure enters recipe search backoff");
         setAir(fixture.input(), 40_080);
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
         helper.assertTrue(wait.canSearch(searchTime, waitKey),
-                "Native refill observation wakes the matching input search without waiting world ticks");
+                "Flushed native refill observation wakes the matching input search without waiting world ticks");
+        long epoch = fixture.controller().resourceAvailabilityEpoch();
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
+        helper.assertTrue(fixture.controller().resourceAvailabilityEpoch() == epoch,
+                "Unchanged air refill flush publishes no duplicate availability fact");
         factory.clear();
 
         CraftingRuntime runtime = owner.craftingRuntime();
@@ -164,6 +171,7 @@ public final class PneumaticRecipeGameTest {
         int capacity = (int) Math.floor((double) fixture.output().airHandler().getDangerPressure()
                 * fixture.output().airHandler().getVolume());
         setAir(fixture.output(), capacity);
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
         MachineRecipe outputOnly = recipe(helper, OUTPUT_WAIT_ID);
         FactoryRuntime factory = controllerRuntime(fixture.controller()).factoryRuntime();
         factory.ensureBaseLane(fixture.controller());
@@ -174,8 +182,9 @@ public final class PneumaticRecipeGameTest {
         helper.assertTrue(waitKey != null && !wait.canSearch(searchTime, waitKey),
                 "Full native output establishes targeted output-capacity search backoff");
         setAir(fixture.output(), capacity - 80);
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
         helper.assertTrue(wait.canSearch(searchTime, waitKey),
-                "Observed native extraction wakes the matching output-capacity search immediately");
+                "Flushed native extraction wakes the matching output-capacity search without waiting world ticks");
         factory.clear();
         setAir(fixture.output(), capacity);
         CraftingRuntime outputRuntime = new CraftingRuntime(fixture.controller(), fixture.controller().componentRuntime());
@@ -222,6 +231,8 @@ public final class PneumaticRecipeGameTest {
         controller.setMachine(MachineRegistry.getMachine(MACHINE_ID));
         controller.requestImmediateStructureCheck();
         controller.tickStructure(helper.getLevel(), controller.getBlockPos());
+        // The test controls native IO steps directly, without an automatic output-only recipe start.
+        SharedIoCoordinator.get(helper.getLevel()).markControllerEligible(controller, helper.getLevel().getGameTime());
         helper.assertTrue(controller.currentStructureSnapshot().formed()
                         && input.linkedControllerPositions().contains(controller.getBlockPos())
                         && output.linkedControllerPositions().contains(controller.getBlockPos()),

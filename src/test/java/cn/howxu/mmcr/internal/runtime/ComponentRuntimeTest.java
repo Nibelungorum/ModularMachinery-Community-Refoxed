@@ -271,6 +271,7 @@ class ComponentRuntimeTest {
         assertThat(shared.amountReads).isZero();
         shared.forceExtract(0, 4L, true);
         assertThat(runtime.capabilityContentRevision()).isEqualTo(revision + 2L);
+        shared.resetReads(); // The native simulation reads its resource; measure only presentation work below.
         var after = runtime.capabilityPresentations();
         assertThat(after.subList(0, 3)).allSatisfy(row -> assertThat(row.amount()).isEqualTo(10L));
         assertThat(before.subList(0, 3)).allSatisfy(row -> assertThat(row.amount()).isZero());

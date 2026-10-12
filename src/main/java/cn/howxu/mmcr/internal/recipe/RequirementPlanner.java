@@ -188,15 +188,15 @@ public final class RequirementPlanner {
             } else {
                 RequirementPlan plan = handler(requirement.type()).plan(requirement, matching, requirementContext);
                 if (!plan.successful()) return failed(plan.failure(), originalIndex, plans, plan);
-                if (plan.maxParallelism() < selected) {
-                    return failed(failure(requirement, originalIndex), originalIndex, plans, plan);
-                }
                 RequirementPlan.ReservationResult reservation = plan.reservationResult(selected, feasibilityReservations);
                 if (reservation.failure() != null) {
                     RequirementPlan rejected = RequirementPlan.withOutputSimulation(originalIndex, selected,
                             List.of(), reservation.failure(), reservation.outputSimulation() == null
                                     ? plan.outputSimulation() : reservation.outputSimulation());
                     return failed(reservation.failure(), originalIndex, plans, rejected);
+                }
+                if (plan.maxParallelism() < selected) {
+                    return failed(failure(requirement, originalIndex), originalIndex, plans, plan);
                 }
                 resolved = plan.preparedAt(selected);
                 if (reservation.outputSimulation() != null) {

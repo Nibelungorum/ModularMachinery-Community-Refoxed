@@ -7,11 +7,13 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.compat.ars_nouveau.loaded.SourcePortBlockEntity;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchContextKey;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
@@ -43,6 +45,8 @@ public final class ArsSourceRecipeGameTest {
         controller.setMachine(MachineRegistry.getMachine(MACHINE_ID));
         controller.requestImmediateStructureCheck();
         controller.tickStructure(helper.getLevel(), controller.getBlockPos());
+        // Explicit lifecycle steps must not compete with an automatic output-only catalog candidate.
+        SharedIoCoordinator.get(helper.getLevel()).markControllerEligible(controller, helper.getLevel().getGameTime());
         helper.assertTrue(controller.currentStructureSnapshot().formed()
                         && input.linkedControllerPositions().contains(controller.getBlockPos())
                         && output.linkedControllerPositions().contains(controller.getBlockPos()),
@@ -67,9 +71,15 @@ public final class ArsSourceRecipeGameTest {
         helper.assertTrue(input.externalHandler().receiveSource(900, true) == 900
                         && input.storage().amount() == 0 && !inputWait.canSearch(gameTime, inputKey),
                 "Native simulation changes neither storage nor source-input search backoff");
-        helper.assertTrue(relay.transferSource(jar.getSourceStorage(), input.externalHandler()) == 900
-                        && inputWait.canSearch(gameTime, inputKey),
+        helper.assertTrue(relay.transferSource(jar.getSourceStorage(), input.externalHandler()) == 900,
+                "Native relay inserts the actual source into the input interface");
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
+        helper.assertTrue(inputWait.canSearch(gameTime, inputKey),
                 "Native relay insertion emits matching INPUT_AVAILABLE and wakes the waiting source lane");
+        long inputEpoch = controller.resourceAvailabilityEpoch();
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
+        helper.assertTrue(controller.resourceAvailabilityEpoch() == inputEpoch,
+                "Repeated clean flush does not republish the source-input availability fact");
         factory.clear();
 
         CraftingRuntime runtime = ownerRuntime.craftingRuntime();
@@ -131,6 +141,7 @@ public final class ArsSourceRecipeGameTest {
                 "Reloaded finish still refuses a smaller positive-parallelism plan");
 
         factory.ensureBaseLane(controller);
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
         factory.tick(List.of(outputOnly), 1, gameTime);
         FactoryRecipeThread outputWait = baseLane(factory);
         RecipeSearchContextKey outputKey = outputWait.searchFailureKey();
@@ -140,8 +151,10 @@ public final class ArsSourceRecipeGameTest {
                         && !outputWait.canSearch(gameTime, outputKey),
                 "Simulated extraction does not wake the source-output lane");
         jar.setSource(jar.getMaxSource() - 100);
-        helper.assertTrue(relay.transferSource(output.externalHandler(), jar.getSourceStorage()) == 100
-                        && outputWait.canSearch(gameTime, outputKey),
+        helper.assertTrue(relay.transferSource(output.externalHandler(), jar.getSourceStorage()) == 100,
+                "Native relay extracts actual source into the jar");
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
+        helper.assertTrue(outputWait.canSearch(gameTime, outputKey),
                 "Native relay extraction emits matching OUTPUT_CAPACITY and wakes a blocked source lane");
         // Make the native retry entry eligible directly; do not wait ten world ticks or mutate level time.
         restored.activeRecipe().markFinishBlocked((int) gameTime - 10);
@@ -177,9 +190,11 @@ public final class ArsSourceRecipeGameTest {
                 "First simulated extraction after reload neither warms the baseline nor wakes the lane");
         jar.setSource(jar.getMaxSource() - 200);
         helper.assertTrue(relay.transferSource(reloaded.externalHandler(), jar.getSourceStorage()) == 200
-                        && reloaded.storage().amount() == reloaded.storage().capacity() - 200
-                        && reloadWait.canSearch(gameTime, reloadKey),
-                "First real native extraction after reload immediately emits OUTPUT_CAPACITY without an inventory prewarm");
+                        && reloaded.storage().amount() == reloaded.storage().capacity() - 200,
+                "First real native extraction after reload mutates the actual store without an inventory prewarm");
+        IOPortBlockEntity.flushStorageChanges(helper.getLevel());
+        helper.assertTrue(reloadWait.canSearch(gameTime, reloadKey),
+                "Flushed first real extraction after reload emits OUTPUT_CAPACITY without an inventory prewarm");
         factory.clear();
         helper.succeed();
     }
