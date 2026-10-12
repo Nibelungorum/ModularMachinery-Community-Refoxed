@@ -1,9 +1,13 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.config.CommonConfig;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
+import net.neoforged.fml.config.IConfigSpec;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,6 +125,85 @@ class ControllerScreenTextStateTest {
         state.append(CONTROLLER, id("example:status"), Component.literal("same"));
 
         assertEquals(revision, state.revision());
+    }
+
+    @Test
+    void repeated_translatable_tick_text_preserves_scope_order_and_tracks_value_changes() {
+        ResourceLocation lineId = id("mmcr_test:modern_ui_value");
+        Component initial = Component.translatable("gui.mmcr_test.modern_ui.controller_value", 0);
+        state.append(CONTROLLER, lineId, initial);
+        state.append(OPERATION, lineId, Component.literal("operation"));
+        ControllerScreenTextSnapshot before = state.snapshot();
+        state.clearDirty();
+
+        state.append(CONTROLLER, lineId,
+                Component.translatable("gui.mmcr_test.modern_ui.controller_value", 0));
+
+        assertThat(state.snapshot()).isEqualTo(before);
+        assertThat(state.dirty()).isFalse();
+
+        Component changed = Component.translatable("gui.mmcr_test.modern_ui.controller_value", 42);
+        state.append(CONTROLLER, lineId, changed);
+
+        assertThat(state.snapshot().lines()).containsExactly(
+                new ControllerScreenTextSnapshot.Line(CONTROLLER, lineId, changed),
+                new ControllerScreenTextSnapshot.Line(OPERATION, lineId, Component.literal("operation")));
+        assertThat(state.revision()).isGreaterThan(before.revision());
+        assertThat(state.dirty()).isTrue();
+    }
+
+    @Test
+    void nested_component_mutation_cannot_bypass_validation_on_resubmission() {
+        ResourceLocation lineId = id("test:nested");
+        MutableComponent argument = Component.literal("small");
+        Component text = Component.translatable("test.translation", argument);
+        state.append(CONTROLLER, lineId, text);
+        ControllerScreenTextSnapshot before = state.snapshot();
+        state.clearDirty();
+
+        ((MutableComponent) ((TranslatableContents)
+                before.lines().getFirst().text().getContents()).getArgs()[0]).append(" snapshot mutation");
+        argument.append(largeComponent());
+
+        assertThatThrownBy(() -> state.append(CONTROLLER, lineId, text))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Encoded controller screen text is too large");
+        assertThat(state.snapshot().lines().getFirst().text())
+                .isEqualTo(Component.translatable("test.translation", Component.literal("small")));
+        assertThat(state.revision()).isEqualTo(before.revision());
+        assertThat(state.dirty()).isFalse();
+    }
+
+    @Test
+    void repeated_text_is_revalidated_after_limits_are_lowered() throws Exception {
+        CommentedConfig config = CommentedConfig.inMemory();
+        CommonConfig.SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        CommonConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+        try {
+            ResourceLocation lineId = id("test:existing");
+            Component text = Component.literal("existing");
+            state.append(CONTROLLER, lineId, text);
+            state.append(CONTROLLER, id("test:other"), Component.literal("other"));
+            ControllerScreenTextSnapshot before = state.snapshot();
+            state.clearDirty();
+
+            CommonConfig.SCREEN_TEXT_MAX_LINES.set(1);
+            assertThatThrownBy(() -> state.append(CONTROLLER, lineId, text))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Too many controller screen text lines");
+            CommonConfig.SCREEN_TEXT_MAX_LINES.set(CommonConfig.DEFAULT_SCREEN_TEXT_MAX_LINES);
+            CommonConfig.SCREEN_TEXT_MAX_ENCODED_BYTES.set(1);
+            assertThatThrownBy(() -> state.append(CONTROLLER, lineId, text))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Encoded controller screen text is too large");
+
+            assertThat(state.snapshot()).isEqualTo(before);
+            assertThat(state.dirty()).isFalse();
+        } finally {
+            CommonConfig.SPEC.acceptConfig(null);
+        }
     }
 
     @Test

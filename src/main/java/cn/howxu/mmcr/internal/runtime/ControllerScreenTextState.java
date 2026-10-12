@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.presentation.ComponentSnapshots;
 import cn.howxu.mmcr.config.CommonConfig;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
@@ -31,6 +32,8 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     private final Map<ResourceLocation, Component> pendingReplacements = new LinkedHashMap<>();
     private long revision;
     private boolean dirty;
+    private int validatedMaxLines = -1;
+    private int validatedMaxEncodedTextBytes = -1;
 
     @Override
     public void append(ControllerScreenTextScope scope, ResourceLocation lineId, Component text) {
@@ -53,7 +56,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         }
 
         ControllerScreenTextSnapshot.Line replacement = new ControllerScreenTextSnapshot.Line(
-                scope, lineId, text.copy());
+                scope, lineId, ComponentSnapshots.copy(text));
         Map<Key, ControllerScreenTextSnapshot.Line> candidate = new LinkedHashMap<>(lines);
         candidate.remove(key);
         Map<Key, ControllerScreenTextSnapshot.Line> ordered = new LinkedHashMap<>();
@@ -72,7 +75,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     @Override
     public void replace(ResourceLocation lineId, Component text) {
         requireNamespaced(lineId);
-        pendingReplacements.put(lineId, Objects.requireNonNull(text, "text").copy());
+        pendingReplacements.put(lineId, ComponentSnapshots.copy(Objects.requireNonNull(text, "text")));
     }
 
     @Override
@@ -94,7 +97,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
 
     public ControllerScreenTextSnapshot snapshot() {
         return new ControllerScreenTextSnapshot(revision, lines.values().stream()
-                .map(line -> new ControllerScreenTextSnapshot.Line(line.scope(), line.lineId(), line.text().copy()))
+                .map(line -> new ControllerScreenTextSnapshot.Line(line.scope(), line.lineId(), ComponentSnapshots.copy(line.text())))
                 .toList());
     }
 
@@ -118,7 +121,7 @@ public final class ControllerScreenTextState implements ControllerScreenText {
             if (key == null) continue;
             ControllerScreenTextSnapshot.Line old = candidate.get(key);
             candidate.put(key, new ControllerScreenTextSnapshot.Line(
-                    old.scope(), old.lineId(), replacement.getValue().copy()));
+                    old.scope(), old.lineId(), ComponentSnapshots.copy(replacement.getValue())));
         }
         validateCandidate(candidate);
         boolean changed = !new ArrayList<>(lines.entrySet()).equals(new ArrayList<>(candidate.entrySet()));
@@ -137,9 +140,14 @@ public final class ControllerScreenTextState implements ControllerScreenText {
 
     private void appendInternal(Key key, Component text) {
         Objects.requireNonNull(text, "text");
+        ControllerScreenTextSnapshot.Line current = lines.get(key);
+        // Owned text can skip encoding only while the limits used to validate it are unchanged.
+        if (current != null && current.text().equals(text)
+                && validatedMaxLines == maxLines()
+                && validatedMaxEncodedTextBytes == maxEncodedTextBytes()) return;
 
         ControllerScreenTextSnapshot.Line replacement = new ControllerScreenTextSnapshot.Line(
-                key.scope(), key.lineId(), text.copy());
+                key.scope(), key.lineId(), ComponentSnapshots.copy(text));
         Map<Key, ControllerScreenTextSnapshot.Line> candidate = new LinkedHashMap<>(lines);
         candidate.put(key, replacement);
         validateCandidate(candidate);
@@ -172,8 +180,10 @@ public final class ControllerScreenTextState implements ControllerScreenText {
         }
     }
 
-    private static void validateCandidate(Map<Key, ControllerScreenTextSnapshot.Line> candidate) {
-        if (candidate.size() > maxLines()) {
+    private void validateCandidate(Map<Key, ControllerScreenTextSnapshot.Line> candidate) {
+        int lineLimit = maxLines();
+        int byteLimit = maxEncodedTextBytes();
+        if (candidate.size() > lineLimit) {
             throw new IllegalArgumentException("Too many controller screen text lines");
         }
 
@@ -184,13 +194,15 @@ public final class ControllerScreenTextState implements ControllerScreenText {
                 buffer.writeVarInt(line.scope().ordinal());
                 ResourceLocation.STREAM_CODEC.encode(buffer, line.lineId());
                 ComponentSerialization.STREAM_CODEC.encode(buffer, line.text());
-                if (buffer.writerIndex() > maxEncodedTextBytes()) {
+                if (buffer.writerIndex() > byteLimit) {
                     throw new IllegalArgumentException("Encoded controller screen text is too large");
                 }
             }
         } finally {
             buffer.release();
         }
+        validatedMaxLines = lineLimit;
+        validatedMaxEncodedTextBytes = byteLimit;
     }
 
     private record Key(ControllerScreenTextScope scope, ResourceLocation lineId) {
