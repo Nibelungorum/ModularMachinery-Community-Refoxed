@@ -1,3 +1,5 @@
+import java.util.zip.GZIPOutputStream
+
 sourceSets.main {
     resources.setSrcDirs(['src/main/resources', 'src/generated/resources'])
 }
@@ -5,6 +7,39 @@ sourceSets.main {
 sourceSets.test {
     resources.setSrcDirs(['src/test/resources'])
 }
+
+// Empty templates still determine GameTest clearing, chunk loading and grid spacing.
+def generateGameTestTemplates = tasks.register('generateGameTestTemplates') {
+    def outputDirectory = layout.buildDirectory.dir('generated/gametestTemplates')
+    def size = [64, 16, 64]
+    inputs.property('size', size)
+    outputs.dir(outputDirectory)
+    doLast {
+        def target = outputDirectory.get().file('data/mmcr/structure/empty_compact.nbt').asFile
+        target.parentFile.mkdirs()
+        new DataOutputStream(new GZIPOutputStream(new FileOutputStream(target))).withCloseable { out ->
+            out.writeByte(10) // Root compound, unnamed.
+            out.writeUTF('')
+            out.writeByte(3)
+            out.writeUTF('DataVersion')
+            out.writeInt(3955) // Minecraft 1.21.1.
+            out.writeByte(9)
+            out.writeUTF('size')
+            out.writeByte(3)
+            out.writeInt(size.size())
+            size.each { out.writeInt(it) }
+            ['palette', 'blocks', 'entities'].each { name ->
+                out.writeByte(9)
+                out.writeUTF(name)
+                out.writeByte(10)
+                out.writeInt(0)
+            }
+            out.writeByte(0)
+        }
+    }
+}
+
+sourceSets.gametest.resources.srcDir(generateGameTestTemplates)
 
 tasks.withType(ProcessResources).configureEach {
     var replaceProperties = [
