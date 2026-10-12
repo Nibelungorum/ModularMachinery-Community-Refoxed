@@ -93,9 +93,6 @@ public final class RunningRecipeGameTest {
     public static void installedFluidProbabilityAttempts(GameTestHelper helper) {
         var fluid = place(helper, new BlockPos(1, 1, 1), "fluid_input_hatch", FluidInputHatchBlockEntity.class);
         var energy = place(helper, new BlockPos(2, 1, 1), "energy_input_hatch", EnergyInputHatchBlockEntity.class);
-        energy.energyStorage().setAmount(1_000L);
-        helper.assertTrue(fluid.fluidHandler(null).fill(new FluidStack(Fluids.WATER, 2_000), FluidAction.EXECUTE) == 2_000,
-                "Real registered fluid hatch accepts runtime water");
         var controller = controller(helper, List.of(energy, fluid));
         var runtime = attachedRuntime(controller);
         var type = fluidProbabilityType();
@@ -106,6 +103,11 @@ public final class RunningRecipeGameTest {
             for (var mode : MachineWorkMode.values()) {
                 setWorkMode(controller, mode);
                 for (float chance : new float[] { 0.5F, 1F }) {
+                    // Keep each mode/chance case independent of earlier random consumption.
+                    energy.energyStorage().setAmount(1_000L);
+                    fluid.fluidHandler(null).clearContent();
+                    helper.assertTrue(fluid.fluidHandler(null).fill(new FluidStack(Fluids.WATER, 2_000), FluidAction.EXECUTE) == 2_000,
+                            "Real registered fluid hatch accepts runtime water");
                     var wrapped = new ProbabilityFluidRequirement(type, new FluidRequirement(IOType.INPUT,
                             FluidIngredient.of(Fluids.WATER), 100, FluidStack.EMPTY, 1F, chance));
                     // Independent restored executions isolate formal attempts from admission/start probability.
