@@ -105,7 +105,7 @@ public final class InterfaceTooltips {
     }
 
     public static List<Component> energyTooltip(ExtendedEnergyHatchSize size) {
-        return energyTooltip(size.capacity(), size.transfer());
+        return energyTooltip(size.capacity(), Math.min(size.transfer(), Integer.MAX_VALUE));
     }
 
     static List<Component> energyTooltip(long capacity, long transfer) {
@@ -162,7 +162,7 @@ public final class InterfaceTooltips {
     }
 
     private static String formatAmount(long amount, String unit) {
-        return ReadableNumber.format(amount) + " " + unit;
+        return ReadableNumber.formatExact(amount) + " " + unit;
     }
 
     private static String formatAmount(double amount, String unit) {

@@ -72,7 +72,7 @@ public class E2ERecipeRunGameTest {
 
         MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
         controller.setMachine(machine);
-        helper.runAtTickTime(120, () -> {
+        helper.succeedWhen(() -> {
             helper.assertTrue(controller.structureSnapshot().formed(), "Structure formed");
             ItemStack input = item(helper.getBlockEntity(inputPos), 0);
             ItemStack input1 = item(helper.getBlockEntity(inputPos), 1);
@@ -80,8 +80,9 @@ public class E2ERecipeRunGameTest {
             helper.assertTrue(input.isEmpty() && input1.isEmpty(), "Input ingots consumed input0=" + input + " input1=" + input1
                     + " crafting=" + controller.runtimeSnapshot().crafting()
                     + " failure=" + controller.runtimeSnapshot().crafting().failure());
-            helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget");
-            helper.succeed();
+            helper.assertTrue(output.is(Items.IRON_NUGGET), "Output is iron nugget output=" + output
+                    + " crafting=" + controller.runtimeSnapshot().crafting()
+                    + " failure=" + controller.runtimeSnapshot().crafting().failure());
         });
     }
 

@@ -4,7 +4,6 @@ import cn.howxu.mmcr.client.model.DynamicOverlayBakedModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.client.model.MachineModelDataKeys;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
-import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
@@ -63,17 +62,24 @@ class InterfaceBlockItemTest {
     }
 
     @Test
-    void long_interface_quantities_use_readable_si_formatting() {
-        assertThat(InterfaceTooltips.energyTooltip(ExtendedEnergyHatchSize.ULTIMATE))
-                .extracting(Component::getString)
-                .containsExactly(
-                        "tooltip.mmcr.interface.capacity_label9.22E FE",
-                        "tooltip.mmcr.interface.rate_label9.22E FE/t");
+    void ultimate_extended_energy_tooltips_show_exact_capacity_and_neoforge_transfer_limit() {
+        for (String id : List.of("extended_energy_input_hatch_ultimate", "extended_energy_output_hatch_ultimate")) {
+            assertThat(InterfaceTooltips.tooltipLines(ModBlocks.BLOCKS.get(id).get()))
+                    .as(id)
+                    .extracting(Component::getString)
+                    .containsExactly(
+                            "tooltip.mmcr.interface.capacity_label9,223,372,036,854,775,807 FE",
+                            "tooltip.mmcr.interface.rate_label2,147,483,647 FE/t");
+        }
+    }
+
+    @Test
+    void long_fluid_quantities_show_exact_values_with_grouping() {
         assertThat(InterfaceTooltips.fluidTooltip(Long.MAX_VALUE, Long.MAX_VALUE))
                 .extracting(Component::getString)
                 .containsExactly(
-                        "tooltip.mmcr.interface.capacity_label9.22E mB",
-                        "tooltip.mmcr.interface.rate_label9.22E mB/t");
+                        "tooltip.mmcr.interface.capacity_label9,223,372,036,854,775,807 mB",
+                        "tooltip.mmcr.interface.rate_label9,223,372,036,854,775,807 mB/t");
     }
 
     @Test
