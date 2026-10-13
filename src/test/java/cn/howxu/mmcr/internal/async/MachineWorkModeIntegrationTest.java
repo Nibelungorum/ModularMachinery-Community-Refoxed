@@ -6,6 +6,9 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRole;
+import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
@@ -20,8 +23,10 @@ import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
+import cn.howxu.mmcr.internal.recipe.RecipeThread.StartResult;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.InstalledRecipeProgram;
@@ -51,6 +56,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -76,6 +82,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MachineWorkModeIntegrationTest {
     private ServerThreadTestScope serverThreadScope;
     private ServerLevel level;
+    private MachineRegistration pendingPoolOriginalRegistration;
+    private boolean pendingPoolRegistryPhaseOpen;
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -96,6 +104,12 @@ class MachineWorkModeIntegrationTest {
     @AfterEach
     void discardLevelCoordinators() throws Exception {
         try {
+            if (pendingPoolOriginalRegistration != null) {
+                MachineDefinitions.beginRegistryPhase();
+                MachineDefinitions.replace(pendingPoolOriginalRegistration);
+                if (!pendingPoolRegistryPhaseOpen) MachineDefinitions.freezeRegistryPhase();
+                pendingPoolOriginalRegistration = null;
+            }
             ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
             RecipeRegistry.clearForTesting();
             if (level == null) return;
@@ -526,7 +540,8 @@ class MachineWorkModeIntegrationTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("production_forwarded_start"), machineId, 20,
                 List.of(), List.of());
         RecipeRegistry.registerStatic(recipe);
-        assertThat(lane.searchAndStartRecipe(List.of(recipe), 1L, controller.currentStructureSnapshot().version())).isTrue();
+        assertThat(lane.searchAndStartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version()).ownsStart()).isTrue();
         if (mode == MachineWorkMode.ASYNC) {
             assertThat(phases).isEmpty();
             assertThat(workers).hasSize(1);
@@ -758,6 +773,224 @@ class MachineWorkModeIntegrationTest {
         assertNormalControllerContinuesLastRecipe(mode);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"pause", "pool", "remove", "reset", "replace"})
+    void normal_pending_start_is_revoked_before_the_old_worker_can_pay_or_change_new_search_state(String action)
+            throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        ResourceLocation machineId = MMCR.id("test_cube");
+        ResourceLocation otherPool = MMCR.id("normal_pending_other_pool");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        if (action.equals("pool")) {
+            pendingPoolOriginalRegistration = MachineDefinitions.getRegistration(machineId);
+            pendingPoolRegistryPhaseOpen = MachineDefinitions.isRegistryPhaseOpen();
+            MachineDefinitions.beginRegistryPhase();
+            MachineDefinitions.replace(MachineRegistration.builder(machineId)
+                    .recipePoolIds(List.of(machineId, otherPool)).build());
+        }
+        AtomicInteger starts = new AtomicInteger();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        RuntimeTestFixtures.formStructureWithComponents(controller, normalMachine(machineId,
+                RecipeBehavior.builder().beforeStart(context -> starts.incrementAndGet()).build()), energy);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(),
+                energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        level = (ServerLevel) controller.getLevel();
+        energy.energyStorage().setAmount(100L);
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        MachineAsyncCoordinator async = installQueuedCoordinator(workers);
+        MachineRecipeThread thread = normalRecipeThread(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_pending_" + action), machineId, 1,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.PENDING);
+        assertThat(thread.isStartPending()).isTrue();
+        long attempts = normalSearchAttempts(controller);
+        long epoch = controller.lifecycleEpoch();
+        thread.requestFullSearch();
+
+        switch (action) {
+            case "pause" -> {
+                RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 15);
+                controller.tickRuntimeWork(level, controller.getBlockPos());
+            }
+            case "pool" -> {
+                assertThat(controller.selectRecipePool(otherPool)).isTrue();
+                assertThat(thread.hasFullSearchPending()).isFalse();
+            }
+            case "remove" -> controller.setRemoved();
+            case "reset" -> controller.invalidateFormedStructure();
+            case "replace" -> {
+                controller.setRemoved();
+                RuntimeTestFixtures.replaceBlockEntity(controller,
+                        RuntimeTestFixtures.controllerEntity(machineId, controller.getBlockPos()));
+            }
+            default -> throw new AssertionError(action);
+        }
+        assertThat(controller.lifecycleEpoch()).isGreaterThan(epoch);
+        assertThat(thread.isStartPending()).isFalse();
+        // A stale terminal callback must not consume a request established in the new epoch.
+        thread.requestFullSearch();
+        drainQueuedCoordinator(async, workers);
+
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+        assertThat(starts).hasValue(0);
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.runtime().recipe()).isNull();
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isTrue();
+        assertThat(normalSearchAttempts(controller)).isEqualTo(attempts);
+    }
+
+    @Test
+    void normal_pending_start_switches_to_sync_without_the_old_async_worker_starting_twice() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ResourceLocation machineId = MMCR.id("test_cube");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        AtomicInteger starts = new AtomicInteger();
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        RuntimeTestFixtures.formStructureWithComponents(controller, normalMachine(machineId,
+                RecipeBehavior.builder().beforeStart(context -> starts.incrementAndGet()).build()), energy);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(),
+                energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        level = (ServerLevel) controller.getLevel();
+        energy.energyStorage().setAmount(100L);
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        MachineAsyncCoordinator async = installQueuedCoordinator(workers);
+        // Establish the outgoing mode before a real recipe is available.
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        drainQueuedCoordinator(async, workers);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_pending_switch_to_sync"), machineId, 20,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        MachineRecipeThread thread = normalRecipeThread(controller);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.PENDING);
+        long epoch = controller.lifecycleEpoch();
+        long attempts = normalSearchAttempts(controller);
+
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        drainQueuedCoordinator(async, workers);
+
+        assertThat(controller.lifecycleEpoch()).isGreaterThan(epoch);
+        assertThat(controller.activeWorkMode()).isEqualTo(MachineWorkMode.SYNC);
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.runtime().recipe()).isSameAs(recipe);
+        assertThat(thread.runtime().active()).isTrue();
+        assertThat(thread.runtime().tickCount()).isZero();
+        assertThat(starts).hasValue(1);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(93L);
+        assertThat(normalSearchAttempts(controller)).isEqualTo(attempts + 1L);
+    }
+
+    private MachineAsyncCoordinator installQueuedCoordinator(ArrayDeque<Runnable> workers) throws Exception {
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.forTesting(workers::addLast);
+        Field coordinators = MachineAsyncCoordinator.class.getDeclaredField("COORDINATORS");
+        coordinators.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        Map<ServerLevel, MachineAsyncCoordinator> installed =
+                (Map<ServerLevel, MachineAsyncCoordinator>) coordinators.get(null);
+        installed.put(level, async);
+        return async;
+    }
+
+    @Test
+    void paused_pending_last_recipe_resumes_from_the_candidate_without_a_full_search_or_double_payment()
+            throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ResourceLocation machineId = MMCR.id("test_cube");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SEMI_SYNC);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        AtomicInteger starts = new AtomicInteger();
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        RuntimeTestFixtures.formStructureWithComponents(controller, normalMachine(machineId,
+                RecipeBehavior.builder().beforeStart(context -> starts.incrementAndGet()).build()), energy);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(),
+                energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        level = (ServerLevel) controller.getLevel();
+        energy.energyStorage().setAmount(100L);
+        MachineRecipeThread thread = normalRecipeThread(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_last_recipe_pause_resume"), machineId, 1,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+        thread.runtime().tick();
+        thread.runtime().finish();
+        thread.markRecipeFinished();
+        // Invalidate only execution rules so this legal source takes the queued replan route.
+        controller.componentRuntime().replaceLinkedPortPositions(Set.of(new BlockPos(8, 0, 0)));
+        RuntimeTestFixtures.republish(controller);
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        MachineAsyncCoordinator async = installQueuedCoordinator(workers);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        assertThat(thread.isStartPending()).isTrue();
+        long afterFirst = energy.energyStorage().getAmountAsLong();
+        long attempts = normalSearchAttempts(controller);
+        long epoch = controller.lifecycleEpoch();
+
+        RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 15);
+        controller.tickRuntimeWork(level, controller.getBlockPos());
+        drainQueuedCoordinator(async, workers);
+
+        assertThat(controller.lifecycleEpoch()).isGreaterThan(epoch);
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isFalse();
+        assertThat(thread.hasRestartPending()).isTrue();
+        assertThat(starts).hasValue(1);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterFirst);
+        RuntimeTestFixtures.setDirectSignal(level, controller.getBlockPos(), 0);
+        RuntimeTestFixtures.advanceGameTime(level);
+        RuntimeTestFixtures.beginLevelTick(level, true);
+        controller.serverTick();
+        drainQueuedCoordinator(async, workers);
+        SharedIoEvents.completeLevelTick(level);
+        drainQueuedCoordinator(async, workers);
+
+        assertThat(thread.runtime().active()).isTrue();
+        assertThat(thread.runtime().recipe()).isSameAs(recipe);
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isFalse();
+        assertThat(starts).hasValue(2);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterFirst - 7L);
+        assertThat(normalSearchAttempts(controller)).isEqualTo(attempts);
+    }
+
+    private static void drainQueuedCoordinator(MachineAsyncCoordinator async, ArrayDeque<Runnable> workers) {
+        while (!workers.isEmpty() || async.hasPendingMainStepForTesting()) {
+            while (!workers.isEmpty()) workers.removeFirst().run();
+            async.pumpMainThreadSteps();
+        }
+    }
+
+    private static MachineRecipeThread normalRecipeThread(MachineControllerBlockEntity controller)
+            throws ReflectiveOperationException {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("normalRecipeThread");
+        field.setAccessible(true);
+        return (MachineRecipeThread) field.get(controller);
+    }
+
+    private static long normalSearchAttempts(MachineControllerBlockEntity controller)
+            throws ReflectiveOperationException {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("recipeSearchAttemptCounter");
+        field.setAccessible(true);
+        return field.getLong(controller);
+    }
+
     private void assertNormalControllerContinuesLastRecipe(MachineWorkMode mode) throws ReflectiveOperationException {
         ResourceLocation machineId = MMCR.id("test_cube");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
@@ -808,6 +1041,262 @@ class MachineWorkModeIntegrationTest {
         assertThat(finishes).hasValue(1);
         assertThat(RuntimeTestFixtures.craftingRuntime(controller).active()).isTrue();
         assertThat(RuntimeTestFixtures.craftingRuntime(controller).tickCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void failed_last_recipe_start_forces_one_full_search_for_an_alternative_in_each_mode(MachineWorkMode mode)
+            throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ResourceLocation machineId = MMCR.id("test_cube");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SEMI_SYNC);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        List<ResourceLocation> starts = new ArrayList<>();
+        AtomicInteger finishes = new AtomicInteger();
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        RuntimeTestFixtures.formStructureWithComponents(controller, normalMachine(machineId, RecipeBehavior.builder()
+                .beforeStart(context -> starts.add(context.recipeId()))
+                .beforeFinish(context -> finishes.incrementAndGet()).build()), energy);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(),
+                energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        level = (ServerLevel) controller.getLevel();
+        energy.energyStorage().setAmount(14L);
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        MachineAsyncCoordinator async = installQueuedCoordinator(workers);
+        MachineRecipeThread thread = normalRecipeThread(controller);
+        MachineRecipe first = RecipeTestSupport.create(MMCR.id("normal_fallback_first"), machineId, 1,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+        RecipeRegistry.registerStatic(first);
+        assertThat(thread.searchAndStartRecipe(List.of(first), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+        thread.runtime().tick();
+        thread.tick();
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isTrue();
+        assertThat(starts).containsExactly(first.id(), first.id());
+        assertThat(finishes).hasValue(1);
+        MachineRecipe alternative = RecipeTestSupport.create(MMCR.id("normal_fallback_alternative"), machineId, 20,
+                List.of(), List.of());
+        RecipeRegistry.registerStatic(alternative);
+        long attempts = normalSearchAttempts(controller);
+        ConfigTestSupport.setMachineWorkMode(mode);
+
+        RuntimeTestFixtures.advanceGameTime(level);
+        RuntimeTestFixtures.beginLevelTick(level, true);
+        controller.serverTick();
+        drainQueuedCoordinator(async, workers);
+        SharedIoEvents.completeLevelTick(level);
+        drainQueuedCoordinator(async, workers);
+        SharedIoCoordinator.get(level).resolve(level);
+
+        assertThat(thread.runtime().recipe()).isSameAs(alternative);
+        assertThat(thread.runtime().active()).isTrue();
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isFalse();
+        assertThat(normalSearchAttempts(controller)).isEqualTo(attempts + 1L);
+        assertThat(starts).containsExactly(first.id(), first.id(), alternative.id());
+        assertThat(finishes).hasValue(1);
+        assertThat(energy.energyStorage().getAmountAsLong()).isZero();
+    }
+
+    @Test
+    void ordinary_source_survives_state_and_compatible_catalog_changes_without_consuming_a_peek() throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ResourceLocation machineId = MMCR.id("test_cube");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SEMI_SYNC);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        RuntimeTestFixtures.formStructureWithComponents(controller, normalMachine(machineId, RecipeBehavior.defaults()), energy);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(),
+                energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        energy.energyStorage().setAmount(100L);
+        level = (ServerLevel) controller.getLevel();
+        MachineRecipeThread thread = normalRecipeThread(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_source_revision"), machineId, 1,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+        thread.runtime().ensureInstalledProgram();
+        thread.runtime().tick();
+        thread.runtime().finish();
+        thread.markRecipeFinished();
+        controller.componentRuntime().replaceLinkedPortPositions(Set.of(new BlockPos(8, 0, 0)));
+        controller.componentRuntime().replaceModifiers(Map.of("current_energy", List.of(
+                MachineModifier.numeric("energy", "input", 2D, "multiply", false))));
+        RuntimeTestFixtures.republish(controller);
+        MachineRecipe reloaded = RecipeTestSupport.create(recipe.id(), machineId, 1,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+        MachineRecipe added = RecipeTestSupport.create(MMCR.id("normal_source_catalog_addition"), machineId, 20,
+                List.of(), List.of());
+        long previousCatalog = RecipeRegistry.catalogForPool(machineId).version();
+        RecipeRegistry.replaceDynamic(Map.of(reloaded.id(), reloaded, added.id(), added));
+        assertThat(RecipeRegistry.catalogForPool(machineId).version()).isNotEqualTo(previousCatalog);
+        assertThat(RecipeRegistry.catalogForPool(machineId).recipes()).anyMatch(candidate -> candidate == reloaded);
+        long beforeRestart = energy.energyStorage().getAmountAsLong();
+
+        assertThat(thread.runtime().restartProgramReady(reloaded)).isFalse();
+        assertThat(thread.peekRestartRecipe(List.of(reloaded), 1L,
+                controller.currentStructureSnapshot().version())).isSameAs(reloaded);
+        assertThat(thread.peekRestartRecipe(List.of(reloaded), 1L,
+                controller.currentStructureSnapshot().version())).isSameAs(reloaded);
+        assertThat(thread.tryRestartLastRecipe(List.of(reloaded), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+        assertThat(thread.runtime().recipe()).isSameAs(reloaded);
+        assertThat(thread.hasRestartPending()).isFalse();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(beforeRestart - 14L);
+    }
+
+    @Test
+    void two_sync_controllers_share_receipt_backpressure_and_resume_last_recipe_without_repreparing_or_searching()
+            throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        ResourceLocation machineId = MMCR.id("test_cube");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        AtomicInteger starts = new AtomicInteger();
+        AtomicInteger finishes = new AtomicInteger();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        RuntimeTestFixtures.formStructureWithComponents(controller, normalMachine(machineId, RecipeBehavior.builder()
+                .beforeStart(context -> starts.incrementAndGet())
+                .beforeFinish(context -> finishes.incrementAndGet()).build()), energy);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(),
+                energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        level = (ServerLevel) controller.getLevel();
+        MachineControllerBlockEntity other = RuntimeTestFixtures.controllerEntity(machineId, new BlockPos(3, 0, 0));
+        RuntimeTestFixtures.replaceBlockEntity(controller, other);
+        other.setMachine(normalMachine(machineId, RecipeBehavior.defaults()));
+        other.setFormed(true);
+        StructureClaimRegistry claims = StructureClaimRegistry.get(level);
+        List<StructureClaimRegistry.Claim> sharedClaims = List.of(new StructureClaimRegistry.Claim(
+                energy.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED));
+        assertThat(claims.claim(controller.getBlockPos(), sharedClaims).accepted()).isTrue();
+        assertThat(claims.claim(other.getBlockPos(), sharedClaims).accepted()).isTrue();
+        assertThat(controller.resourceDomain().controllers()).containsExactlyInAnyOrder(controller.getBlockPos(), other.getBlockPos());
+        SharedIoCoordinator shared = SharedIoCoordinator.get(level);
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        MachineAsyncCoordinator async = installQueuedCoordinator(workers);
+        MachineRecipeThread thread = normalRecipeThread(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("sync_shared_receipt_backpressure"), machineId, 1,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+        RecipeRegistry.registerStatic(recipe);
+        energy.energyStorage().setAmount(1000L);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+        thread.runtime().ensureInstalledProgram();
+        long attempts = normalSearchAttempts(controller);
+        long retries = normalSearchRetries(controller);
+
+        // Explicit execution boundaries pay and complete two real executions with ACK workers held back.
+        RuntimeTestFixtures.advanceGameTime(level);
+        RuntimeTestFixtures.beginLevelTick(level, true);
+        controller.serverTick();
+        shared.executeInstalled(level);
+        shared.resolve(level);
+        assertThat(finishes).hasValue(1);
+        assertThat(starts).hasValue(2);
+        assertThat(thread.runtime().active()).isTrue();
+        RuntimeTestFixtures.advanceGameTime(level);
+        RuntimeTestFixtures.beginLevelTick(level, true);
+        controller.serverTick();
+        shared.executeInstalled(level);
+        shared.resolve(level);
+
+        assertThat(finishes).hasValue(2);
+        assertThat(starts).hasValue(2);
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(controller.hasPendingNormalRecipeStart()).isFalse();
+        assertThat(thread.hasRestartPending()).isTrue();
+        assertThat(thread.hasFullSearchPending()).isFalse();
+        assertThat(shared.reserveExecution(thread.runtime(), "base")).isFalse();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(972L);
+        assertThat(normalSearchAttempts(controller)).isEqualTo(attempts);
+        assertThat(normalSearchRetries(controller)).isEqualTo(retries);
+
+        // A later legal ticker while receipts are still unacknowledged must not call beforeStart again.
+        RuntimeTestFixtures.advanceGameTime(level);
+        RuntimeTestFixtures.beginLevelTick(level, true);
+        controller.serverTick();
+        shared.resolve(level);
+        assertThat(starts).hasValue(2);
+        assertThat(thread.hasRestartPending()).isTrue();
+        assertThat(thread.hasFullSearchPending()).isFalse();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(972L);
+        async.pumpReceiptDrains();
+        assertThat(workers).isNotEmpty();
+        drainQueuedCoordinator(async, workers);
+        shared.drainReceiptAcknowledgements(level);
+
+        RuntimeTestFixtures.advanceGameTime(level);
+        RuntimeTestFixtures.beginLevelTick(level, true);
+        controller.serverTick();
+        shared.resolve(level);
+
+        assertThat(thread.runtime().active()).isTrue();
+        assertThat(thread.runtime().recipe()).isSameAs(recipe);
+        assertThat(thread.runtime().tickCount()).isZero();
+        assertThat(thread.runtime().installedProgram()).isNotNull();
+        assertThat(controller.hasPendingNormalRecipeStart()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isFalse();
+        assertThat(starts).hasValue(3);
+        assertThat(finishes).hasValue(2);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(965L);
+        assertThat(normalSearchAttempts(controller)).isEqualTo(attempts);
+        assertThat(normalSearchRetries(controller)).isEqualTo(retries);
+        shared.resolve(level);
+        assertThat(starts).hasValue(3);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(965L);
+    }
+
+    private static long normalSearchRetries(MachineControllerBlockEntity controller) throws ReflectiveOperationException {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("recipeSearchRetryCounter");
+        field.setAccessible(true);
+        return field.getInt(controller);
+    }
+
+    @Test
+    void ordinary_changed_catalog_definition_requests_full_search_and_pause_keeps_a_legal_candidate()
+            throws Exception {
+        ResourceLocation machineId = MMCR.id("test_cube");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SEMI_SYNC);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, normalMachine(machineId, RecipeBehavior.defaults()));
+        level = (ServerLevel) controller.getLevel();
+        MachineRecipeThread thread = normalRecipeThread(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("normal_source_definition"), machineId, 1,
+                List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+        thread.runtime().tick();
+        thread.runtime().finish();
+        thread.markRecipeFinished();
+        thread.cancelAsyncState();
+        assertThat(thread.peekRestartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version())).isSameAs(recipe);
+        thread.reportLastRecipeStartResult(StartResult.DEFERRED);
+        assertThat(thread.peekRestartRecipe(List.of(recipe), 1L,
+                controller.currentStructureSnapshot().version())).isSameAs(recipe);
+        MachineRecipe changed = RecipeTestSupport.create(recipe.id(), machineId, 20, List.of(), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(changed.id(), changed));
+
+        assertThat(thread.tryRestartLastRecipe(List.of(changed), 1L,
+                controller.currentStructureSnapshot().version())).isEqualTo(StartResult.NO_MATCH);
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isTrue();
+        assertThat(thread.hasRestartPending()).isFalse();
+        assertThat(thread.peekRestartRecipe(List.of(changed), 1L,
+                controller.currentStructureSnapshot().version())).isNull();
     }
 
     private static DynamicMachine normalMachine(ResourceLocation machineId, RecipeBehavior behavior) {
@@ -932,7 +1421,7 @@ class MachineWorkModeIntegrationTest {
                 List.of(), List.of());
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version()).ownsStart()).isTrue();
         MachineAsyncCoordinator.get(level).completeTick(() -> 0);
 
         interrupt.accept(controller);

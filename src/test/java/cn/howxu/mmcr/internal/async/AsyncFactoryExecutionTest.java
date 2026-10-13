@@ -342,6 +342,8 @@ class AsyncFactoryExecutionTest {
         List<MachineControllerBlockEntity> controllers = timingControllers(recipe, phases, inputs, outputs);
         MachineControllerBlockEntity controller = controllers.getFirst();
         FactoryRecipeThread lane = attachedLanes(controller).getFirst();
+        // Observe the execution whose request becomes stale independently of the next recipe's admission.
+        lane.setFinishContinuation(null);
         if (finish) {
             for (MachineControllerBlockEntity owner : controllers) {
                 for (FactoryRecipeThread attached : attachedLanes(owner)) attached.tick();

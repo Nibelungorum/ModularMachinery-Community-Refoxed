@@ -868,7 +868,11 @@ public final class CraftingRuntime {
             }
             pendingPrefetchStart = null;
         }
-        for (PreparedPrefetch prefetch : prepared.prefetches()) {
+        releaseUnpaidPrefetches(prepared.prefetches());
+    }
+
+    private void releaseUnpaidPrefetches(List<PreparedPrefetch> prefetches) {
+        for (PreparedPrefetch prefetch : prefetches) {
             if (prefetch.released || prefetch.transferred || prefetch.inFlight) continue;
             long acquired = prefetch.confirmedAmount();
             // An opaque throwing operation cannot authorize releasing somebody else's reservation.
@@ -998,100 +1002,195 @@ public final class CraftingRuntime {
         return start(recipe, requestedParallelism, null);
     }
 
+    /** Start preparation does not pay resources or admit an execution. @author howxu <dev@howxu.cn> */
+    public enum PreparationResult { READY, DEFERRED, FAILED, CANCELLED }
+
+    /** Only READY carries a prepared execution. @author howxu <dev@howxu.cn> */
+    public record StartPreparation(PreparationResult result,
+                                   @Nullable RecipeStartContext.ExecutionSnapshot execution) { }
+
     /** Executes the start behavior callback before shared-IO native admission is requested. */
-    public @Nullable RecipeStartContext.ExecutionSnapshot prepareAsyncStart(MachineRecipe recipe, long requestedParallelism) {
-        if (recipe == null || requestedParallelism <= 0 || active() || patternStartReserved) return null;
+    public StartPreparation prepareStartAttempt(MachineRecipe recipe, long requestedParallelism) {
+        if (active() || patternStartReserved || pendingPatternStart != null || pendingPaymentStart != null) {
+            return new StartPreparation(PreparationResult.DEFERRED, null);
+        }
+        if (recipe == null || requestedParallelism <= 0) {
+            fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()));
+            return new StartPreparation(PreparationResult.FAILED, null);
+        }
+        long lifecycle = controller.lifecycleEpoch();
+        RecipeCommitLedger originalLedger = ledger;
+        try {
+            StartPreparation prepared = prepareStartAttempt(recipe, requestedParallelism, lifecycle, originalLedger);
+            if (!startAttemptCurrent(lifecycle, originalLedger)) {
+                return new StartPreparation(PreparationResult.CANCELLED, null);
+            }
+            if (prepared.result() == PreparationResult.READY
+                    && (patternStartReserved || pendingPatternStart != null || pendingPaymentStart != null)) {
+                return new StartPreparation(PreparationResult.DEFERRED, null);
+            }
+            return prepared;
+        } catch (RuntimeException exception) {
+            MMCR.LOG.warn("Recipe start preparation failed: recipe={} controller={}",
+                    recipe.id(), controller.getBlockPos(), exception);
+            if (!startAttemptCurrent(lifecycle, originalLedger)) {
+                return new StartPreparation(PreparationResult.CANCELLED, null);
+            }
+            fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()));
+            return new StartPreparation(PreparationResult.FAILED, null);
+        }
+    }
+
+    private StartPreparation prepareStartAttempt(MachineRecipe recipe, long requestedParallelism,
+                                                 long lifecycle, RecipeCommitLedger originalLedger) {
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        if (!recipeBelongsToMachine(recipe)
-                || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
+        if (!recipeBelongsToMachine(recipe)) {
+            fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START,
+                    Map.of("reason", "recipe_pool")));
+            return new StartPreparation(PreparationResult.FAILED, null);
+        }
+        if (!runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
+            fail(failure(BuiltinFailureReasons.MODULE_CONNECTION, FailurePhase.RECIPE_START, Map.of()));
+            return new StartPreparation(PreparationResult.FAILED, null);
+        }
         RecipeBehavior behavior = recipeBehavior(runtime);
-        if (behavior == null) return null;
+        if (behavior == null) {
+            fail(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.RECIPE_START, Map.of()));
+            return new StartPreparation(PreparationResult.FAILED, null);
+        }
         EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
+        if (!startAttemptCurrent(lifecycle, originalLedger)) {
+            return new StartPreparation(PreparationResult.CANCELLED, null);
+        }
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
                 effectiveRecipe.parallelismLimit()));
         List<MachineRequirement> requirements = effectiveRecipe.requirements();
         if (!behavior.hasBeforeStart()) {
-            return new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
-                    MachineRequirement.copyList(requirements), effectiveRecipe.outputs());
+            return new StartPreparation(PreparationResult.READY,
+                    new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
+                            MachineRequirement.copyList(requirements), effectiveRecipe.outputs()));
         }
         MachineBehaviorContext machineContext = behaviorContext();
-        long lifecycle = controller.lifecycleEpoch();
-        RecipeCommitLedger originalLedger = ledger;
         RecipeStartContext startContext = new RecipeStartContext(machineContext, recipe, requestedParallelism,
                 effectiveParallelism, effectiveRecipe.duration(),
                 MachineRequirement.copyList(requirements), effectiveRecipe.outputs());
+        if (!startAttemptCurrent(lifecycle, originalLedger)) {
+            return new StartPreparation(PreparationResult.CANCELLED, null);
+        }
         try {
             behavior.beforeStart().accept(startContext);
         } catch (RuntimeException exception) {
             logCallbackFailure("beforeStart", runtime, recipe, exception);
-            if (lifecycle != controller.lifecycleEpoch() || originalLedger != ledger) return null;
+            if (!startAttemptCurrent(lifecycle, originalLedger)) {
+                return new StartPreparation(PreparationResult.CANCELLED, null);
+            }
             fail(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.RECIPE_START, Map.of()));
-            return null;
+            return new StartPreparation(PreparationResult.FAILED, null);
         } finally {
             flushScreenTextReplacements(machineContext.screenText());
         }
-        if (lifecycle != controller.lifecycleEpoch() || originalLedger != ledger || active()) return null;
+        if (!startAttemptCurrent(lifecycle, originalLedger)) {
+            return new StartPreparation(PreparationResult.CANCELLED, null);
+        }
         if (startContext.cancelled()) {
             stopEnergyPrefetch();
             failure = null;
             status = CraftingStatus.IDLE;
-            return null;
+            return new StartPreparation(PreparationResult.CANCELLED, null);
         }
-        return startContext.snapshot();
+        if (patternStartReserved || pendingPatternStart != null || pendingPaymentStart != null) {
+            return new StartPreparation(PreparationResult.DEFERRED, null);
+        }
+        return new StartPreparation(PreparationResult.READY, startContext.snapshot());
+    }
+
+    private boolean startAttemptCurrent(long lifecycle, RecipeCommitLedger payment) {
+        return lifecycle == controller.lifecycleEpoch() && payment == ledger && !active();
+    }
+
+    /** Nullable compatibility bridge for callers that do not need the preparation outcome. */
+    public @Nullable RecipeStartContext.ExecutionSnapshot prepareAsyncStart(MachineRecipe recipe, long requestedParallelism) {
+        return prepareStartAttempt(recipe, requestedParallelism).execution();
     }
 
     public CraftingStatus start(MachineRecipe recipe, long requestedParallelism,
                                 @Nullable RecipeStartContext.ExecutionSnapshot preparedStart) {
+        if (active() || patternStartReserved || pendingPatternStart != null || pendingPaymentStart != null) return status;
         if (recipe == null || requestedParallelism <= 0) {
             return fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()));
         }
-        if (active() || errorPaused() || patternStartReserved || pendingPaymentStart != null) return status;
-        if (!reserveStartSlot()) return status;
-
-        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
-        if (!recipeBelongsToMachine(recipe)) {
-            return fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START,
-                    Map.of("reason", "recipe_pool")));
+        if (errorPaused()) return status;
+        long lifecycle = controller.lifecycleEpoch();
+        RecipeCommitLedger originalLedger = ledger;
+        PreparedStart prepared;
+        List<MachineRequirement> executionRequirements;
+        List<MachineOutput> executionOutputs;
+        List<PreparedPrefetch> prefetches = List.of();
+        try {
+            if (!reserveStartSlot()) return status;
+            ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+            if (!recipeBelongsToMachine(recipe)) {
+                return fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START,
+                        Map.of("reason", "recipe_pool")));
+            }
+            if (!runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
+                return fail(failure(BuiltinFailureReasons.MODULE_CONNECTION, FailurePhase.RECIPE_START, Map.of()));
+            }
+            RecipeBehavior behavior = recipeBehavior(runtime);
+            if (behavior == null) {
+                return fail(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.RECIPE_START, Map.of()));
+            }
+            RecipeStartContext.ExecutionSnapshot effective = preparedStart == null
+                    ? prepareAsyncStart(recipe, requestedParallelism) : preparedStart;
+            if (!startAttemptCurrent(lifecycle, originalLedger)) return status;
+            if (effective == null) {
+                releaseStartSlot();
+                return status;
+            }
+            EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
+            long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
+                    effectiveRecipe.parallelismLimit()));
+            List<MachineRequirement> requirements = MachineRequirement.copyList(effective.requirements());
+            // Extension copies must succeed before payment, including the copies used during activation.
+            executionRequirements = MachineRequirement.copyList(requirements);
+            executionOutputs = MachineOutput.copyList(effective.outputs());
+            List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(List.of());
+            CraftingContext context = context(runtime);
+            if (!startAttemptCurrent(lifecycle, originalLedger)) return status;
+            boolean restarting = restartRecipe == recipe;
+            // beforeStart has already run and frozen its edits. Unknown edits are executed by the full compatibility set.
+            restartProgramAuthorized = restarting && restartRuleCurrent(recipe, runtime);
+            if (restartProgramAuthorized) {
+                effectiveParallelism = Math.min(effectiveParallelism, restartRule.maximumParallelism());
+            }
+            PlanningResult result = planStartInputs(context, requirements, facets, effectiveParallelism);
+            if (!startAttemptCurrent(lifecycle, originalLedger)) return status;
+            CraftingPlan plan = result.plan();
+            if (!result.successful() || plan == null) return fail(result.failure());
+            prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
+            if (!startAttemptCurrent(lifecycle, originalLedger)) {
+                if (prefetches != null) releaseUnpaidPrefetches(prefetches);
+                return status;
+            }
+            if (prefetches == null) return fail(missingInputStatus());
+            prepared = new PreparedStart(effectiveRecipe, runtime,
+                    catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches);
+        } catch (RuntimeException exception) {
+            if (prefetches != null) releaseUnpaidPrefetches(prefetches);
+            MMCR.LOG.warn("Recipe start planning failed: recipe={} controller={}",
+                    recipe.id(), controller.getBlockPos(), exception);
+            if (!startAttemptCurrent(lifecycle, originalLedger)) return status;
+            return fail(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()));
         }
-        if (!runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
-            return fail(failure(BuiltinFailureReasons.MODULE_CONNECTION, FailurePhase.RECIPE_START, Map.of()));
-        }
-        RecipeBehavior behavior = recipeBehavior(runtime);
-        if (behavior == null) {
-            return fail(failure(BuiltinFailureReasons.RECIPE_BEHAVIOR, FailurePhase.RECIPE_START, Map.of()));
-        }
-        RecipeStartContext.ExecutionSnapshot effective = preparedStart == null
-                ? prepareAsyncStart(recipe, requestedParallelism) : preparedStart;
-        if (effective == null) {
-            releaseStartSlot();
-            return status;
-        }
-        EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
-        long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
-                effectiveRecipe.parallelismLimit()));
-        List<MachineRequirement> requirements = effective.requirements().stream()
-                .map(MachineRequirement::copyOf).toList();
-        List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(List.of());
-        CraftingContext context = context(runtime);
-        boolean restarting = restartRecipe == recipe;
-        restartProgramAuthorized = restarting && restartRuleCurrent(recipe, runtime);
-        if (restartProgramAuthorized) effectiveParallelism = Math.min(effectiveParallelism, restartRule.maximumParallelism());
-        PlanningResult result = planStartInputs(context, requirements, facets, effectiveParallelism);
-        CraftingPlan plan = result.plan();
-        if (!result.successful() || plan == null) {
-            return fail(result.failure());
-        }
-        List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
-        if (prefetches == null) return fail(missingInputStatus());
-        PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime,
-                catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches);
+        ControllerRuntimeSnapshot runtime = prepared.runtime();
+        CraftingPlan plan = prepared.plan();
         boolean committed = false;
         RecipeCommitLedger payment = new RecipeCommitLedger();
         ledger = payment;
         pendingPaymentStart = prepared;
-        long lifecycle = controller.lifecycleEpoch();
         try {
             ExecutionStatus commitFailure = commitPreparedStart(prepared);
+            if (!startAttemptCurrent(lifecycle, payment)) return status;
             if (commitFailure != null) {
                 if (payment != ledger || lifecycle != controller.lifecycleEpoch()) return status;
                 quarantineNativeStart(prepared, payment);
@@ -1127,20 +1226,28 @@ public final class CraftingRuntime {
         activeRecipe.setParallelism(plan.parallelism());
         startPlan = plan;
         finishPlan = null;
-        effectiveRequirements = MachineRequirement.copyList(effective.requirements().stream()
-                .map(MachineRequirement::copyOf).toList());
-        effectiveOutputs = MachineOutput.copyList(effective.outputs());
+        effectiveRequirements = executionRequirements;
+        effectiveOutputs = executionOutputs;
         presentationEpoch++;
-        ActiveMachineRecipe activatingRecipe = activeRecipe;
-        activatePrefetches(prefetches, effectiveRequirements, activeRecipe.getParallelism());
-        if (ledger != payment || activeRecipe != activatingRecipe || controller.lifecycleEpoch() != lifecycle) return status;
-        captureInputState(effectiveRequirements, plan);
-        captureVersions(runtime);
-        status = CraftingStatus.working();
-        failure = null;
-        payment.settleTick(0, false);
-        if (payment.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED) {
-            restoreFailure(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+        try {
+            ActiveMachineRecipe activatingRecipe = activeRecipe;
+            activatePrefetches(prefetches, effectiveRequirements, activeRecipe.getParallelism());
+            if (ledger != payment || activeRecipe != activatingRecipe || controller.lifecycleEpoch() != lifecycle) return status;
+            captureInputState(effectiveRequirements, plan);
+            captureVersions(runtime);
+            status = CraftingStatus.working();
+            failure = null;
+            payment.settleTick(0, false);
+            if (payment.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED) {
+                restoreFailure(failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()));
+            }
+        } catch (RuntimeException exception) {
+            MMCR.LOG.warn("Recipe start activation failed after payment: recipe={} controller={}",
+                    recipe.id(), controller.getBlockPos(), exception);
+            payment.pauseAfterCommitFailure();
+            if (lifecycle == controller.lifecycleEpoch() && payment == ledger && active()) {
+                restoreFailure(failure(BuiltinFailureReasons.RECIPE_START, FailurePhase.RECIPE_START, Map.of()));
+            }
         }
         return status;
     }
@@ -2347,42 +2454,34 @@ public final class CraftingRuntime {
         }
         List<PreparedPrefetch> prefetches = new ArrayList<>();
         long total = 0L;
-        for (MachineRequirement requirement : requirements) {
-            if (!(requirement instanceof EnergyRequirement energy)
-                    || energy.io() != RecipeModifier.IOType.INPUT) continue;
-            long remaining = SaturatingLong.multiply(SaturatingLong.multiply(energy.fePerTick(), duration), parallelism);
-            try {
-                total = Math.addExact(total, remaining);
-            } catch (ArithmeticException exception) {
-                for (PreparedPrefetch prefetch : prefetches) {
-                    prefetch.facet().restoreReservation(prefetch.plan().amount());
-                }
-                return null;
-            }
-            for (RecipeEnergyPrefetchFacet facet : facets) {
-                if (remaining <= 0L) break;
-                var planned = facet.planPrefetch(remaining);
-                if (planned.isEmpty()) continue;
-                RecipeEnergyPrefetchFacet.PrefetchPlan plan = planned.get();
-                if (plan.amount() > remaining) {
-                    facet.restoreReservation(plan.amount());
-                    for (PreparedPrefetch prefetch : prefetches) {
-                        prefetch.facet().restoreReservation(prefetch.plan().amount());
-                    }
+        boolean complete = false;
+        try {
+            for (MachineRequirement requirement : requirements) {
+                if (!(requirement instanceof EnergyRequirement energy)
+                        || energy.io() != RecipeModifier.IOType.INPUT) continue;
+                long remaining = SaturatingLong.multiply(SaturatingLong.multiply(energy.fePerTick(), duration), parallelism);
+                try {
+                    total = Math.addExact(total, remaining);
+                } catch (ArithmeticException exception) {
                     return null;
                 }
-                long accepted = plan.amount();
-                prefetches.add(new PreparedPrefetch(facet.reservationKey(), facet, plan));
-                remaining -= accepted;
-            }
-            if (remaining > 0L) {
-                for (PreparedPrefetch prefetch : prefetches) {
-                    prefetch.facet().restoreReservation(prefetch.plan().amount());
+                for (RecipeEnergyPrefetchFacet facet : facets) {
+                    if (remaining <= 0L) break;
+                    var planned = facet.planPrefetch(remaining);
+                    if (planned.isEmpty()) continue;
+                    RecipeEnergyPrefetchFacet.PrefetchPlan plan = planned.get();
+                    prefetches.add(new PreparedPrefetch(facet.reservationKey(), facet, plan));
+                    if (plan.amount() > remaining) return null;
+                    remaining -= plan.amount();
                 }
-                return null;
+                if (remaining > 0L) return null;
             }
+            List<PreparedPrefetch> result = List.copyOf(prefetches);
+            complete = true;
+            return result;
+        } finally {
+            if (!complete) releaseUnpaidPrefetches(prefetches);
         }
-        return List.copyOf(prefetches);
     }
 
     private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared) {

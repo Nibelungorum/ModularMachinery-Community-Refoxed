@@ -102,7 +102,7 @@ class AsyncCraftingExecutionTest {
         thread.setFinishContinuation(finishes::incrementAndGet);
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
         completeTick(controller);
         long epochBeforeFinish = controller.resourceAvailabilityEpoch();
         thread.tick();
@@ -133,7 +133,7 @@ class AsyncCraftingExecutionTest {
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
         completeTick(controller);
         thread.tick();
         completeTick(controller);
@@ -143,7 +143,7 @@ class AsyncCraftingExecutionTest {
         assertThat(thread.runtime().active()).isFalse();
         RuntimeTestFixtures.advanceGameTime(level);
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
         completeTick(controller);
         assertThat(thread.runtime().active()).isTrue();
     }
@@ -165,7 +165,7 @@ class AsyncCraftingExecutionTest {
         MachineRecipeThread thread = new MachineRecipeThread(controller);
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
         completeTick(controller);
         thread.tick();
         completeTick(controller);
@@ -196,7 +196,7 @@ class AsyncCraftingExecutionTest {
                 List.of(), List.of());
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
         completeTick(controller);
 
         thread.tick();
@@ -228,7 +228,7 @@ class AsyncCraftingExecutionTest {
                 List.of(), List.of());
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
         completeTick(controller);
 
         var beginPendingTick = RecipeThread.class.getDeclaredMethod("beginPendingTick",
@@ -282,7 +282,7 @@ class AsyncCraftingExecutionTest {
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
 
         // Prefetch feasibility is planned on the main thread before shared IO, but nothing commits yet.
         MachineAsyncCoordinator.get(level).completeTick();

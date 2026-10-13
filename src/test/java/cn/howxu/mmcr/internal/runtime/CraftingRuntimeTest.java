@@ -49,6 +49,7 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
@@ -57,6 +58,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
@@ -74,6 +76,9 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
@@ -100,6 +105,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -116,6 +122,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 
 import java.util.List;
@@ -141,6 +148,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  */
 class CraftingRuntimeTest {
     private ServerThreadTestScope serverThreadScope;
+    private ServerLevel startFixtureLevel;
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
     private static final FailureReason REGISTERED_RUNTIME_REASON = new FailureReason(
             MMCR.id("runtime_registered_restore"), "gui.mmcr.failure.runtime_registered_restore", 50);
@@ -172,7 +180,15 @@ class CraftingRuntimeTest {
         try {
             RecipeRegistry.clearForTesting();
         } finally {
-            if (serverThreadScope != null) serverThreadScope.close();
+            try {
+                if (startFixtureLevel != null) {
+                    MachineAsyncCoordinator.discard(startFixtureLevel);
+                    SharedIoCoordinator.discard(startFixtureLevel);
+                    StructureClaimRegistry.discard(startFixtureLevel);
+                }
+            } finally {
+                if (serverThreadScope != null) serverThreadScope.close();
+            }
         }
     }
 
@@ -747,6 +763,513 @@ class CraftingRuntimeTest {
         assertThat(runtime.active()).isFalse();
         assertThat(runtime.failure()).isNull();
         assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void preparation_cancel_clears_previous_failure_without_paying_inputs() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(RecipeStartContext::cancel).build()));
+        setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.recordSearchFailure(null);
+        var payment = runtime.ledger().state();
+
+        var prepared = runtime.prepareStartAttempt(recipe("runtime_preparation_cancel", 20,
+                List.of(input(Items.IRON_INGOT, 1))), 1L);
+
+        assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.CANCELLED);
+        assertThat(prepared.execution()).isNull();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.failure()).isNull();
+        assertThat(runtime.snapshot().status().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
+        assertThat(runtime.ledger().state()).isSameAs(payment);
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void preparation_callback_exception_records_behavior_failure_without_paying_inputs() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder().beforeStart(context -> {
+            throw new IllegalStateException("expected preparation callback failure");
+        }).build()));
+        setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        var payment = runtime.ledger().state();
+
+        var prepared = runtime.prepareStartAttempt(recipe("runtime_preparation_callback_failure", 20,
+                List.of(input(Items.IRON_INGOT, 1))), 1L);
+
+        assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.FAILED);
+        assertThat(prepared.execution()).isNull();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_BEHAVIOR);
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.ledger().state()).isSameAs(payment);
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void preparation_rejects_pool_module_and_behavior_with_their_existing_failure_reasons() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> starts.incrementAndGet()).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe foreign = RecipeTestSupport.create(MMCR.id("runtime_preparation_foreign_pool"),
+                MMCR.id("foreign_recipe_pool"), 20, List.of(), List.of());
+
+        assertThat(runtime.prepareStartAttempt(foreign, 1L).result())
+                .isEqualTo(CraftingRuntime.PreparationResult.FAILED);
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_START);
+        assertThat(runtime.failure().details()).containsEntry("reason", "recipe_pool");
+
+        controller.componentRuntime().replaceModuleConnectionState(ModuleConnectionStatus.disconnected(), 1);
+        RuntimeTestFixtures.republish(controller);
+        MachineRecipe module = RecipeTestSupport.create(MMCR.id("runtime_preparation_module"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 1, false, false, List.of(), false,
+                Set.of(MMCR.id("runtime_preparation_required_host")));
+        var disconnected = runtime.prepareStartAttempt(module, 1L);
+        assertThat(disconnected.result()).isEqualTo(CraftingRuntime.PreparationResult.FAILED);
+        assertThat(disconnected.execution()).isNull();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MODULE_CONNECTION);
+
+        controller.componentRuntime().replaceModuleConnectionState(ModuleConnectionStatus.notRequired(), 0);
+        controller.setMachine(machine(controller.machineId(), TickBehavior.defaults()));
+        var unsupported = runtime.prepareStartAttempt(recipe("runtime_preparation_tick_behavior", 20, List.of()), 1L);
+        assertThat(unsupported.result()).isEqualTo(CraftingRuntime.PreparationResult.FAILED);
+        assertThat(unsupported.execution()).isNull();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_BEHAVIOR);
+        assertThat(starts).hasValue(0);
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.ledger().state().paidAttempts()).isZero();
+    }
+
+    @Test
+    void preparation_defers_active_and_pattern_owned_slots_without_running_callbacks() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> starts.incrementAndGet()).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_preparation_busy", 20, List.of());
+        assertThat(runtime.start(recipe, 1L).isCrafting()).isTrue();
+        ActiveMachineRecipe active = runtime.activeRecipe();
+        var payment = runtime.ledger().state();
+
+        var busy = runtime.prepareStartAttempt(recipe, 1L);
+        assertThat(busy.result()).isEqualTo(CraftingRuntime.PreparationResult.DEFERRED);
+        assertThat(busy.execution()).isNull();
+        assertThat(runtime.activeRecipe()).isSameAs(active);
+        assertThat(runtime.ledger().state()).isSameAs(payment);
+        assertThat(starts).hasValue(1);
+
+        runtime.invalidate();
+        runtime.recordSearchFailure(null);
+        ExecutionStatus failure = runtime.failure();
+        assertThat(runtime.reservePatternStart()).isTrue();
+        var reserved = runtime.prepareStartAttempt(recipe, 1L);
+        assertThat(reserved.result()).isEqualTo(CraftingRuntime.PreparationResult.DEFERRED);
+        assertThat(reserved.execution()).isNull();
+        assertThat(runtime.failure()).isSameAs(failure);
+        assertThat(starts).hasValue(1);
+        runtime.releasePatternStart();
+
+        var pattern = runtime.preparePatternStart(recipe, 1L, List.of());
+        assertThat(pattern).isNotNull();
+        var pending = runtime.prepareStartAttempt(recipe, 1L);
+        assertThat(pending.result()).isEqualTo(CraftingRuntime.PreparationResult.DEFERRED);
+        assertThat(pending.execution()).isNull();
+        assertThat(starts).hasValue(2);
+        assertThat(runtime.reservePatternStart()).isTrue();
+        assertThat(runtime.commitPatternStart(pattern)).isTrue();
+        assertThat(runtime.recipe()).isSameAs(recipe);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void preparation_lifecycle_change_does_not_overwrite_the_new_lifecycle_failure(boolean throwAfterChange) {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        CraftingRuntime runtime = controllerRuntime(controller);
+        AtomicReference<ExecutionStatus> replacementFailure = new AtomicReference<>();
+        attachStartServerLevel(controller, input, RecipeBehavior.builder().beforeStart(context -> {
+            controller.setMachine(machine(controller.machineId(), RecipeBehavior.defaults()));
+            runtime.recordSearchFailure(null);
+            replacementFailure.set(runtime.failure());
+            if (throwAfterChange) throw new IllegalStateException("obsolete preparation callback");
+        }).build());
+        setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        long lifecycle = controller.lifecycleEpoch();
+
+        var prepared = runtime.prepareStartAttempt(recipe("runtime_preparation_lifecycle", 20,
+                List.of(input(Items.IRON_INGOT, 1))), 1L);
+
+        assertThat(controller.lifecycleEpoch()).isGreaterThan(lifecycle);
+        assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.CANCELLED);
+        assertThat(prepared.execution()).isNull();
+        assertThat(runtime.failure()).isSameAs(replacementFailure.get());
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.ledger().state().paidAttempts()).isZero();
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @ParameterizedTest
+    @EnumSource(StartFailureStage.class)
+    void preparation_extension_exception_is_failed_and_releases_unpaid_ownership(StartFailureStage stage)
+            throws ReflectiveOperationException {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            StartFailureProbe probe = new StartFailureProbe();
+            RequirementHandlerRegistry.register(probe.type);
+            ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+            AtomicInteger starts = new AtomicInteger();
+            AtomicBoolean failing = new AtomicBoolean(true);
+            AtomicInteger failures = new AtomicInteger();
+            Runnable exception = () -> {
+                failures.incrementAndGet();
+                throw new IllegalStateException("expected extension preparation failure");
+            };
+            RecipeBehavior behavior = RecipeBehavior.builder().beforeStart(context -> {
+                starts.incrementAndGet();
+                if (stage == StartFailureStage.SNAPSHOT && failing.get()) probe.copying = exception;
+            }).build();
+            attachStartServerLevel(controller, input, stage == StartFailureStage.NO_CALLBACK
+                    ? RecipeBehavior.defaults() : behavior);
+            CraftingRuntime runtime = controllerRuntime(controller);
+            MachineRecipe recipe = recipe("runtime_preparation_extension_failure", 20,
+                    List.of(input(Items.IRON_INGOT, 1), probe.requirement()));
+            setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+            var payment = runtime.ledger().state();
+            stage.arm(probe, exception);
+            SharedIoCoordinator shared = SharedIoCoordinator.get(startFixtureLevel);
+            RuntimeTestFixtures.beginLevelTick(startFixtureLevel, true);
+            shared.markControllerEligible(controller.getBlockPos(), startFixtureLevel.getGameTime());
+            assertThat(shared.reserveExecution(runtime, "base")).isTrue();
+            assertThat(hasStartReservation(shared, runtime)).isTrue();
+
+            var prepared = runtime.prepareStartAttempt(recipe, 1L);
+
+            assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.FAILED);
+            assertThat(prepared.execution()).isNull();
+            assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_START);
+            assertThat(runtime.active()).isFalse();
+            assertThat(runtime.ledger().state()).isSameAs(payment);
+            assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+            assertThat(failures).hasValue(1);
+            assertThat(starts).hasValue(stage == StartFailureStage.SNAPSHOT ? 1 : 0);
+            assertThat(hasStartReservation(shared, runtime)).isFalse();
+
+            failing.set(false);
+            probe.resolving = () -> { };
+            probe.copying = () -> { };
+            var retry = runtime.prepareStartAttempt(recipe, 1L);
+            assertThat(retry.result()).isEqualTo(CraftingRuntime.PreparationResult.READY);
+            assertThat(runtime.start(recipe, 1L, retry.execution()).isCrafting()).isTrue();
+            assertThat(starts).hasValue(stage == StartFailureStage.NO_CALLBACK ? 0
+                    : stage == StartFailureStage.SNAPSHOT ? 2 : 1);
+            assertThat(input.itemHandler().amount(0)).isZero();
+            assertThat(runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(StartFailureStage.class)
+    void preparation_extension_lifecycle_change_is_cancelled_without_overwriting_new_failure(StartFailureStage stage) {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            StartFailureProbe probe = new StartFailureProbe();
+            RequirementHandlerRegistry.register(probe.type);
+            ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+            CraftingRuntime runtime = controllerRuntime(controller);
+            AtomicInteger starts = new AtomicInteger();
+            AtomicInteger failures = new AtomicInteger();
+            AtomicReference<ExecutionStatus> replacementFailure = new AtomicReference<>();
+            Runnable cancellation = () -> {
+                failures.incrementAndGet();
+                controller.setMachine(machine(controller.machineId(), RecipeBehavior.defaults()));
+                runtime.recordSearchFailure(null);
+                replacementFailure.set(runtime.failure());
+                throw new IllegalStateException("obsolete extension preparation failure");
+            };
+            RecipeBehavior behavior = RecipeBehavior.builder().beforeStart(context -> {
+                starts.incrementAndGet();
+                if (stage == StartFailureStage.SNAPSHOT) probe.copying = cancellation;
+            }).build();
+            attachStartServerLevel(controller, input, stage == StartFailureStage.NO_CALLBACK
+                    ? RecipeBehavior.defaults() : behavior);
+            MachineRecipe recipe = recipe("runtime_preparation_extension_cancel", 20,
+                    List.of(input(Items.IRON_INGOT, 1), probe.requirement()));
+            setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+            stage.arm(probe, cancellation);
+            long lifecycle = controller.lifecycleEpoch();
+
+            var prepared = runtime.prepareStartAttempt(recipe, 1L);
+
+            assertThat(controller.lifecycleEpoch()).isGreaterThan(lifecycle);
+            assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.CANCELLED);
+            assertThat(prepared.execution()).isNull();
+            assertThat(runtime.failure()).isSameAs(replacementFailure.get());
+            assertThat(runtime.active()).isFalse();
+            assertThat(runtime.ledger().state().paidAttempts()).isZero();
+            assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+            assertThat(failures).hasValue(1);
+            assertThat(starts).hasValue(stage == StartFailureStage.SNAPSHOT ? 1 : 0);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void ready_start_copy_or_planner_exception_releases_the_unpaid_slot_without_repeating_before_start(boolean copyFailure)
+            throws ReflectiveOperationException {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            StartFailureProbe probe = new StartFailureProbe();
+            RequirementHandlerRegistry.register(probe.type);
+            ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+            AtomicInteger starts = new AtomicInteger();
+            attachStartServerLevel(controller, input, RecipeBehavior.builder()
+                    .beforeStart(context -> starts.incrementAndGet()).build());
+            CraftingRuntime runtime = controllerRuntime(controller);
+            MachineRecipe recipe = recipe("runtime_ready_start_extension_failure", 20,
+                    List.of(input(Items.IRON_INGOT, 1), probe.requirement()));
+            setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+            var prepared = runtime.prepareStartAttempt(recipe, 1L);
+            assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.READY);
+            var payment = runtime.ledger().state();
+            SharedIoCoordinator shared = SharedIoCoordinator.get(startFixtureLevel);
+            RuntimeTestFixtures.beginLevelTick(startFixtureLevel, true);
+            shared.markControllerEligible(controller.getBlockPos(), startFixtureLevel.getGameTime());
+            AtomicInteger failures = new AtomicInteger();
+            Runnable exception = () -> {
+                failures.incrementAndGet();
+                throw new IllegalStateException("expected unpaid start failure");
+            };
+            if (copyFailure) probe.copying = exception;
+            else probe.planning = exception;
+
+            assertThatCode(() -> runtime.start(recipe, 1L, prepared.execution())).doesNotThrowAnyException();
+
+            assertThat(runtime.active()).isFalse();
+            assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_START);
+            assertThat(runtime.ledger().state()).isSameAs(payment);
+            assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+            assertThat(starts).hasValue(1);
+            assertThat(failures).hasValue(1);
+            assertThat(hasStartReservation(shared, runtime)).isFalse();
+            assertThat(runtime.reservePatternStart()).isTrue();
+            runtime.releasePatternStart();
+
+            probe.copying = () -> { };
+            probe.planning = () -> { };
+            assertThat(runtime.start(recipe, 1L, prepared.execution()).isCrafting()).isTrue();
+            assertThat(runtime.recipe()).isSameAs(recipe);
+            assertThat(starts).hasValue(1);
+            assertThat(input.itemHandler().amount(0)).isZero();
+            assertThat(runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void ready_start_planner_lifecycle_change_stops_payment_and_preserves_new_failure(boolean throwAfterChange) {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            StartFailureProbe probe = new StartFailureProbe();
+            RequirementHandlerRegistry.register(probe.type);
+            ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+            AtomicInteger starts = new AtomicInteger();
+            attachStartServerLevel(controller, input, RecipeBehavior.builder()
+                    .beforeStart(context -> starts.incrementAndGet()).build());
+            CraftingRuntime runtime = controllerRuntime(controller);
+            MachineRecipe recipe = recipe("runtime_ready_start_planner_cancel", 20,
+                    List.of(input(Items.IRON_INGOT, 1), probe.requirement()));
+            setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+            var prepared = runtime.prepareStartAttempt(recipe, 1L);
+            assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.READY);
+            long lifecycle = controller.lifecycleEpoch();
+            AtomicReference<ExecutionStatus> replacementFailure = new AtomicReference<>();
+            probe.planning = () -> {
+                controller.setMachine(machine(controller.machineId(), RecipeBehavior.defaults()));
+                runtime.recordSearchFailure(null);
+                replacementFailure.set(runtime.failure());
+                if (throwAfterChange) throw new IllegalStateException("obsolete planner failure");
+            };
+
+            assertThatCode(() -> runtime.start(recipe, 1L, prepared.execution())).doesNotThrowAnyException();
+
+            assertThat(controller.lifecycleEpoch()).isGreaterThan(lifecycle);
+            assertThat(runtime.failure()).isSameAs(replacementFailure.get());
+            assertThat(runtime.active()).isFalse();
+            assertThat(runtime.ledger().state().paidAttempts()).isZero();
+            assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+            assertThat(starts).hasValue(1);
+        }
+    }
+
+    @Test
+    void prefetch_planner_exception_releases_earlier_unpaid_reservations_and_allows_retry() {
+        PrefetchNetworkCapability first = new PrefetchNetworkCapability("test:first", 2L);
+        PrefetchNetworkCapability second = new PrefetchNetworkCapability("test:second", 4L);
+        MachineControllerBlockEntity controller = controllerWithPrefetchNetworks(first, second);
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> starts.incrementAndGet()).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = energyRecipe("runtime_prefetch_planner_exception", 3, 2);
+        var prepared = runtime.prepareStartAttempt(recipe, 1L);
+        assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.READY);
+        var payment = runtime.ledger().state();
+        second.failPlan = true;
+
+        assertThatCode(() -> runtime.start(recipe, 1L, prepared.execution())).doesNotThrowAnyException();
+
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_START);
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.ledger().state()).isSameAs(payment);
+        assertThat(first.planned).isZero();
+        assertThat(first.extracted()).isZero();
+        assertThat(second.extracted()).isZero();
+        assertThat(starts).hasValue(1);
+
+        second.failPlan = false;
+        assertThat(runtime.start(recipe, 1L, prepared.execution()).isCrafting()).isTrue();
+        assertThat(first.extracted()).isEqualTo(2L);
+        assertThat(second.extracted()).isEqualTo(4L);
+        assertThat(runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+        assertThat(starts).hasValue(1);
+    }
+
+    @Test
+    void prepared_snapshot_runs_before_start_once_and_pays_only_when_started() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder().beforeStart(context -> {
+            starts.incrementAndGet();
+            context.setDuration(3);
+            context.setRequirements(List.of(input(Items.IRON_INGOT, 2)));
+        }).build()));
+        setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 3));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_prepared_once", 20, List.of(input(Items.IRON_INGOT, 1)));
+        var payment = runtime.ledger().state();
+
+        var prepared = runtime.prepareStartAttempt(recipe, 1L);
+        assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.READY);
+        assertThat(prepared.execution()).isNotNull();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.ledger().state()).isSameAs(payment);
+        assertThat(input.itemHandler().amount(0)).isEqualTo(3L);
+        assertThat(starts).hasValue(1);
+
+        assertThat(runtime.start(recipe, 1L, prepared.execution()).isCrafting()).isTrue();
+        assertThat(starts).hasValue(1);
+        assertThat(runtime.totalTick()).isEqualTo(3);
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+    }
+
+    @Test
+    void native_start_notification_failure_quarantines_the_execution_and_blocks_a_second_payment() {
+        AtomicReference<Runnable> notification = new AtomicReference<>(() -> { });
+        LongItemStorage storage = new LongItemStorage(1, 64L, () -> notification.get().run());
+        ItemInputBusBlockEntity input = new ItemInputBusBlockEntity(new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState()) {
+            @Override
+            public LongItemStorage itemHandler() { return storage; }
+            @Override
+            public LongItemStorage nativeItemHandler() { return storage; }
+        };
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(context -> starts.incrementAndGet()).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        setItem(storage, 0, stack(Items.IRON_INGOT, 2));
+        AtomicReference<CraftingRuntime.StartPreparation> reentrant = new AtomicReference<>();
+        MachineRecipe recipe = recipe("runtime_paid_start_notification", 20, List.of(input(Items.IRON_INGOT, 1)));
+        notification.set(() -> {
+            reentrant.set(runtime.prepareStartAttempt(recipe, 1L));
+            throw new IllegalStateException("expected paid start notification failure");
+        });
+
+        assertThatCode(() -> runtime.start(recipe, 1L)).doesNotThrowAnyException();
+        assertThat(reentrant.get().result()).isEqualTo(CraftingRuntime.PreparationResult.DEFERRED);
+        assertThat(reentrant.get().execution()).isNull();
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.recipe()).isSameAs(recipe);
+        assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+        assertThat(storage.amount(0)).isEqualTo(1L);
+        var payment = runtime.ledger().state();
+        // Native notification failure leaves mutated inputs without confirming a complete payment batch.
+        assertThat(payment.paidAttempts()).isZero();
+        assertThat(payment.sequence()).isPositive();
+        ActiveMachineRecipe active = runtime.activeRecipe();
+        ExecutionStatus failure = runtime.failure();
+        assertThat(failure).isNotNull();
+
+        assertThat(runtime.prepareStartAttempt(recipe, 1L).result())
+                .isEqualTo(CraftingRuntime.PreparationResult.DEFERRED);
+        runtime.start(recipe("runtime_paid_start_replacement", 20, List.of(input(Items.IRON_INGOT, 1))), 1L);
+        runtime.start(null, 1L);
+        runtime.tick();
+        assertThat(runtime.activeRecipe()).isSameAs(active);
+        assertThat(runtime.failure()).isSameAs(failure);
+        assertThat(runtime.ledger().state()).isSameAs(payment);
+        assertThat(payment.paidAttempts()).isZero();
+        assertThat(storage.amount(0)).isEqualTo(1L);
+        assertThat(starts).hasValue(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void expired_restart_rule_prepares_current_modifiers_and_plans_current_supply(boolean changeModifiers) {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        ResourceLocation machineId = controller.machineId();
+        controller.setMachine(new DynamicMachine(machineId, machineId.toString(), new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 4L, true, false, 1));
+        controller.componentRuntime().replaceModifiers(Map.of("parallelism", List.of(
+                MachineModifier.numeric("parallelism", "machine", 3D, "add", false))));
+        RuntimeTestFixtures.republish(controller);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("runtime_expired_restart_rule"), MMCR.id("test_cube"),
+                1, List.of(input(Items.IRON_INGOT, 1)), List.of(), List.of(), 0, 1, false, true,
+                List.of(), false, Set.of());
+        setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 2));
+        assertThat(runtime.start(recipe, 4L).isCrafting()).isTrue();
+        assertThat(runtime.parallelism()).isEqualTo(2L);
+        assertThat(runtime.ensureInstalledProgram()).isNotNull();
+        runtime.tick();
+        runtime.finish();
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.ledger().state().outputPaid()).isTrue();
+        assertThat(runtime.restartProgramReady(recipe)).isTrue();
+
+        if (changeModifiers) {
+            controller.componentRuntime().replaceModifiers(Map.of("current", List.of(
+                    MachineModifier.numeric("parallelism", "machine", 3D, "add", false),
+                    MachineModifier.numeric("duration", "input", 3D, "multiply", false))));
+        } else {
+            controller.componentRuntime().replaceLinkedPortPositions(Set.of(new BlockPos(8, 0, 0)));
+        }
+        RuntimeTestFixtures.republish(controller);
+        setItem(input.itemHandler(), 0, stack(Items.IRON_INGOT, 3));
+        assertThat(runtime.restartProgramReady(recipe)).isFalse();
+        var completed = runtime.ledger().state();
+        var prepared = runtime.prepareStartAttempt(recipe, 4L);
+        assertThat(prepared.result()).isEqualTo(CraftingRuntime.PreparationResult.READY);
+        assertThat(runtime.ledger().state()).isSameAs(completed);
+
+        assertThat(runtime.start(recipe, 4L, prepared.execution()).isCrafting()).isTrue();
+        assertThat(runtime.restartProgramAuthorized()).isFalse();
+        assertThat(runtime.recipe()).isSameAs(recipe);
+        assertThat(runtime.totalTick()).isEqualTo(changeModifiers ? 3 : 1);
+        assertThat(runtime.parallelism()).isEqualTo(3L);
+        assertThat(input.itemHandler().amount(0)).isZero();
     }
 
     @Test
@@ -2485,7 +3008,7 @@ class CraftingRuntimeTest {
         assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
     }
 
-    private static MachineRecipe recipe(String path, int duration, List<ItemRequirement> requirements) {
+    private static MachineRecipe recipe(String path, int duration, List<? extends MachineRequirement> requirements) {
         return RecipeTestSupport.create(MMCR.id(path), MMCR.id("test_cube"), duration,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), new ArrayList<>(requirements));
     }
@@ -2560,6 +3083,33 @@ class CraftingRuntimeTest {
 
     private static ItemStack item(LongItemStorage storage, int slot) {
         return storage.getStackInSlot(slot);
+    }
+
+    private void attachStartServerLevel(MachineControllerBlockEntity controller, ItemInputBusBlockEntity input,
+                                        RecipeBehavior behavior) {
+        List<ProcessingComponent> ports = controller.componentRuntime().components();
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine(controller.machineId(), behavior), input);
+        startFixtureLevel = (ServerLevel) controller.getLevel();
+        controller.componentRuntime().replaceComponents(ports);
+        RuntimeTestFixtures.republish(controller);
+        assertThat(StructureClaimRegistry.get(startFixtureLevel).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        assertThat(controller.resourceDomain()).isNotNull();
+    }
+
+    private static boolean hasStartReservation(SharedIoCoordinator shared, CraftingRuntime owner)
+            throws ReflectiveOperationException {
+        Field recordsField = SharedIoCoordinator.class.getDeclaredField("executionRecords");
+        recordsField.setAccessible(true);
+        for (Object records : ((Map<?, ?>) recordsField.get(shared)).values()) {
+            Field slotsField = records.getClass().getDeclaredField("slots");
+            slotsField.setAccessible(true);
+            for (Object slot : (Object[]) slotsField.get(records)) {
+                Field ownerField = slot.getClass().getDeclaredField("reservedOwner");
+                ownerField.setAccessible(true);
+                if (ownerField.get(slot) == owner) return true;
+            }
+        }
+        return false;
     }
 
     private static CraftingRuntime controllerRuntime(MachineControllerBlockEntity controller) {
@@ -2723,6 +3273,7 @@ class CraftingRuntimeTest {
         private long releaseCalls;
         private long extractionBaseline;
         private final boolean failCommit;
+        private boolean failPlan;
         private boolean failRestore;
         private boolean failRelease;
 
@@ -2753,6 +3304,7 @@ class CraftingRuntimeTest {
 
         @Override
         public Optional<PrefetchPlan> planPrefetch(long requestedAmount) {
+            if (failPlan) throw new IllegalStateException("expected prefetch planning failure");
             long accepted = Math.min(Math.max(0L, requestedAmount), Math.max(0L, storage.amount() - planned));
             if (accepted <= 0L) return Optional.empty();
             planned += accepted;
@@ -2846,6 +3398,70 @@ class CraftingRuntimeTest {
 
         private void failRelease() {
             failRelease = true;
+        }
+    }
+
+    /** Extension entry points exercised before start payment. @author howxu <dev@howxu.cn> */
+    private enum StartFailureStage {
+        RESOLVE, COPY, CONTEXT, SNAPSHOT, NO_CALLBACK;
+
+        private void arm(StartFailureProbe probe, Runnable failure) {
+            switch (this) {
+                case RESOLVE -> probe.resolving = failure;
+                case COPY, NO_CALLBACK -> probe.copying = failure;
+                case CONTEXT -> {
+                    AtomicBoolean copied = new AtomicBoolean();
+                    probe.copying = () -> {
+                        if (copied.getAndSet(true)) failure.run();
+                    };
+                }
+                case SNAPSHOT -> { }
+            }
+        }
+    }
+
+    /** Canonical extension with caller-controlled copy, modifier and planner callbacks. @author howxu <dev@howxu.cn> */
+    private static final class StartFailureProbe {
+        private static final ResourceLocation TYPE_ID = MMCR.id("runtime_start_failure_probe");
+        private Runnable resolving = () -> { };
+        private Runnable copying = () -> { };
+        private Runnable planning = () -> { };
+        private final RequirementType<StartProbeRequirement> type = new RequirementType.Definition<>(TYPE_ID,
+                Codec.STRING.fieldOf("type").xmap(ignored -> requirement(), ignored -> TYPE_ID.toString()),
+                new RequirementHandler<StartProbeRequirement>() {
+                    @Override
+                    public StartProbeRequirement applyModifiers(StartProbeRequirement requirement,
+                                                                List<RecipeModifier> modifiers) {
+                        resolving.run();
+                        return requirement;
+                    }
+
+                    @Override
+                    public RequirementPlan plan(StartProbeRequirement requirement, List<MachineCapability> capabilities,
+                                                PlanningContext context) {
+                        planning.run();
+                        return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+                    }
+                }, requirement -> {
+                    copying.run();
+                    return requirement();
+                });
+
+        private StartProbeRequirement requirement() {
+            return new StartProbeRequirement(this);
+        }
+    }
+
+    /** Immutable declaration sharing its canonical extension probe. @author howxu <dev@howxu.cn> */
+    private record StartProbeRequirement(StartFailureProbe probe) implements MachineRequirement {
+        @Override
+        public RequirementType<StartProbeRequirement> type() {
+            return probe.type;
+        }
+
+        @Override
+        public RecipeModifier.IOType io() {
+            return RecipeModifier.IOType.INPUT;
         }
     }
 

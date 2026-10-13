@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
+import cn.howxu.mmcr.internal.recipe.RecipeThread.StartResult;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.RecipeCommitLedger;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
@@ -112,7 +113,7 @@ class ExecutionAdmissionTest {
         MachineRecipeThread thread = new MachineRecipeThread(controller, runtime);
         for (int attempt = 0; attempt < 2; attempt++) {
             assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
-                    controller.currentStructureSnapshot().version())).isTrue();
+                    controller.currentStructureSnapshot().version())).isEqualTo(StartResult.PENDING);
             // Drive only start work. Stop immediately when the input commit queues compilation.
             for (int step = 0; step < 32 && !runtime.active(); step++) {
                 if (!workers.isEmpty()) workers.removeFirst().run();

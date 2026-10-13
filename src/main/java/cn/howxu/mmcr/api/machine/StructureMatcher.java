@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import com.google.common.collect.ImmutableList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -128,60 +127,77 @@ public final class StructureMatcher {
         }
     }
 
-    /** Internal observation; public entries and diagnostics are materialized only when requested.
+    /** Owns compact batch observations; public entries and diagnostics are materialized on demand.
      * @author howxu <dev@howxu.cn> */
-    private static final class CapturedEntry {
-        private final BlockPos relativePos;
-        private final BlockPos worldPos;
-        private final BlockPredicate expected;
-        private final BlockState actualState;
+    private static final class CapturedEntries extends AbstractList<ScanEntry> implements RandomAccess {
         private final ScanIdentity identity;
-        private final BlockPredicate matchingExpected;
-        private final List<BlockPredicate> replacementPredicates;
-        private @Nullable ScanEntry entry;
+        private final CompiledMachinePattern.ScanPlan scanPlan;
+        private final @Nullable Mismatch previousMismatch;
+        private final int[] entryIndexes;
+        private final BlockPos[] worldPositions;
+        private final BlockState[] actualStates;
+        private final BlockPredicate[] matchingExpected;
+        private @Nullable List<BlockPredicate>[] replacementPredicates;
+        private int size;
+        private @Nullable ScanEntry[] entries;
+        private @Nullable List<ScanEntry> view;
 
-        private CapturedEntry(BlockPos relativePos, BlockPos worldPos, BlockPredicate expected, BlockState actualState,
-                              ScanIdentity identity, BlockPredicate matchingExpected,
-                              List<BlockPredicate> replacementPredicates) {
-            this.relativePos = relativePos;
-            this.worldPos = worldPos;
-            this.expected = expected;
-            this.actualState = actualState;
+        private CapturedEntries(ScanIdentity identity, CompiledMachinePattern.ScanPlan scanPlan,
+                                @Nullable Mismatch previousMismatch, int capacity) {
             this.identity = identity;
-            this.matchingExpected = matchingExpected;
-            this.replacementPredicates = List.copyOf(replacementPredicates);
+            this.scanPlan = scanPlan;
+            this.previousMismatch = previousMismatch;
+            entryIndexes = new int[capacity];
+            worldPositions = new BlockPos[capacity];
+            actualStates = new BlockState[capacity];
+            matchingExpected = new BlockPredicate[capacity];
         }
 
-        private synchronized ScanEntry entry() {
+        @SuppressWarnings("unchecked")
+        private void add(int entryIndex, BlockPos worldPos, BlockState actualState, BlockPredicate expected,
+                         List<BlockPredicate> replacements) {
+            int index = size++;
+            entryIndexes[index] = entryIndex;
+            worldPositions[index] = worldPos;
+            actualStates[index] = actualState;
+            matchingExpected[index] = expected;
+            if (!replacements.isEmpty()) {
+                if (replacementPredicates == null) {
+                    replacementPredicates = (List<BlockPredicate>[]) new List<?>[entryIndexes.length];
+                }
+                replacementPredicates[index] = replacements;
+            }
+        }
+
+        private BlockPos relativePosAt(int index) {
+            int entryIndex = entryIndexes[index];
+            return entryIndex < 0 ? previousMismatch.relativePos() : scanPlan.entryPositions().get(entryIndex);
+        }
+
+        private BlockPredicate expectedAt(int index) {
+            int entryIndex = entryIndexes[index];
+            return entryIndex < 0 ? previousMismatch.expected() : scanPlan.entryPredicates().get(entryIndex);
+        }
+
+        private List<BlockPredicate> replacementsAt(int index) {
+            List<BlockPredicate> replacements = replacementPredicates == null ? null : replacementPredicates[index];
+            return replacements == null ? List.of() : replacements;
+        }
+
+        @Override public synchronized ScanEntry get(int index) {
+            Objects.checkIndex(index, size);
+            if (entries == null) entries = new ScanEntry[size];
+            ScanEntry entry = entries[index];
             if (entry == null) {
-                Mismatch mismatch = new Mismatch(relativePos, worldPos, expected, actualState, identity.structureVersion(),
-                        identity.frontFacing(), identity.rollFacing(), identity.stageNumber(), identity.patternIdentity());
-                entry = new ScanEntry(mismatch, matchingExpected, replacementPredicates);
+                Mismatch mismatch = new Mismatch(relativePosAt(index), worldPositions[index], expectedAt(index),
+                        actualStates[index], identity.structureVersion(), identity.frontFacing(), identity.rollFacing(),
+                        identity.stageNumber(), identity.patternIdentity());
+                entries[index] = entry = new ScanEntry(mismatch, matchingExpected[index], replacementsAt(index));
             }
             return entry;
         }
 
-        private boolean matches(boolean stateSensitive) {
-            if (matchingExpected.matches(actualState, stateSensitive)) return true;
-            for (BlockPredicate replacement : replacementPredicates) {
-                if (replacement.matches(actualState, stateSensitive)) return true;
-            }
-            return expected instanceof BlockPredicate.Air && actualState.isAir();
-        }
-    }
-
-    /** Owns a completed capture list; its unmodifiable public view is created on demand.
-     * @author howxu <dev@howxu.cn> */
-    private static final class CapturedEntries extends AbstractList<ScanEntry> implements RandomAccess {
-        private final List<CapturedEntry> captured;
-        private @Nullable List<ScanEntry> view;
-
-        private CapturedEntries(List<CapturedEntry> captured) {
-            this.captured = captured;
-        }
-
-        @Override public ScanEntry get(int index) { return captured.get(index).entry(); }
-        @Override public int size() { return captured.size(); }
+        @Override public int size() { return size; }
 
         private synchronized List<ScanEntry> view() {
             if (view == null) view = Collections.unmodifiableList(this);
@@ -189,13 +205,21 @@ public final class StructureMatcher {
         }
 
         private ScanResult match(ScanStatus completionStatus, boolean stateSensitive) {
-            for (int index = 0; index < captured.size(); index++) {
-                CapturedEntry entry = captured.get(index);
-                if (!entry.matches(stateSensitive)) {
-                    return new ScanResult(ScanStatus.MISMATCH, index + 1, entry.entry().mismatch(), null);
+            for (int index = 0; index < size; index++) {
+                if (!matches(index, stateSensitive)) {
+                    return new ScanResult(ScanStatus.MISMATCH, index + 1, get(index).mismatch(), null);
                 }
             }
-            return new ScanResult(completionStatus, captured.size(), null, null);
+            return new ScanResult(completionStatus, size, null, null);
+        }
+
+        private boolean matches(int index, boolean stateSensitive) {
+            BlockState actualState = actualStates[index];
+            if (matchingExpected[index].matches(actualState, stateSensitive)) return true;
+            for (BlockPredicate replacement : replacementsAt(index)) {
+                if (replacement.matches(actualState, stateSensitive)) return true;
+            }
+            return expectedAt(index) instanceof BlockPredicate.Air && actualState.isAir();
         }
     }
 
@@ -308,21 +332,20 @@ public final class StructureMatcher {
                         ScanStatus.INVALIDATED, invalidated, stateSensitive);
             }
             int budget = batchSize();
-            List<CapturedEntry> entries = new ArrayList<>(budget);
+            CapturedEntries entries = new CapturedEntries(identity, scanPlan, previousMismatch,
+                    Math.max(budget, previousMismatch == null ? 0 : 1));
             CapturePredicates memo = capturePredicates;
             memo.beginBatch();
             int nextSentinelCursor = sentinelCursor;
             boolean nextSentinelsChecked = sentinelsChecked;
             int nextScanIndex = scanIndex;
             if (previousMismatch != null) {
-                entries.add(entryAt(previousMismatch.relativePos(), previousMismatch.expected(), level, ctrlPos, memo, identity));
+                entryAt(-1, level, ctrlPos, memo, entries);
             }
             if (options.sentinelEnabled() && !nextSentinelsChecked) {
                 while (nextSentinelCursor < activeSentinelCount && entries.size() < budget) {
                     int index = scanPlan.sentinelAt(nextSentinelCursor++);
-                    BlockPos relativePos = scanPlan.entryPositions().get(index);
-                    BlockPredicate expected = scanPlan.entryPredicates().get(index);
-                    entries.add(entryAt(relativePos, expected, level, ctrlPos, memo, identity));
+                    entryAt(index, level, ctrlPos, memo, entries);
                 }
                 nextSentinelsChecked = nextSentinelCursor == activeSentinelCount;
             }
@@ -332,12 +355,10 @@ public final class StructureMatcher {
                     continue;
                 }
                 int index = nextScanIndex++;
-                BlockPos relativePos = scanPlan.entryPositions().get(index);
-                BlockPredicate expected = scanPlan.entryPredicates().get(index);
-                entries.add(entryAt(relativePos, expected, level, ctrlPos, memo, identity));
+                entryAt(index, level, ctrlPos, memo, entries);
             }
             ScanStatus status = nextScanIndex == scanPlan.entryCount() ? ScanStatus.VALID : ScanStatus.IN_PROGRESS;
-            return pendingBatch = new ScanBatch(identity, new CapturedEntries(entries), nextSentinelCursor, nextSentinelsChecked,
+            return pendingBatch = new ScanBatch(identity, entries, nextSentinelCursor, nextSentinelsChecked,
                     nextScanIndex, status, null, stateSensitive);
         }
 
@@ -360,8 +381,10 @@ public final class StructureMatcher {
             previousMismatch = null;
         }
 
-        private CapturedEntry entryAt(BlockPos relativePos, BlockPredicate expected, Level level, BlockPos ctrlPos,
-                                      CapturePredicates memo, ScanIdentity identity) {
+        private void entryAt(int entryIndex, Level level, BlockPos ctrlPos,
+                             CapturePredicates memo, CapturedEntries entries) {
+            BlockPos relativePos = entryIndex < 0 ? previousMismatch.relativePos() : scanPlan.entryPositions().get(entryIndex);
+            BlockPredicate expected = entryIndex < 0 ? previousMismatch.expected() : scanPlan.entryPredicates().get(entryIndex);
             BlockPos worldPos = ctrlPos.offset(relativePos);
             BlockState actualState = level.getBlockState(worldPos);
             List<SingleBlockModifierReplacement> entryReplacements = replacements.getOrDefault(relativePos, List.of());
@@ -369,8 +392,7 @@ public final class StructureMatcher {
                     .map(SingleBlockModifierReplacement::getReplacement)
                     .map(predicate -> snapshotPredicate(predicate, memo))
                     .toList();
-            return new CapturedEntry(relativePos, worldPos, expected, actualState, identity,
-                    snapshotPredicate(expected, memo), replacementPredicates);
+            entries.add(entryIndex, worldPos, actualState, snapshotPredicate(expected, memo), replacementPredicates);
         }
 
         private static BlockPredicate snapshotPredicate(BlockPredicate predicate,
@@ -392,19 +414,19 @@ public final class StructureMatcher {
                     BlockPredicate.AnyOf previous = cached != null && cached.snapshot instanceof BlockPredicate.AnyOf value
                             ? value : anyOf;
                     List<BlockPredicate> previousChildren = previous.children();
-                    ImmutableList.Builder<BlockPredicate> snapshots = children.size() == previousChildren.size()
-                            ? null : ImmutableList.builderWithExpectedSize(children.size());
+                    List<BlockPredicate> snapshots = children.size() == previousChildren.size()
+                            ? null : new ArrayList<>(children.size());
                     for (int index = 0; index < children.size(); index++) {
                         BlockPredicate childSnapshot = snapshotPredicate(children.get(index), memo);
                         if (snapshots == null && childSnapshot != previousChildren.get(index)) {
-                            snapshots = ImmutableList.builderWithExpectedSize(children.size());
+                            snapshots = new ArrayList<>(children.size());
                             for (int previousIndex = 0; previousIndex < index; previousIndex++) {
-                                snapshots.add(previousChildren.get(previousIndex));
+                                snapshots.add(Objects.requireNonNull(previousChildren.get(previousIndex)));
                             }
                         }
-                        if (snapshots != null) snapshots.add(childSnapshot);
+                        if (snapshots != null) snapshots.add(Objects.requireNonNull(childSnapshot));
                     }
-                    if (snapshots != null) yield new BlockPredicate.AnyOf(snapshots.build());
+                    if (snapshots != null) yield new BlockPredicate.AnyOf(Collections.unmodifiableList(snapshots));
                     if (cached != null) yield previous;
                     List<BlockPredicate> immutableChildren = List.copyOf(previousChildren);
                     yield immutableChildren == previousChildren ? previous : new BlockPredicate.AnyOf(immutableChildren);

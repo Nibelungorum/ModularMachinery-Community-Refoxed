@@ -406,8 +406,8 @@ public final class BotaniaManaRecipeGameTest {
         FactoryRecipeThread lane = FactoryRecipeThread.base(fixture.controller());
         try {
             helper.assertTrue(lane.startSearchResult(context, candidates, snapshot.structure().version(),
-                            new FactoryRecipeThread.SearchResult(worker.result(), worker.failure(),
-                                    worker.requiresMainThreadReplan())),
+                             new FactoryRecipeThread.SearchResult(worker.result(), worker.failure(),
+                                     worker.requiresMainThreadReplan())).ownsStart(),
                     "Main-thread fallback searches the whole candidate set and starts an executable recipe");
             helper.assertTrue(lane.runtime().active() && lane.runtime().recipe().id().equals(OUTPUT_WAIT_ID),
                     "Empty selected pool rejects the provisional tagged candidate and selects the output-only fallback");

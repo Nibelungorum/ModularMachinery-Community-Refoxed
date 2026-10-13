@@ -11,6 +11,7 @@ import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
@@ -25,15 +26,12 @@ import java.util.List;
 public final class MachineRecipeThread extends RecipeThread {
     private final boolean controlsControllerRuntime;
     private @Nullable MachineRecipe lastRecipe;
-    private long lastRecipeStructureVersion = Long.MIN_VALUE;
-    private long lastRecipeCapabilityVersion = Long.MIN_VALUE;
-    private long lastRecipeModifierVersion = Long.MIN_VALUE;
-    private long lastRecipeComponentStateVersion = Long.MIN_VALUE;
     private long lastRecipeCatalogVersion = Long.MIN_VALUE;
     private boolean restartPending;
     private @Nullable PendingAsyncSearch pendingAsyncSearch;
     private long nextAsyncSearchId;
 
+    /** @author howxu <dev@howxu.cn> */
     private record PendingAsyncSearch(AsyncRequirementPlanner.RecipeSearchRequest request,
                                       MachineAsyncCoordinator.TaskKey taskKey, long catalogVersion) {
     }
@@ -56,41 +54,36 @@ public final class MachineRecipeThread extends RecipeThread {
 
     @Override
     protected void onFinished() {
-        if (lastRecipe != null && !recipeBelongsToCurrentMachine(lastRecipe)) {
-            clearLastRecipe();
-        } else if (lastRecipe != null && lastRecipeCatalogVersion != Long.MIN_VALUE) {
-            MachineRecipeCatalog catalog = currentRecipeCatalog();
-            MachineRecipe current = catalog.recipes().stream()
-                    .filter(candidate -> lastRecipe.id().equals(candidate.id()))
-                    .findFirst().orElse(null);
-            if (lastRecipeCatalogVersion != catalog.version()
-                    && (current == null || !ActiveMachineRecipe.sameDefinition(lastRecipe, current, registryAccess()))) {
-                clearLastRecipe();
-            }
-        }
         if (controlsControllerRuntime) {
-            controller.onNormalRecipeThreadFinished(runtime.active() || isStartPending());
+            controller.onNormalRecipeThreadFinished(runtime.active() || controller.hasPendingNormalRecipeStart(), true);
         }
     }
 
     @Override
     protected void onRecipeFinished() {
         markRecipeFinished();
-        MachineRecipe restartRecipe = consumeRestartRecipe(currentRecipeCatalog().recipes(),
+        if (controlsControllerRuntime && controller.activeWorkMode() == MachineWorkMode.SYNC) {
+            controller.tryRestartNormalRecipe();
+            return;
+        }
+        MachineRecipe restartRecipe = peekRestartRecipe(currentRecipeCatalog().recipes(),
                 controller.getMaxParallelism(), controller.currentRuntimeSnapshot().structure().version());
-        if (restartRecipe == null) return;
+        if (restartRecipe == null) {
+            if (restartPending || hasFullSearchPending()) reportLastRecipeStartResult(StartResult.NO_MATCH);
+            return;
+        }
         if (controller.activeWorkMode() == MachineWorkMode.ASYNC) {
             enqueueAsyncFinishRestart(restartRecipe, controller.getMaxParallelism(),
-                    controller.currentRuntimeSnapshot().structure().version(), null);
+                    controller.currentRuntimeSnapshot().structure().version(), null, StartOrigin.LAST_RECIPE);
         } else {
             startRecipe(restartRecipe, controller.getMaxParallelism(),
-                    controller.currentRuntimeSnapshot().structure().version());
+                    controller.currentRuntimeSnapshot().structure().version(), null, StartOrigin.LAST_RECIPE);
         }
     }
 
     @Override
     protected void onRecipeFailure() {
-        if (controlsControllerRuntime) controller.onNormalRecipeThreadFinished(false);
+        if (controlsControllerRuntime) controller.onNormalRecipeThreadFinished(false, false);
     }
 
     @Override
@@ -99,16 +92,18 @@ public final class MachineRecipeThread extends RecipeThread {
         if (controlsControllerRuntime) controller.onNormalRecipeThreadSearchFailed();
     }
 
+    @Override
+    protected void onStartFailed() {
+        if (controlsControllerRuntime) controller.onNormalRecipeThreadSearchFailed();
+    }
+
     public void rememberStartedRecipe() {
         MachineRecipe recipe = runtime.recipe();
         if (recipe == null) return;
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         lastRecipe = recipe;
-        lastRecipeStructureVersion = snapshot.structure().version();
-        lastRecipeCapabilityVersion = snapshot.capabilityVersion();
-        lastRecipeModifierVersion = snapshot.modifierVersion();
-        lastRecipeComponentStateVersion = snapshot.stateVersion();
         lastRecipeCatalogVersion = currentRecipeCatalog().version();
+        restartPending = false;
+        clearFullSearchRequest();
         installStartedProgram();
     }
 
@@ -116,22 +111,37 @@ public final class MachineRecipeThread extends RecipeThread {
         restartPending = lastRecipe != null;
     }
 
-    public boolean tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
+    public StartResult tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                         long structureVersion) {
-        MachineRecipe retryRecipe = consumeRestartRecipe(candidates, availableParallelism, structureVersion);
-        return retryRecipe != null && startRecipe(retryRecipe, availableParallelism, structureVersion);
+        if (!restartPending || hasFullSearchPending()) return StartResult.NO_MATCH;
+        MachineRecipe retryRecipe = peekRestartRecipe(candidates, availableParallelism, structureVersion);
+        if (retryRecipe == null) {
+            reportLastRecipeStartResult(StartResult.NO_MATCH);
+            return StartResult.NO_MATCH;
+        }
+        return startRecipe(retryRecipe, availableParallelism,
+                controller.currentRuntimeSnapshot().structure().version(), null, StartOrigin.LAST_RECIPE);
+    }
+
+    @Override
+    protected void onLastRecipeStartResult(StartResult result) {
+        switch (result) {
+            case STARTED, NO_MATCH, FAILED, CANCELLED -> restartPending = false;
+            case PENDING, DEFERRED -> { }
+        }
     }
 
     /** Starts one ordinary-controller candidate search from immutable main-thread captures. */
-    public boolean searchAndStartAsyncRecipe(List<MachineRecipe> candidates, long availableParallelism,
+    public StartResult searchAndStartAsyncRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                              long structureVersion) {
         if (controller.activeWorkMode() != MachineWorkMode.ASYNC || !(controller.getLevel() instanceof ServerLevel level)) {
             return searchAndStartRecipe(candidates, availableParallelism, structureVersion);
         }
-        if (hasPendingAsyncSearch()) return false;
+        if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
+        if (hasPendingAsyncSearch()) return StartResult.PENDING;
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = currentMachine();
-        if (machine == null || availableParallelism <= 0L) return false;
+        if (machine == null || availableParallelism <= 0L) return StartResult.NO_MATCH;
         long catalogVersion = currentRecipeCatalog().version();
         AsyncRequirementPlanner.RecipeSearchRequest request;
         try {
@@ -147,9 +157,9 @@ public final class MachineRecipeThread extends RecipeThread {
         PendingAsyncSearch pending = new PendingAsyncSearch(request, taskKey, catalogVersion);
         pendingAsyncSearch = pending;
         if (submitAsyncRecipeSearch(taskKey, request, catalogVersion, searchId, asyncSearchLaneId(),
-                () -> clearPendingAsyncSearch(pending, false))) return true;
+                () -> clearPendingAsyncSearch(pending, false))) return StartResult.PENDING;
         clearPendingAsyncSearch(pending, false);
-        return false;
+        return StartResult.DEFERRED;
     }
 
     /** Returns whether a current ordinary-controller search owns the single in-flight slot. */
@@ -161,20 +171,26 @@ public final class MachineRecipeThread extends RecipeThread {
         return false;
     }
 
-    public @Nullable MachineRecipe consumeRestartRecipe(List<MachineRecipe> candidates, long availableParallelism,
+    public @Nullable MachineRecipe peekRestartRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                                          long structureVersion) {
-        if (!restartPending) return null;
-        restartPending = false;
-        MachineRecipe retryRecipe = lastRecipe;
+        if (!restartPending || hasFullSearchPending()) return null;
+        MachineRecipe retryRecipe = resolveCurrentLastRecipe(candidatesForMachine(candidates));
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         boolean canRestart = retryRecipe != null && availableParallelism > 0
-                && lastRecipeStructureVersion == structureVersion
-                && lastRecipeCapabilityVersion == snapshot.capabilityVersion()
-                && lastRecipeModifierVersion == snapshot.modifierVersion()
-                && lastRecipeComponentStateVersion == snapshot.stateVersion()
-                && recipeBelongsToCurrentMachine(retryRecipe)
-                && candidatesForMachine(candidates).contains(retryRecipe);
+                && snapshot.structure().formed() && snapshot.structure().structureAreaLoaded()
+                && snapshot.moduleConnectionStatus().canRunRecipe(retryRecipe.requiredHostIds())
+                && AsyncRequirementPlanner.capturedRequirementFailure(snapshot, retryRecipe) == null;
         return canRestart ? retryRecipe : null;
+    }
+
+    /** Compatibility entry point; inspecting a candidate no longer consumes its restart opportunity. */
+    public @Nullable MachineRecipe consumeRestartRecipe(List<MachineRecipe> candidates, long availableParallelism,
+                                                        long structureVersion) {
+        return peekRestartRecipe(candidates, availableParallelism, structureVersion);
+    }
+
+    public boolean hasRestartPending() {
+        return restartPending;
     }
 
     @Override
@@ -187,6 +203,7 @@ public final class MachineRecipeThread extends RecipeThread {
     public void invalidate() {
         clearPendingAsyncSearch(pendingAsyncSearch, true);
         super.invalidate();
+        clearLastRecipe();
     }
 
     @Override
@@ -247,16 +264,34 @@ public final class MachineRecipeThread extends RecipeThread {
         return RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
     }
 
-    private @Nullable net.minecraft.core.HolderLookup.Provider registryAccess() {
+    private @Nullable MachineRecipe resolveCurrentLastRecipe(List<MachineRecipe> candidates) {
+        if (lastRecipe == null) return null;
+        if (!recipeBelongsToCurrentMachine(lastRecipe)) {
+            clearLastRecipe();
+            requestFullSearch();
+            return null;
+        }
+        MachineRecipeCatalog catalog = currentRecipeCatalog();
+        if (lastRecipeCatalogVersion != catalog.version()) {
+            MachineRecipe current = catalog.recipes().stream()
+                    .filter(recipe -> lastRecipe.id().equals(recipe.id())).findFirst().orElse(null);
+            if (current == null || !ActiveMachineRecipe.sameDefinition(lastRecipe, current, registryAccess())) {
+                clearLastRecipe();
+                requestFullSearch();
+                return null;
+            }
+            lastRecipe = current;
+            lastRecipeCatalogVersion = catalog.version();
+        }
+        return candidates.contains(lastRecipe) ? lastRecipe : null;
+    }
+
+    private @Nullable HolderLookup.Provider registryAccess() {
         return controller.getLevel() == null ? null : controller.getLevel().registryAccess();
     }
 
     private void clearLastRecipe() {
         lastRecipe = null;
-        lastRecipeStructureVersion = Long.MIN_VALUE;
-        lastRecipeCapabilityVersion = Long.MIN_VALUE;
-        lastRecipeModifierVersion = Long.MIN_VALUE;
-        lastRecipeComponentStateVersion = Long.MIN_VALUE;
         lastRecipeCatalogVersion = Long.MIN_VALUE;
         restartPending = false;
     }

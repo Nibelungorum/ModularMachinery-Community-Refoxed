@@ -76,6 +76,9 @@ import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
+import cn.howxu.mmcr.internal.recipe.RecipeThread.StartOrigin;
+import cn.howxu.mmcr.internal.recipe.RecipeThread.StartResult;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.RecipeStartDelay;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
@@ -207,6 +210,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private boolean clientStateBaseline;
     private @Nullable ExecutionStatus lastFailure;
     private @Nullable ResourceLocation selectedRecipePoolId;
+    private @Nullable List<ResourceLocation> immutableRecipePoolIds;
+    private @Nullable ResourceLocation validatedRecipePoolId;
     private boolean redstonePaused;
     private final BlockPos directSignalPosition;
     private boolean runtimePersistenceChanged;
@@ -226,6 +231,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long cachedMachineReferenceStructureVersion = Long.MIN_VALUE;
     private RecipeStartDelay recipeStartDelay = new RecipeStartDelay();
     private boolean sharedStartPending;
+    private transient StartOrigin pendingSharedStartOrigin = StartOrigin.SEARCH;
+    private transient long pendingSharedStartLifecycleEpoch = Long.MIN_VALUE;
     private @Nullable MachineRecipe pendingSharedStartRecipe;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingSharedStartDomain;
     private long pendingSharedStartStructureVersion = Long.MIN_VALUE;
@@ -479,6 +486,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void onPatternStartCommitted() {
+        if (runtime.craftingRuntime().active()) normalRecipeThread.rememberStartedRecipe();
         setActiveState(true);
         syncRuntimeStateIfChanged();
         publishRuntimeState();
@@ -488,19 +496,24 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void onNormalRecipeThreadStarted() {
         setActiveState(true);
         recipeSearchRetryCounter = 0;
-        lastFailure = null;
+        lastFailure = runtime.craftingRuntime().failure();
         syncRuntimeStateIfChanged();
         setChanged();
     }
 
-    public void onNormalRecipeThreadFinished(boolean restarting) {
+    public void onNormalRecipeThreadFinished(boolean restarting, boolean completedSuccessfully) {
         lastFailure = runtime.craftingRuntime().failure();
-        if (lastFailure == null) playFinishSound();
+        if (completedSuccessfully) playFinishSound();
         if (!restarting && !runtime.craftingRuntime().active()) {
             setActiveState(false);
         }
         if (!restarting || runtime.craftingRuntime().active()) syncRuntimeStateIfChanged();
         setChanged();
+    }
+
+    public void onNormalRecipeThreadFinished(boolean restarting) {
+        onNormalRecipeThreadFinished(restarting, runtime.craftingRuntime().failure() == null
+                && runtime.craftingRuntime().ledger().state().outputPaid());
     }
 
     public void onNormalRecipeThreadSearchFailed() {
@@ -1901,15 +1914,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending()
                 && !normalRecipeThread.hasPendingAsyncSearch()) {
             ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
-            startedThisTick = normalRecipeThread.tryRestartLastRecipe(recipesForMachine(), getMaxParallelism(),
+            StartResult restart = normalRecipeThread.tryRestartLastRecipe(recipesForMachine(), getMaxParallelism(),
                     snapshot.structure().version());
-            if (!startedThisTick && shouldSearchRecipe()) {
+            startedThisTick = restart.ownsStart();
+            if (!startedThisTick && restart != StartResult.DEFERRED && restart != StartResult.CANCELLED
+                    && (normalRecipeThread.hasFullSearchPending() || shouldSearchRecipe())) {
                 recipeSearchAttemptCounter++;
-                startedThisTick = activeWorkMode() == MachineWorkMode.ASYNC
+                long epoch = lifecycleEpoch();
+                StartResult searched = activeWorkMode() == MachineWorkMode.ASYNC
                         ? normalRecipeThread.searchAndStartAsyncRecipe(recipesForMachine(), getMaxParallelism(),
                         snapshot.structure().version())
                         : normalRecipeThread.searchAndStartRecipe(recipesForMachine(), getMaxParallelism(),
                         snapshot.structure().version());
+                if (epoch == lifecycleEpoch()) normalRecipeThread.onFullSearchResult(searched);
+                startedThisTick = searched.ownsStart();
             }
         }
         if (runtime.craftingRuntime().active() && !startedThisTick) {
@@ -3785,7 +3803,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.publishUpgradeBusState(List.of());
         runtime.publishComponentState(List.of(), Map.of(), Map.of(), Set.of());
         if (wasFormed && invalidateScheduledCheck) publishStructureWork(state -> state.withNextCheckTick(-1L));
-        runtime.craftingRuntime().invalidate();
+        normalRecipeThread.invalidate();
         setActiveState(false);
         clearPendingSharedStart();
         clearSharedTickPending();
@@ -3798,6 +3816,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         syncRuntimeStateIfChanged();
         publishRuntimeState();
         syncOpenControllerScreenText();
+        clearRecipePoolMembershipCache();
     }
 
     private void unbindSmartInterfaces() {
@@ -4013,12 +4032,47 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean tryStartNewRecipe() {
-        if (!shouldSearchRecipe()) return false;
+        StartResult restart = tryRestartNormalRecipe();
+        if (restart.ownsStart()) return true;
+        if (restart == StartResult.DEFERRED || restart == StartResult.CANCELLED
+                || !normalRecipeThread.hasFullSearchPending() && !shouldSearchRecipe()) return false;
+        long epoch = lifecycleEpoch();
+        StartResult searched = searchNewRecipe();
+        if (epoch == lifecycleEpoch()) normalRecipeThread.onFullSearchResult(searched);
+        return searched.ownsStart();
+    }
+
+    /** Keeps legacy shared SYNC starts under the same arbiter as a full candidate search. */
+    public StartResult tryRestartNormalRecipe() {
+        if (runtime.craftingRuntime().active() || sharedStartPending || normalRecipeThread.isStartPending()) {
+            return StartResult.PENDING;
+        }
+        if (!usesSharedIoCoordinator()) {
+            return normalRecipeThread.tryRestartLastRecipe(recipesForMachine(), getMaxParallelism(),
+                    currentRuntimeSnapshot().structure().version());
+        }
+        if (!normalRecipeThread.hasRestartPending() || normalRecipeThread.hasFullSearchPending()) {
+            return StartResult.NO_MATCH;
+        }
+        MachineRecipe candidate = normalRecipeThread.peekRestartRecipe(recipesForMachine(), getMaxParallelism(),
+                currentRuntimeSnapshot().structure().version());
+        if (candidate == null) {
+            normalRecipeThread.reportLastRecipeStartResult(StartResult.NO_MATCH);
+            return StartResult.NO_MATCH;
+        }
+        return requestSharedStart(candidate, StartOrigin.LAST_RECIPE);
+    }
+
+    public boolean hasPendingNormalRecipeStart() {
+        return sharedStartPending || normalRecipeThread.isStartPending();
+    }
+
+    private StartResult searchNewRecipe() {
         recipeSearchAttemptCounter++;
         ControllerRuntimeSnapshot current = currentRuntimeSnapshot();
         Machine matchedMachine = current.structure().machine();
         ResourceLocation machineId = matchedMachine == null ? null : matchedMachine.registryName();
-        if (machineId == null) return false;
+        if (machineId == null) return StartResult.NO_MATCH;
         List<MachineRecipe> candidates = recipesForMachine();
         long maxParallelism = getMaxParallelism();
         RecipeSearchResult result;
@@ -4035,7 +4089,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     FailureOccurrence.at(BuiltinFailureReasons.RECIPE_SEARCH_EXCEPTION, source,
                             FailurePhase.RECIPE_SEARCH, null, null, Map.of()));
             runtime.craftingRuntime().recordSearchFailure(lastFailure);
-            return false;
+            return StartResult.FAILED;
         }
         if (result.success()) {
             return applySearchResult(result);
@@ -4044,7 +4098,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         recipeSearchRetryCounter++;
         runtime.craftingRuntime().recordSearchFailure(result.failure());
         lastFailure = runtime.craftingRuntime().failure();
-        return false;
+        return StartResult.NO_MATCH;
     }
 
     private boolean shouldSearchRecipe() {
@@ -4079,32 +4133,114 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.componentRuntime().markCapabilityPresentationChanged(sourcePos);
     }
 
-    private boolean applySearchResult(RecipeSearchResult result) {
+    private StartResult applySearchResult(RecipeSearchResult result) {
         if (!isSearchResultCurrent(result) || !recipeBelongsToCurrentMachine(result.recipe())) {
-            return false;
+            return StartResult.CANCELLED;
         }
         MachineRecipe next = result.recipe();
         if (shouldDelayConflictProneStart(result)) {
-            return false;
+            return StartResult.DEFERRED;
         }
         if (usesSharedIoCoordinator()) {
-            requestSharedStart(next);
-            return true;
+            return requestSharedStart(next, StartOrigin.SEARCH);
         }
-        CraftingStatus state = runtime.craftingRuntime().start(next, getMaxParallelism());
-        if (!state.isCrafting()) {
-            clearPendingConflictStart();
-            recipeSearchRetryCounter++;
-            lastFailure = runtime.craftingRuntime().failure();
-            return false;
+        long epoch = lifecycleEpoch();
+        ControllerRuntimeSnapshot captured = currentRuntimeSnapshot();
+        long catalogVersion = currentCatalogVersion();
+        StructureClaimRegistry.ResourceDomain domain = resourceDomain();
+        if (!reserveNormalStartSlot()) return StartResult.DEFERRED;
+        try {
+            CraftingRuntime.StartPreparation preparation = runtime.craftingRuntime().prepareStartAttempt(next, getMaxParallelism());
+            if (epoch != lifecycleEpoch()) return StartResult.CANCELLED;
+            if (preparation.result() != CraftingRuntime.PreparationResult.READY) {
+                StartResult resultState = normalPreparationResult(preparation);
+                if (resultState == StartResult.FAILED) onNormalRecipeThreadSearchFailed();
+                return resultState;
+            }
+            StartResult invalid = normalPreparedStartInvalidation(next, captured, catalogVersion, domain);
+            if (epoch != lifecycleEpoch()) return StartResult.CANCELLED;
+            if (invalid != null) return invalid;
+            runtime.craftingRuntime().start(next, getMaxParallelism(), preparation.execution());
+            if (epoch != lifecycleEpoch()) return StartResult.CANCELLED;
+            if (!runtime.craftingRuntime().active()) {
+                reportSharedStartResult(StartOrigin.SEARCH, StartResult.FAILED);
+                syncCraftingFailure();
+                return StartResult.FAILED;
+            }
+        } catch (RuntimeException exception) {
+            if (epoch != lifecycleEpoch()) return StartResult.CANCELLED;
+            if (!runtime.craftingRuntime().active()) {
+                recordNormalStartException(next, exception);
+                onNormalRecipeThreadSearchFailed();
+                return StartResult.FAILED;
+            }
+            // A paid active execution keeps ownership even if its notification failed.
+            if (runtime.craftingRuntime().recipe() != next) return StartResult.CANCELLED;
+        } finally {
+            if (epoch == lifecycleEpoch() && !runtime.craftingRuntime().active()) releaseNormalStartSlot();
         }
         setActiveState(true);
         normalRecipeThread.rememberStartedRecipe();
         syncRuntimeStateIfChanged();
         recipeSearchRetryCounter = 0;
-        lastFailure = null;
+        lastFailure = runtime.craftingRuntime().failure();
         setChanged();
-        return true;
+        return StartResult.STARTED;
+    }
+
+    private boolean reserveNormalStartSlot() {
+        if (!(level instanceof ServerLevel serverLevel)) return true;
+        SharedIoCoordinator coordinator = SharedIoCoordinator.get(serverLevel);
+        if (coordinator.executionRoundId() == 0L) return true;
+        return !isRemoved() && !redstonePaused && serverLevel.getBlockEntity(getBlockPos()) == this
+                && currentStructureSnapshot().formed() && currentStructureSnapshot().structureAreaLoaded()
+                && coordinator.controllerPermit(getBlockPos()).eligible(coordinator.executionRoundId(),
+                serverLevel.getGameTime(), serverLevel.tickRateManager().runsNormally())
+                && coordinator.reserveExecution(runtime.craftingRuntime(), "base");
+    }
+
+    private void releaseNormalStartSlot() {
+        if (level instanceof ServerLevel serverLevel) {
+            SharedIoCoordinator.get(serverLevel).releaseExecutionReservation(runtime.craftingRuntime(), "base");
+        }
+    }
+
+    private static StartResult normalPreparationResult(CraftingRuntime.StartPreparation preparation) {
+        return switch (preparation.result()) {
+            case DEFERRED -> StartResult.DEFERRED;
+            case CANCELLED -> StartResult.CANCELLED;
+            case FAILED -> StartResult.FAILED;
+            case READY -> throw new IllegalArgumentException("READY is not a terminal preparation result");
+        };
+    }
+
+    private @Nullable StartResult normalPreparedStartInvalidation(MachineRecipe recipe,
+                                                                  ControllerRuntimeSnapshot captured,
+                                                                  long catalogVersion,
+                                                                  @Nullable StructureClaimRegistry.ResourceDomain domain) {
+        if (isRemoved() || level instanceof ServerLevel serverLevel && serverLevel.getBlockEntity(getBlockPos()) != this) {
+            return StartResult.CANCELLED;
+        }
+        if (!recipeBelongsToCurrentMachine(recipe) || catalogVersion != currentCatalogVersion()) return StartResult.NO_MATCH;
+        ControllerRuntimeSnapshot current = currentRuntimeSnapshot();
+        if (!current.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())
+                || AsyncRequirementPlanner.capturedRequirementFailure(current, recipe) != null) return StartResult.NO_MATCH;
+        if (redstonePaused || !current.structure().formed() || !current.structure().structureAreaLoaded()
+                || current.structure().version() != captured.structure().version()
+                || current.capabilityVersion() != captured.capabilityVersion()
+                || current.modifierVersion() != captured.modifierVersion()
+                || current.stateVersion() != captured.stateVersion()
+                || current.upgradeContentRevision() != captured.upgradeContentRevision()
+                || !Objects.equals(domain, resourceDomain())) return StartResult.DEFERRED;
+        return null;
+    }
+
+    private void recordNormalStartException(MachineRecipe recipe, RuntimeException exception) {
+        LOG.warn("[Ctrl#{}] recipe start failed: recipe={} pos={}", instanceId, recipe.id(), getBlockPos(), exception);
+        ResourceLocation source = MMCR.id("controller");
+        runtime.craftingRuntime().recordSearchFailure(ExecutionStatus.blocked(source, source,
+                FailureOccurrence.at(BuiltinFailureReasons.RECIPE_START, source, FailurePhase.RECIPE_START,
+                        null, null, Map.of())));
     }
 
     public boolean shouldDelayConflictProneStart(RecipeSearchResult result) {
@@ -4164,13 +4300,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return level instanceof ServerLevel && domain != null && domain.controllers().size() > 1;
     }
 
-    private void requestSharedStart(MachineRecipe next) {
-        if (!(level instanceof ServerLevel serverLevel)) return;
-        if (!recipeBelongsToCurrentMachine(next)) return;
+    private StartResult requestSharedStart(MachineRecipe next, StartOrigin origin) {
+        if (!(level instanceof ServerLevel serverLevel)) return StartResult.DEFERRED;
+        if (!recipeBelongsToCurrentMachine(next)) return StartResult.CANCELLED;
         StructureClaimRegistry.ResourceDomain domain = resourceDomain();
-        if (domain == null) return;
+        if (domain == null) return StartResult.DEFERRED;
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
         sharedStartPending = true;
+        pendingSharedStartOrigin = origin;
+        pendingSharedStartLifecycleEpoch = lifecycleEpoch();
         pendingSharedStartRecipe = next;
         pendingSharedStartDomain = domain;
         pendingSharedStartStructureVersion = snapshot.structure().version();
@@ -4189,22 +4327,50 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 snapshot.stateVersion(),
                 getMaxParallelism(),
                 requested -> {
-                    if (!isPendingSharedStart(token, next, domain) || runtime.craftingRuntime().active()) return 0L;
-                    CraftingStatus state = runtime.craftingRuntime().start(next, requested);
-                    if (!state.isCrafting()) {
-                        clearPendingSharedStart();
-                        recipeSearchRetryCounter++;
-                        syncCraftingFailure();
-                        syncRuntimeStateIfChanged();
-                        return 0L;
+                    if (lifecycleEpoch != lifecycleEpoch() || !isPendingSharedStart(token, next, domain)
+                            || runtime.craftingRuntime().active()) return 0L;
+                    try {
+                        if (!reserveNormalStartSlot()) {
+                            finishPendingSharedStart(token, next, domain, lifecycleEpoch, StartResult.DEFERRED);
+                            return 0L;
+                        }
+                        CraftingRuntime.StartPreparation preparation = runtime.craftingRuntime().prepareStartAttempt(next, requested);
+                        if (!ownsPendingSharedStart(token, next, domain, lifecycleEpoch)) return 0L;
+                        if (preparation.result() != CraftingRuntime.PreparationResult.READY) {
+                            finishPendingSharedStart(token, next, domain, lifecycleEpoch, normalPreparationResult(preparation));
+                            return 0L;
+                        }
+                        if (!isPendingSharedStart(token, next, domain)) return 0L;
+                        StartResult invalid = normalPreparedStartInvalidation(next, snapshot,
+                                pendingSharedStartCatalogVersion, domain);
+                        if (invalid != null) {
+                            finishPendingSharedStart(token, next, domain, lifecycleEpoch, invalid);
+                            return 0L;
+                        }
+                        runtime.craftingRuntime().start(next, requested, preparation.execution());
+                        if (!ownsPendingSharedStart(token, next, domain, lifecycleEpoch)) return 0L;
+                        if (!runtime.craftingRuntime().active()) {
+                            finishPendingSharedStart(token, next, domain, lifecycleEpoch, StartResult.FAILED);
+                            return 0L;
+                        }
+                    } catch (RuntimeException exception) {
+                        if (!ownsPendingSharedStart(token, next, domain, lifecycleEpoch)) return 0L;
+                        if (!runtime.craftingRuntime().active()) {
+                            recordNormalStartException(next, exception);
+                            finishPendingSharedStart(token, next, domain, lifecycleEpoch, StartResult.FAILED);
+                            return 0L;
+                        }
+                        if (runtime.craftingRuntime().recipe() != next) return 0L;
                     }
                     return runtime.craftingRuntime().parallelism();
                 },
                 granted -> {
-                    if (!isPendingSharedStart(token, next, domain) || !runtime.craftingRuntime().active()) return;
+                    if (!ownsPendingSharedStart(token, next, domain, lifecycleEpoch)
+                            || !runtime.craftingRuntime().active()) return;
                     clearPendingSharedStart();
                     setActiveState(true);
                     normalRecipeThread.rememberStartedRecipe();
+                    reportSharedStartResult(origin, StartResult.STARTED);
                     syncRuntimeStateIfChanged();
                     recipeSearchRetryCounter = 0;
                     syncCraftingFailure();
@@ -4216,12 +4382,32 @@ public class MachineControllerBlockEntity extends BlockEntity {
                   pendingSharedStartCatalogVersion,
                   this::currentCatalogVersion
          ));
+        if (origin == StartOrigin.LAST_RECIPE) normalRecipeThread.reportLastRecipeStartResult(StartResult.PENDING);
+        return StartResult.PENDING;
+    }
+
+    private void finishPendingSharedStart(long token, MachineRecipe next, StructureClaimRegistry.ResourceDomain domain,
+                                          long epoch, StartResult result) {
+        if (!ownsPendingSharedStart(token, next, domain, epoch)) return;
+        StartOrigin origin = pendingSharedStartOrigin;
+        clearPendingSharedStart();
+        reportSharedStartResult(origin, result);
+        syncCraftingFailure();
+        syncRuntimeStateIfChanged();
+    }
+
+    private void reportSharedStartResult(StartOrigin origin, StartResult result) {
+        if (origin == StartOrigin.LAST_RECIPE) {
+            normalRecipeThread.reportLastRecipeStartResult(result);
+        } else if (result == StartResult.FAILED) {
+            clearPendingConflictStart();
+            recipeSearchRetryCounter++;
+        }
     }
 
     private boolean isPendingSharedStart(long token, MachineRecipe next,
                                          StructureClaimRegistry.ResourceDomain domain) {
-        if (!sharedStartPending || pendingSharedStartToken != token || pendingSharedStartRecipe != next
-                || pendingSharedStartDomain == null || !pendingSharedStartDomain.equals(domain)) return false;
+        if (!ownsPendingSharedStart(token, next, domain, lifecycleEpoch())) return false;
         if (redstonePaused) {
             invalidatePendingSharedStart();
             return false;
@@ -4236,36 +4422,52 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 || snapshot.modifierVersion() != pendingSharedStartModifierVersion
                 || snapshot.stateVersion() != pendingSharedStartComponentStateVersion) {
             invalidatePendingSharedStart();
-            recipeSearchRetryCounter++;
             return false;
         }
         if (!recipeBelongsToCurrentMachine(next)) {
-            invalidatePendingSharedStart();
+            invalidatePendingSharedStart(StartResult.NO_MATCH);
             recipeSearchRetryCounter = 0;
             return false;
         }
         if (!Objects.equals(pendingSharedStartRecipePoolId, currentRecipePoolId())) {
-            invalidatePendingSharedStart();
+            invalidatePendingSharedStart(StartResult.NO_MATCH);
             recipeSearchRetryCounter = 0;
             return false;
         }
         if (currentCatalogVersion() != pendingSharedStartCatalogVersion) {
-            invalidatePendingSharedStart();
+            invalidatePendingSharedStart(StartResult.NO_MATCH);
             recipeSearchRetryCounter = 0;
             return false;
         }
         return true;
     }
 
+    private boolean ownsPendingSharedStart(long token, MachineRecipe next,
+                                           StructureClaimRegistry.ResourceDomain domain, long epoch) {
+        return epoch == lifecycleEpoch() && pendingSharedStartLifecycleEpoch == epoch
+                && sharedStartPending && pendingSharedStartToken == token && pendingSharedStartRecipe == next
+                && pendingSharedStartDomain != null && pendingSharedStartDomain.equals(domain);
+    }
+
     private void invalidatePendingSharedStart() {
+        invalidatePendingSharedStart(StartResult.DEFERRED);
+    }
+
+    private void invalidatePendingSharedStart(StartResult result) {
+        StartOrigin origin = pendingSharedStartOrigin;
+        long epoch = pendingSharedStartLifecycleEpoch;
         clearPendingSharedStart();
         runtime.craftingRuntime().invalidate();
+        if (epoch == lifecycleEpoch()) reportSharedStartResult(origin, result);
         syncCraftingFailure();
         syncRuntimeStateIfChanged();
     }
 
     private void clearPendingSharedStart() {
+        if (sharedStartPending && !runtime.craftingRuntime().active()) releaseNormalStartSlot();
         sharedStartPending = false;
+        pendingSharedStartOrigin = StartOrigin.SEARCH;
+        pendingSharedStartLifecycleEpoch = Long.MIN_VALUE;
         pendingSharedStartRecipe = null;
         pendingSharedStartDomain = null;
         pendingSharedStartStructureVersion = Long.MIN_VALUE;
@@ -4333,23 +4535,28 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 () -> {
                     if (!validateSharedRuntime(token, domain)) return false;
                     boolean wasActive = runtime.craftingRuntime().active();
+                    MachineRecipe completedRecipe = runtime.craftingRuntime().recipe();
                     runtime.craftingRuntime().finish();
-                    boolean restarting = false;
+                    boolean completedSuccessfully = wasActive && !runtime.craftingRuntime().active()
+                            && runtime.craftingRuntime().failure() == null
+                            && runtime.craftingRuntime().ledger().state().outputPaid();
                     // SharedIoCoordinator resolves starts submitted while committing finishes in this tick.
-                    if (wasActive && !runtime.craftingRuntime().active()
-                            && runtime.craftingRuntime().failure() == null) {
+                    if (completedSuccessfully) {
                         normalRecipeThread.markRecipeFinished();
-                        MachineRecipe restartRecipe = normalRecipeThread.consumeRestartRecipe(recipesForMachine(),
-                                getMaxParallelism(), currentRuntimeSnapshot().structure().version());
-                        if (restartRecipe != null) {
-                            requestSharedStart(restartRecipe);
-                            restarting = sharedStartPending;
-                        } else {
+                        try {
                             tryStartNewRecipe();
-                            restarting = sharedStartPending;
+                        } catch (RuntimeException exception) {
+                            if (lifecycleEpoch == lifecycleEpoch() && !runtime.craftingRuntime().active()) {
+                                recordNormalStartException(completedRecipe, exception);
+                                normalRecipeThread.reportLastRecipeStartResult(StartResult.FAILED);
+                            }
+                        } finally {
+                            boolean restarting = runtime.craftingRuntime().active() || hasPendingNormalRecipeStart();
+                            completeSharedRuntime(wasActive, restarting, true);
                         }
+                    } else {
+                        completeSharedRuntime(wasActive, false, false);
                     }
-                    completeSharedRuntime(wasActive, restarting);
                     return true;
                   },
                   () -> lifecycleEpoch == lifecycleEpoch() && validateSharedRuntime(token, domain),
@@ -4395,20 +4602,19 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void completeSharedRuntime(boolean wasActive) {
-        completeSharedRuntime(wasActive, false);
+        completeSharedRuntime(wasActive, false, wasActive && !runtime.craftingRuntime().active()
+                && runtime.craftingRuntime().failure() == null && runtime.craftingRuntime().ledger().state().outputPaid());
     }
 
-    private void completeSharedRuntime(boolean wasActive, boolean restarting) {
+    private void completeSharedRuntime(boolean wasActive, boolean restarting, boolean completedSuccessfully) {
         clearSharedTickPending();
         syncCraftingFailure();
-        if (wasActive && !runtime.craftingRuntime().active()) {
-            boolean finished = runtime.craftingRuntime().failure() == null;
-            lastFailure = finished ? null : runtime.craftingRuntime().failure();
-            if (finished) playFinishSound();
-            if (!restarting) setActiveState(false);
+        if (completedSuccessfully || wasActive && !runtime.craftingRuntime().active()) {
+            onNormalRecipeThreadFinished(restarting, completedSuccessfully);
+        } else {
+            if (!restarting) syncRuntimeStateIfChanged();
+            setChanged();
         }
-        if (!restarting) syncRuntimeStateIfChanged();
-        setChanged();
     }
 
     void playFinishSound() {
@@ -4433,25 +4639,43 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureSnapshot snapshot = runtime.currentStructureSnapshot();
         Machine machine = snapshot.machine() == null
                 ? snapshot.configuredMachine() : snapshot.machine();
-        return MachineRegistry.recipePoolsForMachine(machine);
+        // Only registry-owned immutable snapshots are trusted; overrides may return mutable lists.
+        List<ResourceLocation> pools = MachineRegistry.recipePoolsForMachine(machine);
+        if (immutableRecipePoolIds != pools) {
+            immutableRecipePoolIds = pools;
+            validatedRecipePoolId = null;
+        }
+        return pools;
     }
 
     public @Nullable ResourceLocation currentRecipePoolId() {
         List<ResourceLocation> pools = supportedRecipePoolIds();
-        if (pools.isEmpty()) return null;
+        if (pools.isEmpty()) {
+            clearRecipePoolMembershipCache();
+            return null;
+        }
+        if (pools == immutableRecipePoolIds && selectedRecipePoolId != null
+                && selectedRecipePoolId.equals(validatedRecipePoolId)) return selectedRecipePoolId;
         if (selectedRecipePoolId == null || !pools.contains(selectedRecipePoolId)) {
             boolean poolChanged = selectedRecipePoolId != null;
             selectedRecipePoolId = pools.getFirst();
             if (poolChanged) discardWorkForRecipePoolChange();
             if (level != null && !level.isClientSide()) setChanged();
         }
+        validatedRecipePoolId = pools == immutableRecipePoolIds ? selectedRecipePoolId : null;
         return selectedRecipePoolId;
+    }
+
+    private void clearRecipePoolMembershipCache() {
+        immutableRecipePoolIds = null;
+        validatedRecipePoolId = null;
     }
 
     public boolean selectRecipePool(ResourceLocation recipePoolId) {
         if (level == null || level.isClientSide() || !supportedRecipePoolIds().contains(recipePoolId)) return false;
         if (recipePoolId.equals(currentRecipePoolId())) return false;
         selectedRecipePoolId = recipePoolId;
+        clearRecipePoolMembershipCache();
         discardWorkForRecipePoolChange();
         setChanged();
         broadcastStateIfChanged();
@@ -4459,6 +4683,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void discardWorkForRecipePoolChange() {
+        if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
         normalRecipeThread.discardForRecipePoolChange();
         runtime.factoryRuntime().discardForRecipePoolChange();
         clearPendingSharedStart();
@@ -4504,7 +4729,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             clientStateBaseline = false;
         }
         super.setLevel(level);
-        if (changedLevel) cachedStructureClaimRegistry = null;
+        if (changedLevel) {
+            cachedStructureClaimRegistry = null;
+            clearRecipePoolMembershipCache();
+        }
     }
 
     @Override
@@ -4527,6 +4755,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level != null && level.isClientSide()) clientRemovedListener.accept(this);
         if (level != null && !level.isClientSide() && !chunkUnloaded) resetMachine(true, false);
         cachedStructureClaimRegistry = null;
+        clearRecipePoolMembershipCache();
     }
 
     @Override
@@ -4545,6 +4774,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             clearStructureScan();
         }
         cachedStructureClaimRegistry = null;
+        clearRecipePoolMembershipCache();
     }
 
     void bindDefaultMachine() {
@@ -4654,6 +4884,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     protected void loadAdditional(CompoundTag input, HolderLookup.Provider registries) {
+        clearRecipePoolMembershipCache();
         super.loadAdditional(input, registries);
         runtimeTopologyReady = false;
         loadingRuntime = true;

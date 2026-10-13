@@ -72,3 +72,12 @@ runs {
         arguments.addAll '--existing-mod', 'botania'
     }
 }
+
+def prepareGameTestExampleItems = tasks.register('prepareGameTestExampleItems', Copy) {
+    from layout.projectDirectory.file('example/startup_scripts/video/Specilized.js')
+    into layout.projectDirectory.dir('run/gameTestServer/kubejs/startup_scripts/mmcr_examples')
+}
+
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    dependsOn prepareGameTestExampleItems
+}

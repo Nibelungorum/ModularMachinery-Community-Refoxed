@@ -66,6 +66,7 @@ public final class MachineAsyncCoordinator {
     private boolean completingFence;
     private final Map<ExecutionDomain, ReceiptDrain> receiptDrains = new ConcurrentHashMap<>();
     private final Map<ExecutionIdentity, Acknowledgement> receiptAcknowledgements = new ConcurrentHashMap<>();
+    private final Object receiptLifecycle = new Object();
     private volatile boolean closed;
 
     /**
@@ -76,30 +77,49 @@ public final class MachineAsyncCoordinator {
 
     /** Coalesces only facts of the same execution; no world objects cross this boundary. */
     public void publishReceipt(ExecutionDomain domain, Receipt receipt) {
-        if (closed) return;
-        receiptDrains.compute(domain, (ignored, current) -> {
-            ReceiptDrain drain = current == null ? new ReceiptDrain() : current;
-            synchronized (drain) {
-                if (closed) return null;
-                drain.pending.merge(receipt.identity(), receipt,
-                        (previous, next) -> next.sequence() > previous.sequence() ? next : previous);
+        while (!closed) {
+            ReceiptDrain drain = receiptDrains.get(domain);
+            if (drain == null) {
+                // Only cold attachment shares the ACK/close gate. Hot publication takes just the drain monitor.
+                synchronized (receiptLifecycle) {
+                    if (closed) return;
+                    drain = receiptDrains.get(domain);
+                    if (drain == null) {
+                        ReceiptDrain created = new ReceiptDrain(domain);
+                        ReceiptDrain existing = receiptDrains.putIfAbsent(domain, created);
+                        drain = existing == null ? created : existing;
+                    }
+                }
             }
-            return drain;
-        });
+            synchronized (drain) {
+                if (closed) return;
+                // Cleanup may have detached the drain after our lookup. Retry instead of losing a terminal fact.
+                if (receiptDrains.get(domain) != drain) continue;
+                ReceiptMailbox mailbox = drain.mailboxes.get(receipt.identity());
+                if (mailbox == null) {
+                    mailbox = new ReceiptMailbox(receipt.identity());
+                    drain.mailboxes.put(receipt.identity(), mailbox);
+                }
+                drain.offer(mailbox, receipt);
+                return;
+            }
+        }
     }
 
     /** One outstanding executor segment per domain. Rejected work stays dirty until the next pump. */
     public void pumpReceiptDrains() {
         if (closed) return;
-        receiptDrains.forEach((domain, drain) -> {
-            receiptDrains.computeIfPresent(domain, (ignored, current) -> {
-                if (current != drain) return current;
-                synchronized (drain) {
-                    return !drain.queued.get() && drain.idle && drain.pending.isEmpty() ? null : drain;
+        for (ReceiptDrain drain : receiptDrains.values()) {
+            synchronized (drain) {
+                // No CHM remapping callback ever acquires a drain monitor: removal has only drain -> bin order.
+                if (receiptDrains.get(drain.domain) != drain) continue;
+                if (!drain.queued.get() && drain.mailboxes.isEmpty()) {
+                    receiptDrains.remove(drain.domain, drain);
+                    continue;
                 }
-            });
-            if (receiptDrains.get(domain) == drain) scheduleReceiptDrain(drain);
-        });
+            }
+            scheduleReceiptDrain(drain);
+        }
     }
 
     public Acknowledgement pollReceiptAcknowledgement() {
@@ -111,10 +131,11 @@ public final class MachineAsyncCoordinator {
 
     private void scheduleReceiptDrain(ReceiptDrain drain) {
         synchronized (drain) {
-            if (closed || drain.pending.isEmpty() || !drain.queued.compareAndSet(false, true)) return;
+            if (closed || receiptDrains.get(drain.domain) != drain || drain.dirtyHead == null || drain.queued.get()) return;
+            drain.queued.set(true);
         }
         try {
-            executor.execute(() -> drainReceipts(drain));
+            executor.execute(drain);
         } catch (RuntimeException exception) {
             synchronized (drain) {
                 drain.queued.set(false);
@@ -123,52 +144,121 @@ public final class MachineAsyncCoordinator {
     }
 
     private void drainReceipts(ReceiptDrain drain) {
-        List<Receipt> captured = new ArrayList<>();
+        ReceiptMailbox mailbox = null;
+        Receipt receipt = null;
         boolean failed = false;
         try {
-            if (closed) return;
-            for (Receipt receipt : drain.pending.values()) {
-                if (captured.size() == ServerConfig.asyncSharedIoWorksetEntries()) break;
-                if (drain.pending.remove(receipt.identity(), receipt)) captured.add(receipt);
+            int remaining;
+            synchronized (drain) {
+                if (closed || receiptDrains.get(drain.domain) != drain) return;
+                remaining = Math.min(drain.dirtyCount, ServerConfig.asyncSharedIoWorksetEntries());
             }
-            for (Receipt receipt : captured) {
-                if (closed) return;
-                RecipeExecutionState state = drain.states.computeIfAbsent(receipt.identity(), RecipeExecutionState::new);
-                if (!state.accept(receipt)) continue;
-                if (receipt.terminal()) {
-                    Acknowledgement acknowledgement = new Acknowledgement(receipt.identity(),
-                            receipt.installedRevision(), receipt.sequence());
-                    receiptAcknowledgements.merge(receipt.identity(), acknowledgement, (current, next) ->
-                            next.installedRevision() > current.installedRevision()
-                                    || next.installedRevision() == current.installedRevision()
-                                    && next.sequence() > current.sequence() ? next : current);
-                    drain.states.remove(receipt.identity());
+            while (remaining-- > 0) {
+                synchronized (drain) {
+                    if (closed || receiptDrains.get(drain.domain) != drain) return;
+                    mailbox = drain.dirtyHead;
+                    if (mailbox == null) break;
+                    drain.dirtyHead = mailbox.nextDirty;
+                    if (drain.dirtyHead == null) drain.dirtyTail = null;
+                    drain.dirtyCount--;
+                    mailbox.nextDirty = null;
+                    receipt = mailbox.pending;
+                    mailbox.pending = null;
                 }
+                if (mailbox.state == null) mailbox.state = new RecipeExecutionState(mailbox.identity);
+                if (mailbox.state.accept(receipt) && receipt.terminal()) mailbox.unacknowledgedTerminal = receipt;
+                if (mailbox.unacknowledgedTerminal != null) {
+                    if (!publishReceiptAcknowledgement(drain, mailbox.unacknowledgedTerminal)) return;
+                    mailbox.unacknowledgedTerminal = null;
+                }
+                synchronized (drain) {
+                    if (closed || receiptDrains.get(drain.domain) != drain) return;
+                    // A publication after take owns a fresh FIFO turn and must retain this execution's state.
+                    if (mailbox.state.terminal() && mailbox.pending == null) {
+                        drain.mailboxes.remove(mailbox.identity, mailbox);
+                    }
+                }
+                mailbox = null;
+                receipt = null;
             }
         } catch (RuntimeException exception) {
             failed = true;
-            for (Receipt receipt : captured) drain.pending.merge(receipt.identity(), receipt,
-                    (current, old) -> current.sequence() >= old.sequence() ? current : old);
+            synchronized (drain) {
+                if (!closed && receiptDrains.get(drain.domain) == drain && mailbox != null && receipt != null) {
+                    drain.offer(mailbox, receipt);
+                }
+            }
             MMCR.LOG.error("Execution receipt drain failed", exception);
         } finally {
-            // Publications during a running drain remain pending. Never clear a later dirty fact.
             synchronized (drain) {
-                drain.idle = drain.states.isEmpty();
                 drain.queued.set(false);
             }
-            if (!failed && !closed && !drain.pending.isEmpty()) scheduleReceiptDrain(drain);
+            if (!failed) scheduleReceiptDrain(drain);
+        }
+    }
+
+    private boolean publishReceiptAcknowledgement(ReceiptDrain drain, Receipt receipt) {
+        // Close never waits for a drain while holding this gate. Workers likewise hold no drain here.
+        synchronized (receiptLifecycle) {
+            if (closed || receiptDrains.get(drain.domain) != drain) return false;
+            Acknowledgement acknowledgement = new Acknowledgement(receipt.identity(),
+                    receipt.installedRevision(), receipt.sequence());
+            receiptAcknowledgements.merge(receipt.identity(), acknowledgement, (current, next) ->
+                    next.installedRevision() > current.installedRevision()
+                            || next.installedRevision() == current.installedRevision()
+                            && next.sequence() > current.sequence() ? next : current);
+            return true;
         }
     }
 
     /**
-     * Mutable state belongs exclusively to this domain's serial executor segment.
+     * Slot membership and the intrusive dirty FIFO are guarded by this drain's monitor.
      * @author howxu <dev@howxu.cn>
      */
-    private static final class ReceiptDrain {
-        private final Map<ExecutionIdentity, Receipt> pending = new ConcurrentHashMap<>();
-        private final Map<ExecutionIdentity, RecipeExecutionState> states = new HashMap<>();
+    private final class ReceiptDrain implements Runnable {
+        private final ExecutionDomain domain;
+        private final Map<ExecutionIdentity, ReceiptMailbox> mailboxes = new HashMap<>();
+        private ReceiptMailbox dirtyHead;
+        private ReceiptMailbox dirtyTail;
+        private int dirtyCount;
         private final AtomicBoolean queued = new AtomicBoolean();
-        private boolean idle = true;
+
+        private ReceiptDrain(ExecutionDomain domain) {
+            this.domain = domain;
+        }
+
+        private void offer(ReceiptMailbox mailbox, Receipt receipt) {
+            if (mailbox.pending == null) {
+                mailbox.pending = receipt;
+                if (dirtyTail == null) dirtyHead = mailbox;
+                else dirtyTail.nextDirty = mailbox;
+                dirtyTail = mailbox;
+                dirtyCount++;
+            } else if (receipt.sequence() > mailbox.pending.sequence()) {
+                mailbox.pending = receipt;
+            }
+        }
+
+        @Override
+        public void run() {
+            drainReceipts(this);
+        }
+    }
+
+    /**
+     * Pending/link fields use the drain monitor; confirmed state and terminal retry belong only to the worker.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ReceiptMailbox {
+        private final ExecutionIdentity identity;
+        private Receipt pending;
+        private ReceiptMailbox nextDirty;
+        private RecipeExecutionState state;
+        private Receipt unacknowledgedTerminal;
+
+        private ReceiptMailbox(ExecutionIdentity identity) {
+            this.identity = identity;
+        }
     }
 
     private MachineAsyncCoordinator(Executor executor) {
@@ -636,9 +726,21 @@ public final class MachineAsyncCoordinator {
     }
 
     private void cancelAll() {
-        closed = true;
+        synchronized (receiptLifecycle) {
+            closed = true;
+            receiptAcknowledgements.clear();
+        }
+        // Release the lifecycle gate before taking any drain monitor; no publisher can attach a new domain now.
+        for (ReceiptDrain drain : receiptDrains.values()) {
+            synchronized (drain) {
+                drain.mailboxes.clear();
+                drain.dirtyHead = null;
+                drain.dirtyTail = null;
+                drain.dirtyCount = 0;
+                receiptDrains.remove(drain.domain, drain);
+            }
+        }
         receiptDrains.clear();
-        receiptAcknowledgements.clear();
         for (TickBatch batch : batches.values()) {
             for (Task task : List.copyOf(batch.tasks.values())) {
                 requestTermination(batch, task, new TaskOutcome.Cancelled("level unloaded"));

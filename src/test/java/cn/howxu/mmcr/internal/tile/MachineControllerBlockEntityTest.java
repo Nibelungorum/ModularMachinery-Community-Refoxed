@@ -56,7 +56,13 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.client.model.DynamicOverlayItemModel;
 import cn.howxu.mmcr.client.model.DynamicOverlayModelLoader;
@@ -70,6 +76,7 @@ import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.event.ControllerUiEvents;
 import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
@@ -82,6 +89,9 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
+import cn.howxu.mmcr.internal.recipe.RecipeThread.StartResult;
+import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
@@ -97,8 +107,14 @@ import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.ConfigTestSupport;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import com.electronwill.nightconfig.core.CommentedConfig;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -146,7 +162,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.fml.config.IConfigSpec;
 import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import sun.misc.Unsafe;
@@ -154,6 +175,7 @@ import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -183,6 +205,11 @@ class MachineControllerBlockEntityTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        ServerConfig.SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
         bind(ModUIs.MACHINE_CONTROLLER,
                 new MenuType<>((containerId, inventory) -> MachineControllerMenu.clientOpen(containerId, inventory),
                         FeatureFlags.VANILLA_SET));
@@ -241,6 +268,328 @@ class MachineControllerBlockEntityTest {
         controller.tickRuntimeWork(level, controller.getBlockPos());
 
         assertThat(controller.runtimeSnapshot()).isSameAs(published);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SYNC", "SEMI_SYNC"})
+    void successful_completion_survives_the_next_last_recipe_start_running_out_of_energy(MachineWorkMode mode)
+            throws Exception {
+        MachineWorkMode previousMode = ServerConfig.machineWorkMode();
+        try (ServerThreadTestScope ignored = ServerThreadTestScope.open()) {
+            ConfigTestSupport.setMachineWorkMode(mode);
+            TestBootstrap.bootstrapCapabilities();
+            FinishRecordingController controller = finishRecordingController();
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            runtimeStateBatchLevels.add(level);
+            CraftingRuntime crafting = RuntimeTestFixtures.craftingRuntime(controller);
+            MachineRecipeThread thread = normalRecipeThreadOf(controller);
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("completion_before_restart_failure"),
+                    MMCR.id("test_cube"), 1,
+                    List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+            RecipeRegistry.registerStatic(recipe);
+            assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                    controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+            crafting.tick();
+            assertThat(crafting.finishPending()).isTrue();
+
+            thread.tick();
+
+            assertThat(controller.successfulCompletions).isEqualTo(1);
+            assertThat(controller.finishSounds).isEqualTo(1);
+            assertThat(crafting.active()).isFalse();
+            assertThat(crafting.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            thread.tick();
+            assertThat(controller.successfulCompletions).isEqualTo(1);
+            assertThat(controller.finishSounds).isEqualTo(1);
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(previousMode);
+            RecipeRegistry.clearForTesting();
+        }
+    }
+
+    @Test
+    void legacy_shared_finish_reports_success_before_the_queued_restart_fails() throws Exception {
+        MachineWorkMode previousMode = ServerConfig.machineWorkMode();
+        try (ServerThreadTestScope ignored = ServerThreadTestScope.open()) {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+            TestBootstrap.bootstrapCapabilities();
+            FinishRecordingController controller = finishRecordingController();
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            runtimeStateBatchLevels.add(level);
+            MachineControllerBlockEntity other = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"),
+                    new BlockPos(3, 0, 0));
+            RuntimeTestFixtures.replaceBlockEntity(controller, other);
+            BlockPos sharedPort = new BlockPos(1, 0, 0);
+            StructureClaimRegistry claims = StructureClaimRegistry.get(level);
+            assertThat(claims.claim(controller.getBlockPos(), List.of(
+                    new StructureClaimRegistry.Claim(sharedPort, ComponentClaimPolicy.SHARED_SERIALIZED)))
+                    .accepted()).isTrue();
+            assertThat(claims.claim(other.getBlockPos(), List.of(
+                    new StructureClaimRegistry.Claim(sharedPort, ComponentClaimPolicy.SHARED_SERIALIZED)))
+                    .accepted()).isTrue();
+            assertThat(controller.resourceDomain().controllers()).hasSize(2);
+            CraftingRuntime crafting = RuntimeTestFixtures.craftingRuntime(controller);
+            MachineRecipeThread thread = normalRecipeThreadOf(controller);
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("shared_completion_before_restart_failure"),
+                    MMCR.id("test_cube"), 1,
+                    List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+            RecipeRegistry.registerStatic(recipe);
+            assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                    controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+            crafting.tick();
+
+            controller.tickRuntimeWork(level, controller.getBlockPos());
+            SharedIoCoordinator.get(level).beginLevelTick(level.getGameTime());
+            SharedIoCoordinator.get(level).resolve(level);
+
+            assertThat(controller.successfulCompletions).isEqualTo(1);
+            assertThat(controller.finishSounds).isEqualTo(1);
+            assertThat(crafting.active()).isFalse();
+            assertThat(crafting.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            SharedIoCoordinator.get(level).resolve(level);
+            assertThat(controller.successfulCompletions).isEqualTo(1);
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(previousMode);
+            RecipeRegistry.clearForTesting();
+        }
+    }
+
+    private static FinishRecordingController finishRecordingController() {
+        return finishRecordingController(RecipeBehavior.defaults());
+    }
+
+    private static FinishRecordingController finishRecordingController(RecipeBehavior behavior) {
+        ResourceLocation machineId = MMCR.id("test_cube");
+        RuntimeTestFixtures.registerRecipePool(machineId);
+        FinishRecordingController controller = new FinishRecordingController(BlockPos.ZERO,
+                ModBlocks.controllerFor(machineId).get().defaultBlockState());
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        RuntimeTestFixtures.formStructureWithComponents(controller,
+                new DynamicMachine(machineId, "finish notification", new BlockArray(Map.of()),
+                        MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                        PortTierRequirementSpec.none(), List.of(), Map.of(), 1, false, false, 1, List.of(),
+                        MachineRole.NORMAL, Set.of(), List.of(), RecipeFailureActions.getDefaultAction(), behavior), energy);
+        controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(
+                new MachineComponent(energy.kind(), energy.ioType()), energy, energy.getBlockPos(),
+                energy.getBlockPos(), (String) null)));
+        RuntimeTestFixtures.republish(controller);
+        energy.energyStorage().setAmount(14L);
+        return controller;
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,catalog-delete", "false,catalog-definition", "false,modifier",
+            "true,catalog-delete", "true,catalog-definition", "true,modifier"})
+    void sync_search_rechecks_callback_changes_before_paying_and_uses_current_requirements_on_retry(boolean shared,
+                                                                                                   String change)
+            throws Exception {
+        MachineWorkMode previousMode = ServerConfig.machineWorkMode();
+        try (ServerThreadTestScope ignored = ServerThreadTestScope.open()) {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+            TestBootstrap.bootstrapCapabilities();
+            AtomicInteger starts = new AtomicInteger();
+            ResourceLocation recipeId = MMCR.id("sync_callback_revalidation");
+            MachineRecipe replacement = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 20,
+                    List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 11L)), List.of());
+            FinishRecordingController controller = finishRecordingController(RecipeBehavior.builder().beforeStart(context -> {
+                if (starts.incrementAndGet() != 1) return;
+                switch (change) {
+                    case "catalog-delete" -> RecipeRegistry.replaceDynamic(Map.of());
+                    case "catalog-definition" -> RecipeRegistry.replaceDynamic(Map.of(recipeId, replacement));
+                    case "modifier" -> context.machineContext().controller().componentRuntime().replaceModifiers(
+                            Map.of("new_energy", List.of(MachineModifier.numeric("energy", "input", 2D, "multiply", false))));
+                    default -> throw new AssertionError(change);
+                }
+            }).build());
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            runtimeStateBatchLevels.add(level);
+            if (shared) {
+                MachineControllerBlockEntity other = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"),
+                        new BlockPos(3, 0, 0));
+                RuntimeTestFixtures.replaceBlockEntity(controller, other);
+                StructureClaimRegistry claims = StructureClaimRegistry.get(level);
+                List<StructureClaimRegistry.Claim> sharedClaims = List.of(new StructureClaimRegistry.Claim(
+                        new BlockPos(1, 0, 0), ComponentClaimPolicy.SHARED_SERIALIZED));
+                assertThat(claims.claim(controller.getBlockPos(), sharedClaims).accepted()).isTrue();
+                assertThat(claims.claim(other.getBlockPos(), sharedClaims).accepted()).isTrue();
+            }
+            SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+            coordinator.beginLevelTick(level.getGameTime());
+            EnergyInputHatchBlockEntity energy = (EnergyInputHatchBlockEntity) level.getBlockEntity(new BlockPos(1, 0, 0));
+            energy.energyStorage().setAmount(100L);
+            MachineRecipe original = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 20,
+                    List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L)), List.of());
+            RecipeRegistry.replaceDynamic(Map.of(recipeId, original));
+
+            controller.tickRuntimeWork(level, controller.getBlockPos());
+            coordinator.resolve(level);
+
+            CraftingRuntime crafting = RuntimeTestFixtures.craftingRuntime(controller);
+            MachineRecipeThread thread = normalRecipeThreadOf(controller);
+            assertThat(crafting.active()).isFalse();
+            assertThat(controller.hasPendingNormalRecipeStart()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            assertThat(starts).hasValue(1);
+            assertThat(controller.finishSounds).isZero();
+            if (change.equals("catalog-delete")) {
+                controller.tickRuntimeWork(level, controller.getBlockPos());
+                coordinator.resolve(level);
+                assertThat(crafting.active()).isFalse();
+                assertThat(starts).hasValue(1);
+                assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            } else {
+                RuntimeTestFixtures.advanceGameTime(level);
+                coordinator.beginLevelTick(level.getGameTime());
+                controller.tickRuntimeWork(level, controller.getBlockPos());
+                coordinator.resolve(level);
+                assertThat(crafting.active()).isTrue();
+                assertThat(crafting.recipe()).isSameAs(change.equals("modifier") ? original : replacement);
+                assertThat(starts).hasValue(2);
+                assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(change.equals("modifier") ? 86L : 89L);
+            }
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(previousMode);
+            RecipeRegistry.clearForTesting();
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,copy", "true,copy", "true,plan"})
+    void cached_start_exception_keeps_completion_and_releases_pending_before_fallback(boolean shared, String phase)
+            throws Exception {
+        MachineWorkMode previousMode = ServerConfig.machineWorkMode();
+        try (ServerThreadTestScope ignored = ServerThreadTestScope.open();
+             RequirementHandlerRegistry.TestScope requirementScope = RequirementHandlerRegistry.openTestScope()) {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+            TestBootstrap.bootstrapCapabilities();
+            RequirementHandlerRegistry.register(StartFailureRequirement.TYPE);
+            AtomicInteger starts = new AtomicInteger();
+            FinishRecordingController controller = finishRecordingController(RecipeBehavior.builder().beforeStart(context -> {
+                if (starts.incrementAndGet() == 2) {
+                    if (phase.equals("copy")) StartFailureRequirement.failNextCopy.set(true);
+                    else StartFailureRequirement.failNextPlan.set(true);
+                }
+            }).build());
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            runtimeStateBatchLevels.add(level);
+            if (shared) {
+                MachineControllerBlockEntity other = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"),
+                        new BlockPos(3, 0, 0));
+                RuntimeTestFixtures.replaceBlockEntity(controller, other);
+                StructureClaimRegistry claims = StructureClaimRegistry.get(level);
+                List<StructureClaimRegistry.Claim> sharedClaims = List.of(new StructureClaimRegistry.Claim(
+                        new BlockPos(1, 0, 0), ComponentClaimPolicy.SHARED_SERIALIZED));
+                assertThat(claims.claim(controller.getBlockPos(), sharedClaims).accepted()).isTrue();
+                assertThat(claims.claim(other.getBlockPos(), sharedClaims).accepted()).isTrue();
+            }
+            CraftingRuntime crafting = RuntimeTestFixtures.craftingRuntime(controller);
+            MachineRecipeThread thread = normalRecipeThreadOf(controller);
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("cached_exception_" + shared + "_" + phase), MMCR.id("test_cube"),
+                    1, List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 7L),
+                            new StartFailureRequirement(RecipeModifier.IOType.INPUT)), List.of());
+            RecipeRegistry.registerStatic(recipe);
+            EnergyInputHatchBlockEntity energy = (EnergyInputHatchBlockEntity) level.getBlockEntity(new BlockPos(1, 0, 0));
+            energy.energyStorage().setAmount(100L);
+            assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L,
+                    controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
+            crafting.tick();
+            SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+            coordinator.beginLevelTick(level.getGameTime());
+
+            assertThatCode(() -> {
+                if (shared) {
+                    controller.tickRuntimeWork(level, controller.getBlockPos());
+                    coordinator.resolve(level);
+                } else {
+                    thread.tick();
+                }
+            }).doesNotThrowAnyException();
+
+            assertThat(controller.successfulCompletions).isEqualTo(1);
+            assertThat(controller.finishSounds).isEqualTo(1);
+            assertThat(starts).hasValue(2);
+            assertThat(crafting.active()).isFalse();
+            assertThat(controller.hasPendingNormalRecipeStart()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(StartFailureRequirement.failNextCopy).isFalse();
+            assertThat(StartFailureRequirement.failNextPlan).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(86L);
+            MachineRecipe alternative = RecipeTestSupport.create(MMCR.id("cached_exception_alternative_" + shared + "_" + phase),
+                    MMCR.id("test_cube"), 20, List.of(), List.of(), List.of(), -1, 1);
+            RecipeRegistry.registerStatic(alternative);
+            RuntimeTestFixtures.advanceGameTime(level);
+            coordinator.beginLevelTick(level.getGameTime());
+            controller.tickRuntimeWork(level, controller.getBlockPos());
+            coordinator.resolve(level);
+            assertThat(crafting.active()).isTrue();
+            assertThat(crafting.recipe()).isSameAs(alternative);
+            assertThat(starts).hasValue(3);
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(controller.hasPendingNormalRecipeStart()).isFalse();
+            assertThat(controller.successfulCompletions).isEqualTo(1);
+            assertThat(controller.finishSounds).isEqualTo(1);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(86L);
+        } finally {
+            StartFailureRequirement.failNextCopy.set(false);
+            StartFailureRequirement.failNextPlan.set(false);
+            ConfigTestSupport.setMachineWorkMode(previousMode);
+            RecipeRegistry.clearForTesting();
+        }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record StartFailureRequirement(RecipeModifier.IOType io) implements MachineRequirement {
+        private static final AtomicBoolean failNextCopy = new AtomicBoolean();
+        private static final AtomicBoolean failNextPlan = new AtomicBoolean();
+        private static final ResourceLocation TYPE_ID = MMCR.id("normal_start_copy_failure");
+        private static final MapCodec<StartFailureRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+                Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),
+                RecipeModifier.IO_TYPE_CODEC.fieldOf("io").forGetter(StartFailureRequirement::io)
+        ).apply(instance, (ignored, io) -> new StartFailureRequirement(io)));
+        private static final RequirementType<StartFailureRequirement> TYPE = new RequirementType.Definition<>(TYPE_ID, CODEC,
+                (requirement, capabilities, context) -> {
+                    if (failNextPlan.getAndSet(false)) throw new IllegalStateException("expected cached start planner failure");
+                    return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+                }, requirement -> {
+                    if (failNextCopy.getAndSet(false)) throw new IllegalStateException("expected cached preparation copy failure");
+                    return new StartFailureRequirement(requirement.io());
+                });
+
+        @Override
+        public RequirementType<StartFailureRequirement> type() {
+            return TYPE;
+        }
+    }
+
+    private static MachineRecipeThread normalRecipeThreadOf(MachineControllerBlockEntity controller)
+            throws ReflectiveOperationException {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("normalRecipeThread");
+        field.setAccessible(true);
+        return (MachineRecipeThread) field.get(controller);
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class FinishRecordingController extends MachineControllerBlockEntity {
+        private int successfulCompletions;
+        private int finishSounds;
+
+        private FinishRecordingController(BlockPos pos, BlockState state) {
+            super(pos, state);
+        }
+
+        @Override
+        public void onNormalRecipeThreadFinished(boolean restarting, boolean completedSuccessfully) {
+            if (completedSuccessfully) successfulCompletions++;
+            super.onNormalRecipeThreadFinished(restarting, completedSuccessfully);
+        }
+
+        @Override
+        void playFinishSound() {
+            finishSounds++;
+        }
     }
 
     @Test
@@ -2487,6 +2836,54 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void stable_selected_recipe_pool_preserves_active_work_across_repeated_queries() {
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_stable");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_stable_first");
+        ResourceLocation selectedPool = MMCR.id("controller_recipe_pool_stable_selected");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, selectedPool);
+        assertThat(controller.selectRecipePool(selectedPool)).isTrue();
+        CraftingRuntime crafting = RuntimeTestFixtures.craftingRuntime(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_stable_recipe"),
+                selectedPool, 20, List.of(), List.of());
+        assertThat(crafting.start(recipe, 1L).isCrafting()).isTrue();
+        var activeRecipe = crafting.activeRecipe();
+        List<ResourceLocation> pools = controller.supportedRecipePoolIds();
+
+        for (int query = 0; query < 16; query++) {
+            assertThat(controller.currentRecipePoolId()).isEqualTo(selectedPool);
+            assertThat(controller.supportedRecipePoolIds()).isSameAs(pools);
+            assertThat(crafting.active()).isTrue();
+            assertThat(crafting.activeRecipe()).isSameAs(activeRecipe);
+        }
+    }
+
+    @Test
+    void replacing_supported_pools_without_removing_selection_preserves_active_work() {
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_replaced");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_replaced_first");
+        ResourceLocation selectedPool = MMCR.id("controller_recipe_pool_replaced_selected");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, selectedPool);
+        assertThat(controller.selectRecipePool(selectedPool)).isTrue();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(selectedPool);
+        List<ResourceLocation> previousPools = controller.supportedRecipePoolIds();
+        CraftingRuntime crafting = RuntimeTestFixtures.craftingRuntime(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_replaced_recipe"),
+                selectedPool, 20, List.of(), List.of());
+        assertThat(crafting.start(recipe, 1L).isCrafting()).isTrue();
+        var activeRecipe = crafting.activeRecipe();
+        long gameTime = controller.getLevel().getGameTime();
+
+        MachineDefinitions.replace(MachineRegistration.builder(machineId)
+                .recipePoolIds(List.of(selectedPool, firstPool)).build());
+
+        assertThat(controller.supportedRecipePoolIds()).isNotSameAs(previousPools);
+        assertThat(controller.currentRecipePoolId()).isEqualTo(selectedPool);
+        assertThat(crafting.active()).isTrue();
+        assertThat(crafting.activeRecipe()).isSameAs(activeRecipe);
+        assertThat(controller.getLevel().getGameTime()).isEqualTo(gameTime);
+    }
+
+    @Test
     void selected_non_default_recipe_pool_uses_its_own_catalog() {
         ResourceLocation machineId = MMCR.id("controller_recipe_pool_catalog");
         ResourceLocation firstPool = MMCR.id("controller_recipe_pool_catalog_first");
@@ -2519,6 +2916,7 @@ class MachineControllerBlockEntityTest {
 
         CompoundTag output = saveController(controller);
         MachineControllerBlockEntity restored = recipePoolController(machineId, firstPool, secondPool);
+        assertThat(restored.currentRecipePoolId()).isEqualTo(firstPool);
         loadController(restored, output);
 
         assertThat(restored.currentRecipePoolId()).isEqualTo(secondPool);
@@ -2532,6 +2930,8 @@ class MachineControllerBlockEntityTest {
         CompoundTag output = new CompoundTag();
         output.putString("selected_recipe_pool", "not an identifier");
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, secondPool);
+        assertThat(controller.selectRecipePool(secondPool)).isTrue();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(secondPool);
 
         loadController(controller, output);
 
@@ -2547,6 +2947,7 @@ class MachineControllerBlockEntityTest {
         output.putString("selected_recipe_pool", removedPool.toString());
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
         loadController(controller, output);
+        assertThat(controller.currentRecipePoolId()).isEqualTo(removedPool);
         MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
 
         assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
@@ -2606,16 +3007,19 @@ class MachineControllerBlockEntityTest {
         ResourceLocation firstPool = MMCR.id("controller_recipe_pool_removed_active_first");
         ResourceLocation removedPool = MMCR.id("controller_recipe_pool_removed_active_second");
         MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
-        controller.selectRecipePool(removedPool);
+        assertThat(controller.selectRecipePool(removedPool)).isTrue();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(removedPool);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_removed_active_recipe"),
                 removedPool, 20, List.of(), List.of());
         CraftingRuntime craftingRuntime = controllerRuntime(controller).craftingRuntime();
 
         assertThat(craftingRuntime.start(recipe, 1).isCrafting()).isTrue();
+        long gameTime = controller.getLevel().getGameTime();
         MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
 
         assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
         assertThat(craftingRuntime.active()).isFalse();
+        assertThat(controller.getLevel().getGameTime()).isEqualTo(gameTime);
     }
 
     @Test
@@ -2628,15 +3032,91 @@ class MachineControllerBlockEntityTest {
                 20, List.of(), List.of());
         CraftingRuntime craftingRuntime = controllerRuntime(controller).craftingRuntime();
 
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
         assertThat(craftingRuntime.start(recipe, 1).isCrafting()).isTrue();
         assertThat(craftingRuntime.active()).isTrue();
 
         assertThat(controller.selectRecipePool(MMCR.id("unsupported_recipe_pool"))).isFalse();
         assertThat(controller.selectRecipePool(firstPool)).isFalse();
+        assertThat(craftingRuntime.active()).isTrue();
         assertThat(controller.selectRecipePool(secondPool)).isTrue();
 
         assertThat(controller.currentRecipePoolId()).isEqualTo(secondPool);
         assertThat(craftingRuntime.active()).isFalse();
+
+        MachineRecipe secondRecipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_switch_second_recipe"),
+                secondPool, 20, List.of(), List.of());
+        assertThat(craftingRuntime.start(secondRecipe, 1L).isCrafting()).isTrue();
+        assertThat(controller.selectRecipePool(firstPool)).isTrue();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+        assertThat(craftingRuntime.active()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void mutable_recipe_pool_override_observes_in_place_removal_and_discards_old_work(boolean unmodifiableView) {
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_mutable");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_mutable_first");
+        ResourceLocation removedPool = MMCR.id("controller_recipe_pool_mutable_removed");
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool, removedPool)).build());
+        RecipePoolOverrideController controller = new RecipePoolOverrideController();
+        controller.setMachine(new DynamicMachine(machineId, "recipe pool test", new BlockArray(Map.of())));
+        assertThat(controller.selectRecipePool(removedPool)).isTrue();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(removedPool);
+        List<ResourceLocation> mutablePools = new ArrayList<>(controller.supportedRecipePoolIds());
+        controller.pools = unmodifiableView ? Collections.unmodifiableList(mutablePools) : mutablePools;
+        assertThat(controller.currentRecipePoolId()).isEqualTo(removedPool);
+        CraftingRuntime crafting = RuntimeTestFixtures.craftingRuntime(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("controller_recipe_pool_mutable_recipe"),
+                removedPool, 20, List.of(), List.of());
+        assertThat(crafting.start(recipe, 1L).isCrafting()).isTrue();
+
+        mutablePools.remove(removedPool);
+
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+        assertThat(crafting.active()).isFalse();
+    }
+
+    @Test
+    void empty_supported_pools_do_not_return_a_previously_valid_selection() {
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_empty");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_empty_first");
+        ResourceLocation removedPool = MMCR.id("controller_recipe_pool_empty_removed");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
+        assertThat(controller.selectRecipePool(removedPool)).isTrue();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(removedPool);
+        Machine machine = controller.currentStructureSnapshot().configuredMachine();
+
+        controller.setMachine(null);
+
+        assertThat(controller.supportedRecipePoolIds()).isEmpty();
+        assertThat(controller.currentRecipePoolId()).isNull();
+        assertThat(controller.currentRecipePoolId()).isNull();
+        MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
+        controller.setMachine(machine);
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"chunk-unload", "remove", "level-change", "structure-reset"})
+    void recipe_pool_queries_after_lifecycle_cleanup_resolve_live_replacements(String cleanup) {
+        ResourceLocation machineId = MMCR.id("controller_recipe_pool_unload");
+        ResourceLocation firstPool = MMCR.id("controller_recipe_pool_unload_first");
+        ResourceLocation removedPool = MMCR.id("controller_recipe_pool_unload_removed");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, firstPool, removedPool);
+        assertThat(controller.selectRecipePool(removedPool)).isTrue();
+        assertThat(controller.currentRecipePoolId()).isEqualTo(removedPool);
+
+        switch (cleanup) {
+            case "chunk-unload" -> controller.onChunkUnloaded();
+            case "remove" -> controller.setRemoved();
+            case "level-change" -> controller.setLevel(LevelStub.createWithBlockEntities(List.of(controller)));
+            case "structure-reset" -> controller.invalidateFormedStructure();
+        }
+        MachineDefinitions.replace(MachineRegistration.builder(machineId).recipePoolIds(List.of(firstPool)).build());
+
+        assertThat(controller.currentRecipePoolId()).isEqualTo(firstPool);
     }
 
     private static MachineControllerBlockEntity recipePoolController(ResourceLocation machineId, ResourceLocation... pools) {
@@ -2645,6 +3125,21 @@ class MachineControllerBlockEntityTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         controller.setMachine(new DynamicMachine(machineId, "recipe pool test", new BlockArray(Map.of())));
         return controller;
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class RecipePoolOverrideController extends MachineControllerBlockEntity {
+        private List<ResourceLocation> pools;
+
+        private RecipePoolOverrideController() {
+            super(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+            setLevel(LevelStub.create(Map.of(BlockPos.ZERO, getBlockState().getBlock()), List.of(this)));
+        }
+
+        @Override
+        public List<ResourceLocation> supportedRecipePoolIds() {
+            return pools == null ? super.supportedRecipePoolIds() : pools;
+        }
     }
 
     @Test

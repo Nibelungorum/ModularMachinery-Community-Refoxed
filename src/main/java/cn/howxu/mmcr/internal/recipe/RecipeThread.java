@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -8,7 +9,6 @@ import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
-import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
 import cn.howxu.mmcr.internal.async.AsyncExecutionContext;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
@@ -28,6 +28,7 @@ import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -37,6 +38,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class RecipeThread {
     public enum Status { IDLE, WORKING, WAITING, FAILED }
+
+    /** @author howxu <dev@howxu.cn> */
+    public enum StartResult {
+        STARTED, PENDING, DEFERRED, NO_MATCH, FAILED, CANCELLED;
+
+        public boolean ownsStart() { return this == STARTED || this == PENDING; }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    public enum StartOrigin { SEARCH, LAST_RECIPE }
 
     protected final MachineControllerBlockEntity controller;
     protected final CraftingRuntime runtime;
@@ -50,9 +61,13 @@ public abstract class RecipeThread {
     private long pendingStartCapabilityVersion;
     private long pendingStartModifierVersion;
     private long pendingStartComponentStateVersion;
+    private long pendingStartUpgradeRevision;
     private long pendingStartCatalogVersion;
     private @Nullable ResourceLocation pendingStartRecipePoolId;
     private @Nullable RecipeSearchContextKey pendingStartSearchContextKey;
+    private StartOrigin pendingStartOrigin = StartOrigin.SEARCH;
+    private long pendingStartLifecycleEpoch;
+    private boolean fullSearchPending;
     private boolean tickPending;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingTickDomain;
     private long nextTickToken;
@@ -61,7 +76,8 @@ public abstract class RecipeThread {
     private long lastTickRequestGameTime = Long.MIN_VALUE;
 
     private record StartSnapshot(ControllerRuntimeSnapshot runtime, long structureVersion, long catalogVersion,
-                                 ResourceLocation recipePoolId, @Nullable RecipeSearchContextKey searchContextKey) {
+                                 ResourceLocation recipePoolId, @Nullable RecipeSearchContextKey searchContextKey,
+                                 StartOrigin origin, long lifecycleEpoch) {
     }
 
     private record PendingAsyncStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
@@ -87,12 +103,13 @@ public abstract class RecipeThread {
         runtime.bindRecipeLane("base", this::completeInstalledAttempt);
     }
 
-    public boolean searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
+    public StartResult searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         ResourceLocation machineId = machine == null ? null : machine.registryName();
-        if (machineId == null || availableParallelism <= 0) return false;
+        if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
+        if (machineId == null || availableParallelism <= 0) return StartResult.NO_MATCH;
         List<MachineRecipe> machineCandidates = candidatesForPool(candidates, controller.currentRecipePoolId());
         RecipeSearchResult result;
         try {
@@ -101,25 +118,26 @@ public abstract class RecipeThread {
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);
-            return false;
+            return StartResult.FAILED;
         }
         if (!result.success()) {
             controller.clearPendingConflictStart();
-            onStartSearchFailed(result.failure());
-            return false;
+            onRecipeSearchFailed(result);
+            return StartResult.NO_MATCH;
         }
-        if (controller.shouldDelayConflictProneStart(result)) return false;
+        if (controller.shouldDelayConflictProneStart(result)) return StartResult.DEFERRED;
         return startRecipe(result.recipe(), availableParallelism, structureVersion);
     }
 
-    protected boolean searchAndStartRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
+    protected StartResult searchAndStartRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
                                            long structureVersion) {
-        if (context == null) return false;
+        if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
+        if (context == null) return StartResult.NO_MATCH;
         ControllerRuntimeSnapshot snapshot = context.snapshot();
         Machine machine = snapshot.structure().machine() == null
                 ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
         ResourceLocation machineId = machine == null ? null : machine.registryName();
-        if (machineId == null || context.maxParallelism() <= 0) return false;
+        if (machineId == null || context.maxParallelism() <= 0) return StartResult.NO_MATCH;
         List<MachineRecipe> machineCandidates = candidatesForPool(candidates, controller.currentRecipePoolId());
         RecipeSearchResult result;
         try {
@@ -129,14 +147,14 @@ public abstract class RecipeThread {
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);
-            return false;
+            return StartResult.FAILED;
         }
         if (!result.success()) {
             controller.clearPendingConflictStart();
-            onStartSearchFailed(result.failure());
-            return false;
+            onRecipeSearchFailed(result);
+            return StartResult.NO_MATCH;
         }
-        if (controller.shouldDelayConflictProneStart(result)) return false;
+        if (controller.shouldDelayConflictProneStart(result)) return StartResult.DEFERRED;
         return startRecipe(result.recipe(), context.maxParallelism(), structureVersion, context);
     }
 
@@ -174,7 +192,11 @@ public abstract class RecipeThread {
         if (result == null || result.failure() != null || result.result() == null || !result.result().success()) {
             controller.clearPendingConflictStart();
             if (result != null && result.failure() == null && result.result() != null) runtime.stopEnergyPrefetch();
-            onStartSearchFailed(result == null || result.result() == null ? null : result.result().failure());
+            if (result == null || result.result() == null || result.failure() != null) {
+                onStartSearchFailed(null);
+            } else {
+                onRecipeSearchFailed(result.result());
+            }
             return MainThreadStep.Result.success();
         }
         if (result.requiresMainThreadReplan()) {
@@ -239,50 +261,173 @@ public abstract class RecipeThread {
                 && recipePoolId.equals(recipe.recipePoolId())).toList();
     }
 
-    protected boolean startRecipe(MachineRecipe next, long requestedParallelism, long structureVersion) {
-        return startRecipe(next, requestedParallelism, structureVersion, null);
+    protected StartResult startRecipe(MachineRecipe next, long requestedParallelism, long structureVersion) {
+        return startRecipe(next, requestedParallelism, structureVersion, null, StartOrigin.SEARCH);
     }
 
-    protected boolean startRecipe(MachineRecipe next, long requestedParallelism, long structureVersion,
+    protected StartResult startRecipe(MachineRecipe next, long requestedParallelism, long structureVersion,
                                   @Nullable FactorySearchContext context) {
-        if (next == null || requestedParallelism <= 0) return false;
-        ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
-        ResourceLocation recipePoolId = controller.currentRecipePoolId();
-        if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())) return false;
+        return startRecipe(next, requestedParallelism, structureVersion, context, StartOrigin.SEARCH);
+    }
+
+    protected StartResult startRecipe(MachineRecipe next, long requestedParallelism, long structureVersion,
+                                      @Nullable FactorySearchContext context, StartOrigin origin) {
+        if (runtime.active() || isStartPending()) return reportStartResult(origin, StartResult.DEFERRED);
+        long epoch = controller.lifecycleEpoch();
+        long generation = nextStartToken;
+        StartResult rejected = startCandidateFailure(next, requestedParallelism);
+        if (!currentStartOwner(epoch) || generation != nextStartToken) return StartResult.CANCELLED;
+        if (rejected != null) return reportStartResult(origin, rejected);
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
-        if (!reserveInstalledStart()) return false;
+        if (!reserveInstalledStart()) return reportStartResult(origin, StartResult.DEFERRED);
         if (usesFullAsyncContinuation() && domain != null && runtime.restartProgramReady(next)) {
-            return enqueueAsyncFinishRestart(next, requestedParallelism, structureVersion, context);
+            return enqueueAsyncFinishRestart(next, requestedParallelism, structureVersion, context, origin);
         }
         if (usesFullAsyncContinuation() && controller.getLevel() instanceof ServerLevel serverLevel && domain != null) {
             AsyncContinuation continuation = prepareAsyncStartContinuation(next, requestedParallelism, structureVersion,
-                    context);
-            if (continuation == null) return false;
+                    context, origin);
+            if (continuation == null) {
+                releaseInstalledStart();
+                return reportStartResult(origin, StartResult.DEFERRED);
+            }
             MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.get(serverLevel);
             MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                     serverLevel.getGameTime(), controller.activeWorkMode(), asyncLaneId(), controller.lifecycleEpoch());
             PendingAsyncStart pending = pendingAsyncStart;
             MachineAsyncCoordinator.SubmissionResult submission = coordinator.submitDetailed(taskKey, continuation,
-                    this::executeAsyncMainStep, asyncStartTaskHooks(pending, taskKey.lifecycleEpoch()));
-            if (submission == MachineAsyncCoordinator.SubmissionResult.ACCEPTED) return true;
-            if (submission == MachineAsyncCoordinator.SubmissionResult.REJECTED) {
-                rejectAsyncStart(pendingAsyncStart);
-                return false;
+                    (key, step) -> isPendingStartGeneration(pending)
+                            ? executeAsyncMainStep(key, step) : MainThreadStep.Result.value(false),
+                    asyncStartTaskHooks(pending, taskKey.lifecycleEpoch()));
+            return switch (submission) {
+                case ACCEPTED -> reportStartResult(origin, StartResult.PENDING);
+                case DUPLICATE, REJECTED -> {
+                    // DUPLICATE owns the old task, never this attempt's newly allocated token.
+                    rejectAsyncStart(pending);
+                    yield StartResult.DEFERRED;
+                }
+            };
+        }
+        StartSnapshot snapshot = captureStartSnapshot(structureVersion, null, origin);
+        long token = beginPendingStart(domain, next, snapshot);
+        try {
+            CraftingRuntime.StartPreparation preparation = runtime.prepareStartAttempt(next, requestedParallelism);
+            if (!ownsPendingStart(token, next)) return StartResult.CANCELLED;
+            if (!currentStartOwner(snapshot.lifecycleEpoch())) {
+                finishPendingStart(token, next, StartResult.CANCELLED);
+                return StartResult.CANCELLED;
             }
-            failAsyncStart(pendingAsyncStart);
-            return false;
+            if (preparation.result() != CraftingRuntime.PreparationResult.READY) {
+                StartResult result = preparationResult(preparation);
+                finishPendingStart(token, next, result);
+                return result;
+            }
+            StartResult invalid = pendingStartInvalidResult(next);
+            if (invalid != null) {
+                finishPendingStart(token, next, invalid);
+                return invalid;
+            }
+            if (!reserveInstalledStart()) {
+                finishPendingStart(token, next, StartResult.DEFERRED);
+                return StartResult.DEFERRED;
+            }
+            runtime.start(next, requestedParallelism, preparation.execution());
+        } catch (RuntimeException exception) {
+            return failStartAttempt(token, next, snapshot, exception);
         }
-        CraftingStatus state = runtime.start(next, requestedParallelism);
-        if (!state.isCrafting()) {
-            if (runtime.active()) installStartedProgram();
-            releaseInstalledStart();
+        return completeStartCommit(token, next, snapshot);
+    }
+
+    protected boolean isStartCandidateEligible(MachineRecipe recipe) {
+        ResourceLocation pool = controller.currentRecipePoolId();
+        return pool != null && pool.equals(recipe.recipePoolId());
+    }
+
+    private @Nullable StartResult startCandidateFailure(MachineRecipe next, long parallelism) {
+        if (next == null || parallelism <= 0) return StartResult.NO_MATCH;
+        try {
+            return isStartCandidateEligible(next) ? null : StartResult.NO_MATCH;
+        } catch (RuntimeException exception) {
+            MMCR.LOG.warn("Recipe candidate validation failed: controller={} lane={}",
+                    controller.getBlockPos(), laneId(), exception);
+            return StartResult.FAILED;
+        }
+    }
+
+    private StartResult reportStartResult(StartOrigin origin, StartResult result) {
+        onStartAttemptResult(origin, result, searchContextKeyForStart());
+        return result;
+    }
+
+    private StartSnapshot captureStartSnapshot(long structureVersion, @Nullable FactorySearchContext context,
+                                               StartOrigin origin) {
+        ControllerRuntimeSnapshot snapshot = context == null ? controller.currentRuntimeSnapshot() : context.snapshot();
+        return new StartSnapshot(snapshot,
+                snapshot.structure().version(), context == null ? currentCatalogVersion() : context.catalogVersion(),
+                controller.currentRecipePoolId(), searchContextKeyForStart(), origin, controller.lifecycleEpoch());
+    }
+
+    private boolean currentStartOwner(long epoch) {
+        return epoch == controller.lifecycleEpoch() && !controller.isRemoved()
+                && (!(controller.getLevel() instanceof ServerLevel level)
+                || level.getBlockEntity(controller.getBlockPos()) == controller);
+    }
+
+    private StartResult completeStartCommit(long token, MachineRecipe next, StartSnapshot snapshot) {
+        if (!ownsPendingStart(token, next)) return StartResult.CANCELLED;
+        if (!currentStartOwner(snapshot.lifecycleEpoch())) {
+            finishPendingStart(token, next, StartResult.CANCELLED);
+            return StartResult.CANCELLED;
+        }
+        if (!runtime.active()) {
+            finishPendingStart(token, next, StartResult.FAILED);
             controller.clearRecipeScreenText(laneId());
-            onStartFailed(searchContextKeyForStart());
-            return false;
+            controller.syncRecipeRuntimeFailure(runtime);
+            return StartResult.FAILED;
         }
-        onStarted();
-        installStartedProgram();
-        return true;
+        if (runtime.recipe() != next) {
+            finishPendingStart(token, next, StartResult.CANCELLED);
+            return StartResult.CANCELLED;
+        }
+        // Payment, including ERROR_PAUSED, is final. Do not recheck unpaid versions or lane limits here.
+        clearPendingStart(token, next);
+        try {
+            onStarted();
+            installStartedProgram();
+        } catch (RuntimeException exception) {
+            MMCR.LOG.warn("Accepted recipe start notification failed: controller={} lane={}",
+                    controller.getBlockPos(), laneId(), exception);
+        } finally {
+            if (nextStartToken == token && currentStartOwner(snapshot.lifecycleEpoch())
+                    && runtime.active() && runtime.recipe() == next) {
+                onStartAttemptResult(snapshot.origin(), StartResult.STARTED, snapshot.searchContextKey());
+                controller.syncRecipeRuntimeFailure(runtime);
+            }
+        }
+        return StartResult.STARTED;
+    }
+
+    private StartResult failStartAttempt(long token, MachineRecipe next, StartSnapshot snapshot,
+                                        RuntimeException exception) {
+        if (!ownsPendingStart(token, next)) return StartResult.CANCELLED;
+        if (!currentStartOwner(snapshot.lifecycleEpoch())) {
+            finishPendingStart(token, next, StartResult.CANCELLED);
+            return StartResult.CANCELLED;
+        }
+        MMCR.LOG.warn("Recipe start attempt failed: controller={} lane={}", controller.getBlockPos(), laneId(), exception);
+        if (runtime.active() && runtime.recipe() == next) return completeStartCommit(token, next, snapshot);
+        finishPendingStart(token, next, StartResult.FAILED);
+        controller.clearRecipeScreenText(laneId());
+        controller.syncRecipeRuntimeFailure(runtime);
+        return StartResult.FAILED;
+    }
+
+    private static StartResult preparationResult(CraftingRuntime.StartPreparation preparation) {
+        return switch (preparation.result()) {
+            case READY -> throw new IllegalArgumentException("READY is not a terminal preparation result");
+            case DEFERRED -> StartResult.DEFERRED;
+            case FAILED -> StartResult.FAILED;
+            case CANCELLED -> StartResult.CANCELLED;
+        };
     }
 
     private boolean reserveInstalledStart() {
@@ -388,56 +533,83 @@ public abstract class RecipeThread {
     protected @Nullable AsyncContinuation prepareAsyncStartContinuation(MachineRecipe next, long requestedParallelism,
                                                                          long structureVersion,
                                                                          @Nullable FactorySearchContext context) {
-        PendingAsyncStart pending = preparePendingAsyncStart(next, requestedParallelism, structureVersion, context);
+        return prepareAsyncStartContinuation(next, requestedParallelism, structureVersion, context, StartOrigin.SEARCH);
+    }
+
+    protected @Nullable AsyncContinuation prepareAsyncStartContinuation(MachineRecipe next, long requestedParallelism,
+                                                                         long structureVersion,
+                                                                         @Nullable FactorySearchContext context,
+                                                                         StartOrigin origin) {
+        PendingAsyncStart pending = preparePendingAsyncStart(next, requestedParallelism, structureVersion, context, origin);
         return pending == null ? null : AsyncCraftingExecution.start(asyncLaneId(), pending.snapshot().catalogVersion());
     }
 
-    protected boolean enqueueAsyncFinishRestart(MachineRecipe next, long requestedParallelism, long structureVersion,
+    protected StartResult enqueueAsyncFinishRestart(MachineRecipe next, long requestedParallelism, long structureVersion,
                                                 @Nullable FactorySearchContext context) {
-        PendingAsyncStart pending = preparePendingAsyncStart(next, requestedParallelism, structureVersion, context);
-        if (pending == null) return false;
-        RecipeStartContext.ExecutionSnapshot preparedStart = runtime.prepareAsyncStart(next, requestedParallelism);
-        runtime.flushAsyncScreenText();
-        if (preparedStart == null) {
-            failAsyncStart(pending);
-            return false;
+        return enqueueAsyncFinishRestart(next, requestedParallelism, structureVersion, context, StartOrigin.SEARCH);
+    }
+
+    protected StartResult enqueueAsyncFinishRestart(MachineRecipe next, long requestedParallelism, long structureVersion,
+                                                    @Nullable FactorySearchContext context, StartOrigin origin) {
+        if (runtime.active() || isStartPending()) return reportStartResult(origin, StartResult.DEFERRED);
+        long epoch = controller.lifecycleEpoch();
+        long generation = nextStartToken;
+        StartResult rejected = startCandidateFailure(next, requestedParallelism);
+        if (!currentStartOwner(epoch) || generation != nextStartToken) return StartResult.CANCELLED;
+        if (rejected != null) return reportStartResult(origin, rejected);
+        if (!reserveInstalledStart()) return reportStartResult(origin, StartResult.DEFERRED);
+        PendingAsyncStart pending = preparePendingAsyncStart(next, requestedParallelism, structureVersion, context, origin);
+        if (pending == null) {
+            releaseInstalledStart();
+            return reportStartResult(origin, StartResult.DEFERRED);
         }
-        boolean enqueued = requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(),
-                pending.token(), pending.snapshot(), preparedStart,
-                () -> {
-                    if (isPendingStart(pending.token(), pending.recipe())) failAsyncStart(pending);
-                });
-        if (enqueued) {
+        StartResult result;
+        try {
+            CraftingRuntime.StartPreparation preparation = runtime.prepareStartAttempt(next, requestedParallelism);
+            runtime.flushAsyncScreenText();
+            if (!isPendingStartGeneration(pending)) return StartResult.CANCELLED;
+            if (!currentStartOwner(pending.snapshot().lifecycleEpoch())) {
+                finishPendingStart(pending.token(), pending.recipe(), StartResult.CANCELLED);
+                return StartResult.CANCELLED;
+            }
+            if (preparation.result() != CraftingRuntime.PreparationResult.READY) {
+                result = preparationResult(preparation);
+                finishPendingStart(pending.token(), pending.recipe(), result);
+                return result;
+            }
+            result = requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(),
+                    pending.token(), pending.snapshot(), preparation.execution(),
+                    () -> {
+                        if (isPendingStart(pending.token(), pending.recipe())) failAsyncStart(pending);
+                    });
+        } catch (RuntimeException exception) {
+            return failStartAttempt(pending.token(), next, pending.snapshot(), exception);
+        }
+        if (result == StartResult.PENDING) {
             pendingAsyncStart = null;
             pendingAsyncStartExecution = null;
-        } else {
-            failAsyncStart(pending);
+            onStartAttemptResult(origin, result, pending.snapshot().searchContextKey());
         }
-        return enqueued;
+        return result;
     }
 
     private @Nullable PendingAsyncStart preparePendingAsyncStart(MachineRecipe next, long requestedParallelism,
                                                                  long structureVersion,
-                                                                 @Nullable FactorySearchContext context) {
-        if (next == null || requestedParallelism <= 0 || pendingAsyncStart != null) return null;
-        if (!reserveInstalledStart()) return null;
-        ControllerRuntimeSnapshot currentSnapshot = controller.currentRuntimeSnapshot();
+                                                                 @Nullable FactorySearchContext context,
+                                                                 StartOrigin origin) {
+        if (next == null || requestedParallelism <= 0 || startPending || runtime.active()) return null;
         ResourceLocation recipePoolId = controller.currentRecipePoolId();
-        if (recipePoolId == null || !recipePoolId.equals(next.recipePoolId())
-                || !(controller.getLevel() instanceof ServerLevel serverLevel)) return null;
+        if (recipePoolId == null || !(controller.getLevel() instanceof ServerLevel serverLevel)) return null;
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (domain == null) return null;
-        ControllerRuntimeSnapshot startRuntime = context == null ? currentSnapshot : context.snapshot();
-        StartSnapshot startSnapshot = new StartSnapshot(startRuntime, structureVersion,
-                context == null ? currentCatalogVersion() : context.catalogVersion(), recipePoolId,
-                searchContextKeyForStart());
+        StartSnapshot startSnapshot = captureStartSnapshot(structureVersion, context, origin);
         long token = beginPendingStart(domain, next, startSnapshot);
         pendingAsyncStart = new PendingAsyncStart(serverLevel, domain, next, requestedParallelism, token, startSnapshot);
         pendingAsyncStartExecution = null;
         return pendingAsyncStart;
     }
 
-    private long beginPendingStart(StructureClaimRegistry.ResourceDomain domain, MachineRecipe next,
+    private long beginPendingStart(@Nullable StructureClaimRegistry.ResourceDomain domain, MachineRecipe next,
                                    StartSnapshot startSnapshot) {
         long token = ++nextStartToken;
         startPending = true;
@@ -448,18 +620,26 @@ public abstract class RecipeThread {
         pendingStartCapabilityVersion = startSnapshot.runtime().capabilityVersion();
         pendingStartModifierVersion = startSnapshot.runtime().modifierVersion();
         pendingStartComponentStateVersion = startSnapshot.runtime().stateVersion();
+        pendingStartUpgradeRevision = startSnapshot.runtime().upgradeContentRevision();
         pendingStartCatalogVersion = startSnapshot.catalogVersion();
         pendingStartRecipePoolId = startSnapshot.recipePoolId();
         pendingStartSearchContextKey = startSnapshot.searchContextKey();
+        pendingStartOrigin = startSnapshot.origin();
+        pendingStartLifecycleEpoch = startSnapshot.lifecycleEpoch();
         return token;
     }
 
-    private boolean requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
+    private StartResult requestStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
                                  MachineRecipe next, long requestedParallelism, long token,
                                  StartSnapshot startSnapshot, RecipeStartContext.ExecutionSnapshot preparedStart,
                                  Runnable completion) {
-        if (!isPendingStart(token, next)) return false;
-        long lifecycleEpoch = controller.lifecycleEpoch();
+        if (!ownsPendingStart(token, next)) return StartResult.CANCELLED;
+        StartResult invalid = pendingStartInvalidResult(next);
+        if (invalid != null) {
+            finishPendingStart(token, next, invalid);
+            return invalid;
+        }
+        long lifecycleEpoch = startSnapshot.lifecycleEpoch();
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.StartRequest(
                 domain,
                 new SharedIoCoordinator.LaneKey(controller.getBlockPos(), laneId()),
@@ -467,14 +647,31 @@ public abstract class RecipeThread {
                 startSnapshot.runtime().stateVersion(),
                 requestedParallelism,
                 requested -> {
-                    if (!isPendingStart(token, next) || runtime.active()) return 0L;
-                    CraftingStatus state = runtime.start(next, requested, preparedStart);
-                    if (!state.isCrafting()) {
-                        if (runtime.active()) installStartedProgram();
+                    try {
+                        if (!isPendingStart(token, next) || runtime.active()) return 0L;
+                        if (!reserveInstalledStart()) {
+                            finishPendingStart(token, next, StartResult.DEFERRED);
+                            completion.run();
+                            return 0L;
+                        }
+                        runtime.start(next, requested, preparedStart);
+                    } catch (RuntimeException exception) {
+                        StartResult result = failStartAttempt(token, next, startSnapshot, exception);
+                        completion.run();
+                        return result == StartResult.STARTED ? runtime.parallelism() : 0L;
+                    }
+                    if (!ownsPendingStart(token, next)) {
+                        completion.run();
+                        return 0L;
+                    }
+                    if (!currentStartOwner(lifecycleEpoch)) {
+                        finishPendingStart(token, next, StartResult.CANCELLED);
+                        completion.run();
+                        return 0L;
+                    }
+                    if (!runtime.active()) {
+                        finishPendingStart(token, next, StartResult.FAILED);
                         controller.clearRecipeScreenText(laneId());
-                        RecipeSearchContextKey failureKey = pendingStartSearchContextKey;
-                        clearPendingStart(token, next);
-                        onStartFailed(failureKey);
                         controller.syncRecipeRuntimeFailure(runtime);
                         completion.run();
                         return 0L;
@@ -482,81 +679,102 @@ public abstract class RecipeThread {
                     return runtime.parallelism();
                 },
                 granted -> {
-                    if (!isPendingStart(token, next) || !runtime.active()) return;
-                    clearPendingStart(token, next);
-                    onStarted();
-                    installStartedProgram();
-                    controller.syncRecipeRuntimeFailure(runtime);
+                    if (ownsPendingStart(token, next)) completeStartCommit(token, next, startSnapshot);
                 },
                 () -> {
-                    boolean valid = lifecycleEpoch == controller.lifecycleEpoch()
-                            && isPendingStart(token, next) && domain.equals(controller.resourceDomain());
-                    if (!valid) completion.run();
-                    return valid;
+                    try {
+                        boolean valid = isPendingStart(token, next) && domain.equals(controller.resourceDomain());
+                        if (!valid) completion.run();
+                        return valid;
+                    } catch (RuntimeException exception) {
+                        failStartAttempt(token, next, startSnapshot, exception);
+                        completion.run();
+                        return false;
+                    }
                 },
                 () -> controller.currentRuntimeSnapshot().structure().version(),
                 () -> controller.currentRuntimeSnapshot().stateVersion(),
-                pendingStartCatalogVersion,
+                startSnapshot.catalogVersion(),
                 this::currentCatalogVersion,
                 completion
         ));
-        return true;
+        return StartResult.PENDING;
     }
 
     private void failAsyncStart(PendingAsyncStart pending) {
         if (pending == null || !isPendingStartGeneration(pending)) return;
-        RecipeSearchContextKey failureKey = pending.snapshot().searchContextKey();
-        if (pendingAsyncStart == pending) {
-            pendingAsyncStart = null;
-            pendingAsyncStartExecution = null;
+        if (runtime.active() && runtime.recipe() == pending.recipe()) {
+            completeStartCommit(pending.token(), pending.recipe(), pending.snapshot());
+            return;
         }
-        clearPendingStart(pending.token(), pending.recipe());
-        releaseInstalledStart();
+        boolean current = pending.snapshot().lifecycleEpoch() == controller.lifecycleEpoch();
+        finishPendingStart(pending.token(), pending.recipe(), StartResult.FAILED);
+        if (!current) return;
         controller.clearRecipeScreenText(laneId());
-        onStartFailed(failureKey);
         controller.syncRecipeRuntimeFailure(runtime);
     }
 
     private void rejectAsyncStart(PendingAsyncStart pending) {
         if (pending == null) return;
-        pendingAsyncStart = null;
-        pendingAsyncStartExecution = null;
-        clearPendingStart(pending.token(), pending.recipe());
+        finishPendingStart(pending.token(), pending.recipe(), StartResult.DEFERRED);
+    }
+
+    private void finishPendingStart(long token, MachineRecipe recipe, StartResult result) {
+        if (!startPending || pendingStartToken != token || pendingStartRecipe != recipe) return;
+        StartOrigin origin = pendingStartOrigin;
+        RecipeSearchContextKey key = pendingStartSearchContextKey;
+        long epoch = pendingStartLifecycleEpoch;
+        boolean current = currentStartOwner(epoch);
+        clearPendingStart(token, recipe);
+        if (!runtime.active()) releaseInstalledStart();
+        if (current) {
+            onStartAttemptResult(origin, result, key);
+            if (nextStartToken == token && currentStartOwner(epoch)) {
+                controller.syncRecipeRuntimeFailure(runtime);
+            }
+        }
     }
 
     private boolean isPendingStart(long token, MachineRecipe recipe) {
-        if (!startPending || pendingStartToken != token || pendingStartRecipe != recipe) return false;
-        if (controller.isRedstonePaused()) {
-            invalidatePendingStart(token, recipe);
-            return false;
-        }
-        if (pendingStartDomain == null || !pendingStartDomain.equals(controller.resourceDomain())) {
-            invalidatePendingStart(token, recipe);
-            return false;
+        if (!ownsPendingStart(token, recipe)) return false;
+        StartResult invalid = pendingStartInvalidResult(recipe);
+        if (invalid == null) return true;
+        finishPendingStart(token, recipe, invalid);
+        return false;
+    }
+
+    private @Nullable StartResult pendingStartInvalidResult(MachineRecipe recipe) {
+        if (!currentStartOwner(pendingStartLifecycleEpoch)) return StartResult.CANCELLED;
+        if (controller.isRedstonePaused() || !Objects.equals(pendingStartDomain, controller.resourceDomain())) {
+            return StartResult.DEFERRED;
         }
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        if (pendingStartRecipePoolId == null
+                || !pendingStartRecipePoolId.equals(controller.currentRecipePoolId())
+                || !pendingStartRecipePoolId.equals(recipe.recipePoolId()) || !isStartCandidateEligible(recipe)) {
+            return StartResult.NO_MATCH;
+        }
+        if (currentCatalogVersion() != pendingStartCatalogVersion) {
+            return StartResult.NO_MATCH;
+        }
         if (snapshot.structure().version() != pendingStartStructureVersion
                 || snapshot.capabilityVersion() != pendingStartCapabilityVersion
                 || snapshot.modifierVersion() != pendingStartModifierVersion
-                || snapshot.stateVersion() != pendingStartComponentStateVersion) {
-            invalidatePendingStart(token, recipe);
-            return false;
+                || snapshot.stateVersion() != pendingStartComponentStateVersion
+                || snapshot.upgradeContentRevision() != pendingStartUpgradeRevision
+                || controller.getLevel() instanceof ServerLevel
+                && (!snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded())) {
+            return StartResult.DEFERRED;
         }
-        if (pendingStartRecipePoolId == null
-                || !pendingStartRecipePoolId.equals(controller.currentRecipePoolId())
-                || !pendingStartRecipePoolId.equals(recipe.recipePoolId())) {
-            invalidatePendingStartForCatalog(token, recipe);
-            return false;
-        }
-        if (currentCatalogVersion() != pendingStartCatalogVersion) {
-            invalidatePendingStartForCatalog(token, recipe);
-            return false;
-        }
-        return true;
+        return null;
     }
 
-    private boolean isPendingStartGeneration(PendingAsyncStart pending) {
-        return startPending && pendingStartToken == pending.token() && pendingStartRecipe == pending.recipe();
+    private boolean ownsPendingStart(long token, MachineRecipe recipe) {
+        return startPending && pendingStartToken == token && pendingStartRecipe == recipe;
+    }
+
+    private boolean isPendingStartGeneration(@Nullable PendingAsyncStart pending) {
+        return pending != null && ownsPendingStart(pending.token(), pending.recipe());
     }
 
     private MachineAsyncCoordinator.TaskHooks asyncStartTaskHooks(PendingAsyncStart pending, long lifecycleEpoch) {
@@ -564,8 +782,11 @@ public abstract class RecipeThread {
                 () -> lifecycleEpoch == controller.lifecycleEpoch() && isPendingStartGeneration(pending),
                 (ignored, outcome) -> {
                     if (!(outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded)
-                            && lifecycleEpoch == controller.lifecycleEpoch() && isPendingStartGeneration(pending)) {
-                        failAsyncStart(pending);
+                            && isPendingStartGeneration(pending)) {
+                        if (lifecycleEpoch != controller.lifecycleEpoch()) {
+                            finishPendingStart(pending.token(), pending.recipe(), StartResult.CANCELLED);
+                        } else if (outcome instanceof MachineAsyncCoordinator.TaskOutcome.Cancelled) rejectAsyncStart(pending);
+                        else failAsyncStart(pending);
                     }
                 });
     }
@@ -575,14 +796,17 @@ public abstract class RecipeThread {
     }
 
     private void invalidatePendingStart(long token, MachineRecipe recipe) {
-        clearPendingStart(token, recipe);
-        runtime.invalidate();
+        finishPendingStart(token, recipe, StartResult.DEFERRED);
         controller.clearRecipeScreenText(laneId());
         controller.syncRecipeRuntimeFailure(runtime);
     }
 
     private void clearPendingStart(long token, MachineRecipe recipe) {
         if (!startPending || pendingStartToken != token || pendingStartRecipe != recipe) return;
+        if (pendingAsyncStart != null && pendingAsyncStart.token() == token && pendingAsyncStart.recipe() == recipe) {
+            pendingAsyncStart = null;
+            pendingAsyncStartExecution = null;
+        }
         startPending = false;
         pendingStartRecipe = null;
         pendingStartDomain = null;
@@ -591,14 +815,16 @@ public abstract class RecipeThread {
         pendingStartCapabilityVersion = Long.MIN_VALUE;
         pendingStartModifierVersion = Long.MIN_VALUE;
         pendingStartComponentStateVersion = Long.MIN_VALUE;
+        pendingStartUpgradeRevision = Long.MIN_VALUE;
         pendingStartCatalogVersion = Long.MIN_VALUE;
         pendingStartRecipePoolId = null;
         pendingStartSearchContextKey = null;
+        pendingStartOrigin = StartOrigin.SEARCH;
+        pendingStartLifecycleEpoch = Long.MIN_VALUE;
     }
 
     private void invalidatePendingStartForCatalog(long token, MachineRecipe recipe) {
-        clearPendingStart(token, recipe);
-        runtime.invalidate();
+        finishPendingStart(token, recipe, StartResult.NO_MATCH);
         controller.clearRecipeScreenText(laneId());
         onPendingStartCatalogChanged();
         controller.syncRecipeRuntimeFailure(runtime);
@@ -824,8 +1050,9 @@ public abstract class RecipeThread {
 
     private MainThreadStep.Result executeAsyncMainStep(MachineAsyncCoordinator.TaskKey key, MainThreadStep step) {
         if (!validateAsyncMainStep(key, step)) {
-            discardInvalidAsyncStart(step);
-            if (pendingAsyncStart == null) finishAsyncTick();
+            discardInvalidAsyncStart(key, step);
+            if (!isAsyncStartStep(step) && key.lifecycleEpoch() == controller.lifecycleEpoch()
+                    && pendingAsyncStart == null) finishAsyncTick();
             return MainThreadStep.Result.failure(new IllegalStateException("Async continuation validation failed"));
         }
         if (step instanceof MainThreadStep.Lifecycle lifecycle) {
@@ -834,11 +1061,19 @@ public abstract class RecipeThread {
                 if (pending == null) {
                     return MainThreadStep.Result.failure(new IllegalStateException("Missing async start lifecycle"));
                 }
-                pendingAsyncStartExecution = runtime.prepareAsyncStart(pending.recipe(), pending.parallelism());
-                if (pendingAsyncStartExecution == null) {
-                    failAsyncStart(pending);
+                CraftingRuntime.StartPreparation preparation;
+                try {
+                    preparation = runtime.prepareStartAttempt(pending.recipe(), pending.parallelism());
+                } catch (RuntimeException exception) {
+                    failStartAttempt(pending.token(), pending.recipe(), pending.snapshot(), exception);
                     return MainThreadStep.Result.value(false);
                 }
+                if (!isPendingStartGeneration(pending)) return MainThreadStep.Result.value(false);
+                if (preparation.result() != CraftingRuntime.PreparationResult.READY) {
+                    finishPendingStart(pending.token(), pending.recipe(), preparationResult(preparation));
+                    return MainThreadStep.Result.value(false);
+                }
+                pendingAsyncStartExecution = preparation.execution();
             } else if (lifecycle.kind() == MainThreadStep.Kind.BEFORE_FINISH) {
                 asyncFinishPrepared = runtime.prepareAsyncFinish();
             }
@@ -878,9 +1113,12 @@ public abstract class RecipeThread {
                     return MainThreadStep.Result.failure(new IllegalStateException("Missing async start continuation"));
                 }
                 if (preparedStart == null) return MainThreadStep.Result.success();
-                if (requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(), pending.token(),
-                        pending.snapshot(), preparedStart, () -> MachineAsyncCoordinator.get(pending.level()).resume(key))) {
-                    return MainThreadStep.Result.pending();
+                try {
+                    if (requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(), pending.token(),
+                            pending.snapshot(), preparedStart, () -> MachineAsyncCoordinator.get(pending.level()).resume(key))
+                            == StartResult.PENDING) return MainThreadStep.Result.pending();
+                } catch (RuntimeException exception) {
+                    failStartAttempt(pending.token(), pending.recipe(), pending.snapshot(), exception);
                 }
                 return MainThreadStep.Result.value(false);
             }
@@ -928,18 +1166,24 @@ public abstract class RecipeThread {
     private MainThreadStep.Result validatedAsyncResult(MachineAsyncCoordinator.TaskKey key, MainThreadStep step,
                                                         MainThreadStep.Result result) {
         if (result instanceof MainThreadStep.Result.Pending || validateAsyncMainStep(key, step)) return result;
-        discardInvalidAsyncStart(step);
-        if (pendingAsyncStart == null) finishAsyncTick();
+        discardInvalidAsyncStart(key, step);
+        if (!isAsyncStartStep(step) && key.lifecycleEpoch() == controller.lifecycleEpoch()
+                && pendingAsyncStart == null) finishAsyncTick();
         return MainThreadStep.Result.failure(new IllegalStateException("Async continuation became stale"));
     }
 
-    private void discardInvalidAsyncStart(MainThreadStep step) {
+    private void discardInvalidAsyncStart(MachineAsyncCoordinator.TaskKey key, MainThreadStep step) {
         if (!isAsyncStartStep(step)) return;
         PendingAsyncStart pending = pendingAsyncStart;
-        if (pending == null) return;
+        if (pending == null || pending.snapshot().lifecycleEpoch() != key.lifecycleEpoch()) return;
+        if (key.lifecycleEpoch() != controller.lifecycleEpoch()) {
+            finishPendingStart(pending.token(), pending.recipe(), StartResult.CANCELLED);
+            return;
+        }
         pendingAsyncStart = null;
         pendingAsyncStartExecution = null;
-        if (currentCatalogVersion() != pending.snapshot().catalogVersion()) {
+        if (currentCatalogVersion() != pending.snapshot().catalogVersion()
+                || !isStartCandidateEligible(pending.recipe())) {
             invalidatePendingStartForCatalog(pending.token(), pending.recipe());
         } else {
             invalidatePendingStart(pending.token(), pending.recipe());
@@ -975,8 +1219,10 @@ public abstract class RecipeThread {
                     && snapshot.runtime().capabilityVersion() == current.capabilityVersion()
                     && snapshot.runtime().modifierVersion() == current.modifierVersion()
                     && snapshot.runtime().stateVersion() == current.stateVersion()
+                    && snapshot.runtime().upgradeContentRevision() == current.upgradeContentRevision()
                     && snapshot.recipePoolId().equals(controller.currentRecipePoolId())
-                    && snapshot.recipePoolId().equals(pending.recipe().recipePoolId());
+                    && snapshot.recipePoolId().equals(pending.recipe().recipePoolId())
+                    && isStartCandidateEligible(pending.recipe());
         }
         long catalogVersion = step instanceof MainThreadStep.TickTransitionCommit transition ? transition.catalogVersion()
                 : step instanceof MainThreadStep.IntentCommit intent ? intent.catalogVersion()
@@ -1131,8 +1377,12 @@ public abstract class RecipeThread {
         if (wasActive && !runtime.active()) {
             if (runtime.failure() == null && runtime.ledger().state().outputPaid()) {
                 controller.clearRecipeScreenText(laneId());
-                onRecipeFinished();
-                onFinished();
+                try {
+                    onRecipeFinished();
+                } finally {
+                    // This completion belongs to the output-paid execution, even if its next start throws.
+                    onFinished();
+                }
             } else {
                 onRecipeFailure();
                 controller.clearRecipeScreenText(laneId());
@@ -1145,6 +1395,7 @@ public abstract class RecipeThread {
     }
 
     public void invalidate() {
+        clearFullSearchRequest();
         cancelProgramCompilation();
         releaseInstalledStart();
         runtime.invalidate();
@@ -1160,9 +1411,12 @@ public abstract class RecipeThread {
         pendingStartCapabilityVersion = Long.MIN_VALUE;
         pendingStartModifierVersion = Long.MIN_VALUE;
         pendingStartComponentStateVersion = Long.MIN_VALUE;
+        pendingStartUpgradeRevision = Long.MIN_VALUE;
         pendingStartCatalogVersion = Long.MIN_VALUE;
         pendingStartRecipePoolId = null;
         pendingStartSearchContextKey = null;
+        pendingStartOrigin = StartOrigin.SEARCH;
+        pendingStartLifecycleEpoch = Long.MIN_VALUE;
           clearPendingTick();
     }
 
@@ -1179,6 +1433,7 @@ public abstract class RecipeThread {
     }
 
     public void discardForRecipePoolChange() {
+        clearFullSearchRequest();
         cancelAsyncState();
         clearPendingStartUnconditionally();
         runtime.invalidate();
@@ -1202,6 +1457,34 @@ public abstract class RecipeThread {
 
     protected void onStartSearchFailed(@Nullable ExecutionStatus failure) {
         runtime.recordSearchFailure(failure);
+    }
+
+    protected void onRecipeSearchFailed(RecipeSearchResult result) {
+        onStartSearchFailed(result.failure());
+    }
+
+    public final boolean hasFullSearchPending() { return fullSearchPending; }
+    public final void requestFullSearch() { fullSearchPending = true; }
+
+    public final void onFullSearchResult(StartResult result) {
+        if (result != StartResult.DEFERRED) clearFullSearchRequest();
+    }
+
+    protected final void clearFullSearchRequest() { fullSearchPending = false; }
+
+    public final void reportLastRecipeStartResult(StartResult result) {
+        if (result == StartResult.FAILED || result == StartResult.NO_MATCH) requestFullSearch();
+        if (result == StartResult.STARTED) clearFullSearchRequest();
+        onLastRecipeStartResult(result);
+    }
+
+    protected void onLastRecipeStartResult(StartResult result) { }
+
+    protected void onStartAttemptResult(StartOrigin origin, StartResult result,
+                                        @Nullable RecipeSearchContextKey contextKey) {
+        if (result == StartResult.STARTED) clearFullSearchRequest();
+        if (origin == StartOrigin.LAST_RECIPE) reportLastRecipeStartResult(result);
+        else if (result == StartResult.FAILED) onStartFailed(contextKey);
     }
 
     protected abstract void onStarted();

@@ -209,9 +209,10 @@ class SharedIoCoordinatorTest {
         assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(afterPaid - 7L);
     }
 
-    @Test
-    void live_selection_qualifies_the_selected_lane_once_before_payment() throws Exception {
-        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
+    void live_selection_qualifies_the_selected_lane_once_before_payment(MachineWorkMode mode) throws Exception {
+        InstalledFixture fixture = installedFixture(mode, 40);
         RuntimeTestFixtures.advanceGameTime(fixture.level());
         RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
         fixture.shared().markControllerEligible(fixture.controller(), fixture.level().getGameTime());
@@ -226,7 +227,52 @@ class SharedIoCoordinatorTest {
         assertThat(fixture.runtime().tickCount()).isEqualTo(1);
         assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L);
         assertThat(resolveInstalledDomain(fixture, domain)).isZero();
+        assertThat(fixture.shared().executeInstalled(fixture.program(), fixture.level())).isFalse();
         assertThat(world.lookups).hasValue(1);
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
+    void callback_invalidation_does_not_reuse_the_previous_controller_qualification(MachineWorkMode mode) {
+        InstalledFixture fixture = installedFixture(mode, 40);
+        CraftingRuntime second = attachSecondInstalledController(fixture);
+        InstalledRecipeProgram firstProgram = fixture.runtime().installedProgram();
+        InstalledRecipeProgram secondProgram = second.installedProgram();
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        tickInstalledController(fixture.runtime(), fixture);
+        tickInstalledController(second, fixture);
+        AtomicInteger callbacks = new AtomicInteger();
+        fixture.shared().enqueue(new SharedIoCoordinator.TickRequest(fixture.controller().resourceDomain(),
+                new SharedIoCoordinator.LaneKey(second.controller().getBlockPos(), ""), 1L, 0L,
+                () -> {
+                    assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+                    assertThat(second.tickCount()).isZero();
+                    second.controller().componentRuntime().replaceComponents(List.of());
+                    callbacks.incrementAndGet();
+                    return true;
+                }, () -> true, () -> 1L, () -> 0L));
+        long before = fixture.input().energyStorage().getAmountAsLong();
+        long secondPaidAttempts = secondProgram.ledger().state().paidAttempts();
+
+        assertThat(fixture.shared().resolvePost(fixture.level())).isEqualTo(2);
+
+        assertThat(callbacks).hasValue(1);
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        assertThat(second.tickCount()).isZero();
+        assertThat(secondProgram.current()).isFalse();
+        assertThat(fixture.shared().receiptsForTesting(second, "base")).singleElement()
+                .satisfies(receipt -> {
+                    assertThat(receipt.terminal()).isTrue();
+                    assertThat(receipt.paidAttempts()).isEqualTo(secondPaidAttempts);
+                });
+        assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L);
+        assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
+        assertThat(fixture.shared().executeInstalled(firstProgram, fixture.level())).isFalse();
+        assertThat(fixture.shared().executeInstalled(secondProgram, fixture.level())).isFalse();
+        assertThat(callbacks).hasValue(1);
         assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L);
     }
 

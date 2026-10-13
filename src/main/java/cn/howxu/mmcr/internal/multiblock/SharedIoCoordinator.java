@@ -526,7 +526,12 @@ public final class SharedIoCoordinator {
         InstalledRecipeProgram execution = slot.execution;
         if (execution == null) return false;
         CraftingRuntime owner = execution.owner();
-        MachineControllerBlockEntity controller = owner.controller();
+        return validExecution(slot, level, owner, owner.controller());
+    }
+
+    private boolean validExecution(ExecutionSlot slot, ServerLevel level, CraftingRuntime owner,
+                                   MachineControllerBlockEntity controller) {
+        InstalledRecipeProgram execution = slot.execution;
         VersionStamp versions = execution.program().versions();
         return controller.getLevel() == level && !controller.isRemoved() && owner.active()
                 && execution.current() && controller.lifecycleEpoch() == execution.identity().lifecycleEpoch()
@@ -539,9 +544,21 @@ public final class SharedIoCoordinator {
     }
 
     private boolean eligibleExecution(ExecutionSlot slot, ServerLevel level, boolean sync) {
-        if (slot.execution == null || slot.execution.cancelled()
-                || slot.execution.owner().installedProgram() != slot.execution || !slot.execution.owner().active()
-                || slot.execution.ledger().state().outputPaid()) {
+        InstalledRecipeProgram execution = slot.execution;
+        if (execution == null) {
+            terminateExecution(slot);
+            return false;
+        }
+        CraftingRuntime owner = execution.owner();
+        MachineControllerBlockEntity controller = owner.controller();
+        return eligibleExecution(slot, level, sync, owner, controller, controller.activeWorkMode());
+    }
+
+    private boolean eligibleExecution(ExecutionSlot slot, ServerLevel level, boolean sync, CraftingRuntime owner,
+                                      MachineControllerBlockEntity controller, MachineWorkMode mode) {
+        InstalledRecipeProgram execution = slot.execution;
+        if (execution.cancelled() || owner.installedProgram() != execution || !owner.active()
+                || execution.ledger().state().outputPaid()) {
             terminateExecution(slot);
             return false;
         }
@@ -550,15 +567,15 @@ public final class SharedIoCoordinator {
         // Scans revisit paid lanes: reject scheduling fences before touching live domains/world state.
         if (lane.lastAttemptRound == executionRoundId || lane.lastAttemptTime == gameTime
                 || slot.waiting || gameTime < slot.retryAt
-                || (slot.execution.owner().controller().activeWorkMode() == MachineWorkMode.SYNC) != sync
+                || (mode == MachineWorkMode.SYNC) != sync
                 || sync && slot.synchronousRound != executionRoundId) return false;
-        if (!validExecution(slot, level)) {
+        if (!validExecution(slot, level, owner, controller)) {
             terminateExecution(slot);
             return false;
         }
-        if (slot.execution.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED) return false;
-        if (slot.execution.owner().finishPending() && !slot.execution.finishAttemptReady()) return false;
-        return currentPermit(slot.execution.owner().controller(), slot.permit, level);
+        if (execution.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED) return false;
+        if (owner.finishPending() && !execution.finishAttemptReady()) return false;
+        return currentPermit(controller, slot.permit, level);
     }
 
     private boolean attemptExecution(ExecutionSlot slot, ServerLevel level) {
@@ -1494,11 +1511,15 @@ public final class SharedIoCoordinator {
                 if (laneIndex < 0) laneIndex = controller.pending.nextSetBit(0);
                 while (laneIndex >= 0) {
                     ExecutionSlot slot = controller.ordered.get(laneIndex);
-                    if (slot.execution.owner().controller().activeWorkMode() == MachineWorkMode.SYNC) {
+                    // Reuse only this slot's callback-free selection reads, never a prior attempt's live result.
+                    CraftingRuntime owner = slot.execution.owner();
+                    MachineControllerBlockEntity machineController = owner.controller();
+                    MachineWorkMode mode = machineController.activeWorkMode();
+                    if (mode == MachineWorkMode.SYNC) {
                         controller.pending.clear();
                         break;
                     }
-                    if (coordinator.eligibleExecution(slot, level, false)) return slot;
+                    if (coordinator.eligibleExecution(slot, level, false, owner, machineController, mode)) return slot;
                     removePending(slot);
                     laneIndex = controller.pending.nextSetBit(laneStart);
                     if (laneIndex < 0) laneIndex = controller.pending.nextSetBit(0);

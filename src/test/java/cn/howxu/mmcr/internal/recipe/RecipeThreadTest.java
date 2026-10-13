@@ -3,15 +3,19 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
+import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
@@ -24,6 +28,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
@@ -32,10 +37,13 @@ import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.RecipeCommitLedger;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -56,7 +64,9 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.common.capabilities.heat.BasicHeatCapacitor;
 import com.electronwill.nightconfig.core.CommentedConfig;
+import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.MinecraftServer;
@@ -86,8 +96,11 @@ import java.util.Set;
 import java.util.stream.Stream;
 import java.util.ArrayDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /** Verifies machine-pool boundaries for ordinary recipe threads.
  *
@@ -109,6 +122,8 @@ class RecipeThreadTest {
 
     @AfterEach
     void cleanup() throws Exception {
+        FaultRequirement.copyFault.set(() -> { });
+        FaultRequirement.planFault.set(() -> { });
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         RecipeRegistry.clearForTesting();
         if (serverInstalled) {
@@ -126,7 +141,7 @@ class RecipeThreadTest {
         MachineRecipeThread thread = new MachineRecipeThread(controller);
 
         assertThat(thread.searchAndStartRecipe(List.of(foreign), 1,
-                controller.runtimeSnapshot().structure().version())).isFalse();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.NO_MATCH);
         assertThat(thread.runtime().active()).isFalse();
         assertThat(thread.runtime().failure()).isNotNull();
         assertThat(thread.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_SEARCH);
@@ -353,21 +368,21 @@ class RecipeThreadTest {
             SharedIoCoordinator.get(level).drainReceiptAcknowledgements(level);
             assertThat(SharedIoCoordinator.get(level).reserveExecution(thread.runtime(), thread.asyncLaneId())).isTrue();
             SharedIoCoordinator.get(level).releaseExecutionReservation(thread.runtime(), thread.asyncLaneId());
-            if (mode == MachineWorkMode.ASYNC) {
-                // Exercise the generic idle restart entry too, with the matching template and workers stopped again.
-                if (thread instanceof MachineRecipeThread normal) normal.markRecipeFinished();
-                RuntimeTestFixtures.advanceGameTime(level);
-                RuntimeTestFixtures.beginLevelTick(level, true);
-                controller.serverTick();
-                SharedIoCoordinator.get(level).executeInstalled(level);
-                assertThat(thread.runtime().active()).isTrue();
-                assertThat(thread.isStartPending()).isFalse();
-                assertThat(thread.runtime().parallelism()).isEqualTo(16L);
-                assertThat(thread.runtime().tickCount()).isZero();
-                assertThat(thread.runtime().installedProgram()).isNotNull();
-                assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(1000L - 16L * 7L);
-                assertThat(output.itemHandler().amount(0)).isEqualTo(13L);
-            }
+            long beforeSearch = factory ? controllerFactorySearchAttempts(controller) : normalSearchAttempts(controller);
+            RuntimeTestFixtures.advanceGameTime(level);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            controller.serverTick();
+            SharedIoCoordinator.get(level).executeInstalled(level);
+            assertThat(thread.runtime().active()).isTrue();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().parallelism()).isEqualTo(16L);
+            assertThat(thread.runtime().tickCount()).isZero();
+            assertThat(thread.runtime().installedProgram()).isNotNull();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(1000L - 16L * 7L);
+            assertThat(output.itemHandler().amount(0)).isEqualTo(13L);
+            assertThat(factory ? controllerFactorySearchAttempts(controller) : normalSearchAttempts(controller))
+                    .isEqualTo(beforeSearch);
+            assertReceiptWorkersOnly(MachineAsyncCoordinator.get(level), workers);
         } finally {
             MachineAsyncCoordinator.discard(level);
             SharedIoCoordinator.discard(level);
@@ -377,6 +392,891 @@ class RecipeThreadTest {
 
     private static Stream<Arguments> shortRecipeModes() {
         return Stream.of(MachineWorkMode.values()).flatMap(mode -> Stream.of(Arguments.of(mode, false), Arguments.of(mode, true)));
+    }
+
+    private static long normalSearchAttempts(MachineControllerBlockEntity controller) throws ReflectiveOperationException {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("recipeSearchAttemptCounter");
+        field.setAccessible(true);
+        return field.getLong(controller);
+    }
+
+    private static long controllerFactorySearchAttempts(MachineControllerBlockEntity controller)
+            throws ReflectiveOperationException {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        field.setAccessible(true);
+        return ((MachineControllerRuntime) field.get(controller)).factoryRuntime().searchAttemptsForTesting();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void attached_normal_cached_start_failure_searches_once_and_starts_the_available_alternative(MachineWorkMode mode)
+            throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        var output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        var controller = controllerWithPorts(input, output);
+        var firstStarts = new AtomicInteger();
+        var alternativeStarts = new AtomicInteger();
+        var finishes = new AtomicInteger();
+        ResourceLocation firstId = MMCR.id("cached_start_failure_first");
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> {
+            if (context.recipeId().equals(firstId)) firstStarts.incrementAndGet();
+            else alternativeStarts.incrementAndGet();
+        }).beforeFinish(context -> finishes.incrementAndGet()).build());
+        MachineRecipe first = RecipeTestSupport.create(firstId, controller.currentRecipePoolId(), 1,
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, Ingredient.of(Items.GOLD_NUGGET), 1,
+                                new ItemStack(Items.GOLD_NUGGET))),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
+        MachineRecipe alternative = RecipeTestSupport.create(MMCR.id("cached_start_failure_alternative"),
+                controller.currentRecipePoolId(), 20,
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.COPPER_INGOT), 1, ItemStack.EMPTY)), List.of());
+        RecipeRegistry.registerStatic(first);
+        RecipeRegistry.registerStatic(alternative);
+        input.itemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        input.itemHandler().setContents(1, new ItemStack(Items.COPPER_INGOT), 1L);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            MachineRecipeThread thread = attachedNormalThread(controller);
+            assertThat(thread.runtime().start(first, 1L).isCrafting()).isTrue();
+            thread.onStarted();
+            thread.runtime().ensureInstalledProgram();
+            long beforeSearch = normalSearchAttempts(controller);
+
+            RuntimeTestFixtures.advanceGameTime(level);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            controller.serverTick();
+            SharedIoCoordinator.get(level).executeInstalled(level);
+            SharedIoCoordinator.get(level).resolve(level);
+            assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
+            assertThat(finishes).hasValue(1);
+            assertThat(firstStarts).hasValue(2);
+            assertThat(alternativeStarts).hasValue(0);
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(input.itemHandler().amount(0)).isZero();
+            assertThat(input.itemHandler().amount(1)).isEqualTo(1L);
+            assertThat(normalSearchAttempts(controller)).isEqualTo(beforeSearch);
+
+            RuntimeTestFixtures.advanceGameTime(level);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            controller.serverTick();
+            completeAsyncLevelTick(level);
+            assertThat(thread.runtime().active()).isTrue();
+            assertThat(thread.runtime().recipe()).isSameAs(alternative);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(normalSearchAttempts(controller)).isEqualTo(beforeSearch + 1L);
+            assertThat(firstStarts).hasValue(2);
+            assertThat(alternativeStarts).hasValue(1);
+            assertThat(finishes).hasValue(1);
+            assertThat(input.itemHandler().amount(1)).isZero();
+            assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void before_start_cancellation_is_not_missing_input_or_a_full_search_obligation(MachineWorkMode mode)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var callbacks = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> {
+            callbacks.incrementAndGet();
+            context.cancel();
+        }).build());
+        var recipe = RecipeTestSupport.create(MMCR.id("cancelled_last_start"), controller.currentRecipePoolId(),
+                20, List.of(new EnergyRequirement(7L)), List.of());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            RecipeThread.StartResult result = thread.startRecipe(recipe, 1L,
+                    controller.currentRuntimeSnapshot().structure().version(), null, RecipeThread.StartOrigin.LAST_RECIPE);
+            assertThat(result).isEqualTo(mode == MachineWorkMode.ASYNC
+                    ? RecipeThread.StartResult.PENDING : RecipeThread.StartResult.CANCELLED);
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).filteredOn(value -> value != RecipeThread.StartResult.PENDING)
+                    .containsExactly(RecipeThread.StartResult.CANCELLED);
+            assertThat(callbacks).hasValue(1);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(thread.runtime().failure()).isNull();
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            assertThat(normalSearchAttempts(controller)).isZero();
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"structure", "remove", "replace"})
+    void stale_shared_start_cannot_consume_a_new_generation_search_obligation(String action) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            var recipe = RecipeTestSupport.create(MMCR.id("stale_shared_last_start"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            assertThat(thread.enqueueAsyncFinishRestart(recipe, 1L,
+                    controller.currentRuntimeSnapshot().structure().version(), null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            assertThat(thread.isStartPending()).isTrue();
+            MachineRecipeThread replacementThread = null;
+            if (action.equals("structure")) controller.invalidateFormedStructure();
+            else if (action.equals("remove")) controller.setRemoved();
+            else {
+                var replacement = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), controller.getBlockPos());
+                RuntimeTestFixtures.replaceBlockEntity(controller, replacement);
+                replacementThread = attachedNormalThread(replacement);
+                replacementThread.requestFullSearch();
+            }
+            thread.requestFullSearch();
+            completeAsyncLevelTick(level);
+            completeAsyncLevelTick(level);
+
+            assertThat(thread.lastResults).containsExactly(RecipeThread.StartResult.PENDING);
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            assertThat(normalSearchAttempts(controller)).isZero();
+            if (replacementThread != null) {
+                assertThat(replacementThread.hasFullSearchPending()).isTrue();
+                assertThat(replacementThread.runtime().active()).isFalse();
+            }
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @Test
+    void failed_cached_shared_start_dispatches_only_once_and_requests_full_search() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            var thread = new RecordingRecipeThread(controller);
+            var recipe = RecipeTestSupport.create(MMCR.id("failed_shared_last_start"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            assertThat(thread.enqueueAsyncFinishRestart(recipe, 1L,
+                    controller.currentRuntimeSnapshot().structure().version(), null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            completeAsyncLevelTick(level);
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).containsExactly(RecipeThread.StartResult.PENDING, RecipeThread.StartResult.FAILED);
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isZero();
+            assertThat(normalSearchAttempts(controller)).isZero();
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @Test
+    void discarded_shared_start_cannot_fail_or_cancel_a_replacement_token() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            var oldRecipe = RecipeTestSupport.create(MMCR.id("old_shared_start_token"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            var replacement = RecipeTestSupport.create(MMCR.id("new_shared_start_token"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            long version = controller.currentRuntimeSnapshot().structure().version();
+            assertThat(thread.enqueueAsyncFinishRestart(oldRecipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            thread.cancelAsyncState();
+            assertThat(thread.enqueueAsyncFinishRestart(replacement, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            completeAsyncLevelTick(level);
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).containsExactly(RecipeThread.StartResult.PENDING,
+                    RecipeThread.StartResult.PENDING, RecipeThread.StartResult.STARTED);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isTrue();
+            assertThat(thread.runtime().recipe()).isSameAs(replacement);
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(93L);
+            assertThat(normalSearchAttempts(controller)).isZero();
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @Test
+    void catalog_removal_ends_a_cached_pending_start_with_one_full_search_obligation() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            var recipe = RecipeTestSupport.create(MMCR.id("removed_cached_pending_start"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+            assertThat(thread.enqueueAsyncFinishRestart(recipe, 1L,
+                    controller.currentRuntimeSnapshot().structure().version(), null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            RecipeRegistry.replaceDynamic(Map.of());
+            completeAsyncLevelTick(level);
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).containsExactly(RecipeThread.StartResult.PENDING, RecipeThread.StartResult.NO_MATCH);
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            assertThat(normalSearchAttempts(controller)).isZero();
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @Test
+    void changed_domain_defers_the_old_request_and_accepts_the_candidate_in_the_new_domain() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var level = (ServerLevel) controller.getLevel();
+        var claims = StructureClaimRegistry.get(level);
+        assertThat(claims.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            var recipe = RecipeTestSupport.create(MMCR.id("domain_shared_last_start"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            long version = controller.currentRuntimeSnapshot().structure().version();
+            assertThat(thread.enqueueAsyncFinishRestart(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            var oldDomain = controller.resourceDomain();
+            claims.release(controller.getBlockPos());
+            assertThat(claims.claim(controller.getBlockPos(), List.of(
+                    new StructureClaimRegistry.Claim(energy.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED)))
+                    .accepted()).isTrue();
+            assertThat(controller.resourceDomain()).isNotEqualTo(oldDomain);
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).containsExactly(RecipeThread.StartResult.PENDING, RecipeThread.StartResult.DEFERRED);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            assertThat(thread.enqueueAsyncFinishRestart(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).containsExactly(RecipeThread.StartResult.PENDING, RecipeThread.StartResult.DEFERRED,
+                    RecipeThread.StartResult.PENDING, RecipeThread.StartResult.STARTED);
+            assertThat(thread.runtime().recipe()).isSameAs(recipe);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(93L);
+            assertThat(normalSearchAttempts(controller)).isZero();
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void paid_start_notification_failure_is_an_owned_execution_and_does_not_pay_twice(boolean shared) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        var notification = new AtomicReference<Runnable>(() -> { });
+        var storage = new LongItemStorage(1, 64L, () -> notification.get().run());
+        var input = new ItemInputBusBlockEntity(new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState()) {
+            @Override public LongItemStorage itemHandler() { return storage; }
+            @Override public LongItemStorage nativeItemHandler() { return storage; }
+        };
+        var controller = controllerWithPorts(input);
+        var starts = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> starts.incrementAndGet()).build());
+        var level = (ServerLevel) controller.getLevel();
+        if (shared) assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            storage.setContents(0, new ItemStack(Items.IRON_INGOT), 2L);
+            notification.set(() -> { throw new IllegalStateException("paid start notification"); });
+            var thread = new RecordingRecipeThread(controller);
+            var recipe = RecipeTestSupport.create(MMCR.id("paid_paused_thread_start"), controller.currentRecipePoolId(), 20,
+                    List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), List.of());
+            long version = controller.currentRuntimeSnapshot().structure().version();
+            RecipeThread.StartResult result = shared
+                    ? thread.enqueueAsyncFinishRestart(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE)
+                    : thread.startRecipe(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE);
+            assertThat(result).isEqualTo(shared ? RecipeThread.StartResult.PENDING : RecipeThread.StartResult.STARTED);
+            completeAsyncLevelTick(level);
+            assertThat(thread.runtime().active()).isTrue();
+            assertThat(thread.runtime().recipe()).isSameAs(recipe);
+            assertThat(thread.runtime().ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+            assertThat(thread.runtime().failure()).isNotNull();
+            var paid = thread.runtime().ledger().state();
+            assertThat(thread.startRecipe(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.DEFERRED);
+            assertThat(thread.runtime().ledger().state()).isSameAs(paid);
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.lastResults).doesNotContain(RecipeThread.StartResult.FAILED);
+            assertThat(storage.amount(0)).isEqualTo(1L);
+            assertThat(starts).hasValue(1);
+            assertThat(normalSearchAttempts(controller)).isZero();
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void before_start_lane_eligibility_change_is_rechecked_before_payment(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var eligible = new AtomicBoolean(true);
+        var callbacks = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> {
+            callbacks.incrementAndGet();
+            eligible.set(false);
+        }).build());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            thread.eligibility = eligible;
+            var recipe = RecipeTestSupport.create(MMCR.id("callback_lane_changed"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            RecipeThread.StartResult result = thread.startRecipe(recipe, 1L,
+                    controller.currentRuntimeSnapshot().structure().version(), null, RecipeThread.StartOrigin.LAST_RECIPE);
+            assertThat(result).isEqualTo(mode == MachineWorkMode.ASYNC
+                    ? RecipeThread.StartResult.PENDING : RecipeThread.StartResult.NO_MATCH);
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).filteredOn(value -> value != RecipeThread.StartResult.PENDING)
+                    .containsExactly(RecipeThread.StartResult.NO_MATCH);
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(callbacks).hasValue(1);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            assertThat(SharedIoCoordinator.get(level).reserveExecution(thread.runtime(), thread.asyncLaneId())).isTrue();
+            SharedIoCoordinator.get(level).releaseExecutionReservation(thread.runtime(), thread.asyncLaneId());
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void attached_search_cancellation_does_not_try_the_second_candidate_or_record_resource_backoff(MachineWorkMode mode)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var first = RecipeTestSupport.create(MMCR.id("a_search_cancelled"), controller.currentRecipePoolId(),
+                20, List.of(new EnergyRequirement(7L)), List.of());
+        var second = RecipeTestSupport.create(MMCR.id("b_search_cancelled_alternative"), controller.currentRecipePoolId(),
+                20, List.of(new EnergyRequirement(3L)), List.of());
+        RecipeRegistry.registerStatic(first);
+        RecipeRegistry.registerStatic(second);
+        var callbacks = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> {
+            assertThat(context.recipeId()).isEqualTo(first.id());
+            callbacks.incrementAndGet();
+            context.cancel();
+        }).build());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = attachedNormalThread(controller);
+            controller.serverTick();
+            completeAsyncLevelTick(level);
+            completeAsyncLevelTick(level);
+            assertThat(callbacks).hasValue(1);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.hasPendingAsyncSearch()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(thread.runtime().failure()).isNull();
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(normalSearchAttempts(controller)).isEqualTo(1L);
+            Field retry = MachineControllerBlockEntity.class.getDeclaredField("recipeSearchRetryCounter");
+            retry.setAccessible(true);
+            assertThat(retry.getInt(controller)).isZero();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void before_start_state_change_defers_old_preparation_and_retries_once_with_current_state(MachineWorkMode mode)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var callbacks = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> {
+            if (callbacks.getAndIncrement() == 0) controller.componentRuntime()
+                    .replaceLinkedPortPositions(Set.of(new BlockPos(99, 0, 0)));
+        }).build());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            var recipe = RecipeTestSupport.create(MMCR.id("callback_state_changed"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            long epoch = controller.lifecycleEpoch();
+            long state = controller.currentRuntimeSnapshot().stateVersion();
+            thread.startRecipe(recipe, 1L, controller.currentRuntimeSnapshot().structure().version(), null,
+                    RecipeThread.StartOrigin.LAST_RECIPE);
+            completeAsyncLevelTick(level);
+            assertThat(controller.lifecycleEpoch()).isEqualTo(epoch);
+            assertThat(controller.currentRuntimeSnapshot().stateVersion()).isNotEqualTo(state);
+            assertThat(thread.lastResults).filteredOn(value -> value != RecipeThread.StartResult.PENDING)
+                    .containsExactly(RecipeThread.StartResult.DEFERRED);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            assertThat(callbacks).hasValue(1);
+
+            RuntimeTestFixtures.advanceGameTime(level);
+            RecipeThread.StartResult retry = thread.startRecipe(recipe, 1L,
+                    controller.currentRuntimeSnapshot().structure().version(), null, RecipeThread.StartOrigin.LAST_RECIPE);
+            assertThat(retry).isEqualTo(mode == MachineWorkMode.ASYNC
+                    ? RecipeThread.StartResult.PENDING : RecipeThread.StartResult.STARTED);
+            completeAsyncLevelTick(level);
+            assertThat(callbacks).hasValue(2);
+            assertThat(thread.runtime().active()).isTrue();
+            assertThat(thread.runtime().recipe()).isSameAs(recipe);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(93L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("callbackCatalogChanges")
+    void attached_cached_before_start_catalog_change_cannot_pay_the_old_source(MachineWorkMode mode, boolean changed)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var recipe = RecipeTestSupport.create(MMCR.id("callback_catalog_source"), controller.currentRecipePoolId(),
+                1, List.of(new EnergyRequirement(7L)), List.of());
+        var replacement = RecipeTestSupport.create(recipe.id(), recipe.recipePoolId(),
+                20, List.of(new EnergyRequirement(3L)), List.of());
+        RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+        var callbacks = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> {
+            if (callbacks.incrementAndGet() == 2) RecipeRegistry.replaceDynamic(
+                    changed ? Map.of(replacement.id(), replacement) : Map.of());
+        }).build());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = attachedNormalThread(controller);
+            assertThat(thread.runtime().start(recipe, 1L).isCrafting()).isTrue();
+            thread.onStarted();
+            thread.runtime().ensureInstalledProgram();
+            long epoch = controller.lifecycleEpoch();
+            long beforeSearch = normalSearchAttempts(controller);
+            RuntimeTestFixtures.advanceGameTime(level);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            controller.serverTick();
+            SharedIoCoordinator.get(level).executeInstalled(level);
+            SharedIoCoordinator.get(level).resolve(level);
+            assertThat(controller.lifecycleEpoch()).isEqualTo(epoch);
+            assertThat(callbacks).hasValue(2);
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(normalSearchAttempts(controller)).isEqualTo(beforeSearch);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(86L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    private static Stream<Arguments> callbackCatalogChanges() {
+        return Stream.of(MachineWorkMode.SYNC, MachineWorkMode.SEMI_SYNC)
+                .flatMap(mode -> Stream.of(Arguments.of(mode, false), Arguments.of(mode, true)));
+    }
+
+    @Test
+    void duplicate_start_submission_defers_the_new_token_without_resource_failure() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var callbacks = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> callbacks.incrementAndGet()).build());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        var workers = new ArrayDeque<Runnable>();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(workers::add));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            var recipe = RecipeTestSupport.create(MMCR.id("duplicate_cached_submission"), controller.currentRecipePoolId(),
+                    20, List.of(new EnergyRequirement(7L)), List.of());
+            Runnable drain = () -> {
+                MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+                while (!workers.isEmpty() || async.hasPendingMainStepForTesting()) {
+                    while (!workers.isEmpty()) workers.removeFirst().run();
+                    async.pumpMainThreadSteps();
+                    SharedIoCoordinator.get(level).resolve(level);
+                }
+            };
+            long epoch = controller.lifecycleEpoch();
+            long time = level.getGameTime();
+            long version = controller.currentRuntimeSnapshot().structure().version();
+            assertThat(thread.startRecipe(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            thread.cancelAsyncState();
+            assertThat(thread.startRecipe(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.DEFERRED);
+            assertThat(controller.lifecycleEpoch()).isEqualTo(epoch);
+            assertThat(level.getGameTime()).isEqualTo(time);
+            assertThat(thread.lastResults).containsExactly(RecipeThread.StartResult.PENDING, RecipeThread.StartResult.DEFERRED);
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(callbacks).hasValue(0);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            drain.run();
+            assertThat(thread.lastResults).doesNotContain(RecipeThread.StartResult.FAILED);
+
+            RuntimeTestFixtures.advanceGameTime(level);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            SharedIoCoordinator.get(level).markControllerEligible(controller, level.getGameTime());
+            assertThat(thread.startRecipe(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.PENDING);
+            drain.run();
+            assertThat(thread.runtime().active()).isTrue();
+            assertThat(thread.runtime().recipe()).isSameAs(recipe);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(callbacks).hasValue(1);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(93L);
+            assertThat(normalSearchAttempts(controller)).isZero();
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"sync-copy", "sync-plan", "fast-copy", "shared-plan", "continuation-copy"})
+    void extension_start_exceptions_finish_the_owned_token_once_and_leave_a_usable_reservation(String boundary)
+            throws Exception {
+        boolean async = !boundary.startsWith("sync");
+        ConfigTestSupport.setMachineWorkMode(async ? MachineWorkMode.ASYNC : MachineWorkMode.SYNC);
+        registerFaultRequirement();
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var callbacks = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> callbacks.incrementAndGet()).build());
+        var recipe = RecipeTestSupport.create(MMCR.id("exception_cached_start"), controller.currentRecipePoolId(),
+                20, List.of(new EnergyRequirement(7L), new FaultRequirement()), List.of());
+        var alternative = RecipeTestSupport.create(MMCR.id("exception_alternative_start"), controller.currentRecipePoolId(),
+                20, List.of(new EnergyRequirement(3L)), List.of());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            SharedIoCoordinator.get(level).markControllerEligible(controller, level.getGameTime());
+            var thread = new RecordingRecipeThread(controller);
+            var unpaid = thread.runtime().ledger().state();
+            long version = controller.currentRuntimeSnapshot().structure().version();
+            Runnable fault = () -> { throw new IllegalStateException("extension start " + boundary); };
+            if (boundary.endsWith("copy")) FaultRequirement.copyFault.set(fault);
+            else if (boundary.equals("sync-plan")) FaultRequirement.planFault.set(fault);
+            var result = new AtomicReference<RecipeThread.StartResult>();
+            assertThatCode(() -> result.set(boundary.startsWith("fast") || boundary.startsWith("shared")
+                    ? thread.enqueueAsyncFinishRestart(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE)
+                    : thread.startRecipe(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE)))
+                    .doesNotThrowAnyException();
+            assertThat(result.get()).isEqualTo(boundary.equals("shared-plan") || boundary.equals("continuation-copy")
+                    ? RecipeThread.StartResult.PENDING : RecipeThread.StartResult.FAILED);
+            if (boundary.equals("shared-plan")) FaultRequirement.planFault.set(fault);
+            assertThatCode(() -> completeAsyncLevelTick(level)).doesNotThrowAnyException();
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).filteredOn(value -> value != RecipeThread.StartResult.PENDING)
+                    .containsExactly(RecipeThread.StartResult.FAILED);
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(thread.runtime().ledger().state()).isEqualTo(unpaid);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            assertThat(SharedIoCoordinator.get(level).reserveExecution(thread.runtime(), thread.asyncLaneId())).isTrue();
+            SharedIoCoordinator.get(level).releaseExecutionReservation(thread.runtime(), thread.asyncLaneId());
+
+            RuntimeTestFixtures.advanceGameTime(level);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            SharedIoCoordinator.get(level).markControllerEligible(controller, level.getGameTime());
+            assertThat(thread.searchAndStartRecipe(List.of(alternative), 1L, version).ownsStart()).isTrue();
+            completeAsyncLevelTick(level);
+            assertThat(thread.runtime().active()).isTrue();
+            assertThat(thread.runtime().recipe()).isSameAs(alternative);
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isFalse();
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(97L);
+            assertThat(callbacks).hasValue(boundary.endsWith("plan") ? 2 : 1);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"sync-copy", "fast-copy", "shared-plan"})
+    void next_start_extension_exception_does_not_lose_the_output_paid_completion(String boundary) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(boundary.startsWith("sync") ? MachineWorkMode.SYNC : MachineWorkMode.ASYNC);
+        registerFaultRequirement();
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        var controller = controllerWithPorts(energy, output);
+        var starts = new AtomicInteger();
+        var finishes = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> starts.incrementAndGet())
+                .beforeFinish(context -> finishes.incrementAndGet()).build());
+        var recipe = RecipeTestSupport.create(MMCR.id("exception_completed_source"), controller.currentRecipePoolId(), 1,
+                List.of(new EnergyRequirement(7L), new FaultRequirement(),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, Ingredient.of(Items.GOLD_NUGGET), 1,
+                                new ItemStack(Items.GOLD_NUGGET))),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_NUGGET), 1F)));
+        RecipeRegistry.registerStatic(recipe);
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            assertThat(thread.runtime().start(recipe, 1L).isCrafting()).isTrue();
+            thread.runtime().ensureInstalledProgram();
+            thread.finishedAttempt = () -> {
+                long version = controller.currentRuntimeSnapshot().structure().version();
+                Runnable fault = () -> { throw new IllegalStateException("next start " + boundary); };
+                if (boundary.endsWith("copy")) FaultRequirement.copyFault.set(fault);
+                if (boundary.startsWith("sync")) {
+                    assertThat(thread.startRecipe(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                            .isEqualTo(RecipeThread.StartResult.FAILED);
+                } else {
+                    assertThat(thread.enqueueAsyncFinishRestart(recipe, 1L, version, null, RecipeThread.StartOrigin.LAST_RECIPE))
+                            .isEqualTo(boundary.equals("shared-plan")
+                                    ? RecipeThread.StartResult.PENDING : RecipeThread.StartResult.FAILED);
+                    if (boundary.equals("shared-plan")) FaultRequirement.planFault.set(fault);
+                }
+            };
+            RuntimeTestFixtures.advanceGameTime(level);
+            RuntimeTestFixtures.beginLevelTick(level, true);
+            SharedIoCoordinator.get(level).markControllerEligible(controller, level.getGameTime());
+            assertThatCode(() -> {
+                thread.tick();
+                SharedIoCoordinator.get(level).executeInstalled(level);
+                completeAsyncLevelTick(level);
+            }).doesNotThrowAnyException();
+            thread.tick();
+            completeAsyncLevelTick(level);
+            assertThat(thread.finishedNotifications).isEqualTo(1);
+            assertThat(finishes).hasValue(1);
+            assertThat(starts).hasValue(boundary.equals("shared-plan") ? 2 : 1);
+            assertThat(thread.lastResults).filteredOn(value -> value != RecipeThread.StartResult.PENDING)
+                    .containsExactly(RecipeThread.StartResult.FAILED);
+            assertThat(thread.runtime().active()).isFalse();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(output.itemHandler().amount(0)).isEqualTo(1L);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(86L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void preparation_exception_after_replacement_does_not_clear_a_new_token_or_epoch(boolean changeEpoch)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        registerFaultRequirement();
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(energy);
+        var recipe = RecipeTestSupport.create(MMCR.id("exception_obsolete_preparation"), controller.currentRecipePoolId(),
+                20, List.of(new EnergyRequirement(7L), new FaultRequirement()), List.of());
+        var replacement = RecipeTestSupport.create(MMCR.id("exception_new_preparation"), controller.currentRecipePoolId(),
+                20, List.of(new EnergyRequirement(3L)), List.of());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            energy.energyStorage().setAmount(100L);
+            var thread = new RecordingRecipeThread(controller);
+            FaultRequirement.copyFault.set(() -> {
+                thread.cancelAsyncState();
+                if (changeEpoch) {
+                    controller.invalidateFormedStructure();
+                    thread.requestFullSearch();
+                } else {
+                    assertThat(thread.enqueueAsyncFinishRestart(replacement, 1L,
+                            controller.currentRuntimeSnapshot().structure().version(), null, RecipeThread.StartOrigin.SEARCH))
+                            .isEqualTo(RecipeThread.StartResult.PENDING);
+                    thread.requestFullSearch();
+                }
+                throw new IllegalStateException("obsolete copy after replacement");
+            });
+            assertThat(thread.enqueueAsyncFinishRestart(recipe, 1L,
+                    controller.currentRuntimeSnapshot().structure().version(), null, RecipeThread.StartOrigin.LAST_RECIPE))
+                    .isEqualTo(RecipeThread.StartResult.CANCELLED);
+            assertThat(thread.lastResults).isEmpty();
+            assertThat(thread.hasFullSearchPending()).isTrue();
+            assertThat(thread.isStartPending()).isEqualTo(!changeEpoch);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
+            completeAsyncLevelTick(level);
+            assertThat(thread.lastResults).isEmpty();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().active()).isEqualTo(!changeEpoch);
+            assertThat(thread.hasFullSearchPending()).isEqualTo(changeEpoch);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(changeEpoch ? 100L : 97L);
+            if (!changeEpoch) assertThat(thread.runtime().recipe()).isSameAs(replacement);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    private static void registerFaultRequirement() {
+        if (RequirementHandlerRegistry.typeFor(FaultRequirement.TYPE.id()) == null) {
+            RequirementHandlerRegistry.register(FaultRequirement.TYPE);
+        }
+    }
+
+    /** Extension faults are injected at the real copy and live planner boundaries. @author howxu <dev@howxu.cn> */
+    private record FaultRequirement() implements MachineRequirement {
+        private static final AtomicReference<Runnable> copyFault = new AtomicReference<>(() -> { });
+        private static final AtomicReference<Runnable> planFault = new AtomicReference<>(() -> { });
+        private static final RequirementType<FaultRequirement> TYPE = new RequirementType.Definition<>(
+                MMCR.id("thread_fault_requirement"), Codec.STRING.fieldOf("type")
+                        .xmap(ignored -> new FaultRequirement(), ignored -> MMCR.id("thread_fault_requirement").toString()),
+                (requirement, capabilities, context) -> {
+                    planFault.getAndSet(() -> { }).run();
+                    return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+                }, requirement -> {
+                    copyFault.getAndSet(() -> { }).run();
+                    return requirement;
+                });
+
+        @Override public RequirementType<FaultRequirement> type() { return TYPE; }
+        @Override public RecipeModifier.IOType io() { return RecipeModifier.IOType.INPUT; }
+    }
+
+    private static MachineRecipeThread attachedNormalThread(MachineControllerBlockEntity controller)
+            throws ReflectiveOperationException {
+        Field field = MachineControllerBlockEntity.class.getDeclaredField("normalRecipeThread");
+        field.setAccessible(true);
+        return (MachineRecipeThread) field.get(controller);
+    }
+
+    private static void installBehavior(MachineControllerBlockEntity controller, RecipeBehavior behavior)
+            throws ReflectiveOperationException {
+        Machine original = controller.currentStructureSnapshot().configuredMachine();
+        Machine machine = new Machine() {
+            public ResourceLocation registryName() { return original.registryName(); }
+            public BlockArray pattern() { return original.pattern(); }
+            public MachineControllerSpec controller() { return original.controller(); }
+            public RecipeBehavior behavior() { return behavior; }
+        };
+        controller.setMachine(machine);
+        Field runtimeField = MachineControllerBlockEntity.class.getDeclaredField("runtime");
+        runtimeField.setAccessible(true);
+        Method publish = MachineControllerRuntime.class.getDeclaredMethod("publishFormationState",
+                Machine.class, BlockArray.class, CompiledMachinePattern.class, Direction.class, Direction.class, int.class);
+        publish.setAccessible(true);
+        var structure = controller.currentStructureSnapshot();
+        publish.invoke(runtimeField.get(controller), machine, structure.pattern(), MachinePatternCompiler.compile(machine),
+                structure.facing(), structure.rollFacing(), structure.matchedStage());
+        RuntimeTestFixtures.republish(controller);
+        assertThat(controller.currentStructureSnapshot().machine().behavior()).isSameAs(behavior);
+    }
+
+    /** Records real pending start terminal dispatches. @author howxu <dev@howxu.cn> */
+    private static final class RecordingRecipeThread extends RecipeThread {
+        private final List<StartResult> lastResults = new ArrayList<>();
+        private AtomicBoolean eligibility = new AtomicBoolean(true);
+        private Runnable finishedAttempt = () -> { };
+        private int finishedNotifications;
+
+        private RecordingRecipeThread(MachineControllerBlockEntity controller) { super(controller); }
+        @Override protected void onStarted() { }
+        @Override protected void onFinished() { finishedNotifications++; }
+        @Override protected void onRecipeFinished() { finishedAttempt.run(); }
+        @Override protected void onLastRecipeStartResult(StartResult result) { lastResults.add(result); }
+        @Override protected boolean isStartCandidateEligible(MachineRecipe recipe) {
+            return eligibility.get() && super.isStartCandidateEligible(recipe);
+        }
     }
 
     private static void assertReceiptWorkersOnly(MachineAsyncCoordinator coordinator, ArrayDeque<Runnable> workers)
@@ -748,7 +1648,7 @@ class RecipeThreadTest {
         MachineRecipeThread thread = new MachineRecipeThread(controller);
 
         assertThat(thread.searchAndStartRecipe(List.of(first, second), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.STARTED);
         assertThat(thread.runtime().recipe()).isEqualTo(second);
     }
 
@@ -763,7 +1663,7 @@ class RecipeThreadTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         assertThat(thread.searchAndStartAsyncRecipe(List.of(foreign, valid), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
 
         completeAsyncLevelTick((ServerLevel) controller.getLevel());
 
@@ -786,12 +1686,14 @@ class RecipeThreadTest {
         MachineRecipeThread thread = new MachineRecipeThread(controller);
 
         assertThat(thread.searchAndStartAsyncRecipe(List.of(second), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
         assertThat(controller.selectRecipePool(firstPool)).isTrue();
+        thread.requestFullSearch();
         completeAsyncLevelTick((ServerLevel) controller.getLevel());
 
         assertThat(thread.runtime().active()).isFalse();
         assertThat(thread.hasPendingAsyncSearch()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isTrue();
     }
 
     @Test
@@ -844,12 +1746,12 @@ class RecipeThreadTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
 
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.STARTED);
         thread.markRecipeFinished();
         thread.runtime().invalidate();
 
         assertThat(thread.tryRestartLastRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.STARTED);
         assertThat(thread.hasPendingAsyncSearch()).isFalse();
         assertThat(thread.runtime().active()).isTrue();
     }
@@ -861,14 +1763,14 @@ class RecipeThreadTest {
                 20, List.of(), List.of());
         MachineRecipeThread thread = new MachineRecipeThread(controller);
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.STARTED);
         thread.markRecipeFinished();
 
         thread.discardForRecipePoolChange();
 
         assertThat(thread.runtime().active()).isFalse();
         assertThat(thread.tryRestartLastRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isFalse();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.NO_MATCH);
     }
 
     @Test
@@ -880,14 +1782,16 @@ class RecipeThreadTest {
                 20, List.of(), List.of());
         MachineRecipeThread thread = new MachineRecipeThread(controller);
         assertThat(thread.searchAndStartRecipe(List.of(recipe), 1,
-                controller.runtimeSnapshot().structure().version())).isTrue();
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.PENDING);
         assertThat(thread.isStartPending()).isTrue();
 
+        thread.requestFullSearch();
         thread.discardForRecipePoolChange();
         completeAsyncLevelTick(level);
 
         assertThat(thread.isStartPending()).isFalse();
         assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.hasFullSearchPending()).isFalse();
     }
 
     private static MachineControllerBlockEntity normalController() {

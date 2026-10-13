@@ -10,8 +10,7 @@ MMCREvents.server(event => {
         .pattern(['XXX', 'XCX', 'XXX'])
         .set('X', api.anyOf(
             api.block('minecraft:bricks'),
-            api.anyOfItemInput(),
-            api.anyOfItemOutput()
+            api.ports()
         ))
         .controller('C')
         .build()
