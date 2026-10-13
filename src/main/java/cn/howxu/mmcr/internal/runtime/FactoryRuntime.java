@@ -42,6 +42,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -69,6 +70,8 @@ public final class FactoryRuntime {
     private final Map<CraftingRuntime, FactoryRecipeThread> lanesByRuntime = new IdentityHashMap<>();
     private final Map<FactoryRecipeThread, ExecutionStatus> laneFailures = new IdentityHashMap<>();
     private final Set<FactoryRecipeThread> searchWaitingLanes = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final ArrayDeque<LaneTickObservation> availableTickObservations = new ArrayDeque<>();
+    private int tickObservationBuildCountForTesting;
     private int accountingUpdatesForTesting;
     private Runnable currentFinishCallback = NO_FINISH_CALLBACK;
     private List<MachineRecipe> currentFinishCandidates = List.of();
@@ -1138,23 +1141,35 @@ public final class FactoryRuntime {
     }
 
     private void tickLane(FactoryRecipeThread lane, ControllerRuntimeSnapshot snapshot) {
-        LaneObservation before = observe(lane);
-        MachineRecipe recipe = lane.runtime().recipe();
-        lane.tick(snapshot);
-        if (!matchesObservation(lane, before) || recipe != lane.runtime().recipe()) {
-            markLaneStateChanged();
+        LaneTickObservation before = acquireLaneTickObservation();
+        try {
+            refreshLaneAccounting(lane);
+            before.capture(lane);
+            lane.tick(snapshot);
+            refreshLaneAccounting(lane);
+            if (!before.matches(lane) || before.recipe != lane.runtime().recipe()) {
+                markLaneStateChanged();
+            }
+        } finally {
+            releaseLaneTickObservation(before);
         }
     }
 
     private FactoryTickResult tickIdleBaseRuntime(long initialEpoch) {
         if (lanes.isEmpty()) return currentTickResult(initialEpoch, false);
         FactoryRecipeThread base = lanes.getFirst();
-        LaneObservation before = observe(base);
-        CapabilityTickResult result = base.runtime().tickIdle();
-        boolean unchanged = matchesObservation(base, before);
-        boolean changed = result.stateChanged() || !unchanged;
-        if (changed) markLaneStateChanged();
-        return currentTickResult(initialEpoch, changed);
+        LaneTickObservation before = acquireLaneTickObservation();
+        try {
+            refreshLaneAccounting(base);
+            before.capture(base);
+            CapabilityTickResult result = base.runtime().tickIdle();
+            refreshLaneAccounting(base);
+            boolean changed = result.stateChanged() || !before.matches(base);
+            if (changed) markLaneStateChanged();
+            return currentTickResult(initialEpoch, changed);
+        } finally {
+            releaseLaneTickObservation(before);
+        }
     }
 
     private static RecipeSearchContextKey searchContextKey(FactorySearchContext context,
@@ -1211,6 +1226,8 @@ public final class FactoryRuntime {
     }
 
     int accountingUpdatesForTesting() { return accountingUpdatesForTesting; }
+
+    int tickObservationBuildCountForTesting() { return tickObservationBuildCountForTesting; }
 
     public int activeRecipeCountFor(ResourceLocation recipeId) {
         return activeRecipeCounts().getOrDefault(recipeId, 0);
@@ -1378,6 +1395,20 @@ public final class FactoryRuntime {
     public record PatternLane(CraftingRuntime runtime, String laneId, CraftingRuntime.PreparedStart preparedStart) {
     }
 
+    private LaneTickObservation acquireLaneTickObservation() {
+        LaneTickObservation observation = availableTickObservations.pollFirst();
+        if (observation == null) {
+            observation = new LaneTickObservation();
+            tickObservationBuildCountForTesting++;
+        }
+        return observation;
+    }
+
+    private void releaseLaneTickObservation(LaneTickObservation observation) {
+        observation.clear();
+        availableTickObservations.addFirst(observation);
+    }
+
     private LaneObservation observe(FactoryRecipeThread lane) {
         refreshLaneAccounting(lane);
         return new LaneObservation(lane.runtime().observation(), lane.getStatus(), lane.isStartPending(),
@@ -1395,6 +1426,39 @@ public final class FactoryRuntime {
         recomputeFailureIfDirty();
         return new FactoryTickResult(activeLaneCount(), failure, laneStateChanged,
                 initialEpoch != factoryStateEpoch);
+    }
+
+    /**
+     * One exclusively borrowed factory tick baseline.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class LaneTickObservation extends CraftingRuntime.ObservationBuffer {
+        private RecipeThread.Status laneStatus;
+        private boolean startPending;
+        private @Nullable MachineRecipe pendingRecipe;
+        private @Nullable MachineRecipe recipe;
+
+        void capture(FactoryRecipeThread lane) {
+            super.capture(lane.runtime());
+            laneStatus = lane.getStatus();
+            startPending = lane.isStartPending();
+            pendingRecipe = lane.getPendingStartRecipe();
+            recipe = lane.runtime().recipe();
+        }
+
+        boolean matches(FactoryRecipeThread lane) {
+            return super.matches(lane.runtime()) && laneStatus == lane.getStatus()
+                    && startPending == lane.isStartPending()
+                    && Objects.equals(pendingRecipe, lane.getPendingStartRecipe());
+        }
+
+        @Override
+        void clear() {
+            super.clear();
+            pendingRecipe = null;
+            recipe = null;
+        }
     }
 
     private record LaneObservation(CraftingRuntime.StateObservation runtime, RecipeThread.Status status,

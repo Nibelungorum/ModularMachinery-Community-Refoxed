@@ -12,6 +12,7 @@ import cn.howxu.mmcr.publicapi.data.DataKind;
 import cn.howxu.mmcr.publicapi.data.DataStore;
 import cn.howxu.mmcr.publicapi.data.Repository;
 import cn.howxu.mmcr.publicapi.data.RepositoryContext;
+import com.google.common.collect.MapMaker;
 import net.minecraft.resources.ResourceLocation;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -25,6 +26,10 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public final class StorageAdapters {
+    // Only immutable store/value collections use these caches; results do not retain source containers.
+    private static final Map<Map<String, DataValue>, Map<String, DataKey>> VALUES_CACHE =
+            new MapMaker().weakKeys().makeMap();
+    private static final Map<List<DataValue>, List<DataKey>> LIST_CACHE = new MapMaker().weakKeys().makeMap();
     private StorageAdapters() {}
     public static DataStore wrap(DataStorage value) { return new StoreAdapter(Objects.requireNonNull(value)); }
     public static DataStorage unwrap(DataStore value) { return ((StoreAdapter) value).delegate; }
@@ -72,6 +77,9 @@ public final class StorageAdapters {
         v.forEach((key, value) -> converted.put(key, wrap(value)));
         return Map.copyOf(converted);
     }
+    private static Map<String, DataKey> cachedValues(Map<String, DataValue> values) {
+        return VALUES_CACHE.computeIfAbsent(values, StorageAdapters::values);
+    }
     public static DataRepository toCore(Repository repository) {
         Objects.requireNonNull(repository, "repository");
         return new DataRepository() {
@@ -94,7 +102,7 @@ public final class StorageAdapters {
     private record StoreAdapter(DataStorage delegate) implements DataStore {
         public Optional<DataKey> get(String key) { return delegate.get(key).map(StorageAdapters::wrap); }
         public boolean contains(String key) { return delegate.contains(key); }
-        public Map<String, DataKey> values() { return StorageAdapters.values(delegate.values()); }
+        public Map<String, DataKey> values() { return cachedValues(delegate.values()); }
         public void set(String key, DataKey value) { delegate.set(key, unwrap(value)); }
         public boolean set(String key, DataKey value, Transaction transaction) { return delegate.set(key, unwrap(value), unwrap(transaction)); }
         public Optional<DataKey> remove(String key) { return delegate.remove(key).map(StorageAdapters::wrap); }
@@ -111,8 +119,11 @@ public final class StorageAdapters {
         public Optional<Double> asDouble() { return delegate.asDouble(); }
         public Optional<BigInteger> asBigInteger() { return delegate.asBigInteger(); }
         public Optional<BigDecimal> asBigDecimal() { return delegate.asBigDecimal(); }
-        public Optional<List<DataKey>> asList() { return delegate.asList().map(v -> v.stream().map(StorageAdapters::wrap).toList()); }
-        public Optional<Map<String, DataKey>> asMap() { return delegate.asMap().map(StorageAdapters::values); }
+        public Optional<List<DataKey>> asList() {
+            return delegate.asList().map(values -> LIST_CACHE.computeIfAbsent(values,
+                    source -> source.stream().map(StorageAdapters::wrap).toList()));
+        }
+        public Optional<Map<String, DataKey>> asMap() { return delegate.asMap().map(StorageAdapters::cachedValues); }
         public boolean booleanValue() { return delegate.booleanValue(); }
         public String stringValue() { return delegate.stringValue(); }
         public byte byteValue() { return delegate.byteValue(); }

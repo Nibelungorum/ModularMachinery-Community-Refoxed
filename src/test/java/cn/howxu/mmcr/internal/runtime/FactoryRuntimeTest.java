@@ -191,6 +191,57 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void attached_factory_reuses_tick_observation_while_real_progress_advances() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_observation_reuse"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of());
+            RecipeRegistry.registerStatic(recipe);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            tickAttachedFactory(controller);
+            tickAttachedFactory(controller);
+            CraftingRuntime lane = factoryBaseRuntime(factory);
+            int builds = factory.tickObservationBuildCountForTesting();
+            int tick = lane.tickCount();
+            FactorySnapshot before = factory.snapshot();
+            assertThat(builds).isPositive();
+            for (int step = 0; step < 4; step++) tickAttachedFactory(controller);
+            assertThat(factory.tickObservationBuildCountForTesting()).isEqualTo(builds);
+            assertThat(lane.tickCount()).isGreaterThan(tick);
+            assertThat(factory.snapshot().lanes().getFirst().tick()).isEqualTo(lane.tickCount());
+            assertThat(before.lanes().getFirst().tick()).isEqualTo(tick);
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void nested_tick_observation_leases_do_not_share_an_in_use_baseline() throws Exception {
+        FactoryRuntime factory = new FactoryRuntime();
+        var acquire = FactoryRuntime.class.getDeclaredMethod("acquireLaneTickObservation");
+        var release = FactoryRuntime.class.getDeclaredMethod("releaseLaneTickObservation", acquire.getReturnType());
+        acquire.setAccessible(true);
+        release.setAccessible(true);
+        Object outer = acquire.invoke(factory);
+        Object inner = acquire.invoke(factory);
+        assertThat(inner).isNotSameAs(outer);
+        release.invoke(factory, inner);
+        Object nextInner = acquire.invoke(factory);
+        assertThat(nextInner).isSameAs(inner).isNotSameAs(outer);
+        release.invoke(factory, nextInner);
+        release.invoke(factory, outer);
+        int builds = factory.tickObservationBuildCountForTesting();
+        Object reused = acquire.invoke(factory);
+        assertThat(reused).isSameAs(outer);
+        release.invoke(factory, reused);
+        assertThat(factory.tickObservationBuildCountForTesting()).isEqualTo(builds);
+    }
+
+    @Test
     void full_active_factory_skips_async_recipe_search_scan() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = asyncFactoryController(input);

@@ -29,15 +29,19 @@ public final class StructureClaimRegistry {
     private long nextDomainId;
     private long nextGeneration;
     private long topologyRevision;
+    private volatile boolean discarded;
 
     public long topologyRevision() { return topologyRevision; }
+
+    public boolean isDiscarded() { return discarded; }
 
     public static synchronized StructureClaimRegistry get(ServerLevel level) {
         return REGISTRIES.computeIfAbsent(level, ignored -> new StructureClaimRegistry());
     }
 
     public static synchronized void discard(ServerLevel level) {
-        REGISTRIES.remove(level);
+        StructureClaimRegistry registry = REGISTRIES.remove(level);
+        if (registry != null) registry.discarded = true;
     }
 
     public ClaimResult claim(BlockPos controllerPos, List<Claim> requested) {

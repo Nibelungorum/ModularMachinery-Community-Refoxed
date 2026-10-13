@@ -51,8 +51,11 @@ public final class RecipeCommitLedger {
     public void settleTick(int tick, boolean finishPending) {
         if (state.phase() == Phase.ERROR_PAUSED || state.outputPaid()) return;
         boolean finalTickPaid = state.finalTickPaid() || finishPending;
-        state = new State(finalTickPaid ? Phase.WAITING_FINISH : Phase.READY,
-                state.sequence(), state.paidAttempts(), tick, finalTickPaid, false);
+        Phase phase = finalTickPaid ? Phase.WAITING_FINISH : Phase.READY;
+        if (state.phase() == phase && state.tick() == tick
+                && state.finalTickPaid() == finalTickPaid) return;
+        state = new State(phase, state.sequence(), state.paidAttempts(),
+                tick, finalTickPaid, false);
     }
 
     public void markOutputPaid() {

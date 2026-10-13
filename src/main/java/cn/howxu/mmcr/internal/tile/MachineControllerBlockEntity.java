@@ -270,6 +270,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private transient Set<BlockPos> pendingStructureChanges = new HashSet<>();
     private transient @Nullable ServerLevel indexedFormedLevel;
     private transient Set<ChunkPos> indexedFormedChunks = Set.of();
+    private transient @Nullable StructureClaimRegistry cachedStructureClaimRegistry;
     private transient long cachedCouplerPositionsVersion = Long.MIN_VALUE;
     private transient Set<BlockPos> cachedCouplerWorldPositions = Set.of();
     private final Runnable upgradeBusChangeListener = this::onUpgradeBusContentsChanged;
@@ -1004,10 +1005,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public @Nullable StructureClaimRegistry.ResourceDomain resourceDomain() {
-        if (level instanceof ServerLevel serverLevel) {
-            return StructureClaimRegistry.get(serverLevel).domainFor(getBlockPos());
+        if (!(level instanceof ServerLevel serverLevel)) return null;
+        StructureClaimRegistry registry = cachedStructureClaimRegistry;
+        if (registry == null || registry.isDiscarded()) {
+            registry = StructureClaimRegistry.get(serverLevel);
+            cachedStructureClaimRegistry = registry;
         }
-        return null;
+        return registry.domainFor(getBlockPos());
     }
 
     public ResourceAvailabilityNotifier resourceAvailabilityNotifier() {
@@ -4490,6 +4494,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     public void setLevel(Level level) {
+        boolean changedLevel = this.level != level;
         if (this.level != null && this.level != level) {
             if (this.level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
             ControllerSyncEvents.forgetController(this);
@@ -4499,6 +4504,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             clientStateBaseline = false;
         }
         super.setLevel(level);
+        if (changedLevel) cachedStructureClaimRegistry = null;
     }
 
     @Override
@@ -4520,6 +4526,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         super.setRemoved();
         if (level != null && level.isClientSide()) clientRemovedListener.accept(this);
         if (level != null && !level.isClientSide() && !chunkUnloaded) resetMachine(true, false);
+        cachedStructureClaimRegistry = null;
     }
 
     @Override
@@ -4537,6 +4544,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             invalidateStructureScan(StructureMatcher.InvalidationReason.UNLOADED);
             clearStructureScan();
         }
+        cachedStructureClaimRegistry = null;
     }
 
     void bindDefaultMachine() {

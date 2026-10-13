@@ -43,6 +43,79 @@ class RecipeCommitLedgerTest {
     }
 
     @Test
+    void repeated_settlement_reuses_state_without_changing_payment_facts() {
+        LongValueStorage storage = chargedStorage(null);
+        RecipeCommitLedger ledger = new RecipeCommitLedger();
+        storage.extract(7L, false);
+        ledger.markResourcePaid(0, false);
+        ledger.settleTick(1, false);
+        RecipeCommitLedger.State settled = ledger.state();
+        ledger.settleTick(1, false);
+        assertThat(ledger.state()).isSameAs(settled);
+
+        ledger.settleTick(2, false);
+        RecipeCommitLedger.State advanced = ledger.state();
+        assertThat(advanced).isNotSameAs(settled);
+        assertThat(advanced.tick()).isEqualTo(2);
+        assertThat(advanced.paidAttempts()).isEqualTo(settled.paidAttempts());
+        assertThat(advanced.sequence()).isEqualTo(settled.sequence());
+        assertThat(settled.tick()).isEqualTo(1);
+
+        ledger.settleTick(2, true);
+        RecipeCommitLedger.State waiting = ledger.state();
+        assertThat(waiting).isNotSameAs(advanced);
+        ledger.settleTick(2, false);
+        assertThat(ledger.state()).isSameAs(waiting);
+        assertThat(waiting.phase()).isEqualTo(Phase.WAITING_FINISH);
+        assertThat(waiting.finalTickPaid()).isTrue();
+        assertThat(waiting.paidAttempts()).isEqualTo(settled.paidAttempts());
+        assertThat(waiting.sequence()).isEqualTo(settled.sequence());
+        assertThat(waiting.outputPaid()).isFalse();
+        assertThat(advanced.phase()).isEqualTo(Phase.READY);
+        assertThat(advanced.finalTickPaid()).isFalse();
+        assertThat(storage.amount()).isEqualTo(33L);
+    }
+
+    @Test
+    void same_tick_settlement_still_transitions_resource_paid_to_ready() {
+        RecipeCommitLedger ledger = new RecipeCommitLedger();
+        ledger.markResourcePaid(0, false);
+        RecipeCommitLedger.State paid = ledger.state();
+        ledger.settleTick(0, false);
+        assertThat(ledger.state()).isNotSameAs(paid);
+        assertThat(ledger.state().phase()).isEqualTo(Phase.READY);
+        assertThat(ledger.state().tick()).isEqualTo(paid.tick());
+        assertThat(ledger.state().paidAttempts()).isEqualTo(paid.paidAttempts());
+        assertThat(ledger.state().sequence()).isEqualTo(paid.sequence());
+        assertThat(paid.phase()).isEqualTo(Phase.RESOURCE_PAID);
+    }
+
+    @Test
+    void same_tick_settlement_still_transitions_uncertain_to_ready_after_state_reuse() {
+        RecipeCommitLedger ledger = new RecipeCommitLedger();
+        ledger.settleTick(1, false);
+        RecipeCommitLedger.State baseline = ledger.state();
+        ledger.settleTick(1, false);
+        assertThat(ledger.state()).isSameAs(baseline);
+
+        ledger.beginNativeExecution();
+        RecipeCommitLedger.State uncertain = ledger.state();
+        assertThat(uncertain.phase()).isEqualTo(Phase.UNCERTAIN);
+        ledger.settleTick(1, false);
+        RecipeCommitLedger.State settled = ledger.state();
+        assertThat(settled).isNotSameAs(uncertain);
+        assertThat(settled.phase()).isEqualTo(Phase.READY);
+        assertThat(settled.tick()).isEqualTo(baseline.tick());
+        assertThat(settled.sequence()).isEqualTo(uncertain.sequence());
+        assertThat(settled.paidAttempts()).isEqualTo(baseline.paidAttempts());
+        assertThat(settled.finalTickPaid()).isFalse();
+        assertThat(settled.outputPaid()).isFalse();
+        assertThat(uncertain.phase()).isEqualTo(Phase.UNCERTAIN);
+        ledger.settleTick(1, false);
+        assertThat(ledger.state()).isSameAs(settled);
+    }
+
+    @Test
     void later_native_failure_keeps_successful_payment_and_prevents_replay() {
         LongValueStorage storage = chargedStorage(null);
         RecipeCommitLedger ledger = new RecipeCommitLedger();

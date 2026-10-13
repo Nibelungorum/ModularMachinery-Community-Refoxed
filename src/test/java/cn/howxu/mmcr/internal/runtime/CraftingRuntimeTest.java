@@ -506,34 +506,52 @@ class CraftingRuntimeTest {
         assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
         CraftingStateSnapshot oldSnapshot = runtime.snapshot();
         var started = runtime.observation();
+        var startedBuffer = new CraftingRuntime.ObservationBuffer();
+        startedBuffer.capture(runtime);
         assertThat(started.matches(runtime)).isTrue();
+        assertThat(startedBuffer.matches(runtime)).isTrue();
         String recipeText = runtime.recipeIdText();
         assertThat(recipeText).isEqualTo(recipe.id().toString());
 
         runtime.tick();
         var progressed = runtime.observation();
+        var progressedBuffer = new CraftingRuntime.ObservationBuffer();
+        progressedBuffer.capture(runtime);
         assertThat(started.matches(runtime)).isFalse();
+        assertThat(startedBuffer.matches(runtime)).isFalse();
         assertThat(progressed.matches(runtime)).isTrue();
+        assertThat(progressedBuffer.matches(runtime)).isTrue();
         assertThat(progressed).isNotEqualTo(started);
         assertThat(progressed.tick()).isGreaterThan(started.tick());
         assertThat(runtime.recipeIdText()).isSameAs(recipeText);
         runtime.pause();
         var paused = runtime.observation();
+        var pausedBuffer = new CraftingRuntime.ObservationBuffer();
+        pausedBuffer.capture(runtime);
         assertThat(progressed.matches(runtime)).isFalse();
+        assertThat(progressedBuffer.matches(runtime)).isFalse();
         assertThat(paused.matches(runtime)).isTrue();
+        assertThat(pausedBuffer.matches(runtime)).isTrue();
         assertThat(paused.status()).isEqualTo(CraftingStatus.Status.PAUSED);
         runtime.resume();
         assertThat(paused.matches(runtime)).isFalse();
+        assertThat(pausedBuffer.matches(runtime)).isFalse();
         assertThat(progressed.matches(runtime)).isTrue();
+        assertThat(progressedBuffer.matches(runtime)).isTrue();
         assertThat(runtime.observation().status()).isEqualTo(CraftingStatus.Status.CRAFTING);
         runtime.recordSearchFailure(null);
         assertThat(progressed.matches(runtime)).isFalse();
+        assertThat(progressedBuffer.matches(runtime)).isFalse();
         assertThat(runtime.observation().failure()).isNotNull();
         assertThat(started.failure()).isNull();
         runtime.tick();
         assertThat(runtime.finish().getStatus()).isEqualTo(CraftingStatus.Status.IDLE);
         assertThat(started.matches(runtime)).isFalse();
+        assertThat(startedBuffer.matches(runtime)).isFalse();
+        var finishedBuffer = new CraftingRuntime.ObservationBuffer();
+        finishedBuffer.capture(runtime);
         assertThat(runtime.observation().matches(runtime)).isTrue();
+        assertThat(finishedBuffer.matches(runtime)).isTrue();
         assertThat(runtime.observation().recipeId()).isNull();
         assertThat(runtime.recipeIdText()).isEmpty();
         assertThat(oldSnapshot.tick()).isZero();
@@ -549,24 +567,34 @@ class CraftingRuntimeTest {
         CraftingStatus status = runtime.start(recipe("observation_metadata", 20, List.of()), 1L);
         runtime.activeRecipe().setMaxParallelism(4);
         var before = runtime.observation();
+        var buffer = new CraftingRuntime.ObservationBuffer();
+        buffer.capture(runtime);
         runtime.activeRecipe().setTick(1);
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         runtime.activeRecipe().setTick(before.tick());
         assertThat(before.matches(runtime)).isTrue();
+        assertThat(buffer.matches(runtime)).isTrue();
         runtime.activeRecipe().setTotalTick(30);
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         runtime.activeRecipe().setTotalTick(before.totalTick());
         runtime.activeRecipe().setMaxParallelism(8);
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         runtime.activeRecipe().setMaxParallelism(before.maxParallelism());
         runtime.activeRecipe().setParallelism(2);
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         runtime.activeRecipe().setParallelism(before.parallelism());
         assertThat(before.matches(runtime)).isTrue();
+        assertThat(buffer.matches(runtime)).isTrue();
         status.overrideStatusMessage("test.observation.message");
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         status.overrideStatusMessage(before.statusMessage());
         assertThat(before.matches(runtime)).isTrue();
+        assertThat(buffer.matches(runtime)).isTrue();
         assertThat(runtime.observation()).isEqualTo(before);
     }
 
@@ -578,16 +606,23 @@ class CraftingRuntimeTest {
         ActiveMachineRecipe active = runtime.activeRecipe();
         runtime.restore(active, null, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE, Long.MIN_VALUE);
         var before = runtime.observation();
+        var buffer = new CraftingRuntime.ObservationBuffer();
+        buffer.capture(runtime);
         runtime.restore(active, null, 0L, 0L, 0L, Long.MIN_VALUE);
         assertThat(before.matches(runtime)).isTrue();
+        assertThat(buffer.matches(runtime)).isTrue();
         runtime.restore(active, null, 1L, 0L, 0L, Long.MIN_VALUE);
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         runtime.restore(active, null, 0L, 2L, 0L, Long.MIN_VALUE);
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         runtime.restore(active, null, 0L, 0L, 3L, Long.MIN_VALUE);
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         runtime.restore(active, null, 0L, 0L, 0L, Long.MIN_VALUE);
         assertThat(before.matches(runtime)).isTrue();
+        assertThat(buffer.matches(runtime)).isTrue();
     }
 
     @Test
@@ -599,17 +634,41 @@ class CraftingRuntimeTest {
                         null, null, Map.of("detail", "first")));
         runtime.recordSearchFailure(original);
         var before = runtime.observation();
+        var buffer = new CraftingRuntime.ObservationBuffer();
+        buffer.capture(runtime);
         ExecutionStatus equal = ExecutionStatus.blocked(original.id(), original.source(),
                 FailureOccurrence.at(original.reason(), original.source(), FailurePhase.RECIPE_SEARCH,
                         null, null, Map.of("detail", "first")));
         runtime.recordSearchFailure(equal);
         assertThat(runtime.failure()).isNotSameAs(original);
         assertThat(before.matches(runtime)).isTrue();
+        assertThat(buffer.matches(runtime)).isTrue();
         runtime.recordSearchFailure(ExecutionStatus.blocked(original.id(), original.source(),
                 FailureOccurrence.at(original.reason(), original.source(), FailurePhase.RECIPE_SEARCH,
                         null, null, Map.of("detail", "changed"))));
         assertThat(before.matches(runtime)).isFalse();
+        assertThat(buffer.matches(runtime)).isFalse();
         assertThat(before.failure().details()).containsEntry("detail", "first");
+    }
+
+    @Test
+    void observation_buffers_keep_independent_outer_and_inner_baselines() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        runtime.start(recipe("buffer_nested_baseline", 20, List.of()), 1L);
+        var published = runtime.observation();
+        var outer = new CraftingRuntime.ObservationBuffer();
+        var inner = new CraftingRuntime.ObservationBuffer();
+        outer.capture(runtime);
+        runtime.activeRecipe().setTick(1);
+        inner.capture(runtime);
+        assertThat(outer.matches(runtime)).isFalse();
+        assertThat(inner.matches(runtime)).isTrue();
+        inner.clear();
+        runtime.activeRecipe().setTick(0);
+        assertThat(outer.matches(runtime)).isTrue();
+        assertThat(published.matches(runtime)).isTrue();
+        assertThat(published.tick()).isZero();
     }
 
     @Test

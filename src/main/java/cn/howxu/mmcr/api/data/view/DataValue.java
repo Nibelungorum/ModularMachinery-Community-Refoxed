@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.data.view;
 
+import com.google.common.collect.MapMaker;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.lang.reflect.Array;
@@ -16,6 +17,8 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public final class DataValue {
+    private static final Map<cn.howxu.mmcr.api.data.DataValue, DataValue> VALUE_CACHE =
+            new MapMaker().weakKeys().makeMap();
     private final Object value;
 
     private DataValue(Object value) {
@@ -131,6 +134,10 @@ public final class DataValue {
     }
 
     public static DataValue fromInternal(cn.howxu.mmcr.api.data.DataValue value) {
+        return VALUE_CACHE.computeIfAbsent(value, DataValue::convertInternal);
+    }
+
+    private static DataValue convertInternal(cn.howxu.mmcr.api.data.DataValue value) {
         Object internal = value.value();
         if (internal instanceof List<?> values) {
             return list(values.stream().map(cn.howxu.mmcr.api.data.DataValue.class::cast)

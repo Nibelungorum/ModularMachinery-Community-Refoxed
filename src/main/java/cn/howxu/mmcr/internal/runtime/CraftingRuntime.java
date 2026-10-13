@@ -1780,6 +1780,69 @@ public final class CraftingRuntime {
                 tickCount(), totalTick(), parallelism(), activeRecipe == null ? 1 : activeRecipe.getMaxParallelism());
     }
 
+    private boolean matchesObservation(@Nullable ResourceLocation recipeId, CraftingStatus.Status observedStatus,
+                                       @Nullable String statusMessage, @Nullable ExecutionStatus observedFailure,
+                                       long observedStructureVersion, long observedCapabilityVersion,
+                                       long observedModifierVersion, int tick, int totalTick,
+                                       long parallelism, long maxParallelism) {
+        MachineRecipe recipe = recipe();
+        return Objects.equals(recipeId, recipe == null ? null : recipe.id())
+                && observedStatus == status.getStatus()
+                && Objects.equals(statusMessage, status.getUnlocMessage())
+                && Objects.equals(observedFailure, failure)
+                && observedStructureVersion == (structureVersion == Long.MIN_VALUE ? 0L : structureVersion)
+                && observedCapabilityVersion == (capabilityVersion == Long.MIN_VALUE ? 0L : capabilityVersion)
+                && observedModifierVersion == (modifierVersion == Long.MIN_VALUE ? 0L : modifierVersion)
+                && tick == tickCount() && totalTick == totalTick()
+                && parallelism == parallelism() && maxParallelism == maxParallelism();
+    }
+
+    /**
+     * Scope-owned scalar baseline; never publish or share while borrowed.
+     *
+     * @author howxu <dev@howxu.cn>
+     */
+    static class ObservationBuffer {
+        private @Nullable ResourceLocation recipeId;
+        private CraftingStatus.Status observedStatus;
+        private @Nullable String statusMessage;
+        private @Nullable ExecutionStatus observedFailure;
+        private long observedStructureVersion;
+        private long observedCapabilityVersion;
+        private long observedModifierVersion;
+        private int tick;
+        private int totalTick;
+        private long parallelism;
+        private long maxParallelism;
+
+        void capture(CraftingRuntime runtime) {
+            MachineRecipe recipe = runtime.recipe();
+            recipeId = recipe == null ? null : recipe.id();
+            observedStatus = runtime.status.getStatus();
+            statusMessage = runtime.status.getUnlocMessage();
+            observedFailure = runtime.failure;
+            observedStructureVersion = runtime.structureVersion == Long.MIN_VALUE ? 0L : runtime.structureVersion;
+            observedCapabilityVersion = runtime.capabilityVersion == Long.MIN_VALUE ? 0L : runtime.capabilityVersion;
+            observedModifierVersion = runtime.modifierVersion == Long.MIN_VALUE ? 0L : runtime.modifierVersion;
+            tick = runtime.tickCount();
+            totalTick = runtime.totalTick();
+            parallelism = runtime.parallelism();
+            maxParallelism = runtime.maxParallelism();
+        }
+
+        boolean matches(CraftingRuntime runtime) {
+            return runtime.matchesObservation(recipeId, observedStatus, statusMessage, observedFailure,
+                    observedStructureVersion, observedCapabilityVersion, observedModifierVersion,
+                    tick, totalTick, parallelism, maxParallelism);
+        }
+
+        void clear() {
+            recipeId = null;
+            statusMessage = null;
+            observedFailure = null;
+        }
+    }
+
     /**
      * Immutable scalar state used for factory change detection.
      *
@@ -1789,16 +1852,9 @@ public final class CraftingRuntime {
                             @Nullable ExecutionStatus failure, long structureVersion, long capabilityVersion,
                             long modifierVersion, int tick, int totalTick, long parallelism, long maxParallelism) {
         boolean matches(CraftingRuntime runtime) {
-            MachineRecipe recipe = runtime.recipe();
-            return Objects.equals(recipeId, recipe == null ? null : recipe.id())
-                    && status == runtime.status.getStatus()
-                    && Objects.equals(statusMessage, runtime.status.getUnlocMessage())
-                    && Objects.equals(failure, runtime.failure)
-                    && structureVersion == (runtime.structureVersion == Long.MIN_VALUE ? 0L : runtime.structureVersion)
-                    && capabilityVersion == (runtime.capabilityVersion == Long.MIN_VALUE ? 0L : runtime.capabilityVersion)
-                    && modifierVersion == (runtime.modifierVersion == Long.MIN_VALUE ? 0L : runtime.modifierVersion)
-                    && tick == runtime.tickCount() && totalTick == runtime.totalTick()
-                    && parallelism == runtime.parallelism() && maxParallelism == runtime.maxParallelism();
+            return runtime.matchesObservation(recipeId, status, statusMessage, failure,
+                    structureVersion, capabilityVersion, modifierVersion,
+                    tick, totalTick, parallelism, maxParallelism);
         }
     }
 
