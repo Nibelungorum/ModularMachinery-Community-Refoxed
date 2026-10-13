@@ -6,10 +6,12 @@ import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
+import appeng.api.stacks.AEKeyTypes;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.internal.capability.NativeReservationAccess;
 import net.minecraft.core.HolderLookup;
@@ -119,7 +121,13 @@ public final class AE2NativeAdapters {
 
     /** Creates an isolated slot-accurate view for cumulative return-inventory simulation. */
     public static GenericStackInv copyForSimulation(GenericStackInv inventory) {
-        GenericStackInv copy = new SimulatedInventory(inventory);
+        GenericStackInv copy;
+        if (inventory instanceof PatternReturnInventory) {
+            copy = new PatternReturnInventory(() -> {});
+            for (AEKeyType type : AEKeyTypes.getAll()) copy.setCapacity(type, inventory.getCapacity(type));
+        } else {
+            copy = new SimulatedInventory(inventory);
+        }
         copy.beginBatch();
         try {
             for (int slot = 0; slot < inventory.size(); slot++) copy.setStack(slot, inventory.getStack(slot));
@@ -262,6 +270,16 @@ public final class AE2NativeAdapters {
         @Override public Object resource(Object key) { return key instanceof AEItemKey item ? item.toStack(1) : ItemStack.EMPTY; }
         @Override public Object storedKey(int slot) { return inventory.getKey(slot); }
         @Override public long storedAmount(int slot) { return inventory.getAmount(slot); }
+        @Override public long insertionBudget(Object key) {
+            return inventory instanceof PatternReturnInventory returns ? returns.remainingCapacity((AEKey) key) : -1L;
+        }
+        @Override public long transfer(int slot, Object resource, long amount, boolean insert, boolean simulate) {
+            AEItemKey key = AEItemKey.of((ItemStack) resource);
+            return insert ? inventory.insert(slot, key, amount, mode(simulate))
+                    : inventory.extract(slot, key, amount, mode(simulate));
+        }
+        @Override public boolean supportsLargeStacks() { return inventory instanceof PatternReturnInventory; }
+        @Override public boolean requiresServerOutputPlanning() { return inventory instanceof PatternReturnInventory; }
 
         @Override public ItemStack getStackInSlot(int slot) {
             AEKey key = inventory.getKey(slot);
@@ -284,7 +302,7 @@ public final class AE2NativeAdapters {
 
         @Override public int getSlotLimit(int slot) {
             AEKey key = inventory.getKey(slot);
-            return AE2NativeAdapters.amount(key == null ? inventory.getCapacity(AEKeyType.items()) : inventory.getMaxAmount(key));
+            return AE2NativeAdapters.amount(PatternReturnInventory.slotLimit(inventory, slot, key, AEKeyType.items()));
         }
 
         @Override public boolean isItemValid(int slot, ItemStack stack) {
@@ -297,8 +315,12 @@ public final class AE2NativeAdapters {
 
         @Override public long capacity(int slot) {
             AEKey key = inventory.getKey(slot);
-            return key == null ? inventory.getCapacity(AEKeyType.items())
-                    : key instanceof AEItemKey ? inventory.getMaxAmount(key) : 0L;
+            return key == null || key instanceof AEItemKey
+                    ? PatternReturnInventory.slotLimit(inventory, slot, key, AEKeyType.items()) : 0L;
+        }
+
+        @Override public long capacity(int slot, ItemStack resource) {
+            return PatternReturnInventory.slotLimit(inventory, slot, AEItemKey.of(resource), AEKeyType.items());
         }
 
         @Override public void setContents(int slot, ItemStack stack, long amount) {
@@ -309,8 +331,21 @@ public final class AE2NativeAdapters {
         }
 
         @Override public boolean isSyncCapacityValid(int slot, ItemStack stack, long capacity) {
-            return stack.isEmpty() ? capacity == 0L || capacity == inventory.getCapacity(AEKeyType.items())
-                    : capacity == inventory.getMaxAmount(AEItemKey.of(stack));
+            return stack.isEmpty() ? capacity == 0L
+                    || capacity == PatternReturnInventory.slotLimit(inventory, slot, null, AEKeyType.items())
+                    : capacity == PatternReturnInventory.slotLimit(inventory, slot, AEItemKey.of(stack), AEKeyType.items());
+        }
+
+        @Override public void setContents(ItemStack[] stacks, long[] amounts) {
+            if (!(inventory instanceof PatternReturnInventory returns)) {
+                NativeStackSync.Item.super.setContents(stacks, amounts);
+                return;
+            }
+            GenericStack[] projection = new GenericStack[stacks.length];
+            for (int slot = 0; slot < stacks.length; slot++) {
+                if (!stacks[slot].isEmpty() && amounts[slot] > 0L) projection[slot] = new GenericStack(AEItemKey.of(stacks[slot]), amounts[slot]);
+            }
+            returns.replaceProjection(AEKeyType.items(), projection);
         }
     }
 
@@ -329,6 +364,15 @@ public final class AE2NativeAdapters {
         @Override public Object resource(Object key) { return key instanceof AEFluidKey fluid ? fluid.toStack(1) : FluidStack.EMPTY; }
         @Override public Object storedKey(int slot) { return inventory.getKey(slot); }
         @Override public long storedAmount(int slot) { return inventory.getAmount(slot); }
+        @Override public long insertionBudget(Object key) {
+            return inventory instanceof PatternReturnInventory returns ? returns.remainingCapacity((AEKey) key) : -1L;
+        }
+        @Override public boolean requiresServerOutputPlanning() { return inventory instanceof PatternReturnInventory; }
+        @Override public long transfer(int slot, Object resource, long amount, boolean insert, boolean simulate) {
+            AEFluidKey key = AEFluidKey.of((FluidStack) resource);
+            return insert ? inventory.insert(slot, key, amount, mode(simulate))
+                    : inventory.extract(slot, key, amount, mode(simulate));
+        }
 
         @Override public FluidStack getFluidInTank(int tank) {
             AEKey key = inventory.getKey(tank);
@@ -337,7 +381,7 @@ public final class AE2NativeAdapters {
 
         @Override public int getTankCapacity(int tank) {
             AEKey key = inventory.getKey(tank);
-            return AE2NativeAdapters.amount(key == null ? inventory.getCapacity(AEKeyType.fluids()) : inventory.getMaxAmount(key));
+            return AE2NativeAdapters.amount(PatternReturnInventory.slotLimit(inventory, tank, key, AEKeyType.fluids()));
         }
 
         @Override public boolean isFluidValid(int tank, FluidStack stack) {
@@ -348,6 +392,9 @@ public final class AE2NativeAdapters {
         @Override public int fill(FluidStack stack, FluidAction action) {
             AEFluidKey key = AEFluidKey.of(stack);
             if (key == null) return 0;
+            if (inventory instanceof PatternReturnInventory) {
+                return AE2NativeAdapters.amount(inventory.insert(key, stack.getAmount(), mode(action.simulate()), IActionSource.empty()));
+            }
             long inserted = 0L;
             for (int tank = 0; tank < getTanks() && inserted < stack.getAmount(); tank++) {
                 inserted += inventory.insert(tank, key, stack.getAmount() - inserted, mode(action.simulate()));
@@ -380,8 +427,8 @@ public final class AE2NativeAdapters {
 
         @Override public long capacity(int tank) {
             AEKey key = inventory.getKey(tank);
-            return key == null ? inventory.getCapacity(AEKeyType.fluids())
-                    : key instanceof AEFluidKey ? inventory.getMaxAmount(key) : 0L;
+            return key == null || key instanceof AEFluidKey
+                    ? PatternReturnInventory.slotLimit(inventory, tank, key, AEKeyType.fluids()) : 0L;
         }
 
         @Override public void setContents(int tank, FluidStack stack, long amount) {
@@ -392,8 +439,21 @@ public final class AE2NativeAdapters {
         }
 
         @Override public boolean isSyncCapacityValid(int tank, FluidStack stack, long capacity) {
-            return stack.isEmpty() ? capacity == 0L || capacity == inventory.getCapacity(AEKeyType.fluids())
-                    : capacity == inventory.getMaxAmount(AEFluidKey.of(stack));
+            return stack.isEmpty() ? capacity == 0L
+                    || capacity == PatternReturnInventory.slotLimit(inventory, tank, null, AEKeyType.fluids())
+                    : capacity == PatternReturnInventory.slotLimit(inventory, tank, AEFluidKey.of(stack), AEKeyType.fluids());
+        }
+
+        @Override public void setContents(FluidStack[] stacks, long[] amounts) {
+            if (!(inventory instanceof PatternReturnInventory returns)) {
+                NativeStackSync.Fluid.super.setContents(stacks, amounts);
+                return;
+            }
+            GenericStack[] projection = new GenericStack[stacks.length];
+            for (int slot = 0; slot < stacks.length; slot++) {
+                if (!stacks[slot].isEmpty() && amounts[slot] > 0L) projection[slot] = new GenericStack(AEFluidKey.of(stacks[slot]), amounts[slot]);
+            }
+            returns.replaceProjection(AEKeyType.fluids(), projection);
         }
     }
 

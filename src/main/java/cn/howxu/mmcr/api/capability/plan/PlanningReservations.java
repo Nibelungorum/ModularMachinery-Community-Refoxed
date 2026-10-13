@@ -131,8 +131,7 @@ public final class PlanningReservations {
 
     public boolean reserveItemInsert(IItemHandler handler, int slot, ItemStack stack, long amount, long capacity) {
         if (handler instanceof NativeReservationAccess access) {
-            return reserveNativeInsert(access.reservationIdentity(), access.reservationSlot(slot),
-                    access.resourceKey(stack), access.storedKey(slot), access.storedAmount(slot), capacity, amount);
+            return reserveNativeInsert(access, slot, access.resourceKey(stack), capacity, amount);
         }
         return reserveInsert(handler, slot, stack, amount, capacity, ItemStack::isSameItemSameComponents,
                 (storage, reservedSlot) -> itemAmount((IItemHandler) storage, reservedSlot));
@@ -151,8 +150,7 @@ public final class PlanningReservations {
 
     public boolean reserveFluidInsert(IFluidHandler handler, int tank, FluidStack stack, long amount, long capacity) {
         if (handler instanceof NativeReservationAccess access) {
-            return reserveNativeInsert(access.reservationIdentity(), access.reservationSlot(tank),
-                    access.resourceKey(stack), access.storedKey(tank), access.storedAmount(tank), capacity, amount);
+            return reserveNativeInsert(access, tank, access.resourceKey(stack), capacity, amount);
         }
         return reserveInsert(handler, tank, stack, amount, capacity, FluidStack::isSameFluidSameComponents,
                 (storage, reservedTank) -> fluidAmount((IFluidHandler) storage, reservedTank));
@@ -181,6 +179,23 @@ public final class PlanningReservations {
         nativeSlots.computeIfAbsent(identity, ignored -> new HashMap<>())
                 .put(slot, new NativeSlotState(key, current + amount));
         return true;
+    }
+
+    public long nativeOutputAvailable(Object handler, Object resource) {
+        if (!(handler instanceof NativeReservationAccess access)) return Long.MAX_VALUE;
+        return nativeKeyOutputAvailable(access, access.resourceKey(resource));
+    }
+
+    private long nativeKeyOutputAvailable(NativeReservationAccess access, Object key) {
+        long budget = access.insertionBudget(key);
+        return budget < 0L ? Long.MAX_VALUE : outputAvailable(access.reservationIdentity(), key, budget);
+    }
+
+    public boolean reserveNativeInsert(NativeReservationAccess access, int slot, Object key, long capacity, long amount) {
+        if (amount > nativeKeyOutputAvailable(access, key)) return false;
+        if (!reserveNativeInsert(access.reservationIdentity(), access.reservationSlot(slot), key,
+                access.storedKey(slot), access.storedAmount(slot), capacity, amount)) return false;
+        return access.insertionBudget(key) < 0L || reserveOutput(access.reservationIdentity(), key, amount);
     }
 
     public boolean reserveNativeExtract(Object identity, Object slot, Object key, Object storedKey,

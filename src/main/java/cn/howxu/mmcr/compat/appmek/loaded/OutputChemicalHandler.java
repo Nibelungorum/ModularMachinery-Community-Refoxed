@@ -92,7 +92,7 @@ public final class OutputChemicalHandler implements IChemicalHandler, NativeRese
     }
 
     @Override public Object reservationIdentity() { return local.reservationIdentity(); }
-    boolean isSyncCapacityValid(ChemicalStack stack, long capacity) { return local.isSyncCapacityValid(stack, capacity); }
+    boolean isSyncCapacityValid(int tank, ChemicalStack stack, long capacity) { return local.isSyncCapacityValid(tank, stack, capacity); }
     @Override public Object reservationSlot(int slot) { return slot; }
     @Override public Object resourceKey(Object resource) { return local.resourceKey(resource); }
     @Override public Object resource(Object key) { return local.resource(key); }

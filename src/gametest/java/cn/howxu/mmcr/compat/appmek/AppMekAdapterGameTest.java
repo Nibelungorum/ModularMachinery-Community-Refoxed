@@ -21,6 +21,7 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.compat.kubejs.KubeJSApi;
 import cn.howxu.mmcr.internal.api.facade.runtime.IoAdapters;
 import cn.howxu.mmcr.internal.api.facade.recipe.RecipeAdapters;
@@ -30,6 +31,10 @@ import cn.howxu.mmcr.compat.appmek.loaded.MEChemicalCapability;
 import cn.howxu.mmcr.compat.appmek.loaded.NetworkChemicalHandler;
 import cn.howxu.mmcr.compat.appmek.loaded.OutputChemicalHandler;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
+import net.minecraft.core.BlockPos;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import me.ramidzkh.mekae2.ae2.MekanismKey;
 import mekanism.api.Action;
@@ -56,6 +61,52 @@ import cn.howxu.mmcr.util.IOType;
  * @author howxu <dev@howxu.cn>
  */
 public final class AppMekAdapterGameTest {
+    public void patternReturnBudgetsAndSyncRemainExact(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        PatternInterfaceBlockEntity host = helper.getBlockEntity(BlockPos.ZERO);
+        var inventory = host.getLogic().getReturnInv();
+        var oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical("oxygen", 1L));
+        inventory.insert(9, oxygen, Long.MAX_VALUE - 5L, Actionable.MODULATE);
+        var handler = new InventoryChemicalHandler(inventory);
+        var output = new MEChemicalCapability(null, handler, CapabilityDirections.output(), false);
+        var context = new CraftingContext(new CapabilitySnapshot(List.of(output)));
+        var blocked = context.planOutputRequirements(List.of(new LoadedChemicalRequirement(
+                RecipeModifier.IOType.OUTPUT,
+                ChemicalIngredient.chemical(oxygen.getId(), 10L), 1F, List.of(), 1F)), 1L, false);
+        helper.assertTrue(!blocked.successful() && inventory.getAmount(9) == Long.MAX_VALUE - 5L,
+                "Chemical output admission does not reuse one complete-key budget across physical slots");
+        helper.assertTrue(output.outputCapacity(oxygen.getId()) == 5L
+                        && handler.insertChemical(oxygen.withAmount(10L), Action.SIMULATE).getAmount() == 5L,
+                "Chemical capacity queries and aggregate simulation share one key budget rather than multiplying it by tanks");
+        inventory.insert(0, oxygen, 5L, Actionable.MODULATE);
+        var source = PatternInterfaceKind.INSTANCE.entityFactory().create(helper.absolutePos(new BlockPos(2, 0, 0)),
+                ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        var next = source.getLogic().getReturnInv();
+        next.insert(0, oxygen, 10L, Actionable.MODULATE);
+        next.insert(9, oxygen, Long.MAX_VALUE - 10L, Actionable.MODULATE);
+        var sourceOutput = new MEChemicalCapability(null, new InventoryChemicalHandler(next), CapabilityDirections.output(), false);
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+        try {
+            sourceOutput.encode(buffer);
+            output.decode(buffer);
+        } finally {
+            buffer.release();
+        }
+        helper.assertTrue(inventory.getAmount(0) == 10L && inventory.getAmount(9) == Long.MAX_VALUE - 10L
+                        && inventory.getAvailableStacks().get(oxygen) == Long.MAX_VALUE,
+                "Chemical sync validates hidden capacities and replaces the full new projection without old-balance clipping");
+        inventory.clear();
+        next.clear();
+        var huge = context.planOutputRequirements(List.of(new LoadedChemicalRequirement(
+                RecipeModifier.IOType.OUTPUT,
+                ChemicalIngredient.chemical(oxygen.getId(), Long.MAX_VALUE), 1F, List.of(), 1F)), 1L, false);
+        helper.assertTrue(huge.successful() && huge.plan().commit()
+                        && inventory.getAvailableStacks().get(oxygen) == Long.MAX_VALUE,
+                "Native AppMek output execution retains exact chemical quantities through Long.MAX_VALUE");
+        inventory.clear();
+        helper.succeed();
+    }
+
     public void queriesAndExistingApisSeeAllChemicalKinds(GameTestHelper helper) {
         GenericStackInv inventory = AppMekGameTestFixtures.inventory(3, 5_000L);
         MekanismKey oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical("oxygen", 1L));

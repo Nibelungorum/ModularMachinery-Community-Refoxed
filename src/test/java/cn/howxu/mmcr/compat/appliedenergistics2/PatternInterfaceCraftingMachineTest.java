@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
+import cn.howxu.mmcr.mixin.compat.appliedenergistics2.CraftingCpuLogicMixin;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -56,6 +57,7 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -83,6 +85,52 @@ class PatternInterfaceCraftingMachineTest {
     @AfterEach
     void cleanup() {
         RecipeRegistry.clearForTesting();
+    }
+
+    @Test
+    void cpu_counter_merges_bound_each_complete_key_without_mutation() throws Exception {
+        Method merge = CraftingCpuLogicMixin.class.getDeclaredMethod("mmcr$canMergeCounters", KeyCounter.class, KeyCounter.class);
+        merge.setAccessible(true);
+        KeyCounter current = counter(Items.IRON_INGOT, Long.MAX_VALUE - 1L);
+        assertThat(merge.invoke(null, current, counter(Items.IRON_INGOT, 1L))).isEqualTo(true);
+        assertThat(merge.invoke(null, current, counter(Items.IRON_INGOT, 2L))).isEqualTo(false);
+        assertThat(merge.invoke(null, current, counter(Items.GOLD_INGOT, Long.MAX_VALUE))).isEqualTo(true);
+        assertThat(current.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(Long.MAX_VALUE - 1L);
+    }
+
+    @Test
+    void cpu_output_budget_includes_waiting_outputs_and_container_items() throws Exception {
+        Method track = CraftingCpuLogicMixin.class.getDeclaredMethod("mmcr$canTrackOutputs", KeyCounter.class, KeyCounter[].class);
+        track.setAccessible(true);
+        KeyCounter waiting = counter(Items.IRON_INGOT, Long.MAX_VALUE - 5L);
+        assertThat(track.invoke(null, waiting, new KeyCounter[]{counter(Items.IRON_INGOT, 5L)})).isEqualTo(true);
+        assertThat(track.invoke(null, waiting, new KeyCounter[]{counter(Items.IRON_INGOT, 6L)})).isEqualTo(false);
+        assertThat(track.invoke(null, waiting, new KeyCounter[]{counter(Items.IRON_INGOT, 3L),
+                counter(Items.IRON_INGOT, 3L)})).isEqualTo(false);
+        assertThat(track.invoke(null, waiting, new KeyCounter[]{counter(Items.IRON_INGOT, 5L),
+                counter(Items.GOLD_INGOT, Long.MAX_VALUE)})).isEqualTo(true);
+        assertThat(waiting.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(Long.MAX_VALUE - 5L);
+    }
+
+    @Test
+    void factory_batch_capacity_saturates_and_rejects_exhausted_thread_limits() throws Exception {
+        Method capacity = PatternInterfaceBlockEntity.class.getDeclaredMethod("batchCapacity", long.class, long.class);
+        capacity.setAccessible(true);
+        assertThat(capacity.invoke(null, 2L, Long.MAX_VALUE)).isEqualTo(Long.MAX_VALUE);
+        assertThat(capacity.invoke(null, 2L, Long.MAX_VALUE / 2L)).isEqualTo(Long.MAX_VALUE - 1L);
+        assertThat(capacity.invoke(null, 0L, Long.MAX_VALUE)).isEqualTo(0L);
+        assertThat(capacity.invoke(null, -2L, Long.MAX_VALUE)).isEqualTo(0L);
+    }
+
+    @Test
+    void batch_resource_limit_combines_equal_keys_without_cross_resource_overflow() throws Exception {
+        Method limit = PatternInterfaceCraftingMachine.class.getDeclaredMethod("batchResourceLimit", List.class);
+        limit.setAccessible(true);
+        var iron = AEItemKey.of(Items.IRON_INGOT);
+        var gold = AEItemKey.of(Items.GOLD_INGOT);
+        assertThat(limit.invoke(null, List.of(new GenericStack(iron, 2L), new GenericStack(iron, 3L)))).isEqualTo(Long.MAX_VALUE / 5L);
+        assertThat(limit.invoke(null, List.of(new GenericStack(iron, Long.MAX_VALUE), new GenericStack(iron, 1L)))).isEqualTo(0L);
+        assertThat(limit.invoke(null, List.of(new GenericStack(iron, Long.MAX_VALUE), new GenericStack(gold, Long.MAX_VALUE)))).isEqualTo(1L);
     }
 
     @Test

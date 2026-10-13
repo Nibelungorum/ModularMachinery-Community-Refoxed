@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.internal.capability.NativeReservationAccess;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
@@ -773,8 +775,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                         long simulated = remaining - handler.insertChemical(slot,
                                 requestedResource.copyWithAmount(remaining), Action.SIMULATE).getAmount();
                         long moved = Math.min(simulated, Math.max(0L, capacity - currentAmount));
-                        if (reservations.reserveNativeInsert(identity, slotKey, port.planningKey(requestedResource),
-                                storedKey, storedAmount, capacity, moved)) {
+                        moved = Math.min(moved, reservations.nativeOutputAvailable(handler, requestedResource));
+                        boolean reserved = handler instanceof NativeReservationAccess access
+                                ? reservations.reserveNativeInsert(access, slot, port.planningKey(requestedResource), capacity, moved)
+                                : reservations.reserveNativeInsert(identity, slotKey, port.planningKey(requestedResource),
+                                        storedKey, storedAmount, capacity, moved);
+                        if (reserved) {
                             actions.computeIfAbsent(port, ignored -> new ArrayList<>())
                                     .add(new CapabilityRequests.ResourceAction<>(slot, requestedResource, moved, true));
                             remaining -= moved;

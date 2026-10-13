@@ -145,10 +145,11 @@ final class NativeRequirementPlanning {
                         || !requirement.components().matches(current))) continue;
                 if (insert && !handler.isItemValid(slot, output)
                         || insert && !current.isEmpty() && !ItemStack.isSameItemSameComponents(current, output)) continue;
-                long capacity = itemCapacity(handler, slot);
+                long capacity = insert ? itemCapacity(handler, slot, output) : itemCapacity(handler, slot);
                 if (insert && !facet.supportsLargeStacks()) capacity = Math.min(capacity, output.getMaxStackSize());
                 long moved = Math.min(remaining, insert ? capacity - reservations.itemAmount(handler, slot)
-                        : reservations.itemAmount(handler, slot));
+                         : reservations.itemAmount(handler, slot));
+                if (insert) moved = Math.min(moved, reservations.nativeOutputAvailable(handler, output));
                 if (moved <= 0L) continue;
                 if (insert ? !reservations.reserveItemInsert(handler, slot, output, moved, capacity)
                         : !reservations.reserveItemExtract(handler, slot, current, moved)) continue;
@@ -182,7 +183,8 @@ final class NativeRequirementPlanning {
                 if (insert && !handler.isFluidValid(tank, output)
                         || insert && !current.isEmpty() && !FluidStack.isSameFluidSameComponents(current, output)) continue;
                 long moved = Math.min(remaining, insert ? fluidCapacity(handler, tank) - reservations.fluidAmount(handler, tank)
-                        : reservations.fluidAmount(handler, tank));
+                         : reservations.fluidAmount(handler, tank));
+                if (insert) moved = Math.min(moved, reservations.nativeOutputAvailable(handler, output));
                 if (moved <= 0L) continue;
                 if (insert ? !reservations.reserveFluidInsert(handler, tank, output, moved, fluidCapacity(handler, tank))
                         : !reservations.reserveFluidExtract(handler, tank, current, moved)) continue;
@@ -283,7 +285,7 @@ final class NativeRequirementPlanning {
             ItemStack stack = handler.getStackInSlot(slot);
             if (insert) {
                 if (handler.isItemValid(slot, output) && (stack.isEmpty() || ItemStack.isSameItemSameComponents(stack, output))) {
-                    long capacity = itemCapacity(handler, slot);
+                    long capacity = itemCapacity(handler, slot, output);
                     if (!supportsLargeStacks) capacity = Math.min(capacity, output.getMaxStackSize());
                     result = RequirementHandlerSupport.saturatingAdd(result,
                             Math.max(0L, capacity - itemAmount(handler, slot)));
@@ -345,6 +347,10 @@ final class NativeRequirementPlanning {
     private static long itemCapacity(IItemHandler handler, int slot) {
         return handler instanceof LongItemStorage storage ? storage.capacity(slot)
                 : handler instanceof NativeStackSync.Item sync ? sync.capacity(slot) : handler.getSlotLimit(slot);
+    }
+
+    private static long itemCapacity(IItemHandler handler, int slot, ItemStack resource) {
+        return handler instanceof NativeStackSync.Item sync ? sync.capacity(slot, resource) : itemCapacity(handler, slot);
     }
 
     private static long fluidAmount(IFluidHandler handler, int tank) {

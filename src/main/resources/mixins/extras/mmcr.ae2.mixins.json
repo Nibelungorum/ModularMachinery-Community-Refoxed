@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "ConfigInventoryAccessor",
+    "GenericStackInvAccessor",
     "InterfaceLogicMixin",
     "PatternProviderLogicMixin",
     "PatternProviderLogicBatchAccessMixin",

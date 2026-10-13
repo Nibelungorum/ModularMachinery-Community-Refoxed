@@ -6,6 +6,7 @@ import appeng.api.implementations.blockentities.ICraftingMachine;
 import appeng.api.implementations.blockentities.PatternContainerGroup;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.networking.security.IActionSource;
@@ -16,6 +17,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -30,6 +32,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -65,7 +69,22 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         if (outputs == null) return 0L;
         long machineCap = host.maxPatternBatchSize();
         long recipeCap = host.maxRecipeBatchSize(outputs);
-        return Math.min(machineCap, recipeCap);
+        long resourceCap = Math.min(batchResourceLimit(pattern.getSparseInputs()), batchResourceLimit(pattern.getOutputs()));
+        return Math.min(resourceCap, Math.min(machineCap, recipeCap));
+    }
+
+    private static long batchResourceLimit(List<GenericStack> stacks) {
+        Map<AEKey, Long> amounts = new HashMap<>();
+        for (GenericStack stack : stacks) {
+            if (stack == null) continue;
+            if (stack.amount() <= 0L) return 0L;
+            long previous = amounts.getOrDefault(stack.what(), 0L);
+            if (stack.amount() > Long.MAX_VALUE - previous) return 0L;
+            amounts.put(stack.what(), previous + stack.amount());
+        }
+        long limit = Long.MAX_VALUE;
+        for (long amount : amounts.values()) limit = Math.min(limit, Long.MAX_VALUE / amount);
+        return limit;
     }
 
     public boolean pushBatchPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, long batchSize,
@@ -158,7 +177,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                 for (int target = 0; debt != null && target < returns.size(); target++) {
                     GenericStack before = returns.getStack(target);
                     long beforeAmount = before != null && before.what().equals(debt.what()) ? before.amount() : 0L;
-                    long requested = Math.min(debt.amount(), Math.max(0L, returns.getMaxAmount(debt.what()) - beforeAmount));
+                    long capacity = PatternReturnInventory.slotCapacity(returns, target, debt.what(), debt.what().getType());
+                    long requested = Math.min(debt.amount(), Math.max(0L, capacity - beforeAmount));
                     if (requested == 0L) continue;
                     try {
                         returns.insert(target, debt.what(), requested, Actionable.MODULATE);
@@ -210,7 +230,7 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         for (int slot = 0; slot < pendingRequest.inventory.size(); slot++) {
             GenericStack stack = pendingRequest.inventory.getStack(slot);
             if (stack == null) continue;
-            stack.what().addDrops(stack.amount(), drops, host.getLevel(), host.getBlockPos());
+            PatternReturnInventory.addDrops(stack, drops, host.getLevel(), host.getBlockPos());
             pendingRequest.inventory.setStack(slot, null);
         }
         pendingRequest = null;

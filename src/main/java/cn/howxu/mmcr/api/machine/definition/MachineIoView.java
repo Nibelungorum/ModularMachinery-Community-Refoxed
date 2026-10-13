@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.compat.pneumaticcraft.AirState;
 import cn.howxu.mmcr.api.compat.pneumaticcraft.PneumaticAirFacet;
 import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
+import cn.howxu.mmcr.internal.capability.NativeReservationAccess;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -310,20 +311,24 @@ public final class MachineIoView {
     public long itemOutputCapacity(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return 0L;
         long capacity = 0L;
+        PlanningReservations reservations = new PlanningReservations();
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
             ItemHandlerFacet nativeFacet = capability.facet(ItemHandlerFacet.class).orElse(null);
             if (nativeFacet != null && nativeFacet.itemHandler() != null) {
                 var handler = nativeFacet.itemHandler();
+                long localCapacity = 0L;
                 for (int slot = 0; slot < handler.getSlots(); slot++) {
                     ItemStack current = itemResource(handler, slot);
                     if (handler.isItemValid(slot, stack) && (current.isEmpty() || ItemStack.isSameItemSameComponents(current, stack))) {
-                        long slotCapacity = itemCapacity(handler, slot);
+                        long slotCapacity = handler instanceof NativeStackSync.Item sync
+                                ? sync.capacity(slot, stack) : itemCapacity(handler, slot);
                         if (!nativeFacet.supportsLargeStacks()) {
                             slotCapacity = Math.min(slotCapacity, stack.getMaxStackSize());
                         }
-                        capacity = saturatedAdd(capacity, Math.max(0L, slotCapacity - itemAmount(handler, slot)));
+                        localCapacity = saturatedAdd(localCapacity, Math.max(0L, slotCapacity - itemAmount(handler, slot)));
                     }
                 }
+                capacity = saturatedAdd(capacity, boundedOutputCapacity(handler, stack, localCapacity, reservations));
                 continue;
             }
         }
@@ -333,20 +338,33 @@ public final class MachineIoView {
     public long fluidOutputCapacity(FluidStack stack) {
         if (stack == null || stack.isEmpty()) return 0L;
         long capacity = 0L;
+        PlanningReservations reservations = new PlanningReservations();
         for (MachineCapability capability : capabilities(IOType.OUTPUT)) {
             FluidHandlerFacet nativeFacet = capability.facet(FluidHandlerFacet.class).orElse(null);
             if (nativeFacet != null && nativeFacet.fluidHandler() != null) {
                 var handler = nativeFacet.fluidHandler();
+                long localCapacity = 0L;
                 for (int tank = 0; tank < handler.getTanks(); tank++) {
                     FluidStack current = handler.getFluidInTank(tank);
                     if (handler.isFluidValid(tank, stack) && (current.isEmpty() || FluidStack.isSameFluidSameComponents(current, stack))) {
-                        capacity = saturatedAdd(capacity, Math.max(0L, fluidCapacity(handler, tank) - fluidAmount(handler, tank)));
+                        localCapacity = saturatedAdd(localCapacity, Math.max(0L, fluidCapacity(handler, tank) - fluidAmount(handler, tank)));
                     }
                 }
+                capacity = saturatedAdd(capacity, boundedOutputCapacity(handler, stack, localCapacity, reservations));
                 continue;
             }
         }
         return capacity;
+    }
+
+    private static long boundedOutputCapacity(Object handler, Object resource, long capacity, PlanningReservations reservations) {
+        if (!(handler instanceof NativeReservationAccess access)) return capacity;
+        Object key = access.resourceKey(resource);
+        long budget = access.insertionBudget(key);
+        if (budget < 0L) return capacity;
+        long available = Math.min(capacity, reservations.outputAvailable(access.reservationIdentity(), key, budget));
+        if (available > 0L) reservations.reserveOutput(access.reservationIdentity(), key, available);
+        return available;
     }
 
     public long energyOutputCapacity() {

@@ -55,6 +55,88 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public class AE2PatternOutputComponentGameTest {
+    public void craftingCpuSettlesLargeInputsOutputsAndLeftovers(GameTestHelper helper) {
+        var machineId = MMCR.id("ae2_large_pattern_return_test");
+        var recipeId = MMCR.id("ae2_large_pattern_return_recipe");
+        BlockPos portPos = new BlockPos(0, 1, 0);
+        BlockPos chestPos = new BlockPos(3, 0, 0);
+        BlockPos energyPos = new BlockPos(3, 0, 2);
+        BlockPos cpuPos = new BlockPos(3, 0, 4);
+        helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        helper.setBlock(portPos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        helper.setBlock(cpuPos, AEBlocks.CRAFTING_STORAGE_64K.block().defaultBlockState());
+        var machine = new DynamicMachine(machineId, "AE2 Large Pattern Return Test", new BlockArray(Map.of(
+                portPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get()))));
+        if (!MachineRegistry.containsStatic(machineId)) MachineRegistry.register(machine);
+        ItemStack output = new ItemStack(Items.GOLD_INGOT, 20_000);
+        if (!RecipeRegistry.containsStatic(recipeId)) {
+            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 1,
+                    List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                            MachineRequirement.itemOutput(output)), List.of(new MachineOutput.ItemOutput(output, 1F)),
+                    List.of(), 0, 1, false, false, false, Set.of()));
+        }
+        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
+        controller.setMachine(machine);
+        controller.setStructureCheckIntervalForTesting(1);
+        PatternInterfaceBlockEntity port = helper.getBlockEntity(portPos);
+        MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
+        chest.setCell(AEItems.ITEM_CELL_64K.stack());
+        CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
+        CraftingBlockEntity cpuBlock = helper.getBlockEntity(cpuPos);
+        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
+        AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
+        helper.startSequence().thenWaitUntil(() -> {
+            helper.assertTrue(port.getMainNode().getNode() != null && chest.getMainNode().getNode() != null
+                            && energy.getMainNode().getNode() != null && cpuBlock.getMainNode().getNode() != null,
+                    "Large pattern test waits for actual AE2 node initialization");
+        }).thenExecute(() -> {
+            GridHelper.createConnection(port.getMainNode().getNode(), chest.getMainNode().getNode());
+            GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode());
+            GridHelper.createConnection(port.getMainNode().getNode(), cpuBlock.getMainNode().getNode());
+            controller.requestImmediateStructureCheck();
+        }).thenWaitUntil(() -> {
+            helper.assertTrue(controller.structureSnapshot().formed() && port.getMainNode().isActive()
+                            && cpuBlock.getCluster() != null && cpuBlock.getCluster().isActive(),
+                    "Actual controller and CPU are ready for admission");
+        }).thenExecute(() -> {
+            port.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
+                    List.of(new GenericStack(iron, 10_000L)), List.of(new GenericStack(gold, 20_000L))));
+            port.getLogic().updatePatterns();
+            IPatternDetails pattern = port.getLogic().getAvailablePatterns().getFirst();
+            var grid = port.getMainNode().getNode().getGrid();
+            KeyCounter usedItems = new KeyCounter();
+            usedItems.add(iron, 10_000L);
+            helper.assertTrue(grid.getStorageService().getInventory().insert(iron, 10_000L,
+                    Actionable.MODULATE, new BaseActionSource()) == 10_000L, "Network stores all ten thousand input items");
+            ICraftingPlan plan = new ICraftingPlan() {
+                @Override public GenericStack finalOutput() { return new GenericStack(gold, 20_000L); }
+                @Override public long bytes() { return 1L; }
+                @Override public boolean simulation() { return false; }
+                @Override public boolean multiplePaths() { return false; }
+                @Override public KeyCounter usedItems() { return usedItems; }
+                @Override public KeyCounter emittedItems() { return new KeyCounter(); }
+                @Override public KeyCounter missingItems() { return new KeyCounter(); }
+                @Override public Map<IPatternDetails, Long> patternTimes() { return Map.of(pattern, 1L); }
+            };
+            var cpu = cpuBlock.getCluster().craftingLogic;
+            helper.assertTrue(cpu.trySubmitJob(grid, plan, new BaseActionSource(), null).successful(),
+                    "CPU accepts the large encoded processing plan");
+            helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
+                            grid.getEnergyService(), helper.getLevel()) == 1 && cpu.getWaitingFor(gold) == 20_000L,
+                    "Real CPU dispatch admits large leftovers and reserves the full output");
+            helper.assertTrue(port.getLogic().getReturnInv().getAvailableStacks().get(iron) == 9_999L,
+                    "Exactly one item is consumed and 9999 leftovers are safely owned by the return inventory");
+        }).thenWaitUntil(() -> {
+            helper.assertTrue(chest.getInventory().extract(gold, 20_000L, Actionable.SIMULATE, new BaseActionSource()) == 20_000L
+                            && chest.getInventory().extract(iron, 9_999L, Actionable.SIMULATE, new BaseActionSource()) == 9_999L,
+                    "Native return work drains both large outputs and leftover inputs exactly");
+            helper.assertTrue(!cpuBlock.getCluster().craftingLogic.hasJob(), "AE2 CPU settles the large output");
+        }).thenSucceed();
+    }
+
     public void craftingCpuPushesResolvedEnchantmentOutput(GameTestHelper helper) {
         var machineId = MMCR.id("ae2_pattern_output_components_test");
         var recipeId = MMCR.id("ae2_pattern_output_components_recipe");

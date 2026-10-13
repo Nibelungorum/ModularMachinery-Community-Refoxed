@@ -49,12 +49,21 @@ public abstract class CraftingCpuLogicMixin {
                 ((ExecutingCraftingJobAccessor) job).mmcr$tasks().get(details);
         long batchSize = Math.min(progress.mmcr$value(), batchMachine.maxBatchSize(details));
         if (batchSize < 1L) return false;
+        KeyCounter waitingFor = ((ExecutingCraftingJobAccessor) job).mmcr$waitingFor().list;
+        if (!mmcr$canTrackOutputs(waitingFor, expectedOutputs, expectedContainerItems)) return false;
         if (batchSize == 1L) return original.call(provider, details, inputs);
 
         KeyCounter extraOutputs = new KeyCounter();
         KeyCounter extraContainerItems = new KeyCounter();
         KeyCounter[] extraInputs = mmcr$extractInputs(details, batchSize - 1L, level, extraOutputs, extraContainerItems);
         if (extraInputs == null) return false;
+        if (!mmcr$canMergeInputs(inputs, extraInputs) || !mmcr$canMergeCounters(expectedOutputs, extraOutputs)
+                || !mmcr$canMergeCounters(expectedContainerItems, extraContainerItems)
+                || !mmcr$canTrackOutputs(waitingFor, expectedOutputs, extraOutputs,
+                        expectedContainerItems, extraContainerItems)) {
+            CraftingCpuHelper.reinjectPatternInputs(inventory, extraInputs);
+            return false;
+        }
         KeyCounter[] combined = new KeyCounter[inputs.length];
         for (int index = 0; index < inputs.length; index++) {
             combined[index] = new KeyCounter();
@@ -94,12 +103,23 @@ public abstract class CraftingCpuLogicMixin {
                                             KeyCounter expectedOutputs, KeyCounter expectedContainerItems) {
         KeyCounter[] combined = null;
         for (long operation = 0; operation < operations; operation++) {
+            KeyCounter operationOutputs = new KeyCounter();
+            KeyCounter operationContainerItems = new KeyCounter();
             KeyCounter[] extracted = CraftingCpuHelper.extractPatternInputs(details, inventory, level,
-                    expectedOutputs, expectedContainerItems);
+                    operationOutputs, operationContainerItems);
             if (extracted == null) {
                 if (combined != null) CraftingCpuHelper.reinjectPatternInputs(inventory, combined);
                 return null;
             }
+            if (combined != null && !mmcr$canMergeInputs(combined, extracted)
+                    || !mmcr$canMergeCounters(expectedOutputs, operationOutputs)
+                    || !mmcr$canMergeCounters(expectedContainerItems, operationContainerItems)) {
+                CraftingCpuHelper.reinjectPatternInputs(inventory, extracted);
+                if (combined != null) CraftingCpuHelper.reinjectPatternInputs(inventory, combined);
+                return null;
+            }
+            expectedOutputs.addAll(operationOutputs);
+            expectedContainerItems.addAll(operationContainerItems);
             if (combined == null) {
                 combined = extracted;
             } else {
@@ -107,5 +127,38 @@ public abstract class CraftingCpuLogicMixin {
             }
         }
         return combined;
+    }
+
+    @Unique
+    private static boolean mmcr$canMergeInputs(KeyCounter[] first, KeyCounter[] second) {
+        KeyCounter totals = new KeyCounter();
+        for (KeyCounter[] holders : new KeyCounter[][]{first, second}) {
+            for (KeyCounter holder : holders) {
+                if (!mmcr$canMergeCounters(totals, holder)) return false;
+                totals.addAll(holder);
+            }
+        }
+        return true;
+    }
+
+    @Unique
+    private static boolean mmcr$canTrackOutputs(KeyCounter waitingFor, KeyCounter... outputs) {
+        KeyCounter totals = new KeyCounter();
+        totals.addAll(waitingFor);
+        for (KeyCounter output : outputs) {
+            if (!mmcr$canMergeCounters(totals, output)) return false;
+            totals.addAll(output);
+        }
+        return true;
+    }
+
+    @Unique
+    private static boolean mmcr$canMergeCounters(KeyCounter current, KeyCounter added) {
+        for (var entry : added) {
+            long amount = entry.getLongValue();
+            long previous = current.get(entry.getKey());
+            if (amount < 0L || previous < 0L || amount > Long.MAX_VALUE - previous) return false;
+        }
+        return true;
     }
 }

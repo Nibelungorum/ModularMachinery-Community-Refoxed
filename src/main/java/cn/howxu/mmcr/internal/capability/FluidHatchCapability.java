@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.capability;
 
+import java.util.HashSet;
+
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -90,11 +92,13 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
                 return commitNativeAsync(operation);
             }
         };
-        this.view = CapabilityFactories.view(type(), directions(), exposeTransferFacet
+        Set<Class<? extends CapabilityFacet>> facets = new HashSet<>(exposeTransferFacet
                 ? Set.of(FluidHandlerFacet.class, TransferFacet.class, OperationFacet.class,
                         PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class)
                 : Set.of(FluidHandlerFacet.class, OperationFacet.class, PresentationFacet.class,
                         SyncFacet.class, AsyncPlanningFacet.class));
+        if (requiresServerOutputPlanning()) facets.remove(AsyncPlanningFacet.class);
+        this.view = CapabilityFactories.view(type(), directions(), facets);
     }
 
     @Override public IFluidHandler fluidHandler() { return fluidHandler; }
@@ -115,7 +119,8 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
 
     @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
-        if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        if (facetType == AsyncPlanningFacet.class) return requiresServerOutputPlanning()
+                ? Optional.empty() : Optional.of(facetType.cast(asyncPlanning));
         if (facetType == TransferFacet.class) {
             return exposeTransferFacet ? Optional.of(facetType.cast(this)) : Optional.empty();
         }
@@ -138,6 +143,17 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
 
     private CapabilityResult commitNative(CapabilityRequests.FluidRequest request) {
         for (CapabilityRequests.FluidAction action : request.actions()) {
+            if (fluidHandler instanceof NativeReservationAccess access) {
+                long simulated = access.transfer(action.tank(), action.stack(), action.amount(), action.insert(), true);
+                if (simulated >= 0L) {
+                    if (simulated != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
+                            : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), simulated));
+                    long committed = access.transfer(action.tank(), action.stack(), action.amount(), action.insert(), false);
+                    if (committed != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
+                            : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), committed));
+                    continue;
+                }
+            }
             long remaining = action.amount();
             while (remaining > 0L) {
                 int chunk = (int) Math.min(remaining, Integer.MAX_VALUE);
@@ -182,6 +198,11 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
                 : fluidHandler.getFluidInTank(tank).getAmount();
     }
 
+    private boolean requiresServerOutputPlanning() {
+        return ioType == IOType.OUTPUT && fluidHandler instanceof NativeReservationAccess access
+                && access.requiresServerOutputPlanning();
+    }
+
     private long fluidCapacity(int tank) {
         return fluidHandler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage ? storage.capacity(tank)
                 : fluidHandler instanceof NativeStackSync.Fluid storage ? storage.capacity(tank) : fluidHandler.getTankCapacity(tank);
@@ -213,6 +234,8 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
     public void decode(RegistryFriendlyByteBuf buffer) {
         int count = buffer.readVarInt();
         if (count < 0 || count > 1024 || count != fluidHandler.getTanks()) throw new IllegalArgumentException("Invalid fluid sync state");
+        FluidStack[] stacks = new FluidStack[count];
+        long[] amounts = new long[count];
         for (int tank = 0; tank < count; tank++) {
             FluidStack stack = FluidStack.OPTIONAL_STREAM_CODEC.decode(buffer);
             long amount = buffer.readLong();
@@ -220,9 +243,14 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
             boolean validCapacity = fluidHandler instanceof NativeStackSync.Fluid storage
                     ? storage.isSyncCapacityValid(tank, stack, capacity) : capacity == fluidCapacity(tank);
             if (amount < 0L || capacity < amount || !validCapacity) throw new IllegalArgumentException("Invalid fluid sync amount");
-            if (fluidHandler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage) storage.setContents(tank, stack, amount);
-            else if (fluidHandler instanceof NativeStackSync.Fluid storage) storage.setContents(tank, stack, amount);
-            else throw new IllegalStateException("Fluid handler cannot apply synchronized state");
+            stacks[tank] = stack;
+            amounts[tank] = amount;
+        }
+        if (fluidHandler instanceof NativeStackSync.Fluid storage) storage.setContents(stacks, amounts);
+        else if (fluidHandler instanceof cn.howxu.mmcr.internal.storage.LongFluidStorage storage) {
+            for (int tank = 0; tank < count; tank++) storage.setContents(tank, stacks[tank], amounts[tank]);
+        } else {
+            throw new IllegalStateException("Fluid handler cannot apply synchronized state");
         }
     }
 }

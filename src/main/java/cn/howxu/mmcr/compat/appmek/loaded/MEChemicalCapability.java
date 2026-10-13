@@ -235,8 +235,8 @@ public final class MEChemicalCapability implements ChemicalHandlerPort, Chemical
             long amount = buffer.readLong();
             long capacity = buffer.readLong();
             boolean validCapacity = handler instanceof InventoryChemicalHandler inventory
-                    ? inventory.isSyncCapacityValid(identity, capacity)
-                    : handler instanceof OutputChemicalHandler output ? output.isSyncCapacityValid(identity, capacity)
+                    ? inventory.isSyncCapacityValid(slot, identity, capacity)
+                    : handler instanceof OutputChemicalHandler output ? output.isSyncCapacityValid(slot, identity, capacity)
                     : capacity == handler.getChemicalTankCapacity(slot);
             if (amount < 0L || capacity < amount || !validCapacity
                     || amount > 0L && identity.isEmpty() || amount == 0L && !identity.isEmpty()
@@ -248,7 +248,8 @@ public final class MEChemicalCapability implements ChemicalHandlerPort, Chemical
             stacks.add(identity.copyWithAmount(amount));
         }
         if (handler instanceof NetworkChemicalHandler network) network.prepareSync(count);
-        for (int slot = 0; slot < count; slot++) handler.setChemicalInTank(slot, stacks.get(slot));
+        if (handler instanceof InventoryChemicalHandler inventory) inventory.setContents(stacks);
+        else for (int slot = 0; slot < count; slot++) handler.setChemicalInTank(slot, stacks.get(slot));
     }
 
     private long move(int slot, ChemicalStack identity, long amount, boolean insert, Action action) {

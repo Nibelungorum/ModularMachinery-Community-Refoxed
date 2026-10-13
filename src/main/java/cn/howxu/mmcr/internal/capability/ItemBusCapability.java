@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.capability;
 
+import java.util.HashSet;
+
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -91,18 +93,21 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
                 return commitNativeAsync(operation);
             }
         };
-        this.view = CapabilityFactories.view(type(), directions(), exposeTransferFacet
+        Set<Class<? extends CapabilityFacet>> facets = new HashSet<>(exposeTransferFacet
                 ? Set.of(ItemHandlerFacet.class, TransferFacet.class, OperationFacet.class,
                         PresentationFacet.class, SyncFacet.class, AsyncPlanningFacet.class)
                 : Set.of(ItemHandlerFacet.class, OperationFacet.class, PresentationFacet.class,
                         SyncFacet.class, AsyncPlanningFacet.class));
+        if (requiresServerOutputPlanning()) facets.remove(AsyncPlanningFacet.class);
+        this.view = CapabilityFactories.view(type(), directions(), facets);
     }
 
     @Override public IItemHandler itemHandler() { return itemHandler; }
 
     @Override
     public boolean supportsLargeStacks() {
-        return port != null && (port.kind().extendedItemBusSize().isPresent()
+        return itemHandler instanceof NativeStackSync.Item storage && storage.supportsLargeStacks()
+                || port != null && (port.kind().extendedItemBusSize().isPresent()
                 || port.kind().extendedCombinedPortSize().isPresent());
     }
 
@@ -122,7 +127,8 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
 
     @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
-        if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        if (facetType == AsyncPlanningFacet.class) return requiresServerOutputPlanning()
+                ? Optional.empty() : Optional.of(facetType.cast(asyncPlanning));
         if (facetType == TransferFacet.class) {
             return exposeTransferFacet ? Optional.of(facetType.cast(this)) : Optional.empty();
         }
@@ -146,6 +152,17 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
 
     private CapabilityResult commitNative(CapabilityRequests.ItemRequest request) {
         for (CapabilityRequests.ItemAction action : request.actions()) {
+            if (itemHandler instanceof NativeReservationAccess access) {
+                long simulated = access.transfer(action.slot(), action.stack(), action.amount(), action.insert(), true);
+                if (simulated >= 0L) {
+                    if (simulated != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
+                            : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), simulated));
+                    long committed = access.transfer(action.slot(), action.stack(), action.amount(), action.insert(), false);
+                    if (committed != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
+                            : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), committed));
+                    continue;
+                }
+            }
             long remaining = action.amount();
             while (remaining > 0L) {
                 int chunk = (int) Math.min(remaining, Integer.MAX_VALUE);
@@ -192,6 +209,11 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
                 : itemHandler.getStackInSlot(slot).getCount();
     }
 
+    private boolean requiresServerOutputPlanning() {
+        return ioType == IOType.OUTPUT && itemHandler instanceof NativeReservationAccess access
+                && access.requiresServerOutputPlanning();
+    }
+
     private long itemCapacity(int slot) {
         return itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage ? storage.capacity(slot)
                 : itemHandler instanceof NativeStackSync.Item storage ? storage.capacity(slot) : itemHandler.getSlotLimit(slot);
@@ -223,6 +245,8 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
     public void decode(RegistryFriendlyByteBuf buffer) {
         int count = buffer.readVarInt();
         if (count < 0 || count > 1024 || count != itemHandler.getSlots()) throw new IllegalArgumentException("Invalid item sync state");
+        ItemStack[] stacks = new ItemStack[count];
+        long[] amounts = new long[count];
         for (int slot = 0; slot < count; slot++) {
             ItemStack stack = ItemStack.OPTIONAL_STREAM_CODEC.decode(buffer);
             long amount = buffer.readLong();
@@ -230,9 +254,14 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
             boolean validCapacity = itemHandler instanceof NativeStackSync.Item storage
                     ? storage.isSyncCapacityValid(slot, stack, capacity) : capacity == itemCapacity(slot);
             if (amount < 0L || capacity < amount || !validCapacity) throw new IllegalArgumentException("Invalid item sync amount");
-            if (itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage) storage.setContents(slot, stack, amount);
-            else if (itemHandler instanceof NativeStackSync.Item storage) storage.setContents(slot, stack, amount);
-            else throw new IllegalStateException("Item handler cannot apply synchronized state");
+            stacks[slot] = stack;
+            amounts[slot] = amount;
+        }
+        if (itemHandler instanceof NativeStackSync.Item storage) storage.setContents(stacks, amounts);
+        else if (itemHandler instanceof cn.howxu.mmcr.internal.storage.LongItemStorage storage) {
+            for (int slot = 0; slot < count; slot++) storage.setContents(slot, stacks[slot], amounts[slot]);
+        } else {
+            throw new IllegalStateException("Item handler cannot apply synchronized state");
         }
     }
 }

@@ -185,8 +185,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
                 int factoryLaneCount = snapshot.factory().activeLaneCount();
                 long machineThreadLimit = Math.max(1, controller.effectiveFactoryThreadLimit());
                 long boundedLaneLimit = Math.min(factoryLaneLimit, machineThreadLimit);
-                controllerCapacity = Math.max(0L, boundedLaneLimit - factoryLaneCount)
-                        * Math.max(1L, snapshot.maxParallelism());
+                controllerCapacity = batchCapacity(boundedLaneLimit - factoryLaneCount,
+                        Math.max(1L, snapshot.maxParallelism()));
             } else {
                 controllerCapacity = snapshot.crafting().recipeId() == null ? snapshot.maxParallelism() : 0L;
             }
@@ -229,7 +229,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
                     ResourceLocation laneRecipeId = lanes.get(j).recipeId();
                     if (laneRecipeId != null && laneRecipeId.equals(recipeId)) activeForRecipe++;
                 }
-                long cap = ((long) recipe.maxThreads() - activeForRecipe) * parallelism;
+                long cap = batchCapacity((long) recipe.maxThreads() - activeForRecipe, parallelism);
                 if (cap > capacity) capacity = cap;
             }
         }
@@ -242,6 +242,11 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
             return controller.runtimeSnapshot().factory().activeLaneCount();
         }
         return 0;
+    }
+
+    private static long batchCapacity(long threads, long parallelism) {
+        if (threads <= 0L) return 0L;
+        return parallelism > Long.MAX_VALUE / threads ? Long.MAX_VALUE : threads * parallelism;
     }
 
     @Override
@@ -378,6 +383,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         for (ItemStack stack : drops) {
             Block.popResource(level, worldPosition, stack);
         }
+        logic.clearContent();
     }
 
     private void onNetworkChanged() {

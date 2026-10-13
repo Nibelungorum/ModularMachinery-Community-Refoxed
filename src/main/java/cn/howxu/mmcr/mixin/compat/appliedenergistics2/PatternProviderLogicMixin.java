@@ -2,8 +2,12 @@ package cn.howxu.mmcr.mixin.compat.appliedenergistics2;
 
 import appeng.helpers.patternprovider.PatternProviderLogic;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
+import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import appeng.api.implementations.blockentities.ICraftingMachine;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceHost;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
@@ -29,6 +33,13 @@ public abstract class PatternProviderLogicMixin {
 
     @Unique
     private long[] mmcr$returnInventoryAmounts = new long[0];
+
+    @WrapOperation(method = "<init>(Lappeng/api/networking/IManagedGridNode;Lappeng/helpers/patternprovider/PatternProviderLogicHost;I)V",
+            at = @At(value = "NEW", target = "(Ljava/lang/Runnable;)Lappeng/helpers/patternprovider/PatternProviderReturnInventory;"))
+    private PatternProviderReturnInventory mmcr$createReturnInventory(Runnable listener,
+                                                                      Operation<PatternProviderReturnInventory> original) {
+        return host instanceof PatternInterfaceHost ? new PatternReturnInventory(listener) : original.call(listener);
+    }
 
     @Inject(method = "doWork", at = @At("HEAD"))
     private void mmcr$recordReturnInventoryAmount(CallbackInfoReturnable<Boolean> callback) {
