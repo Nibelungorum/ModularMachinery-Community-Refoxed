@@ -24,13 +24,15 @@ class PktPortContainerTransferPayloadTest {
     }
 
     @Test
-    void packet_preserves_menu_identity_and_second_tank_index() {
+    void packet_preserves_menu_identity_second_tank_index_and_direction() {
         ByteBuf buffer = Unpooled.buffer();
         try {
-            var payload = new PktPortContainerTransferPayload(17, 1);
-            PktPortContainerTransferPayload.STREAM_CODEC.encode(buffer, payload);
-            assertThat(PktPortContainerTransferPayload.STREAM_CODEC.decode(buffer)).isEqualTo(payload);
-            assertThat(payload.type()).isSameAs(PktPortContainerTransferPayload.TYPE);
+            for (boolean extract : new boolean[]{false, true}) {
+                var payload = new PktPortContainerTransferPayload(17, 1, extract);
+                PktPortContainerTransferPayload.STREAM_CODEC.encode(buffer, payload);
+                assertThat(PktPortContainerTransferPayload.STREAM_CODEC.decode(buffer)).isEqualTo(payload);
+                assertThat(payload.type()).isSameAs(PktPortContainerTransferPayload.TYPE);
+            }
         } finally {
             buffer.release();
         }
@@ -39,7 +41,7 @@ class PktPortContainerTransferPayloadTest {
     @Test
     void missing_player_or_payload_is_inert() {
         assertThat(PktPortContainerTransferPayload.interactOnServer(null,
-                new PktPortContainerTransferPayload(17, 0))).isZero();
+                new PktPortContainerTransferPayload(17, 0, false))).isZero();
         assertThat(PktPortContainerTransferPayload.interactOnServer(null, null)).isZero();
     }
 
@@ -49,6 +51,7 @@ class PktPortContainerTransferPayloadTest {
         var storage = new FluidBucketWrapper(ItemStack.EMPTY);
         assertThat(bridge.manualFluidContainerHandler(storage)).isSameAs(storage);
         assertThat(bridge.manualFluidContainerHandler(null)).isNull();
-        assertThat(bridge.transferChemicalContainer(null, null, 0)).isZero();
+        assertThat(bridge.transferChemicalContainer(null, null, 0, true)).isZero();
+        assertThat(bridge.interactWithChemicalContainer(null, null, null)).isZero();
     }
 }

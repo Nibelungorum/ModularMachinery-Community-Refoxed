@@ -145,6 +145,68 @@ class ContainerResourceTransferTest {
     }
 
     @Test
+    void world_interaction_fills_a_partly_filled_container_without_reversing_after_success() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        container.setFluid(new FluidStack(Fluids.WATER, 3_000));
+        port.setFluid(new FluidStack(Fluids.WATER, 2_000));
+        var result = ContainerResourceTransfer.interact(IOType.INPUT, container, port, false);
+        assertThat(result.extract()).isTrue();
+        assertThat(result.amount()).isEqualTo(1_000);
+        assertThat(container.amount(0)).isEqualTo(4_000);
+        assertThat(port.amount(0)).isEqualTo(1_000);
+    }
+
+    @Test
+    void world_interaction_drains_a_full_container_when_extraction_fails() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        container.setFluid(new FluidStack(Fluids.WATER, 4_000));
+        port.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        var result = ContainerResourceTransfer.interact(IOType.INPUT, container, port, false);
+        assertThat(result.extract()).isFalse();
+        assertThat(result.amount()).isEqualTo(3_000);
+        assertThat(container.amount(0)).isEqualTo(1_000);
+        assertThat(port.amount(0)).isEqualTo(4_000);
+    }
+
+    @Test
+    void world_interaction_with_an_empty_port_simulates_without_mutating_either_side() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        container.setFluid(new FluidStack(Fluids.WATER, 2_000));
+        var result = ContainerResourceTransfer.interact(IOType.INPUT, container, port, true);
+        assertThat(result.extract()).isFalse();
+        assertThat(result.amount()).isEqualTo(2_000);
+        assertThat(container.amount(0)).isEqualTo(2_000);
+        assertThat(container.resource(0).is(Fluids.WATER)).isTrue();
+        assertThat(port.amount(0)).isZero();
+    }
+
+    @Test
+    void world_interaction_does_not_fall_back_to_inserting_into_an_output_port() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        container.setFluid(new FluidStack(Fluids.WATER, 2_000));
+        assertThat(ContainerResourceTransfer.interact(IOType.OUTPUT, container, port, false)).isNull();
+        assertThat(container.amount(0)).isEqualTo(2_000);
+        assertThat(port.amount(0)).isZero();
+    }
+
+    @Test
+    void world_interaction_preserves_incompatible_contents_on_both_attempts() {
+        var container = new LongFluidStorage(4_000, () -> {});
+        var port = new LongFluidStorage(4_000, () -> {});
+        container.setFluid(new FluidStack(Fluids.WATER, 2_000));
+        port.setFluid(new FluidStack(Fluids.LAVA, 1_000));
+        assertThat(ContainerResourceTransfer.interact(IOType.INPUT, container, port, false)).isNull();
+        assertThat(container.amount(0)).isEqualTo(2_000);
+        assertThat(container.resource(0).is(Fluids.WATER)).isTrue();
+        assertThat(port.amount(0)).isEqualTo(1_000);
+        assertThat(port.resource(0).is(Fluids.LAVA)).isTrue();
+    }
+
+    @Test
     void missing_direction_or_handler_leaves_existing_contents_unchanged() {
         var container = new LongFluidStorage(4_000, () -> {});
         var port = new LongFluidStorage(4_000, () -> {});

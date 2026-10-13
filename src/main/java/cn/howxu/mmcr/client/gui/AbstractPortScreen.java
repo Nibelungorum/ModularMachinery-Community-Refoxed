@@ -136,7 +136,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             if (tankIndex >= 0) {
                 containerTankClickConsumed = true;
                 PacketDistributor.sendToServer(
-                        new PktPortContainerTransferPayload(menu.containerId, tankIndex));
+                        new PktPortContainerTransferPayload(menu.containerId, tankIndex, hasShiftDown()));
                 return true;
             }
         }

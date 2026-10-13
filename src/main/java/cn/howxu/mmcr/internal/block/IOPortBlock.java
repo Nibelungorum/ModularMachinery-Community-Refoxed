@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.block;
 
+import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
@@ -49,6 +50,11 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidUtil;
+import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.items.ItemHandlerHelper;
+import net.neoforged.neoforge.common.SoundActions;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.gameevent.GameEvent;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -103,13 +109,43 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
         if (AE2Bridge.get().useMemoryCard(stack, level, pos, player)) {
             return ItemInteractionResult.SUCCESS;
         }
-        if (!ItemSpecialOperationUtil.isSpecialOperated(player) && level.getBlockEntity(pos) instanceof IOPortBlockEntity) {
+        if (!ItemSpecialOperationUtil.isSpecialOperated(player)
+                && level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
             if (level.isClientSide()) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+            if (port.kind().fluidHatchSize().isPresent() && port.kind().extendedFluidHatchSize().isEmpty()
+                    || port.kind().combinedPortSize().isPresent() || MekanismBridge.get().isPort(port.kind().id())) {
+                return interactWithContainer(player, hand, port)
+                        ? ItemInteractionResult.SUCCESS : ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+            }
             if (FluidUtil.interactWithFluidHandler(player, hand, level, pos, hit.getDirection())) {
                 return ItemInteractionResult.SUCCESS;
             }
         }
         return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+    }
+
+    private static boolean interactWithContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
+        IFluidHandler storage = port instanceof FluidHatchBlockEntity fluid ? fluid.fluidHandler(null)
+                : port instanceof CombinedPortBlockEntity combined ? combined.fluidHandler(null) : null;
+        if (storage == null) return MekanismBridge.get().interactWithChemicalContainer(player, hand, port) > 0;
+        ItemStack held = player.getItemInHand(hand);
+        var container = MekanismBridge.get().manualFluidContainerHandler(
+                FluidUtil.getFluidHandler(held.copyWithCount(1)).orElse(null));
+        var result = ContainerResourceTransfer.interact(port.ioType(), container, storage, false);
+        if (result == null) return false;
+        if (!player.getAbilities().instabuild) {
+            ItemStack changed = container.getContainer();
+            if (held.getCount() == 1) player.setItemInHand(hand, changed);
+            else {
+                held.shrink(1);
+                ItemHandlerHelper.giveItemToPlayer(player, changed);
+            }
+        }
+        var sound = result.extract() ? result.resource().getFluidType().getSound(SoundActions.BUCKET_FILL)
+                : result.resource().getFluidType().getSound(SoundActions.BUCKET_EMPTY);
+        if (sound != null) player.level().playSound(null, port.getBlockPos(), sound, SoundSource.BLOCKS, 1F, 1F);
+        player.level().gameEvent(player, result.extract() ? GameEvent.FLUID_PICKUP : GameEvent.FLUID_PLACE, port.getBlockPos());
+        return true;
     }
 
     @Override

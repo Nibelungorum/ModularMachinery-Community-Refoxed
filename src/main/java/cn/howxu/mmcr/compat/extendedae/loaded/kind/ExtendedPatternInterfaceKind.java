@@ -18,8 +18,8 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 public final class ExtendedPatternInterfaceKind implements PatternLogicKind {
     public static final ExtendedPatternInterfaceKind INSTANCE = new ExtendedPatternInterfaceKind();
     private final PortDefinition definition = AE2ResourceFamilies.definition(MMCR.id(id()), List.of(
-            AE2ResourceFamilies.itemBinding(CapabilityDirections.bidirectional(), host -> host.nativeItemHandler()),
-            AE2ResourceFamilies.fluidBinding(CapabilityDirections.bidirectional(), host -> host.nativeFluidHandler())));
+            AE2ResourceFamilies.itemBinding(CapabilityDirections.bidirectional(), host -> host.nativeItemHandler(), false),
+            AE2ResourceFamilies.fluidBinding(CapabilityDirections.bidirectional(), host -> host.nativeFluidHandler(), false)));
     private ExtendedPatternInterfaceKind() {}
     @Override public String id() { return "eae_me_extended_pattern_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }

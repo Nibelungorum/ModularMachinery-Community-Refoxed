@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.mekanism.loaded;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
@@ -69,6 +70,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
@@ -287,42 +290,69 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
     @Override
     public int transferChemicalContainer(ServerPlayer player, AbstractContainerMenu menu,
-                                         int tankIndex) {
+                                         int tankIndex, boolean extract) {
         if (!(menu instanceof ChemicalPortMenu chemical) || tankIndex != 0) return 0;
         ChemicalPortBlockEntity port = chemical.owner();
         if (!PktPortContainerTransferPayload.validTarget(player, menu, port)) return 0;
-        ItemStack carried = menu.getCarried();
-        ItemStack changed = carried.copyWithCount(1);
-        IChemicalHandler container = changed.getCapability(Capabilities.CHEMICAL.item());
-        if (container == null) return 0;
-        IChemicalTank tank = port.chemicalTank();
-        ChemicalStack resource;
-        if (port.ioType() == IOType.INPUT) {
-            resource = drainChemicalContainer(container, tank);
-        } else {
-            resource = tank.extract(Integer.MAX_VALUE, Action.SIMULATE, AutomationType.MANUAL);
-            long accepted = resource.getAmount() - insertContainerChemical(container, resource, Action.EXECUTE).getAmount();
-            if (accepted == 0) return 0;
-            resource = resource.copyWithAmount(accepted);
-        }
-        if (resource.isEmpty()) return 0;
-        long total = resource.getAmount() * carried.getCount();
-        if (total > Integer.MAX_VALUE) return 0;
-        resource = resource.copyWithAmount(total);
-        long available = port.ioType() == IOType.INPUT
-                ? total - tank.insert(resource, Action.SIMULATE, AutomationType.MANUAL).getAmount()
-                : tank.extract(total, Action.SIMULATE, AutomationType.MANUAL).getAmount();
-        if (available != total) return 0;
-        long moved = port.ioType() == IOType.INPUT
-                ? resource.getAmount() - tank.insert(resource, Action.EXECUTE, AutomationType.MANUAL).getAmount()
-                : tank.extract(resource.getAmount(), Action.EXECUTE, AutomationType.MANUAL).getAmount();
-        if (!changed.isEmpty()) changed.setCount(changed.getCount() * carried.getCount());
+        var result = transferChemicalCarried(menu.getCarried(), port,
+                port.ioType() == IOType.OUTPUT || extract);
+        if (result == null) return 0;
+        ItemStack changed = result.carried();
         int cursorCount = Math.min(changed.getCount(), changed.getMaxStackSize());
         menu.setCarried(changed.copyWithCount(cursorCount));
         if (changed.getCount() > cursorCount) {
             ItemHandlerHelper.giveItemToPlayer(player, changed.copyWithCount(changed.getCount() - cursorCount));
         }
-        return (int) moved;
+        return result.amount();
+    }
+
+    @Override
+    public int interactWithChemicalContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
+        if (!(port instanceof ChemicalPortBlockEntity chemical)) return 0;
+        ItemStack held = player.getItemInHand(hand);
+        var result = transferChemicalCarried(held.copyWithCount(1), chemical, true);
+        if (result == null && port.ioType() == IOType.INPUT) {
+            result = transferChemicalCarried(held.copyWithCount(1), chemical, false);
+        }
+        if (result == null) return 0;
+        if (!player.getAbilities().instabuild) {
+            if (held.getCount() == 1) player.setItemInHand(hand, result.carried());
+            else {
+                held.shrink(1);
+                ItemHandlerHelper.giveItemToPlayer(player, result.carried());
+            }
+        }
+        return result.amount();
+    }
+
+    private static ContainerResourceTransfer.Result transferChemicalCarried(ItemStack carried,
+                                                                            ChemicalPortBlockEntity port, boolean extract) {
+        ItemStack changed = carried.copyWithCount(1);
+        IChemicalHandler container = changed.getCapability(Capabilities.CHEMICAL.item());
+        if (container == null) return null;
+        IChemicalTank tank = port.chemicalTank();
+        ChemicalStack resource;
+        if (!extract) {
+            resource = drainChemicalContainer(container, tank);
+        } else {
+            resource = tank.extract(Integer.MAX_VALUE, Action.SIMULATE, AutomationType.MANUAL);
+            long accepted = resource.getAmount() - insertContainerChemical(container, resource, Action.EXECUTE).getAmount();
+            if (accepted == 0) return null;
+            resource = resource.copyWithAmount(accepted);
+        }
+        if (resource.isEmpty()) return null;
+        long total = resource.getAmount() * carried.getCount();
+        if (total > Integer.MAX_VALUE) return null;
+        resource = resource.copyWithAmount(total);
+        long available = !extract
+                ? total - tank.insert(resource, Action.SIMULATE, AutomationType.MANUAL).getAmount()
+                : tank.extract(total, Action.SIMULATE, AutomationType.MANUAL).getAmount();
+        if (available != total) return null;
+        long moved = !extract
+                ? resource.getAmount() - tank.insert(resource, Action.EXECUTE, AutomationType.MANUAL).getAmount()
+                : tank.extract(resource.getAmount(), Action.EXECUTE, AutomationType.MANUAL).getAmount();
+        if (!changed.isEmpty()) changed.setCount(changed.getCount() * carried.getCount());
+        return new ContainerResourceTransfer.Result((int) moved, changed);
     }
 
     static ChemicalStack drainChemicalContainer(IChemicalHandler container, IChemicalTank tank) {

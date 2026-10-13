@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.networking.GridFlags;
@@ -11,6 +12,8 @@ import appeng.api.util.AECableType;
 import appeng.me.ManagedGridNode;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.TransferFacet;
+import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
@@ -30,6 +33,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -131,7 +135,28 @@ class AE2OutputInterfaceHostTest {
     }
 
     @Test
-    void serverTickNotifiesLinkedOutputCapacitySearchesAfterNativeReturnInventoryDrain() {
+    void cachedPatternCapabilitiesKeepLiveReturnInventoryViews() {
+        for (var kind : List.of(PatternInterfaceKind.INSTANCE, ExtendedPatternInterfaceKind.INSTANCE)) {
+            AE2TestFixtures.bindEntityType(kind.id(), kind.entityFactory());
+            var host = new PatternInterfaceBlockEntity(BlockPos.ZERO, Blocks.IRON_BLOCK.defaultBlockState(), kind);
+            var snapshot = host.capabilitySnapshot();
+
+            assertThat(snapshot.facets(TransferFacet.class)).isEmpty();
+            host.getLogic().getReturnInv().setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 3L));
+            host.getLogic().getReturnInv().setStack(1, new GenericStack(AEFluidKey.of(Fluids.WATER), 500L));
+
+            assertThat(host.capabilitySnapshot()).isSameAs(snapshot);
+            assertThat(host.nativeItemHandler().getStackInSlot(0).getItem()).isEqualTo(Items.IRON_INGOT);
+            assertThat(host.nativeItemHandler().getStackInSlot(0).getCount()).isEqualTo(3);
+            assertThat(host.nativeFluidHandler().getFluidInTank(1).getFluid()).isEqualTo(Fluids.WATER);
+            assertThat(host.nativeFluidHandler().getFluidInTank(1).getAmount()).isEqualTo(500);
+            host.getLogic().getReturnInv().setStack(0, null);
+            assertThat(host.nativeItemHandler().getStackInSlot(0).isEmpty()).isTrue();
+        }
+    }
+
+    @Test
+    void nativeReturnCallbackNotifiesLinkedOutputCapacitySearchesWithoutPolling() {
         PatternInterfaceBlockEntity host = PatternInterfaceKind.INSTANCE.entityFactory()
                 .create(new BlockPos(41, 20, 30), Blocks.IRON_BLOCK.defaultBlockState());
         RecordingController controller = new RecordingController(host.getBlockPos().offset(1, 0, 0),
@@ -163,7 +188,8 @@ class AE2OutputInterfaceHostTest {
             }
         }, IActionSource.empty(), ignored -> {})).isTrue();
 
-        host.serverTick();
+        // Unit tests do not apply mixins; GameTest verifies that native doWork invokes this callback.
+        host.onNativeReturnInventoryDrained();
 
         assertThat(controller.notifiedOutputResources).isEmpty();
         assertThat(controller.notifiedOutputSources).isEmpty();

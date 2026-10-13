@@ -23,8 +23,8 @@ public final class PatternInterfaceKind implements PatternLogicKind {
     public static final PatternInterfaceKind INSTANCE = new PatternInterfaceKind();
 
     private final PortDefinition definition = AE2ResourceFamilies.definition(MMCR.id(ID), List.of(
-            AE2ResourceFamilies.itemBinding(CapabilityDirections.bidirectional(), host -> host.nativeItemHandler()),
-            AE2ResourceFamilies.fluidBinding(CapabilityDirections.bidirectional(), host -> host.nativeFluidHandler())));
+            AE2ResourceFamilies.itemBinding(CapabilityDirections.bidirectional(), host -> host.nativeItemHandler(), false),
+            AE2ResourceFamilies.fluidBinding(CapabilityDirections.bidirectional(), host -> host.nativeFluidHandler(), false)));
 
     private PatternInterfaceKind() {
     }

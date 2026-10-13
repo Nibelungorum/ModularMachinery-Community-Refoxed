@@ -22,6 +22,10 @@
     {
       "type": "patchouli:text",
       "text": {"translate": "guide.mmcr_patchouli.entry.mekanism.chemicals.p2"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.container_interaction"}
     }
   ]
 }

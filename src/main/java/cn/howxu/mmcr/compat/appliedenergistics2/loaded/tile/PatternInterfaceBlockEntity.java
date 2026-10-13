@@ -79,7 +79,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final AtomicInteger nextPatternController = new AtomicInteger();
     private final IItemHandler itemHandler;
     private final IFluidHandler fluidHandler;
-    private long observedReturnInventoryAmount;
+    private final CapabilitySnapshot capabilitySnapshot;
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(typeForKind(kind), pos, state);
@@ -89,6 +89,9 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         AppMekBridge.get().configureInventory(logic.getReturnInv());
         itemHandler = AE2NativeAdapters.items(logic.getReturnInv());
         fluidHandler = AE2NativeAdapters.fluids(logic.getReturnInv());
+        capabilitySnapshot = new CapabilitySnapshot(kind.definition().bindings().stream()
+                .map(this::createCapability)
+                .toList());
     }
 
     @Override
@@ -278,7 +281,6 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void saveChanges() {
-        observedReturnInventoryAmount = returnInventoryAmount();
         notifyStorageChanged();
     }
 
@@ -304,7 +306,6 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     /** Notifies linked controllers after AE2's native return inventory drains. */
     public void onNativeReturnInventoryDrained() {
-        observedReturnInventoryAmount = returnInventoryAmount();
         notifyStorageChanged();
     }
 
@@ -312,16 +313,16 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     protected void tick() {
         super.tick();
         craftingMachine.flushPendingReturns();
-        long currentAmount = returnInventoryAmount();
-        if (currentAmount < observedReturnInventoryAmount) onNativeReturnInventoryDrained();
-        observedReturnInventoryAmount = currentAmount;
+    }
+
+    @Override
+    protected void runAutoIOCycle() {
+        // Pattern capabilities do not expose TransferFacet; AE2's native logic handles returns.
     }
 
     @Override
     public CapabilitySnapshot capabilitySnapshot() {
-        return new CapabilitySnapshot(kind.definition().bindings().stream()
-                .map(this::createCapability)
-                .toList());
+        return capabilitySnapshot;
     }
 
     @Override
@@ -383,13 +384,4 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         if (!logic.getReturnInv().isEmpty() || logic.isBusy()) logic.onMainNodeStateChanged();
     }
 
-    private long returnInventoryAmount() {
-        long amount = 0L;
-        for (int slot = 0; slot < logic.getReturnInv().size(); slot++) {
-            long slotAmount = logic.getReturnInv().getAmount(slot);
-            if (slotAmount > Long.MAX_VALUE - amount) return Long.MAX_VALUE;
-            amount += slotAmount;
-        }
-        return amount;
-    }
 }

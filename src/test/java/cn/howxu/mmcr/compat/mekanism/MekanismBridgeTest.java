@@ -29,7 +29,7 @@ class MekanismBridgeTest {
         assertThat(bridge.isPortMenuAt(null, BlockPos.ZERO, null)).isFalse();
         var storage = new FluidBucketWrapper(ItemStack.EMPTY);
         assertThat(bridge.manualFluidContainerHandler(storage)).isSameAs(storage);
-        assertThat(bridge.transferChemicalContainer(null, null, 0)).isZero();
+        assertThat(bridge.transferChemicalContainer(null, null, 0, true)).isZero();
         bridge.registerRecipeTypes(MMCR.id("mekanism_chemical"), MMCR.id("mekanism_heat_temperature"),
                 MMCR.id("mekanism_heat"));
     }

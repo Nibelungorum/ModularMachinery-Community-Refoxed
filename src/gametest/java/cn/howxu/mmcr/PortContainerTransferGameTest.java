@@ -11,14 +11,18 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
@@ -38,6 +42,9 @@ public class PortContainerTransferGameTest {
         ServerPlayer player = player(helper, input);
         player.containerMenu = new FluidHatchMenu(17, player.getInventory(), input);
         player.containerMenu.setCarried(new ItemStack(Items.WATER_BUCKET));
+        helper.assertTrue(click(player, 0, true) == 0 && input.fluidHandler(null).amount(0) == 0
+                        && player.containerMenu.getCarried().is(Items.WATER_BUCKET),
+                "Shift extraction from an empty input cannot fall back to insertion");
         helper.assertTrue(click(player, 0) == 1_000
                         && ItemStack.matches(player.containerMenu.getCarried(), new ItemStack(Items.BUCKET))
                         && input.fluidHandler(null).resource(0).is(Fluids.WATER)
@@ -45,13 +52,17 @@ public class PortContainerTransferGameTest {
                 "Input receives bucket contents and exchanges the cursor item");
         helper.assertTrue(click(player, 0) == 0 && input.fluidHandler(null).amount(0) == 1_000
                         && player.containerMenu.getCarried().is(Items.BUCKET),
-                "Input cannot refill an empty cursor bucket");
+                "Ordinary input click cannot fill the empty cursor bucket");
+        helper.assertTrue(click(player, 0, true) == 1_000 && input.fluidHandler(null).amount(0) == 0
+                        && player.containerMenu.getCarried().is(Items.WATER_BUCKET),
+                "Shift click extracts from the input hatch into the cursor bucket");
         output.fluidHandler(null).setFluid(new FluidStack(Fluids.WATER, 1_000));
         player.setPos(output.getBlockPos().getCenter());
         player.containerMenu = new FluidHatchMenu(18, player.getInventory(), output);
         player.containerMenu.setCarried(new ItemStack(Items.WATER_BUCKET));
-        helper.assertTrue(click(player, 0) == 0 && output.fluidHandler(null).amount(0) == 1_000,
-                "Output cannot receive a filled bucket");
+        helper.assertTrue(click(player, 0, false) == 0 && output.fluidHandler(null).amount(0) == 1_000
+                        && player.containerMenu.getCarried().is(Items.WATER_BUCKET),
+                "Output cannot receive a filled cursor bucket");
         player.containerMenu.setCarried(new ItemStack(Items.BUCKET));
         helper.assertTrue(click(player, 0) == 1_000 && output.fluidHandler(null).amount(0) == 0
                         && ItemStack.matches(player.containerMenu.getCarried(), new ItemStack(Items.WATER_BUCKET)),
@@ -107,6 +118,14 @@ public class PortContainerTransferGameTest {
                             && port.itemHandler().getStackInSlot(0).is(Items.STONE)
                             && player.containerMenu.getCarried().is(input ? Items.BUCKET : Items.WATER_BUCKET),
                     "Only the clicked second tank changes; items and the first tank stay intact");
+            if (input) {
+                helper.assertTrue(click(player, 1, true) == 1_000
+                                && player.containerMenu.getCarried().is(Items.WATER_BUCKET)
+                                && port.fluidHandler(null).amount(1) == 0
+                                && port.fluidHandler(null).amount(0) == 2_000
+                                && port.itemHandler().amount(0) == 7,
+                        "Shift extraction from combined input touches only the clicked second tank");
+            }
         }
         helper.succeed();
     }
@@ -179,7 +198,7 @@ public class PortContainerTransferGameTest {
                 "Non-container items retain their identity and count");
         player.containerMenu.setCarried(new ItemStack(Items.WATER_BUCKET));
         helper.assertTrue(PktPortContainerTransferPayload.interactOnServer(player, null) == 0
-                        && PktPortContainerTransferPayload.interactOnServer(player, new PktPortContainerTransferPayload(16, 0)) == 0
+                        && PktPortContainerTransferPayload.interactOnServer(player, new PktPortContainerTransferPayload(16, 0, false)) == 0
                         && click(player, -1) == 0 && click(player, 1) == 0 && click(player, Integer.MAX_VALUE) == 0,
                 "Missing payload, stale menu and invalid tank indices are rejected");
         player.setPos(port.getBlockPos().getCenter().add(32, 0, 0));
@@ -208,6 +227,95 @@ public class PortContainerTransferGameTest {
         helper.succeed();
     }
 
+    public void worldBucketsUseExtractionFirstAndOneByOne(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("fluid_input_hatch").get().defaultBlockState());
+        FluidHatchBlockEntity port = helper.getBlockEntity(pos);
+        ServerPlayer player = player(helper, port);
+        player.getAbilities().instabuild = false;
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
+        helper.assertTrue(useContainer(player, port, InteractionHand.MAIN_HAND) == ItemInteractionResult.SUCCESS
+                        && port.fluidHandler(null).amount(0) == 1_000
+                        && player.getMainHandItem().is(Items.BUCKET),
+                "World click inserts into an empty input and exchanges the held bucket");
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET, 2));
+        helper.assertTrue(useContainer(player, port, InteractionHand.MAIN_HAND) == ItemInteractionResult.SUCCESS
+                        && port.fluidHandler(null).amount(0) == 0
+                        && ItemStack.matches(player.getMainHandItem(), new ItemStack(Items.BUCKET))
+                        && player.getInventory().items.stream()
+                        .filter(stack -> stack.is(Items.WATER_BUCKET)).mapToInt(ItemStack::getCount).sum() == 1,
+                "World interaction converts one bucket, retaining the other and stashing the filled result");
+        port.fluidHandler(null).setFluid(new FluidStack(Fluids.WATER, 1_000));
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
+        helper.assertTrue(useContainer(player, port, InteractionHand.MAIN_HAND) == ItemInteractionResult.SUCCESS
+                        && port.fluidHandler(null).amount(0) == 2_000
+                        && player.getMainHandItem().is(Items.BUCKET),
+                "A full held container falls back to insertion when extraction is impossible");
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.STONE));
+        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.BUCKET));
+        helper.assertTrue(useContainer(player, port, InteractionHand.OFF_HAND) == ItemInteractionResult.SUCCESS
+                        && port.fluidHandler(null).amount(0) == 1_000
+                        && player.getOffhandItem().is(Items.WATER_BUCKET)
+                        && player.getMainHandItem().is(Items.STONE),
+                "Offhand transfer changes only the interaction hand");
+        port.fluidHandler(null).setContents(0, new FluidStack(Fluids.WATER, 1), port.fluidHandler(null).capacity(0) - 500);
+        long before = port.fluidHandler(null).amount(0);
+        helper.assertTrue(useContainer(player, port, InteractionHand.OFF_HAND) == ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION
+                        && port.fluidHandler(null).amount(0) == before
+                        && player.getOffhandItem().is(Items.WATER_BUCKET),
+                "Failed extraction and incomplete bucket insertion both roll back without reversing changes");
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("fluid_output_hatch").get().defaultBlockState());
+        port = helper.getBlockEntity(pos);
+        port.fluidHandler(null).setFluid(new FluidStack(Fluids.WATER, 1_000));
+        helper.assertTrue(useContainer(player, port, InteractionHand.OFF_HAND) == ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION
+                        && port.fluidHandler(null).amount(0) == 1_000
+                        && player.getOffhandItem().is(Items.WATER_BUCKET),
+                "World output interaction cannot fall back to receiving a filled bucket");
+        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.BUCKET));
+        helper.assertTrue(useContainer(player, port, InteractionHand.OFF_HAND) == ItemInteractionResult.SUCCESS
+                        && port.fluidHandler(null).amount(0) == 0 && player.getOffhandItem().is(Items.WATER_BUCKET),
+                "World output interaction can still fill an empty bucket");
+        helper.succeed();
+    }
+
+    public void worldCombinedTransfersSelectCompatibleResources(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get("combined_input_reinforced").get().defaultBlockState());
+        CombinedPortBlockEntity port = helper.getBlockEntity(pos);
+        port.fluidHandler(null).setContents(0, new FluidStack(Fluids.LAVA, 1), 2_000);
+        port.fluidHandler(null).setContents(1, new FluidStack(Fluids.WATER, 1), 1_000);
+        ServerPlayer player = player(helper, port);
+        player.getAbilities().instabuild = false;
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET));
+        helper.assertTrue(useContainer(player, port, InteractionHand.MAIN_HAND) == ItemInteractionResult.SUCCESS
+                        && player.getMainHandItem().is(Items.LAVA_BUCKET)
+                        && port.fluidHandler(null).amount(0) == 1_000
+                        && port.fluidHandler(null).amount(1) == 1_000,
+                "World extraction selects the first transferable resource without draining other types");
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WATER_BUCKET));
+        helper.assertTrue(useContainer(player, port, InteractionHand.MAIN_HAND) == ItemInteractionResult.SUCCESS
+                        && player.getMainHandItem().is(Items.BUCKET)
+                        && port.fluidHandler(null).amount(0) == 1_000
+                        && port.fluidHandler(null).resource(0).is(Fluids.LAVA)
+                        && port.fluidHandler(null).amount(1) == 2_000
+                        && port.fluidHandler(null).resource(1).is(Fluids.WATER),
+                "World insertion skips an incompatible first tank and fills the compatible tank");
+        port.fluidHandler(null).setContents(0, new FluidStack(Fluids.WATER, 1), 500);
+        port.fluidHandler(null).setContents(1, new FluidStack(Fluids.WATER, 1), 1_000);
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.BUCKET));
+        helper.assertTrue(useContainer(player, port, InteractionHand.MAIN_HAND) == ItemInteractionResult.SUCCESS
+                        && player.getMainHandItem().is(Items.WATER_BUCKET)
+                        && port.fluidHandler(null).amount(0) == 500
+                        && port.fluidHandler(null).amount(1) == 0,
+                "An insufficient first tank cannot block extraction from a later tank with the same fluid");
+        helper.succeed();
+    }
+
+    static ItemInteractionResult useContainer(ServerPlayer player, IOPortBlockEntity port, InteractionHand hand) {
+        return port.getBlockState().useItemOn(player.getItemInHand(hand), player.level(), player, hand,
+                new BlockHitResult(port.getBlockPos().getCenter(), Direction.UP, port.getBlockPos(), false));
+    }
+
     private static ServerPlayer player(GameTestHelper helper, IOPortBlockEntity port) {
         ServerPlayer player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
                 new GameProfile(UUID.randomUUID(), "mmcr-container"), ClientInformation.createDefault());
@@ -216,8 +324,12 @@ public class PortContainerTransferGameTest {
     }
 
     private static int click(ServerPlayer player, int tankIndex) {
+        return click(player, tankIndex, false);
+    }
+
+    private static int click(ServerPlayer player, int tankIndex, boolean extract) {
         return PktPortContainerTransferPayload.interactOnServer(player,
-                new PktPortContainerTransferPayload(player.containerMenu.containerId, tankIndex));
+                new PktPortContainerTransferPayload(player.containerMenu.containerId, tankIndex, extract));
     }
 
     private static List<ItemEntity> nearbyDrops(GameTestHelper helper, ServerPlayer player) {

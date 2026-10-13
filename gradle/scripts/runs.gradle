@@ -65,6 +65,8 @@ runs {
     gameTestServer {
         modSource project.sourceSets.gametest
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        // The full suite also needs heap headroom while saving its chunks on shutdown.
+        jvmArguments.add('-Xmx6G')
     }
 
     data {

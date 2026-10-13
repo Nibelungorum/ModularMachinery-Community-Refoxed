@@ -89,7 +89,7 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class ModEventRegistration {
-    static final String PAYLOAD_PROTOCOL_VERSION = "10";
+    static final String PAYLOAD_PROTOCOL_VERSION = "11";
 
     private ModEventRegistration() {
     }

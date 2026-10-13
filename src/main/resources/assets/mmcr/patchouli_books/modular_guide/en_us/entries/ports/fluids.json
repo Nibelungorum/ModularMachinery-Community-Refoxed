@@ -21,6 +21,10 @@
     {
       "type": "patchouli:text",
       "text": {"translate": "guide.mmcr_patchouli.entry.ports.fluids.p2"}
+    },
+    {
+      "type": "patchouli:text",
+      "text": {"translate": "guide.mmcr_patchouli.container_interaction"}
     }
   ]
 }

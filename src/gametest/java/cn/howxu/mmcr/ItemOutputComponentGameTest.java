@@ -40,6 +40,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.neoforged.neoforge.items.ItemStackHandler;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,78 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public class ItemOutputComponentGameTest {
+    public void patternOutputsMatchResolvedComponentsStrictly(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        var snapshot = controller.runtimeSnapshot();
+        ItemRequirement requirement = output();
+        ItemStack base = requirement.stack();
+        base.setCount(9);
+        var detached = new MachineOutput.ItemOutput(base, 1F, requirement.components());
+        var recipe = patternRecipe(detached);
+        var enchantments = helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+        ItemStack expected = base.copy();
+        expected.enchant(enchantments.getOrThrow(Enchantments.SHARPNESS), 4);
+        var materialized = new MachineOutput.ItemOutput(expected, 1F);
+        helper.assertTrue(controller.patternOutputsMatch(recipe, snapshot, List.of(materialized)),
+                "Pattern with sharpness IV matches the recipe's independently stored enchantment");
+        helper.assertTrue(controller.patternOutputsMatch(patternRecipe(materialized), snapshot, List.of(materialized)),
+                "Recipe components already on the base stack still match");
+        helper.assertTrue(controller.patternOutputsMatch(patternRecipe(materialized), snapshot, List.of(detached)),
+                "Independent components are resolved on the pattern side too");
+
+        ItemStack changed = expected.copy();
+        changed.enchant(enchantments.getOrThrow(Enchantments.SHARPNESS), 5);
+        helper.assertTrue(!controller.patternOutputsMatch(recipe, snapshot,
+                        List.of(new MachineOutput.ItemOutput(changed, 1F))),
+                "Sharpness V cannot match a sharpness IV recipe");
+        changed = expected.copy();
+        changed.set(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+        changed.enchant(enchantments.getOrThrow(Enchantments.SMITE), 4);
+        helper.assertTrue(!controller.patternOutputsMatch(recipe, snapshot,
+                        List.of(new MachineOutput.ItemOutput(changed, 1F))),
+                "A different enchantment type cannot match");
+        changed = expected.copy();
+        changed.remove(DataComponents.ENCHANTMENTS);
+        helper.assertTrue(!controller.patternOutputsMatch(recipe, snapshot,
+                        List.of(new MachineOutput.ItemOutput(changed, 1F))),
+                "A missing enchantment cannot match");
+        changed = expected.copy();
+        changed.setCount(8);
+        helper.assertTrue(!controller.patternOutputsMatch(recipe, snapshot,
+                        List.of(new MachineOutput.ItemOutput(changed, 1F))),
+                "Resolved output count must match exactly");
+        changed = expected.copy();
+        changed.set(DataComponents.CUSTOM_NAME, Component.literal("Different output name"));
+        helper.assertTrue(!controller.patternOutputsMatch(recipe, snapshot,
+                        List.of(new MachineOutput.ItemOutput(changed, 1F))),
+                "Resolved output name must match exactly");
+
+        var plain = new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 9), 1F);
+        helper.assertTrue(controller.patternOutputsMatch(patternRecipe(plain), snapshot, List.of(plain)),
+                "Plain output still matches without enchantments");
+        helper.assertTrue(!controller.patternOutputsMatch(patternRecipe(plain), snapshot,
+                        List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 8), 1F))),
+                "Plain output count differences remain rejected");
+        helper.assertTrue(!controller.patternOutputsMatch(patternRecipe(plain), snapshot, List.of(materialized)),
+                "Unexpected pattern components remain rejected");
+        helper.assertTrue(detached.stack().get(DataComponents.ENCHANTMENTS).isEmpty(),
+                "Pattern matching must not mutate the recipe's base stack");
+        var storedOutput = (MachineOutput.ItemOutput) recipe.machineOutputs().getFirst();
+        helper.assertTrue(ItemStack.matches(base, storedOutput.stack()),
+                "Matching must preserve the recipe-owned base stack's count, name and unmaterialized enchantment");
+        helper.assertTrue(storedOutput.components().matches(expected,
+                        helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE)),
+                "Matching must preserve the recipe-owned independent enchantment declaration");
+        helper.succeed();
+    }
+
+    private static MachineRecipe patternRecipe(MachineOutput output) {
+        return MachineRecipe.fromCanonical(MMCR.id("pattern_output_components"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(output), List.of(), 0, 1, false, false, false, Set.of());
+    }
+
     public void outputResolvesPlainJsonEnchantments(GameTestHelper helper) {
         ItemRequirement requirement = output();
         ItemStack resolved = requirement.stack(null);

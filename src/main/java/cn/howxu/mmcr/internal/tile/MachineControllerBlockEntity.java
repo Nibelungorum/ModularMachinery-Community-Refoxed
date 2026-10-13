@@ -133,6 +133,7 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
@@ -4834,8 +4835,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private static boolean samePatternOutput(MachineOutput expected, MachineOutput actual) {
         if (expected instanceof MachineOutput.ItemOutput expectedItem
                 && actual instanceof MachineOutput.ItemOutput actualItem) {
-            return expectedItem.stack().getCount() == actualItem.stack().getCount()
-                    && net.minecraft.world.item.ItemStack.isSameItemSameComponents(expectedItem.stack(), actualItem.stack());
+            ItemStack expectedStack = expectedItem.resolvedStack();
+            ItemStack actualStack = actualItem.resolvedStack();
+            return expectedStack.getCount() == actualStack.getCount()
+                    && ItemStack.isSameItemSameComponents(expectedStack, actualStack);
         }
         if (expected instanceof MachineOutput.FluidOutput expectedFluid
                 && actual instanceof MachineOutput.FluidOutput actualFluid) {

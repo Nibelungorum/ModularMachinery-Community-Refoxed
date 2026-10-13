@@ -128,6 +128,8 @@ public final class GameTestRegistry {
                 helper -> new ExampleScriptGameTest().structureBlocksResolve(helper));
         register(event, "item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().outputResolvesPlainJsonEnchantments(helper));
+        register(event, "pattern_output_enchantment_components", 20,
+                helper -> new ItemOutputComponentGameTest().patternOutputsMatchResolvedComponentsStrictly(helper));
         register(event, "recipe_serializer_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().recipeSerializerPreservesEnchantmentComponents(helper));
         register(event, "async_item_output_enchantment_components", 20,
@@ -171,6 +173,10 @@ public final class GameTestRegistry {
                 helper -> new PortContainerTransferGameTest().stackedBucketsRespectInventoryCapacity(helper));
         register(event, "port_container_invalid_requests", 20,
                 helper -> new PortContainerTransferGameTest().invalidRequestsCannotMutateStorage(helper));
+        register(event, "port_container_world_buckets", 20,
+                helper -> new PortContainerTransferGameTest().worldBucketsUseExtractionFirstAndOneByOne(helper));
+        register(event, "port_container_world_combined", 20,
+                helper -> new PortContainerTransferGameTest().worldCombinedTransfersSelectCompatibleResources(helper));
         register(event, "item_bus_capability", 100, ItemBusCapabilityGameTest::itemBusAcceptsItems);
         register(event, "item_bus_non_stackable_limit", 100,
                 ItemBusCapabilityGameTest::itemBusDoesNotStackNonStackableItems);
@@ -331,6 +337,10 @@ public final class GameTestRegistry {
                 helper -> new MekanismContainerTransferGameTest().fluidTankTransfersOnlyAvailableCapacity(helper));
         register(event, "port_container_mekanism_chemical_partial_mismatch", 20,
                 helper -> new MekanismContainerTransferGameTest().chemicalTankRetainsRemainderAndRejectsMismatch(helper));
+        register(event, "port_container_world_mekanism_chemical", 20,
+                helper -> new MekanismContainerTransferGameTest().worldChemicalTankUsesExtractionFirst(helper));
+        register(event, "port_container_world_mekanism_fluid", 20,
+                helper -> new MekanismContainerTransferGameTest().worldFluidTankUsesExtractionFirst(helper));
         register(event, "mekanism_normal_chemical_radioactive_rejection", 100,
                 helper -> new MekanismPortGameTest().normalChemicalPortRejectsRadioactiveAndAcceptsNonRadioactive(helper));
         register(event, "mekanism_radioactive_chemical_only_accepts_radioactive", 100,
@@ -529,8 +539,12 @@ public final class GameTestRegistry {
                     helper -> new AE2PatternInterfaceGameTest().patternInterfaceMemoryCardRoundTrip(helper));
             register(event, "ae2_me_pattern_interface", 160,
                     helper -> new AE2PatternInterfaceGameTest().patternInterfaceRestoresPatternsAndWakesNativeWork(helper));
+            register(event, "ae2_me_pattern_native_return_notification", 100,
+                    helper -> new AE2PatternInterfaceGameTest().nativeReturnDrainNotifiesWithoutBlockEntityPolling(helper));
             register(event, "ae2_me_pattern_interface_request", 100,
                     helper -> new AE2PatternInterfaceGameTest().patternRequestStartsControllerWithRemainingOrdinaryInput(helper));
+            register(event, "ae2_me_pattern_cpu_output_components", 100,
+                    helper -> new AE2PatternOutputComponentGameTest().craftingCpuPushesResolvedEnchantmentOutput(helper));
             // No need for this gameTest
             // register(event, "ae2_cpu_factory_pattern_batch", 180,
             //         helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));

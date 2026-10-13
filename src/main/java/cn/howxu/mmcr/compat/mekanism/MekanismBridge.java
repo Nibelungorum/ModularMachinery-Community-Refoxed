@@ -11,6 +11,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -93,7 +95,11 @@ public interface MekanismBridge {
     }
 
     default int transferChemicalContainer(ServerPlayer player, AbstractContainerMenu menu,
-                                          int tankIndex) {
+                                          int tankIndex, boolean extract) {
+        return 0;
+    }
+
+    default int interactWithChemicalContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
         return 0;
     }
 

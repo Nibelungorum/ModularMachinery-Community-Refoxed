@@ -574,6 +574,44 @@ public class AE2PatternInterfaceGameTest {
         });
     }
 
+    public void nativeReturnDrainNotifiesWithoutBlockEntityPolling(GameTestHelper helper) {
+        helper.setBlock(PORT_POS, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        helper.setBlock(ME_CHEST_POS, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(ENERGY_POS, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+
+        helper.startSequence().thenWaitUntil(() -> {
+            helper.assertTrue(host(helper).getMainNode().getNode() != null
+                            && helper.<MEChestBlockEntity>getBlockEntity(ME_CHEST_POS).getMainNode().getNode() != null
+                            && helper.<CreativeEnergyCellBlockEntity>getBlockEntity(ENERGY_POS).getMainNode().getNode() != null,
+                    "Native AE2 nodes initialize before connecting the return network");
+        }).thenExecute(() -> connectNetwork(helper)).thenWaitUntil(() -> {
+            helper.assertTrue(host(helper).getMainNode().isActive(), "Return network becomes active");
+        }).thenExecute(() -> {
+            PatternInterfaceBlockEntity host = host(helper);
+            AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
+            host.getLogic().getReturnInv().setStack(0, new GenericStack(gold, 2L));
+            host.flushStorageChanges();
+            long before = host.storageRevision();
+            try {
+                Method doWork = PatternProviderLogic.class.getDeclaredMethod("doWork");
+                doWork.setAccessible(true);
+                helper.assertTrue((boolean) doWork.invoke(host.getLogic()), "Native return work releases inventory capacity");
+            } catch (ReflectiveOperationException exception) {
+                throw new AssertionError("Unable to execute native pattern-provider return work", exception);
+            }
+            helper.assertTrue(host.getLogic().getReturnInv().isEmpty(), "Native work drains the return inventory");
+            helper.assertTrue(helper.<MEChestBlockEntity>getBlockEntity(ME_CHEST_POS).getInventory()
+                            .extract(gold, 2L, Actionable.SIMULATE, appeng.api.networking.security.IActionSource.empty()) == 2L,
+                    "Native work returns all outputs to ME storage");
+            helper.assertTrue(host.storageRevision() > before,
+                    "Native drain notifies the host before any further block entity tick");
+            long afterDrain = host.storageRevision();
+            host.serverTick();
+            helper.assertTrue(host.storageRevision() == afterDrain,
+                    "Idle block entity tick does not repeat the native drain notification");
+        }).thenSucceed();
+    }
+
     private static void assertMenuCraftingLock(GameTestHelper helper, PatternInterfaceBlockEntity host,
                                                LockCraftingMode expected) {
         var menu = new PatternInterfaceMenu(AE2MenuTypes.PATTERN, 0,
