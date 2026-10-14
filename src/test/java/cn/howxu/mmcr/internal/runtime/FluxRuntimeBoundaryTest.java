@@ -20,12 +20,19 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.compat.appliedflux.loaded.FluxEnergyTicker;
 import appeng.api.networking.ticking.TickRateModulation;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.ConfigTestSupport;
@@ -41,8 +48,12 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.fml.config.IConfigSpec;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,6 +106,58 @@ class FluxRuntimeBoundaryTest {
         } finally {
             if (serverThreadScope != null) serverThreadScope.close();
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void bulk_resource_start_with_flux_prefetch_advances_without_quarantine_or_replay(boolean pattern) {
+        Fixture fixture = new Fixture(2, false);
+        LongItemStorage input = new LongItemStorage(2, Long.MAX_VALUE, null);
+        input.setContents(0, new ItemStack(Items.IRON_INGOT), 1001L);
+        input.setContents(1, new ItemStack(Items.GOLD_INGOT), 10001L);
+        LongFluidStorage fluids = new LongFluidStorage(Long.MAX_VALUE, null);
+        fluids.setContents(0, new FluidStack(Fluids.WATER, 1), 10001L);
+        var components = new ArrayList<>(fixture.controller.componentRuntime().components());
+        components.add(new ProcessingComponent(null, new TestCapabilityHost(List.of(new ItemBusCapability(input, IOType.INPUT),
+                new FluidHatchCapability(fluids, IOType.INPUT))),
+                new BlockPos(4, 0, 0), BlockPos.ZERO, (String) null));
+        fixture.controller.componentRuntime().replaceComponents(components);
+        RuntimeTestFixtures.republish(fixture.controller);
+        List<MachineRequirement> requirements = new ArrayList<>(fixture.recipe.requirements());
+        requirements.add(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT),
+                1000, ItemStack.EMPTY));
+        requirements.add(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.GOLD_INGOT),
+                10000, ItemStack.EMPTY));
+        requirements.add(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER),
+                10000, FluidStack.EMPTY));
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("bulk_resource_flux_start"), MACHINE, 2,
+                requirements, List.of(new ItemStack(Items.IRON_NUGGET)));
+        RecipeRegistry.registerStatic(recipe);
+
+        if (pattern) {
+            var prepared = fixture.runtime.preparePatternStart(recipe, 1L, List.of());
+            assertThat(prepared).isNotNull();
+            assertThat(fixture.runtime.reservePatternStart()).isTrue();
+            assertThat(fixture.runtime.commitPatternStart(prepared)).isTrue();
+        } else {
+            fixture.runtime.start(recipe, 1L);
+        }
+        assertThat(fixture.runtime.active()).isTrue();
+        assertThat(fixture.runtime.failure()).isNull();
+        assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+        assertThat(input.amount(0)).isEqualTo(1L);
+        assertThat(input.amount(1)).isEqualTo(1L);
+        assertThat(fluids.amount(0)).isEqualTo(1L);
+        fixture.assertReservations(4L, 6L);
+
+        assertThat(fixture.attempt(MachineWorkMode.SYNC).advance()).isTrue();
+        assertThat(fixture.runtime.tickCount()).isEqualTo(1);
+        fixture.assertReservations(2L, 3L);
+        assertThat(input.amount(0)).isEqualTo(1L);
+        assertThat(input.amount(1)).isEqualTo(1L);
+        assertThat(fluids.amount(0)).isEqualTo(1L);
+        assertThat(fixture.first.networkCommits).isEqualTo(1);
+        assertThat(fixture.second.networkCommits).isEqualTo(1);
     }
 
     @ParameterizedTest

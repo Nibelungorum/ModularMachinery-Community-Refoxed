@@ -18,6 +18,8 @@ import cn.howxu.mmcr.test.capability.CapabilityContractAssertions;
 import cn.howxu.mmcr.test.capability.TestExchangeFacet;
 import cn.howxu.mmcr.test.capability.TestNetworkParticipantFacet;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
@@ -67,6 +69,63 @@ class CapabilityFacetContractTest {
         assertThat(items.resource(0).is(Items.IRON_INGOT)).isTrue();
         assertThat(fluids.resource(0).is(Fluids.WATER)).isTrue();
         assertThat(energy.getAmountAsLong()).isEqualTo(40L);
+    }
+
+    @Test
+    void long_fluid_operations_preserve_the_planned_tank_beyond_integer_range() {
+        LongFluidStorage storage = new LongFluidStorage(2, Long.MAX_VALUE, null);
+        FluidStack water = new FluidStack(Fluids.WATER, 1);
+        long amount = (long) Integer.MAX_VALUE + 5L;
+        storage.setContents(0, water, 100L);
+        storage.setContents(1, water, amount + 7L);
+        FluidHatchCapability input = new FluidHatchCapability(storage, IOType.INPUT);
+
+        assertThat(input.prepareOperation(new CapabilityRequests.FluidRequest(input.type(), IOType.INPUT, 1L,
+                List.of(new CapabilityRequests.FluidAction(1, water, amount, false)))).commit().success()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(100L);
+        assertThat(storage.amount(1)).isEqualTo(7L);
+
+        FluidHatchCapability output = new FluidHatchCapability(storage, IOType.OUTPUT);
+        assertThat(output.prepareOperation(new CapabilityRequests.FluidRequest(output.type(), IOType.OUTPUT, 1L,
+                List.of(new CapabilityRequests.FluidAction(1, water, amount, true)))).commit().success()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(100L);
+        assertThat(storage.amount(1)).isEqualTo(amount + 7L);
+    }
+
+    @Test
+    void long_fluid_extraction_rejects_a_changed_component_without_draining_another_tank() {
+        LongFluidStorage storage = new LongFluidStorage(2, Long.MAX_VALUE, null);
+        FluidStack expected = new FluidStack(Fluids.WATER, 1);
+        expected.set(DataComponents.CUSTOM_NAME, Component.literal("Expected"));
+        FluidStack changed = new FluidStack(Fluids.WATER, 1);
+        changed.set(DataComponents.CUSTOM_NAME, Component.literal("Changed"));
+        storage.setContents(0, expected, 100L);
+        storage.setContents(1, changed, 100L);
+        FluidHatchCapability input = new FluidHatchCapability(storage, IOType.INPUT);
+
+        assertThat(input.prepareOperation(new CapabilityRequests.FluidRequest(input.type(), IOType.INPUT, 1L,
+                List.of(new CapabilityRequests.FluidAction(1, expected, 50L, false)))).commit().success()).isFalse();
+        assertThat(storage.amount(0)).isEqualTo(100L);
+        assertThat(storage.amount(1)).isEqualTo(100L);
+        assertThat(FluidStack.isSameFluidSameComponents(storage.resource(1), changed)).isTrue();
+    }
+
+    @Test
+    void long_item_extraction_rejects_changed_components_and_insufficient_amounts_without_debit() {
+        LongItemStorage storage = new LongItemStorage(1, Long.MAX_VALUE, null);
+        ItemStack expected = new ItemStack(Items.IRON_INGOT);
+        expected.set(DataComponents.CUSTOM_NAME, Component.literal("Expected"));
+        ItemStack changed = new ItemStack(Items.IRON_INGOT);
+        changed.set(DataComponents.CUSTOM_NAME, Component.literal("Changed"));
+        storage.setContents(0, changed, 1000L);
+        ItemBusCapability input = new ItemBusCapability(storage, IOType.INPUT);
+
+        assertThat(input.prepareOperation(new CapabilityRequests.ItemRequest(input.type(), IOType.INPUT, 1L,
+                List.of(new CapabilityRequests.ItemAction(0, expected, 1000L, false)))).commit().success()).isFalse();
+        assertThat(input.prepareOperation(new CapabilityRequests.ItemRequest(input.type(), IOType.INPUT, 1L,
+                List.of(new CapabilityRequests.ItemAction(0, changed, 1001L, false)))).commit().success()).isFalse();
+        assertThat(storage.amount(0)).isEqualTo(1000L);
+        assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), changed)).isTrue();
     }
 
     @Test

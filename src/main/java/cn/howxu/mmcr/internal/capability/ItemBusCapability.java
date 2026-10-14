@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.machine.definition.DisplayStack;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
@@ -162,6 +163,16 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
                             : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), committed));
                     continue;
                 }
+            }
+            if (!action.insert() && itemHandler instanceof LongItemStorage storage) {
+                long simulated = ItemStack.isSameItemSameComponents(storage.resource(action.slot()), action.stack())
+                        ? storage.forceExtract(action.slot(), action.amount(), true) : 0L;
+                if (simulated != action.amount()) return failure(BuiltinFailureReasons.MISSING_INPUT,
+                        movementDetails(action.amount(), simulated));
+                long committed = storage.forceExtract(action.slot(), action.amount(), false);
+                if (committed != action.amount()) return failure(BuiltinFailureReasons.MISSING_INPUT,
+                        movementDetails(action.amount(), committed));
+                continue;
             }
             long remaining = action.amount();
             while (remaining > 0L) {

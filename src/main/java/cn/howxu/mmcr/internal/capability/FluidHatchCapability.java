@@ -26,6 +26,7 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
@@ -153,6 +154,20 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
                             : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), committed));
                     continue;
                 }
+            }
+            if (fluidHandler instanceof LongFluidStorage storage) {
+                long simulated = action.insert()
+                        ? storage.forceInsert(action.tank(), action.stack(), action.amount(), true)
+                        : FluidStack.isSameFluidSameComponents(storage.resource(action.tank()), action.stack())
+                                ? storage.forceExtract(action.tank(), action.amount(), true) : 0L;
+                if (simulated != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
+                        : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), simulated));
+                long committed = action.insert()
+                        ? storage.forceInsert(action.tank(), action.stack(), action.amount(), false)
+                        : storage.forceExtract(action.tank(), action.amount(), false);
+                if (committed != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
+                        : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), committed));
+                continue;
             }
             long remaining = action.amount();
             while (remaining > 0L) {
