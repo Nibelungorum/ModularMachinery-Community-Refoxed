@@ -43,6 +43,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import com.mojang.serialization.Codec;
 import cn.howxu.mmcr.compat.jade.MachineControllerDataProvider;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
+import cn.howxu.mmcr.internal.network.PktControllerStructureCheckPayload;
 import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import net.minecraft.world.level.ChunkPos;
 import net.neoforged.neoforge.event.level.ChunkWatchEvent;
@@ -95,6 +96,7 @@ import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerSynchronizer;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
@@ -218,6 +220,174 @@ public final class ControllerUiGameTest {
         private Runnable afterHandle;
         private Runnable afterRevision;
         private Runnable afterSnapshot;
+    }
+
+    public static void manualStructureCheck(GameTestHelper helper) {
+        formedFixture(helper, fixture -> {
+            try (fixture) {
+                var owner = fixture.owner;
+                var pos = owner.getBlockPos();
+                var level = helper.getLevel();
+                var request = new PktControllerStructureCheckPayload(pos);
+                var otherPos = pos.above();
+                var previousOtherState = level.getBlockState(otherPos);
+                var factoryPos = pos.east();
+                var factoryState = level.getBlockState(factoryPos);
+                try {
+                    level.setBlock(otherPos, ModBlocks.controllerFor(MACHINE_ID).get().defaultBlockState()
+                            .setValue(MachineControllerBlock.FACING, Direction.SOUTH)
+                            .setValue(MachineControllerBlock.ROLL_FACING, Direction.NORTH), 3);
+                    helper.assertTrue(level.getBlockEntity(otherPos) instanceof MachineControllerBlockEntity,
+                            "The other target is an actual controller in the same nearby world");
+                    var other = (MachineControllerBlockEntity) level.getBlockEntity(otherPos);
+                    other.setMachine(MachineRegistry.getMachine(MACHINE_ID));
+                    other.tickStructure(level, otherPos);
+                    Object otherWork = manualStructureCheckWork(other);
+                    helper.assertTrue(!(boolean) snapshotField(otherWork, "dirty")
+                                    && (long) snapshotField(otherWork, "nextCheckTick") > level.getGameTime(),
+                            "The unrelated controller has completed its own failed check and is waiting for its interval");
+                    for (boolean factory : List.of(false, true)) {
+                        var player = fixture.newPlayer();
+                        var menu = lifecycleMenu(fixture, player, factory);
+                        player.containerMenu = menu;
+                        ControllerUiEvents.opened(new PlayerContainerEvent.Open(player, menu));
+                        long version = owner.structureSnapshot().version();
+
+                        player.containerMenu = player.inventoryMenu;
+                        helper.assertTrue(!requestStructureCheck(player, request), "Inventory menu cannot request a controller check");
+                        player.containerMenu = menu;
+                        helper.assertTrue(!requestStructureCheck(player, new PktControllerStructureCheckPayload(otherPos)),
+                                "A normal/factory menu cannot authorize another actual nearby controller");
+                        helper.assertTrue(manualStructureCheckWork(other).equals(otherWork),
+                                "A rejected target leaves the other controller's actual structure work unchanged");
+                        player.setPos(pos.getX() + 100, pos.getY(), pos.getZ());
+                        helper.assertTrue(!requestStructureCheck(player, request), "Out-of-range requests are rejected");
+                        helper.assertTrue(owner.structureSnapshot().version() == version,
+                                "Rejected requests leave real structure work unchanged");
+
+                        player.setPos(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+                        int matches = owner.matcherInvocationCountForTesting();
+                        helper.assertTrue(requestStructureCheck(player, request), "An actual normal/factory menu authorizes C");
+                        owner.tickStructure(level, pos);
+                        helper.assertTrue(owner.matcherInvocationCountForTesting() > matches && owner.structureSnapshot().formed(),
+                                "C enters the real matcher and retains a valid structure without waiting for the interval");
+
+                        owner.setStructureScanBatchesForTesting(3);
+                        try {
+                            var safetyCheck = MachineControllerBlockEntity.class.getDeclaredMethod(
+                                    "runStructureSafetyCheck", owner.structureSnapshot().getClass());
+                            safetyCheck.setAccessible(true);
+                            safetyCheck.invoke(owner, owner.structureSnapshot());
+                        } catch (ReflectiveOperationException exception) {
+                            throw new AssertionError("Cannot start the real safety scan", exception);
+                        }
+                        helper.assertTrue(owner.structureScanCursorForTesting() >= 0,
+                                "A real batched safety scan is active before C supersedes it");
+                        level.setBlock(factoryPos, Blocks.AIR.defaultBlockState(), 3);
+                        int[] interruptedScanDiagnostics = {0};
+                        owner.setStructureDiagnosticCallbackForTesting(() -> interruptedScanDiagnostics[0]++);
+                        try {
+                            helper.assertTrue(requestStructureCheck(player, request)
+                                            && owner.structureScanCursorForTesting() == -1
+                                            && owner.isStructureDiagnosticRequestedForTesting(),
+                                    "C cancels the old safety scan before binding its new diagnostic request");
+                            owner.tickStructure(level, pos);
+                            helper.assertTrue(interruptedScanDiagnostics[0] == 1
+                                            && !owner.isStructureDiagnosticRequestedForTesting(),
+                                    "The replacement check reports the actual mismatch exactly once");
+                        } finally {
+                            owner.setStructureDiagnosticCallbackForTesting(null);
+                            owner.setStructureScanBatchesForTesting(null);
+                        }
+                        helper.assertTrue(!owner.structureSnapshot().formed() && !menu.stillValid(player),
+                                "A failed real structure check invalidates the previously formed normal/factory menu");
+                        Object failedWork = manualStructureCheckWork(owner);
+                        helper.assertTrue(!requestStructureCheck(player, request)
+                                        && manualStructureCheckWork(owner).equals(failedWork),
+                                "The invalid normal/factory menu cannot enqueue C or change structure work");
+                        ((ControllerUiMenu) menu).uiServerSession().pollSnapshot();
+                        helper.assertTrue(((ControllerUiMenu) menu).uiServerSession().closed()
+                                        && player.containerMenu == player.inventoryMenu,
+                                "Actual session validation closes the invalid normal/factory menu");
+
+                        // Complete a failed unformed check so recovery cannot piggyback on reset's pending check.
+                        owner.requestImmediateStructureCheck();
+                        matches = owner.matcherInvocationCountForTesting();
+                        owner.tickStructure(level, pos);
+                        failedWork = manualStructureCheckWork(owner);
+                        long gameTime = level.getGameTime();
+                        helper.assertTrue(owner.matcherInvocationCountForTesting() > matches
+                                        && !owner.structureSnapshot().formed()
+                                        && !(boolean) snapshotField(failedWork, "dirty")
+                                        && (long) snapshotField(failedWork, "nextCheckTick") > gameTime,
+                                "An actual failed unformed check schedules a future normal check interval");
+                        var provider = owner.getBlockState().getMenuProvider(level, pos);
+                        helper.assertTrue(provider != null && player.openMenu(provider).isPresent()
+                                        && player.containerMenu instanceof MachineControllerMenu
+                                        && ((ControllerUiMenu) player.containerMenu).uiServerSession().validate(),
+                                "The actual machine provider opens a valid normal menu after factory formation is lost");
+                        int[] diagnostics = {0};
+                        owner.setStructureDiagnosticCallbackForTesting(() -> diagnostics[0]++);
+                        try {
+                            matches = owner.matcherInvocationCountForTesting();
+                            helper.assertTrue(requestStructureCheck(player, request),
+                                    "An unformed controller menu authorizes C while the structure is still incomplete");
+                            Object requestedWork = manualStructureCheckWork(owner);
+                            helper.assertTrue(owner.isStructureDiagnosticRequestedForTesting()
+                                            && player.getUUID().equals(snapshotField(requestedWork, "diagnosticPlayerId"))
+                                            && level.dimension().equals(snapshotField(requestedWork, "diagnosticDimension")),
+                                    "C binds failure feedback to the requesting player and dimension");
+                            owner.tickStructure(level, pos);
+                            helper.assertTrue(owner.matcherInvocationCountForTesting() > matches
+                                            && !owner.structureSnapshot().formed() && diagnostics[0] == 1
+                                            && !owner.isStructureDiagnosticRequestedForTesting(),
+                                    "An incomplete structure runs real matching and emits one mismatch diagnostic before the interval");
+                        } finally {
+                            owner.setStructureDiagnosticCallbackForTesting(null);
+                        }
+                        level.setBlock(factoryPos, factoryState, 3);
+                        matches = owner.matcherInvocationCountForTesting();
+                        owner.tickStructure(level, pos);
+                        helper.assertTrue(owner.matcherInvocationCountForTesting() == matches
+                                        && !owner.structureSnapshot().formed()
+                                        && (long) snapshotField(manualStructureCheckWork(owner), "nextCheckTick") > gameTime,
+                                "Restoring the missing component does not run normal matching before the failed-check interval");
+                        helper.assertTrue(requestStructureCheck(player, request), "The reopened normal menu authorizes C recovery");
+                        owner.tickStructure(level, pos);
+                        helper.assertTrue(level.getGameTime() == gameTime
+                                        && owner.matcherInvocationCountForTesting() > matches && owner.structureSnapshot().formed(),
+                                "C triggers actual matching and reforms the repaired fixture at the same not-yet-due game time");
+                        player.closeContainer();
+                        helper.assertTrue(!requestStructureCheck(player, request), "A closed menu cannot request another check");
+                    }
+                } finally {
+                    level.setBlock(factoryPos, factoryState, 3);
+                    level.setBlock(otherPos, previousOtherState, 3);
+                }
+            }
+        });
+        helper.succeed();
+    }
+
+    private static Object manualStructureCheckWork(MachineControllerBlockEntity owner) {
+        try {
+            var method = MachineControllerBlockEntity.class.getDeclaredMethod("structureWorkSnapshotForTesting");
+            method.setAccessible(true);
+            return method.invoke(owner);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Cannot inspect actual structure-check scheduling", exception);
+        }
+    }
+
+    private static boolean requestStructureCheck(ServerPlayer player, PktControllerStructureCheckPayload request) {
+        try {
+            var method = PktControllerStructureCheckPayload.class.getDeclaredMethod("checkOnServer",
+                    ServerPlayer.class, PktControllerStructureCheckPayload.class);
+            method.setAccessible(true);
+            return (boolean) method.invoke(null, player, request);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Cannot invoke the actual structure-check request handler", exception);
+        }
     }
 
     public static void terminalMenuLifecycle(GameTestHelper helper) {

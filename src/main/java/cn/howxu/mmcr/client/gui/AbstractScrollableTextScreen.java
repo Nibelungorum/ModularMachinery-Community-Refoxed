@@ -29,6 +29,7 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
     private int textScrollOffset;
     private boolean frameActive;
     private List<ControllerScreenTextComposer.VisualLine> frameLines;
+    private boolean sidebarButtonGesture;
 
     protected AbstractScrollableTextScreen(M menu, Inventory inventory,
                                            Component title, int imageWidth, int imageHeight) {
@@ -36,6 +37,45 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         this.imageWidth = imageWidth;
         this.imageHeight = imageHeight;
         this.inventoryLabelY = imageHeight - 94;
+    }
+
+    @Override
+    protected void init() {
+        sidebarButtonGesture = false;
+        super.init();
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
+        // A subpage may have received the previous release instead of this screen.
+        sidebarButtonGesture = false;
+        boolean sidebarButton = hasClickedOutside(mouseX, mouseY, leftPos, topPos, button)
+                && getChildAt(mouseX, mouseY).orElse(null) instanceof StyledButton;
+        boolean handled = super.mouseClicked(mouseX, mouseY, button);
+        if (sidebarButton && handled) {
+            sidebarButtonGesture = true;
+            // Vanilla assigns focus after onPress, so callback-only clearing is too early.
+            setFocused(null);
+            setDragging(false);
+        }
+        return handled;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (button == 0 && sidebarButtonGesture) return true;
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && sidebarButtonGesture) {
+            sidebarButtonGesture = false;
+            // AbstractContainerScreen ignores child release consumption and still clicks slots.
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     static int visibleLineCount(int viewportHeight, float scale, int lineSpacing, int fontLineHeight) {

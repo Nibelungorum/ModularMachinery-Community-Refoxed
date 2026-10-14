@@ -880,6 +880,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void requestImmediateStructureCheck(@Nullable ServerPlayer diagnosticPlayer) {
+        if (diagnosticPlayer != null) clearStructureScan();
         runtime.requestStructureCheck(diagnosticPlayer == null
                 ? StructureRuntime.CheckReason.DIRTY_EVENT : StructureRuntime.CheckReason.DIAGNOSTIC);
         if (diagnosticPlayer != null) {

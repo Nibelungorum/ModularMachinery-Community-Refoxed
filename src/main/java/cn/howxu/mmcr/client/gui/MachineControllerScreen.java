@@ -9,11 +9,13 @@ import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
 import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.network.PktControllerStructureCheckPayload;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
@@ -37,9 +39,10 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     private static final int IDLE_STATUS_COLOR = 0xFFFFAA00;
     private static final float DETAIL_SCALE = 0.85F;
     private static final int DETAIL_LINE_SPACING = 10;
-    static final int RECIPE_POOL_BUTTON_X = 154;
-    static final int RECIPE_POOL_BUTTON_Y = 9;
+    private static final int ACTION_BUTTON_SIZE = 16;
+    private static final int ACTION_BUTTON_GAP = 2;
     private StyledButton recipePoolButton;
+    private StyledButton structureCheckButton;
     private final Supplier<ControllerUiSnapshot> snapshot;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
@@ -58,26 +61,43 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     @Override
     protected void init() {
         super.init();
+        int buttonX = leftPos + imageWidth + ACTION_BUTTON_GAP;
         recipePoolButton = addRenderableWidget(new StyledButton(
-                leftPos + RECIPE_POOL_BUTTON_X, topPos + RECIPE_POOL_BUTTON_Y, 12, 12,
-                Component.literal("M"), button -> {
+                buttonX, topPos + 1, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
+                Component.translatable("gui.mmcr.recipe_pool.button"), button -> {
                     ControllerUiSnapshot value = snapshot.get();
                     minecraft.setScreen(new RecipePoolScreen(this, value.controllerPos(), value.recipePoolIds(),
                             value.currentRecipePoolId().orElse(null)));
                 }));
         recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
-        updateRecipePoolButton();
+        structureCheckButton = addRenderableWidget(new StyledButton(
+                buttonX, topPos + 1, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
+                Component.translatable("gui.mmcr.controller.check_structure.button"), button -> {
+                    PacketDistributor.sendToServer(new PktControllerStructureCheckPayload(snapshot.get().controllerPos()));
+                    button.setFocused(false);
+                }));
+        structureCheckButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.controller.check_structure")));
+        updateControllerButtons();
     }
 
     @Override
     protected void containerTick() {
         super.containerTick();
-        updateRecipePoolButton();
+        updateControllerButtons();
     }
 
-    private void updateRecipePoolButton() {
-        List<ResourceLocation> recipePoolIds = snapshot.get().recipePoolIds();
-        if (recipePoolButton != null) recipePoolButton.visible = recipePoolIds.size() > 1;
+    private void updateControllerButtons() {
+        boolean showRecipePools = snapshot.get().recipePoolIds().size() > 1;
+        int buttonX = leftPos + imageWidth + ACTION_BUTTON_GAP;
+        if (recipePoolButton != null) {
+            recipePoolButton.visible = showRecipePools;
+            recipePoolButton.active = showRecipePools;
+            recipePoolButton.setPosition(buttonX, topPos + 1);
+        }
+        if (structureCheckButton != null) {
+            structureCheckButton.setPosition(buttonX,
+                    topPos + 1 + (showRecipePools ? ACTION_BUTTON_SIZE + ACTION_BUTTON_GAP : 0));
+        }
     }
 
     @Override

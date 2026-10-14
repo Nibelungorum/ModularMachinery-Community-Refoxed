@@ -95,6 +95,7 @@ public final class GameTestRegistry {
         register(event, "controller_ui_menu_lifecycle", 20,
                 helper -> new ControllerUiGameTest().openMetadataAndLifecycle(helper));
         register(event, "controller_ui_terminal_menu_lifecycle", 20, ControllerUiGameTest::terminalMenuLifecycle);
+        register(event, "controller_ui_manual_structure_check", 20, ControllerUiGameTest::manualStructureCheck);
         register(event, "controller_ui_request_storage", 100, ControllerUiGameTest::requestStorage);
         register(event, "controller_ui_reopen_stale_request", 100, ControllerUiGameTest::reopenStaleRequest);
         register(event, "controller_ui_lane_removed", 100, ControllerUiGameTest::laneRemoved);

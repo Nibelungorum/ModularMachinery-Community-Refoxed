@@ -22,8 +22,8 @@ public class StyledButton extends Button {
     }
 
     protected void drawBackground(GuiGraphics graphics) {
-        int baseColor = active ? 0xFF6B6B6B : 0xFF3F3F3F;
-        int borderColor = isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFAAAAAA;
+        int baseColor = active ? 0xFF9A9FB4 : 0xFF8E92A2;
+        int borderColor = isHoveredOrFocused() ? 0xFFF2F3F3 : 0xFFCBCCD4;
         graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), borderColor);
         graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, baseColor);
     }
