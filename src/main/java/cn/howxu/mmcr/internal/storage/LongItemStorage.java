@@ -79,7 +79,8 @@ public class LongItemStorage implements IItemHandlerModifiable {
     @Override
     public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
         if (stack == null || stack.isEmpty() || !isItemValid(slot, stack)) return stack;
-        long available = stack.getMaxStackSize() == 1 ? Math.max(0L, 1L - storage.amount(slot)) : stack.getCount();
+        long available = stack.getMaxStackSize() == 1 && storage.capacity(slot) != Long.MAX_VALUE
+                ? Math.max(0L, 1L - storage.amount(slot)) : stack.getCount();
         long inserted = storage.insertDirect(slot, stack, Math.min(stack.getCount(), available), simulate);
         return inserted == stack.getCount() ? ItemStack.EMPTY : stack.copyWithCount((int) (stack.getCount() - inserted));
     }

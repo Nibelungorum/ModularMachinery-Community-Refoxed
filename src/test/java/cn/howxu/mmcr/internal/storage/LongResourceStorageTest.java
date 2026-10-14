@@ -3,13 +3,18 @@ package cn.howxu.mmcr.internal.storage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,6 +54,59 @@ class LongResourceStorageTest {
         ItemStack rejected = storage.insertItem(0, new ItemStack(Items.GOLD_INGOT, 1), true);
         assertThat(ItemStack.isSameItemSameComponents(rejected, new ItemStack(Items.GOLD_INGOT))).isTrue();
         assertThat(rejected.getCount()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 64})
+    void extended_item_handler_merges_independently_created_items_with_identical_data(int stackLimit) {
+        AtomicInteger changes = new AtomicInteger();
+        LongItemStorage storage = new LongItemStorage(1, Long.MAX_VALUE, changes::incrementAndGet);
+        ItemStack first = dataItem(stackLimit, 1073741824L);
+        ItemStack second = dataItem(stackLimit, 1073741824L);
+
+        assertThat(storage.insertItem(0, first, false).isEmpty()).isTrue();
+        assertThat(storage.insertItem(0, second, true).isEmpty()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(1L);
+        assertThat(changes).hasValue(1);
+        assertThat(storage.insertItem(0, second, false).isEmpty()).isTrue();
+
+        assertThat(storage.amount(0)).isEqualTo(2L);
+        assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), second)).isTrue();
+        assertThat(changes).hasValue(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 64})
+    void extended_item_handler_rejects_different_data_without_changing_stored_items(int stackLimit) {
+        LongItemStorage storage = new LongItemStorage(1, Long.MAX_VALUE, null);
+        ItemStack stored = dataItem(stackLimit, 1073741824L);
+        ItemStack different = dataItem(stackLimit, 1073741823L);
+        storage.insertItem(0, stored, false);
+
+        assertThat(storage.insertItem(0, different, true).getCount()).isEqualTo(1);
+        assertThat(storage.insertItem(0, different, false).getCount()).isEqualTo(1);
+        assertThat(storage.amount(0)).isEqualTo(1L);
+        assertThat(ItemStack.isSameItemSameComponents(storage.resource(0), stored)).isTrue();
+    }
+
+    @Test
+    void ordinary_item_handler_keeps_unstackable_items_separate() {
+        LongItemStorage storage = new LongItemStorage(1, 64L, null);
+        ItemStack item = dataItem(1, 1073741824L);
+
+        assertThat(storage.insertItem(0, item, false).isEmpty()).isTrue();
+        assertThat(storage.insertItem(0, item.copy(), true).getCount()).isEqualTo(1);
+        assertThat(storage.insertItem(0, item.copy(), false).getCount()).isEqualTo(1);
+        assertThat(storage.amount(0)).isEqualTo(1L);
+    }
+
+    private static ItemStack dataItem(int stackLimit, long energy) {
+        ItemStack stack = new ItemStack(Items.IRON_INGOT);
+        CompoundTag data = new CompoundTag();
+        data.putLong("energy", energy);
+        stack.set(DataComponents.MAX_STACK_SIZE, stackLimit);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(data));
+        return stack;
     }
 
     @Test
