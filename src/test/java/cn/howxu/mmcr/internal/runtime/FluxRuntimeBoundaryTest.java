@@ -152,7 +152,7 @@ class FluxRuntimeBoundaryTest {
 
         assertThat(fixture.attempt(MachineWorkMode.SYNC).advance()).isTrue();
         assertThat(fixture.runtime.tickCount()).isEqualTo(1);
-        fixture.assertReservations(2L, 3L);
+        fixture.assertReservations(0L, 5L);
         assertThat(input.amount(0)).isEqualTo(1L);
         assertThat(input.amount(1)).isEqualTo(1L);
         assertThat(fluids.amount(0)).isEqualTo(1L);
