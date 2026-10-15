@@ -423,6 +423,31 @@ class CraftingRuntimeAirTest {
     }
 
     @Test
+    void isolation_change_during_live_air_preflight_rejects_before_the_first_native_payment() {
+        var first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        var second = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        ItemStack stack = new ItemStack(Items.IRON_INGOT);
+        stack.set(DataComponents.MAX_STACK_SIZE, 64);
+        first.itemHandler().setContents(0, stack, 1);
+        second.itemHandler().setContents(0, stack, 1);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+        AirCapability air = new AirCapability(IOType.INPUT, 500);
+        attach(controller, air);
+        CraftingRuntime runtime = runtime(controller);
+        air.onValidate = () -> controller.setFullyInputIsolated(true);
+        MachineRecipe recipe = recipe("air_preflight_isolation", 3, List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY),
+                AirRequirement.input(0, 4F)));
+        assertThat(runtime.start(recipe, 1).isCrafting()).isFalse();
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
+        assertThat(runtime.active()).isFalse();
+        assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
+        assertThat(first.itemHandler().amount(0)).isEqualTo(1);
+        assertThat(second.itemHandler().amount(0)).isEqualTo(1);
+        assertThat(air.applyCalls).isZero();
+    }
+
+    @Test
     void patternStartChecksLaterRequirementsAgainstLiveVirtualDrainWithoutApplyingEarlierOnes() {
         for (long laterRate : List.of(0L, 20L)) {
             var items = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));

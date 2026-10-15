@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
@@ -11,6 +12,22 @@ import net.minecraft.world.inventory.DataSlot;
  * 具体子类决定使用哪个 {@link MenuType};槽位数据由服务端数据包同步给客户端实例。
  */
 public abstract class AbstractMachineMenu extends AbstractContainerMenu {
+    private InputIsolationMenuState inputIsolation = InputIsolationMenuState.forPort(null);
+
+    protected final void bindInputIsolation(InputIsolationMenuState state) {
+        inputIsolation = state;
+        addDataSlot(state.dataSlot());
+    }
+
+    public final InputIsolationMenuState inputIsolation() { return inputIsolation; }
+
+    @Override
+    public boolean clickMenuButton(Player player, int buttonId) {
+        if (buttonId == InputIsolationMenuState.DISABLE || buttonId == InputIsolationMenuState.ENABLE) {
+            return inputIsolation.handleClick(this, player, buttonId);
+        }
+        return super.clickMenuButton(player, buttonId);
+    }
 
     protected AbstractMachineMenu(MenuType<?> type, int containerId) {
         super(type, containerId);

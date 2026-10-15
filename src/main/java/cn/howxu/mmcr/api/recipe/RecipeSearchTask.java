@@ -19,6 +19,10 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -27,6 +31,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Searches published controller state with the current execution capabilities and returns a recipe handle.
@@ -39,9 +44,35 @@ public final class RecipeSearchTask {
     private final long structureVersion;
     private final long maxParallelism;
     private final List<MachineRecipe> candidates;
-    private final List<MachineCapability> capabilities;
+    private final CapabilitySnapshot capabilities;
     private final List<RecipeModifier> modifiers;
     private final @Nullable List<PlanningValue> planningValues;
+
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, long structureVersion,
+                            long maxParallelism, List<MachineRecipe> candidates, CapabilitySnapshot capabilities) {
+        this(snapshot, machineId, MachineRegistry.recipePoolForMachine(machineId), structureVersion,
+                maxParallelism, orderedCandidates(candidates), capabilities, flattenModifiers(snapshot), null);
+    }
+
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, ResourceLocation recipePoolId,
+                            long structureVersion, long maxParallelism, List<MachineRecipe> candidates,
+                            CapabilitySnapshot capabilities) {
+        this(snapshot, machineId, recipePoolId, structureVersion, maxParallelism, orderedCandidates(candidates),
+                capabilities, flattenModifiers(snapshot), null);
+    }
+
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, long structureVersion,
+                            long maxParallelism, List<MachineRecipe> candidates, CapabilitySnapshot capabilities,
+                            List<RecipeModifier> modifiers) {
+        this(snapshot, machineId, MachineRegistry.recipePoolForMachine(machineId), structureVersion,
+                maxParallelism, orderedCandidates(candidates), capabilities, modifiers, null);
+    }
+
+    public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, ResourceLocation recipePoolId,
+                            long structureVersion, long maxParallelism, List<MachineRecipe> candidates,
+                            CapabilitySnapshot capabilities, List<RecipeModifier> modifiers) {
+        this(snapshot, machineId, recipePoolId, structureVersion, maxParallelism, orderedCandidates(candidates), capabilities, modifiers, null);
+    }
 
     public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, long structureVersion,
                             long maxParallelism, List<MachineRecipe> candidates, List<MachineCapability> capabilities) {
@@ -61,19 +92,19 @@ public final class RecipeSearchTask {
                             List<RecipeModifier> modifiers) {
         this(snapshot, machineId, MachineRegistry.recipePoolForMachine(machineId), structureVersion,
                 maxParallelism, orderedCandidates,
-                capabilities, modifiers, null);
+                new CapabilitySnapshot(capabilities == null ? List.of() : capabilities), modifiers, null);
     }
 
     public RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId, ResourceLocation recipePoolId,
                             long structureVersion, long maxParallelism, List<MachineRecipe> orderedCandidates, List<MachineCapability> capabilities,
                             List<RecipeModifier> modifiers) {
         this(snapshot, machineId, recipePoolId, structureVersion, maxParallelism, orderedCandidates,
-                capabilities, modifiers, null);
+                new CapabilitySnapshot(capabilities == null ? List.of() : capabilities), modifiers, null);
     }
 
     private RecipeSearchTask(ControllerRuntimeSnapshot snapshot, ResourceLocation machineId,
                              @Nullable ResourceLocation recipePoolId, long structureVersion,
-                             long maxParallelism, List<MachineRecipe> orderedCandidates, List<MachineCapability> capabilities,
+                             long maxParallelism, List<MachineRecipe> orderedCandidates, CapabilitySnapshot capabilities,
                              List<RecipeModifier> modifiers, @Nullable List<PlanningValue> planningValues) {
         if (snapshot == null || machineId == null) throw new IllegalArgumentException("snapshot and machineId are required");
         this.snapshot = snapshot;
@@ -82,7 +113,7 @@ public final class RecipeSearchTask {
         this.maxParallelism = Math.max(1L, maxParallelism);
         this.candidates = planningValues == null ? poolCandidates(recipePoolId, orderedCandidates)
                 : List.copyOf(orderedCandidates == null ? List.of() : orderedCandidates);
-        this.capabilities = List.copyOf(capabilities == null ? List.of() : capabilities);
+        this.capabilities = capabilities;
         this.modifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
         this.planningValues = planningValues == null ? null : List.copyOf(planningValues);
     }
@@ -93,7 +124,7 @@ public final class RecipeSearchTask {
                                                        List<MachineRecipe> candidates,
                                                        List<PlanningValue> planningValues) {
         return new RecipeSearchTask(snapshot, machineId, null, structureVersion, maxParallelism, candidates,
-                List.of(), List.of(), planningValues);
+                new CapabilitySnapshot(List.of()), List.of(), planningValues);
     }
 
     public RecipeSearchResult compute() {
@@ -102,7 +133,7 @@ public final class RecipeSearchTask {
 
     /** Associates live prefetch hints with the searching runtime; worker captures have no live facets. */
     public RecipeSearchResult compute(@Nullable Object prefetchOwner) {
-        List<RecipeEnergyPrefetchFacet> facets = prefetchOwner == null ? List.of() : capabilities.stream()
+        List<RecipeEnergyPrefetchFacet> facets = prefetchOwner == null ? List.of() : capabilities.capabilities().stream()
                 .map(capability -> capability.facet(RecipeEnergyPrefetchFacet.class).orElse(null))
                 .filter(Objects::nonNull).distinct().toList();
         for (RecipeEnergyPrefetchFacet facet : facets) facet.onRecipeSearchStarted(prefetchOwner);
@@ -142,7 +173,8 @@ public final class RecipeSearchTask {
                 continue;
             }
             if (levelFailure == null) {
-                boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered);
+                boolean conflictProne = hasMoreSpecificPendingInputCandidate(recipe, recipeIndex, ordered,
+                        result.plan().inputScope());
                 return RecipeSearchResult.success(recipe, machineId, structureVersion,
                         snapshot.capabilityVersion(), snapshot.modifierVersion(), result, conflictProne);
             }
@@ -176,7 +208,7 @@ public final class RecipeSearchTask {
     }
 
     private CraftingContext borrowContext(MachineRecipe recipe) {
-        return CraftingContextPool.global().borrow(recipe.id(), new CapabilitySnapshot(capabilities), modifiers);
+        return CraftingContextPool.global().borrow(recipe.id(), capabilities, modifiers);
     }
 
     private static ExecutionStatus moduleFailure(MachineRecipe recipe) {
@@ -239,7 +271,7 @@ public final class RecipeSearchTask {
     }
 
     private boolean hasMoreSpecificPendingInputCandidate(MachineRecipe selectedRecipe, int selectedIndex,
-                                                          List<MachineRecipe> ordered) {
+                                                          List<MachineRecipe> ordered, InputScope selectedScope) {
         for (int index = 0; index < selectedIndex; index++) {
             MachineRecipe earlier = ordered.get(index);
             if (earlier.priority() != selectedRecipe.priority()
@@ -252,15 +284,22 @@ public final class RecipeSearchTask {
                 if (value != null && !value.successful() && value.inputInsufficientWithFeasibleOutputs()) return true;
                 continue;
             }
-            CraftingContext context = borrowContext(earlier);
+            CraftingContext context = new CraftingContext(capabilities, modifiers, selectedScope);
+            if (selectedScope.kind() != InputScope.Kind.LEGACY) {
+                List<MachineRequirement> retained = earlier.runtimeRequirements(modifiers)
+                        .stream().filter(requirement -> requirement.io() == RecipeModifier.IOType.INPUT
+                                && (requirement instanceof ItemRequirement item
+                                && item.consumeChance() == 0F
+                                || requirement instanceof FluidRequirement fluid
+                                && fluid.consumeChance() == 0F
+                                || requirement instanceof LoadedChemicalRequirement chemical
+                                && chemical.consumeChance() == 0F)).toList();
+                if (!retained.isEmpty() && !context.planInputs(retained, 1L, Set.of(), Set.of()).successful()) continue;
+            }
             PlanningResult inputs;
             PlanningResult outputs;
-            try {
-                inputs = context.planInputs(earlier, maxParallelism);
-                outputs = context.planOutputs(earlier, maxParallelism);
-            } finally {
-                CraftingContextPool.global().returnContext(earlier.id(), context);
-            }
+            inputs = context.planInputs(earlier, maxParallelism);
+            outputs = context.planOutputs(earlier, maxParallelism);
             if (!inputs.successful() && outputs.successful()) return true;
         }
         return false;

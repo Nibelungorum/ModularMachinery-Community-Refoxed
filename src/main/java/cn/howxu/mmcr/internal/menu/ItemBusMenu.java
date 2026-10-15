@@ -39,6 +39,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
         this.busColumns = columnsForSize(busSize);
         addBusSlots(owner);
         addPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forPort(owner));
     }
 
     /** 客户端:BE 为 null;槽位数据由服务端通过数据包同步。 */
@@ -61,6 +62,7 @@ public class ItemBusMenu extends AbstractMachineMenu {
         this.busColumns = columnsForSize(this.busSize);
         addBusSlots(null);
         addPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forPort(null));
     }
 
     public static ItemBusMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buf) {

@@ -127,6 +127,26 @@ public final class RequirementHandlerSupport {
         return chance >= 1F || chance > 0F && Math.random() < chance;
     }
 
+    public static boolean shouldProduce(float chance, PlanningContext context) {
+        return context.sampling() == null ? shouldProduce(chance)
+                : context.sampling().outputs.computeIfAbsent(context.requirementIndex(), ignored -> shouldProduce(chance));
+    }
+
+    public static ConsumeProfile consumeProfile(float chance, long parallelism, PlanningContext context) {
+        return context.sampling() == null ? consumeProfile(chance, parallelism)
+                : context.sampling().inputs.computeIfAbsent(context.requirementIndex(),
+                        ignored -> consumeProfile(chance, parallelism));
+    }
+
+    /**
+     * Lazy probability decisions shared only by alternative scopes of one planning call.
+     * @author howxu <dev@howxu.cn>
+     */
+    public static final class Sampling {
+        private final Map<Integer, ConsumeProfile> inputs = new LinkedHashMap<>();
+        private final Map<Integer, Boolean> outputs = new LinkedHashMap<>();
+    }
+
     public static ConsumeProfile consumeProfile(float chance, long parallelism) {
         if (parallelism <= 1_024L) {
             boolean[] decisions = new boolean[(int) parallelism];

@@ -623,7 +623,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                                     PlanningContext context) {
             long requestedParallelism = context.requestedParallelism();
             if (requirement.io() == RecipeModifier.IOType.OUTPUT
-                    && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
+                    && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
                 return new RequirementPlan(context.requirementIndex(), requestedParallelism, List.of(), null);
             }
 
@@ -688,7 +688,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             }
 
             RequirementHandlerSupport.ConsumeProfile consumed = !output
-                    ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), requestedParallelism) : null;
+                    ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), requestedParallelism, context) : null;
             RequirementPlan.OperationFactory operationFactory = (parallelism, reservations) -> planOperations(
                     requirement, matcher, matchingPorts, parallelism, consumed, reservations, direction, allowPartialOutput, true);
             RequirementPlan.ReservationFactory reservationFactory = RequirementHandlerSupport.reservationFactory(

@@ -47,6 +47,7 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
             this.fluidEntries = PktPortStorageSyncPayload.fluidEntries(owner.nativeFluidHandler());
         }
         addPlayerSlots(playerInv, 47);
+        bindInputIsolation(InputIsolationMenuState.forPort(owner));
     }
 
     public ExtendedCombinedMenu(int containerId, Inventory playerInv, BlockPos pos, String kind,
@@ -65,6 +66,7 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
         this.itemEntries = List.of();
         this.fluidEntries = List.of();
         addPlayerSlots(playerInv, 47);
+        bindInputIsolation(InputIsolationMenuState.forPort(null));
     }
 
     public static ExtendedCombinedMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buffer) {

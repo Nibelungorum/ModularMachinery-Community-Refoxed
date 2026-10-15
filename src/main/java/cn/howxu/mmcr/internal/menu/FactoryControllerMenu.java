@@ -74,6 +74,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
         addStateSlot(owner, MachineStateSnapshot::parallelControllerCount);
         ControllerMenuState.addControllerPlayerSlots(this, inventory,
                 FACTORY_PLAYER_INVENTORY_X, FACTORY_PLAYER_INVENTORY_Y_OFFSET);
+        bindInputIsolation(InputIsolationMenuState.forController(owner));
         snapshot = FactorySnapshot.empty();
         if (owner != null) {
             ControllerRuntimeSnapshot runtime = owner.runtimeSnapshot();
@@ -102,6 +103,7 @@ public final class FactoryControllerMenu extends AbstractMachineMenu implements 
         formed.set(openData.formed() ? 1 : 0);
         ControllerMenuState.addControllerPlayerSlots(this, inventory,
                 FACTORY_PLAYER_INVENTORY_X, FACTORY_PLAYER_INVENTORY_Y_OFFSET);
+        bindInputIsolation(InputIsolationMenuState.forController(null));
         snapshot = FactorySnapshot.empty();
     }
 

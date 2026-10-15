@@ -146,7 +146,7 @@ public final class MachineRecipeThread extends RecipeThread {
         AsyncRequirementPlanner.RecipeSearchRequest request;
         try {
             request = AsyncRequirementPlanner.captureRecipeSearch(snapshot, candidatesForMachine(candidates), availableParallelism,
-                    controller.componentRuntime().capabilities(),
+                    controller.componentRuntime().capabilitySnapshot(),
                     controller.componentRuntime().modifierList(), catalogVersion, effectiveRecipeCache);
         } catch (RuntimeException exception) {
             return searchAndStartRecipe(candidates, availableParallelism, structureVersion);

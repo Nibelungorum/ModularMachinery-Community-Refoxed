@@ -1718,10 +1718,11 @@ public final class SharedIoCoordinator {
             List<AsyncRequirementPlanner.Capability> capabilities = prepared.capabilities().stream()
                     .map(capability -> new AsyncRequirementPlanner.Capability(capability.planner(),
                             virtualSnapshots.getOrDefault(capability.snapshot(), capability.snapshot()),
-                            capability.directions()))
+                            capability.directions(), capability.sourceCapabilityIndex()))
                     .toList();
             AsyncRequirementPlanner.PlanResult result = new AsyncRequirementPlanner.PreparedPlan(
-                    prepared.requirements(), capabilities, prepared.initialMainThreadRequirements()).plan();
+                    prepared.requirements(), capabilities, prepared.initialMainThreadRequirements(),
+                    prepared.routing(), prepared.inputScope()).plan();
             results.add(result);
             if (!result.mainThreadRequirements().isEmpty()) continue;
             for (AsyncRequirementPlanner.PlannedOperation operation : result.operations()) {
@@ -1759,10 +1760,10 @@ public final class SharedIoCoordinator {
             List<AsyncRequirementPlanner.Capability> capabilities = preparedPlan.capabilities().stream()
                     .map(capability -> new AsyncRequirementPlanner.Capability(capability.planner(),
                             snapshots.getOrDefault(capability.snapshot(), capability.snapshot()),
-                            capability.directions()))
+                            capability.directions(), capability.sourceCapabilityIndex()))
                     .toList();
             preparedPlan = new AsyncRequirementPlanner.PreparedPlan(preparedPlan.requirements(), capabilities,
-                    preparedPlan.initialMainThreadRequirements());
+                    preparedPlan.initialMainThreadRequirements(), preparedPlan.routing(), preparedPlan.inputScope());
         }
 
         private synchronized boolean commit(AsyncRequirementPlanner.PlanResult intent) {

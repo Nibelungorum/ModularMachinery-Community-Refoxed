@@ -4,8 +4,11 @@ import appeng.helpers.InterfaceLogicHost;
 import appeng.helpers.InventoryAction;
 import appeng.menu.SlotSemantic;
 import appeng.menu.implementations.InterfaceMenu;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
 
@@ -15,9 +18,22 @@ import net.minecraft.world.inventory.Slot;
  * @author howxu <dev@howxu.cn>
  */
 public final class AE2InterfaceMenu extends InterfaceMenu {
+    private final InputIsolationMenuState inputIsolation;
     public AE2InterfaceMenu(MenuType<? extends AE2InterfaceMenu> type, int id,
                             Inventory inventory, InterfaceLogicHost host) {
         super(type, id, inventory, host);
+        inputIsolation = InputIsolationMenuState.forPort(host instanceof IOPortBlockEntity port ? port : null);
+        addDataSlot(inputIsolation.dataSlot());
+    }
+
+    public InputIsolationMenuState inputIsolation() { return inputIsolation; }
+
+    @Override
+    public boolean clickMenuButton(Player player, int buttonId) {
+        if (buttonId == InputIsolationMenuState.DISABLE || buttonId == InputIsolationMenuState.ENABLE) {
+            return inputIsolation.handleClick(this, player, buttonId);
+        }
+        return super.clickMenuButton(player, buttonId);
     }
 
     @Override

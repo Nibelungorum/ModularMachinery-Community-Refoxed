@@ -1453,7 +1453,7 @@ class ComponentRuntimeTest {
                 ModuleConnectionStatus.disconnected(), 0,
                 CraftingStateSnapshot.empty(0L, 0L, 0L), FactorySnapshot.empty(),
                 List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 1, Map.of());
-        FactorySearchContext context = new FactorySearchContext(snapshot, null, null, null,
+        FactorySearchContext context = new FactorySearchContext(snapshot, null, (List<MachineCapability>) null, null,
                 3L, 4L, 0, 5L);
 
         assertThat(context.orderedCandidates()).isEmpty();

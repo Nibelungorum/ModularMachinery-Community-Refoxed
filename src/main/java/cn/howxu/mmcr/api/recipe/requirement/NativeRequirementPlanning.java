@@ -37,7 +37,7 @@ final class NativeRequirementPlanning {
     static RequirementPlan item(ItemRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
-        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
+        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
         ItemStack requested = insert ? requirement.stack(null) : ItemStack.EMPTY;
@@ -59,7 +59,7 @@ final class NativeRequirementPlanning {
         long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
         if (maximum <= 0L) return blocked(requirement, context, insert, requestedAmount, available);
         RequirementHandlerSupport.ConsumeProfile consumed = insert ? null
-                : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism());
+                : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism(), context);
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
                 (parallelism, reservations) -> itemOperations(requirement, ordered, context, parallelism, requested,
                         insert, partial, consumed, reservations, true),
@@ -71,7 +71,7 @@ final class NativeRequirementPlanning {
     static RequirementPlan fluid(FluidRequirement requirement, List<MachineCapability> capabilities,
                                  PlanningContext context) {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
-        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance())) {
+        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
         FluidStack requested = insert ? requirement.stack() : FluidStack.EMPTY;
@@ -93,7 +93,7 @@ final class NativeRequirementPlanning {
         long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
         if (maximum <= 0L) return blocked(requirement, context, insert, requestedAmount, available);
         RequirementHandlerSupport.ConsumeProfile consumed = insert ? null
-                : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism());
+                : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism(), context);
         return RequirementHandlerSupport.deferredPlan(context, maximum <= 0L ? context.requestedParallelism() : maximum,
                 (parallelism, reservations) -> fluidOperations(requirement, ordered, context, parallelism, requested,
                         insert, partial, consumed, reservations, true),

@@ -292,6 +292,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private int broadcastFactoryActiveCount;
     private int broadcastFactoryLaneCount;
     private @Nullable ServerLevel tickingLevel;
+    private boolean fullyInputIsolated;
+    private long inputIsolationChangeVersion;
 
     public MachineControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.controllerFor(machineIdFromState(state)).get(), pos, state);
@@ -320,6 +322,35 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return runtime.componentRuntime();
     }
 
+    public boolean isFullyInputIsolated() {
+        return fullyInputIsolated;
+    }
+
+    public void setFullyInputIsolated(boolean enabled) {
+        if (fullyInputIsolated == enabled) return;
+        fullyInputIsolated = enabled;
+        componentRuntime().refreshInputRouting(enabled);
+        inputIsolationConfigurationChanged();
+    }
+
+    public void onInputIsolationChanged() {
+        long previousStateVersion = componentRuntime().stateVersion();
+        componentRuntime().refreshInputRouting(fullyInputIsolated);
+        if (componentRuntime().stateVersion() != previousStateVersion) inputIsolationConfigurationChanged();
+    }
+
+    private void inputIsolationConfigurationChanged() {
+        inputIsolationChangeVersion++;
+        recipeSearchRetryCounter = 0;
+        resourceAvailabilityEpoch++;
+        clearPendingConflictStart();
+        setChanged();
+        publishRuntimeState();
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+
     /**
      * Admits one AE2 pattern request against this controller without creating an intermediate inventory.
      */
@@ -335,7 +366,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             if (!patternOutputsMatch(recipe, snapshot, patternOutputs)) continue;
             if (!hasFactoryController()) {
                 CraftingRuntime crafting = runtime.craftingRuntime();
-                CraftingRuntime.PreparedStart prepared = crafting.preparePatternStart(recipe, 1L, requestCapabilities);
+                CraftingRuntime.PreparedStart prepared = crafting.preparePatternStart(recipe, 1L, requestCapabilities, sourcePort);
                 if (prepared == null || !crafting.reservePatternStart()) continue;
                 return PatternStartReservation.reserved(recipe, "", crafting, prepared,
                         () -> crafting.releasePatternStart(prepared));
@@ -346,7 +377,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             Machine machine = snapshot.structure().machine() == null
                     ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
             factory.syncCoreLanes(this, machine, recipesForMachine());
-            FactoryRuntime.PatternLane lane = factory.reservePatternStart(recipe, 1L, requestCapabilities);
+            FactoryRuntime.PatternLane lane = factory.reservePatternStart(recipe, 1L, requestCapabilities, sourcePort);
             if (lane == null) continue;
             return PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(), lane.preparedStart(),
                     () -> factory.releasePatternStart(lane));
@@ -373,7 +404,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 long parallelism = Math.min(requestedParallelism, snapshot.maxParallelism());
                 CraftingRuntime crafting = runtime.craftingRuntime();
                 CraftingRuntime.PreparedStart prepared = crafting.preparePatternStart(recipe, parallelism,
-                        capabilitiesForParallelism.apply(parallelism));
+                        capabilitiesForParallelism.apply(parallelism), sourcePort);
                 if (prepared == null || !crafting.reservePatternStart()) {
                     return PatternStartBatchReservation.unavailable();
                 }
@@ -395,7 +426,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 while (remaining > 0L) {
                     long parallelism = Math.min(remaining, snapshot.maxParallelism());
                     FactoryRuntime.PatternLane lane = factory.reservePatternStart(recipe, parallelism,
-                            capabilitiesForParallelism.apply(parallelism));
+                            capabilitiesForParallelism.apply(parallelism), sourcePort);
                     if (lane == null) break;
                     reservations.add(PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(),
                             lane.preparedStart(), () -> factory.releasePatternStart(lane)));
@@ -1795,7 +1826,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void applyControllerScreenText() {
-        if (runtime.currentStructureSnapshot().formed()) {
+        StructureSnapshot current = runtime.currentStructureSnapshot();
+        if (current.formed() && current.configuredMachine() != null) {
             ControllerScreenTextRegistry.apply(runtime.runtimeContext());
             runtime.screenText().flushReplacements();
         }
@@ -4080,7 +4112,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(current, machineId, currentRecipePoolId(), current.structure().version(),
-                    maxParallelism, candidates, componentRuntime().capabilities(),
+                    maxParallelism, candidates, componentRuntime().capabilitySnapshot(),
                     MachineModifier.recipeModifiers(componentRuntime().modifierList())).compute(runtime.craftingRuntime());
         } catch (RuntimeException e) {
             LOG.warn("[Ctrl#{}] tryStartNewRecipe: recipe search failed at pos={}; retrying later", instanceId, getBlockPos(), e);
@@ -4093,6 +4125,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.craftingRuntime().recordSearchFailure(lastFailure);
             return StartResult.FAILED;
         }
+        if (componentRuntime().stateVersion() != current.stateVersion()) return StartResult.DEFERRED;
         if (result.success()) {
             return applySearchResult(result);
         }
@@ -4148,6 +4181,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         long epoch = lifecycleEpoch();
         ControllerRuntimeSnapshot captured = currentRuntimeSnapshot();
+        long isolationChangeVersion = inputIsolationChangeVersion;
         long catalogVersion = currentCatalogVersion();
         StructureClaimRegistry.ResourceDomain domain = resourceDomain();
         if (!reserveNormalStartSlot()) return StartResult.DEFERRED;
@@ -4159,7 +4193,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 if (resultState == StartResult.FAILED) onNormalRecipeThreadSearchFailed();
                 return resultState;
             }
-            StartResult invalid = normalPreparedStartInvalidation(next, captured, catalogVersion, domain);
+            StartResult invalid = normalPreparedStartInvalidation(next, captured, isolationChangeVersion, catalogVersion, domain);
             if (epoch != lifecycleEpoch()) return StartResult.CANCELLED;
             if (invalid != null) return invalid;
             runtime.craftingRuntime().start(next, getMaxParallelism(), preparation.execution());
@@ -4218,6 +4252,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private @Nullable StartResult normalPreparedStartInvalidation(MachineRecipe recipe,
                                                                   ControllerRuntimeSnapshot captured,
+                                                                  long isolationChangeVersion,
                                                                   long catalogVersion,
                                                                   @Nullable StructureClaimRegistry.ResourceDomain domain) {
         if (isRemoved() || level instanceof ServerLevel serverLevel && serverLevel.getBlockEntity(getBlockPos()) != this) {
@@ -4231,7 +4266,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 || current.structure().version() != captured.structure().version()
                 || current.capabilityVersion() != captured.capabilityVersion()
                 || current.modifierVersion() != captured.modifierVersion()
-                || current.stateVersion() != captured.stateVersion()
+                // Each isolation notification advances component state exactly once. Any additional
+                // state change still invalidates this attempt, even if isolation also changed.
+                || current.stateVersion() - captured.stateVersion() != inputIsolationChangeVersion - isolationChangeVersion
                 || current.upgradeContentRevision() != captured.upgradeContentRevision()
                 || !Objects.equals(domain, resourceDomain())) return StartResult.DEFERRED;
         return null;
@@ -4308,6 +4345,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         StructureClaimRegistry.ResourceDomain domain = resourceDomain();
         if (domain == null) return StartResult.DEFERRED;
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        long isolationChangeVersion = inputIsolationChangeVersion;
         sharedStartPending = true;
         pendingSharedStartOrigin = origin;
         pendingSharedStartLifecycleEpoch = lifecycleEpoch();
@@ -4342,13 +4380,14 @@ public class MachineControllerBlockEntity extends BlockEntity {
                             finishPendingSharedStart(token, next, domain, lifecycleEpoch, normalPreparationResult(preparation));
                             return 0L;
                         }
-                        if (!isPendingSharedStart(token, next, domain)) return 0L;
                         StartResult invalid = normalPreparedStartInvalidation(next, snapshot,
-                                pendingSharedStartCatalogVersion, domain);
+                                isolationChangeVersion, pendingSharedStartCatalogVersion, domain);
                         if (invalid != null) {
                             finishPendingSharedStart(token, next, domain, lifecycleEpoch, invalid);
                             return 0L;
                         }
+                        pendingSharedStartComponentStateVersion = currentRuntimeSnapshot().stateVersion();
+                        if (!isPendingSharedStart(token, next, domain)) return 0L;
                         runtime.craftingRuntime().start(next, requested, preparation.execution());
                         if (!ownsPendingSharedStart(token, next, domain, lifecycleEpoch)) return 0L;
                         if (!runtime.craftingRuntime().active()) {
@@ -4866,6 +4905,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     protected void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
         ensureFactoryRuntimeLoaded();
         super.saveAdditional(output, registries);
+        output.putBoolean("full_input_isolation", fullyInputIsolated);
         output.putInt("matched_structure_stage", runtimeSnapshot().structure().matchedStage());
         output.putLong("structure_runtime_version", runtimeSnapshot().structure().version());
         ListTag levels = new ListTag();
@@ -4892,6 +4932,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         super.loadAdditional(input, registries);
         runtimeTopologyReady = false;
         loadingRuntime = true;
+        fullyInputIsolated = input.getBoolean("full_input_isolation");
+        componentRuntime().refreshInputRouting(fullyInputIsolated);
         try {
             CompoundTag factoryRuntimeInput = input.getCompound("factory_runtime");
             StructureSnapshot currentStructure = runtimeSnapshot().structure();

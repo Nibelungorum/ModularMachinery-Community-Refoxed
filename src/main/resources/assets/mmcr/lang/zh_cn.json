@@ -1,4 +1,13 @@
 {
+  "mmcr.input_isolation.button": "I",
+  "mmcr.input_isolation.enabled": "已开启",
+  "mmcr.input_isolation.disabled": "未开启",
+  "mmcr.input_isolation.port.enabled": "接口隔离:%s",
+  "mmcr.input_isolation.port.disabled": "接口隔离:%s",
+  "mmcr.input_isolation.full.enabled": "完全隔离:%s",
+  "mmcr.input_isolation.full.disabled": "完全隔离:%s",
+  "mmcr.input_isolation.port.tooltip": "%s\n隔离本接口的输入\n更改从下次配方进程生效",
+  "mmcr.input_isolation.full.tooltip": "%s\n完全隔离所有接口的物品，流体，化学品\n完全隔离会覆盖单个接口的隔离设置\n更改从下次配方进程生效",
   "gui.mmcr.ui.loading": "正在加载控制器…",
   "gui.mmcr.ui.rejected": "控制器拒绝了此操作。",
   "gui.mmcr.ui.unsupported": "此控制器不支持该操作。",

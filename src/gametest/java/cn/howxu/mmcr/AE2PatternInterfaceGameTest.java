@@ -50,6 +50,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -58,6 +59,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -83,6 +85,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.connection.ConnectionType;
+import net.neoforged.neoforge.network.registration.ChannelAttributes;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -168,6 +172,7 @@ public class AE2PatternInterfaceGameTest {
         helper.runAtTickTime(30, () -> {
             PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
             helper.assertTrue(controller.structureSnapshot().formed(), "Controller with pattern and ordinary input ports forms");
+            assertOrdinaryPatternSources(helper, controller, patternPort, helper.getBlockEntity(ordinaryInputPos));
             var encodedPattern = PatternDetailsHelper.encodeProcessingPattern(
                     List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
                     List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)));
@@ -412,6 +417,7 @@ public class AE2PatternInterfaceGameTest {
         helper.runAtTickTime(30, () -> {
             PatternInterfaceBlockEntity patternPort = helper.getBlockEntity(patternPortPos);
             helper.assertTrue(controller.structureSnapshot().formed(), "Extended pattern machine forms");
+            assertOrdinaryPatternSources(helper, controller, patternPort, helper.getBlockEntity(ordinaryInputPos));
             ItemStack encodedPattern = PatternDetailsHelper.encodeProcessingPattern(
                     List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
                     List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)));
@@ -436,6 +442,15 @@ public class AE2PatternInterfaceGameTest {
                     "Crafting-machine result settles through the extended pattern return inventory");
             helper.succeed();
         });
+    }
+
+    private static void assertOrdinaryPatternSources(GameTestHelper helper, MachineControllerBlockEntity controller,
+                                                      PatternInterfaceBlockEntity host, ItemBusBlockEntity ordinary) {
+        var routing = new CraftingContext(controller.componentRuntime().capabilitySnapshot()).inputRouting();
+        helper.assertTrue(!controller.isFullyInputIsolated() && !host.isInputIsolated() && !ordinary.isInputIsolated()
+                        && routing != null && routing.ordinaryScope().sources().contains(host.getBlockPos())
+                        && routing.ordinaryScope().sources().contains(ordinary.getBlockPos()),
+                "Native pattern request and remaining physical coal belong to the same ordinary input group");
     }
 
     public void patternInterfaceMemoryCardRoundTrip(GameTestHelper helper) {
@@ -847,10 +862,17 @@ public class AE2PatternInterfaceGameTest {
      */
     private static final class NoOpConnection extends ServerGamePacketListenerImpl {
         private NoOpConnection(MinecraftServer server, ServerPlayer player) {
-            super(server, new Connection(PacketFlow.CLIENTBOUND), player,
+            super(server, connected(), player,
                     CommonListenerCookie.createInitial(new GameProfile(UUID.nameUUIDFromBytes(
                             "mmcr-pattern-memory-card-recording".getBytes(StandardCharsets.UTF_8)),
                             "mmcr-pattern-memory-card-recording"), false));
+        }
+
+        private static Connection connected() {
+            var connection = new Connection(PacketFlow.SERVERBOUND);
+            new EmbeddedChannel(connection);
+            ChannelAttributes.setConnectionType(connection, ConnectionType.NEOFORGE);
+            return connection;
         }
 
         @Override

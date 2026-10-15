@@ -2772,14 +2772,18 @@ class FactoryRuntimeTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
         ControllerRuntimeSnapshot live = controller.runtimeSnapshot();
-        long contextStateVersion = live.stateVersion() + 11L;
-        long contextCatalogVersion = 1234L;
-        long contextResourceEpoch = 5678L;
-        ControllerRuntimeSnapshot contextSnapshot = snapshotWithStateVersion(live, contextStateVersion);
+        long contextStateVersion = live.stateVersion();
+        long contextCatalogVersion = RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
+        long contextResourceEpoch = controller.resourceAvailabilityEpoch();
+        ControllerRuntimeSnapshot contextSnapshot = live;
         FactorySearchContext context = new FactorySearchContext(contextSnapshot,
                 List.of(inputRecipe("factory_context_retry_key")), controller.componentRuntime().capabilities(),
                 controller.componentRuntime().modifierList(),
                 contextCatalogVersion, contextResourceEpoch, 1, 0L);
+        // Initialization can already have notified this tick; availability changes coalesce per tick.
+        LevelStub.setGameTime(controller.getLevel(), controller.getLevel().getGameTime() + 1L);
+        controller.notifyResourceAvailability(Reason.INPUT_AVAILABLE, null);
+        assertThat(controller.resourceAvailabilityEpoch()).isNotEqualTo(contextResourceEpoch);
 
         assertThat(thread.searchAndStartRecipe(context, contextSnapshot.structure().version()))
                 .isEqualTo(RecipeThread.StartResult.NO_MATCH);
@@ -2788,19 +2792,27 @@ class FactoryRuntimeTest {
                 contextSnapshot.structure().version(), contextSnapshot.capabilityVersion(),
                 contextSnapshot.modifierVersion(), contextStateVersion, contextCatalogVersion,
                 contextResourceEpoch, thread.coreRecipeSetVersion()));
+        RecipeSearchContextKey recorded = thread.searchFailureKey();
+        var staleResult = FactoryRecipeThread.search(context, context.orderedCandidates(), contextSnapshot.structure().version());
+        controller.setFullyInputIsolated(true);
+        assertThat(thread.startSearchResult(context, context.orderedCandidates(), contextSnapshot.structure().version(), staleResult))
+                .isEqualTo(RecipeThread.StartResult.DEFERRED);
+        assertThat(thread.searchFailureKey()).isEqualTo(recorded);
     }
 
     @Test
     void context_pending_start_is_validated_against_the_context_versions() {
-        MachineControllerBlockEntity controller = factoryController("test_cube");
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = asyncFactoryController(input);
+        setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
         ServerLevel level = (ServerLevel) controller.getLevel();
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
         assertThat(registry.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
-        MachineRecipe candidate = recipe("factory_context_pending_recipe", 20);
+        MachineRecipe candidate = inputRecipe("factory_context_pending_recipe");
         ResourceLocation machineId = controller.structureSnapshot().machine().registryName();
         RecipeRegistry.replaceDynamic(Map.of(candidate.id(), candidate));
         ControllerRuntimeSnapshot live = controller.runtimeSnapshot();
-        ControllerRuntimeSnapshot contextSnapshot = snapshotWithStateVersion(live, live.stateVersion() + 1L);
+        ControllerRuntimeSnapshot contextSnapshot = live;
         FactorySearchContext context = new FactorySearchContext(contextSnapshot, List.of(candidate),
                 controller.componentRuntime().capabilities(),
                 controller.componentRuntime().modifierList(),
@@ -2811,9 +2823,27 @@ class FactoryRuntimeTest {
         assertThat(thread.searchAndStartRecipe(context, contextSnapshot.structure().version()))
                 .isEqualTo(RecipeThread.StartResult.PENDING);
         assertThat(thread.isStartPending()).isTrue();
+        controller.setFullyInputIsolated(true);
 
         resolveSharedRequests(controller);
 
+        assertThat(thread.isStartPending()).isFalse();
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void context_already_stale_at_entry_is_rejected_without_retry_key_pollution() {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+        ControllerRuntimeSnapshot live = controller.currentRuntimeSnapshot();
+        FactorySearchContext context = new FactorySearchContext(snapshotWithStateVersion(live, live.stateVersion() + 1L),
+                List.of(inputRecipe("factory_context_entry_stale")), controller.componentRuntime().capabilitySnapshot(),
+                controller.componentRuntime().modifierList(),
+                RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version(), controller.resourceAvailabilityEpoch(), 1L, 0L);
+
+        assertThat(thread.searchAndStartRecipe(context, live.structure().version())).isEqualTo(RecipeThread.StartResult.DEFERRED);
+        assertThat(thread.searchFailureKey()).isNull();
         assertThat(thread.isStartPending()).isFalse();
         assertThat(thread.runtime().active()).isFalse();
     }

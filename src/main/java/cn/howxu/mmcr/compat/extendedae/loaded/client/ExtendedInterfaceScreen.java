@@ -10,6 +10,8 @@ import appeng.client.gui.widgets.SettingToggleButton;
 import appeng.core.definitions.AEItems;
 import appeng.client.gui.Icon;
 import cn.howxu.mmcr.compat.appliedenergistics2.InterfaceScreenTitles;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.client.InputIsolationButton;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.client.InterfaceAmountButton;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.InterfaceMenuSlots;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
@@ -34,6 +36,8 @@ public final class ExtendedInterfaceScreen extends UpgradeableScreen<ExtendedInt
     private final List<InterfaceAmountButton> amountButtons = new ArrayList<>();
     private final ActionEPPButton nextPage;
     private final ActionEPPButton previousPage;
+    private final InputIsolationButton isolationButton;
+    private int isolationGestureButton = -1;
 
     public ExtendedInterfaceScreen(ExtendedInterfaceMenu menu, Inventory inventory, Component title, ScreenStyle style) {
         super(menu, inventory, title, style);
@@ -47,6 +51,12 @@ public final class ExtendedInterfaceScreen extends UpgradeableScreen<ExtendedInt
         addToLeftToolbar(fuzzyMode);
         addToLeftToolbar(nextPage);
         addToLeftToolbar(previousPage);
+        isolationButton = addToLeftToolbar(new InputIsolationButton(enabled -> {
+            if (minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId,
+                    enabled ? InputIsolationMenuState.ENABLE : InputIsolationMenuState.DISABLE);
+            setFocused(null);
+        }));
+        isolationButton.updateState(menu.inputIsolation());
         widgets.addOpenPriorityButton();
         var configSlots = menu.getConfigSlots();
         for (int i = 0; i < configSlots.size(); i++) {
@@ -59,8 +69,44 @@ public final class ExtendedInterfaceScreen extends UpgradeableScreen<ExtendedInt
     }
 
     @Override
+    protected void init() {
+        isolationGestureButton = -1;
+        super.init();
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        isolationGestureButton = -1;
+        boolean isolationClick = (button == 0 || button == 1)
+                && isolationButton.isMouseOver(mouseX, mouseY);
+        boolean handled = super.mouseClicked(mouseX, mouseY, button);
+        if (isolationClick && handled) {
+            isolationGestureButton = button;
+            setFocused(null);
+            setDragging(false);
+        }
+        return handled;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (button == isolationGestureButton) return true;
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == isolationGestureButton) {
+            isolationGestureButton = -1;
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
     protected void updateBeforeRender() {
         super.updateBeforeRender();
+        isolationButton.updateState(menu.inputIsolation());
         menu.showPage(menu.getPage());
         fuzzyMode.set(menu.getFuzzyMode());
         fuzzyMode.setVisibility(menu.hasUpgrade(AEItems.FUZZY_CARD));

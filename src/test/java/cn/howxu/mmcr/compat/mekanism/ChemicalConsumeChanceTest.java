@@ -3,6 +3,11 @@ package cn.howxu.mmcr.compat.mekanism;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
+import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import net.minecraft.core.BlockPos;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -138,6 +143,32 @@ class ChemicalConsumeChanceTest {
 
         assertThat(plan.successful()).isTrue();
         assertThat(plan.maxParallelism()).isEqualTo(5L);
+    }
+
+    @Test
+    void chemical_material_scope_filters_before_handler_aggregation() {
+        Holder.Reference<Chemical> chemical = registerChemical("routed_input");
+        FakeChemicalTank first = new FakeChemicalTank(2_000, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        FakeChemicalTank second = new FakeChemicalTank(2_000, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        first.setStack(new ChemicalStack(chemical, 500));
+        second.setStack(new ChemicalStack(chemical, 500));
+        List<MachineCapability> capabilities = List.of(new FakeChemicalPort(first, IOType.INPUT),
+                new FakeChemicalPort(second, IOType.INPUT));
+        BlockPos a = new BlockPos(1, 0, 0);
+        BlockPos b = new BlockPos(2, 0, 0);
+        InputRoutingFacet routing = new InputRoutingFacet(1,
+                List.of(new InputRoutingFacet.Source(0, a), new InputRoutingFacet.Source(1, b)),
+                List.of(new InputRoutingFacet.Port(a, false), new InputRoutingFacet.Port(b, false)));
+        LoadedChemicalRequirement requirement = LoadedChemicalRequirement.input(
+                ChemicalIngredient.chemical(chemical.key().location(), 1_000));
+        RequirementHandler<LoadedChemicalRequirement> handler = LoadedMekanismBridge.chemicalHandler();
+        var ordinary = handler.plan(requirement, RequirementPlanner.matchingCapabilities(requirement, capabilities,
+                routing, routing.ordinaryScope()), emptyContext());
+        var isolated = handler.plan(requirement, RequirementPlanner.matchingCapabilities(requirement, capabilities,
+                routing, new InputScope(InputScope.Kind.ISOLATED, List.of(a))), emptyContext());
+        assertThat(ordinary.successful()).isTrue();
+        assertThat(ordinary.reserve(1, new PlanningReservations())).isNull();
+        assertThat(isolated.successful()).isFalse();
     }
 
     @Test

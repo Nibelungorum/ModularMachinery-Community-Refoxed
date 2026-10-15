@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import net.minecraft.resources.ResourceLocation;
+import cn.howxu.mmcr.api.recipe.InputScope;
 
 import java.util.HashSet;
 import java.util.List;
@@ -41,8 +42,9 @@ public record CompiledRecipeProgram(ResourceLocation recipeId, int duration, lon
 
     /** Policies are indexed by the original stage requirement index, including fallback entries. */
     public record Stage(List<AsyncRequirementPlanner.Requirement> requirements,
-                        List<Integer> fallbackIndices, List<OutputPolicy> outputPolicies) {
+                        List<Integer> fallbackIndices, List<OutputPolicy> outputPolicies, InputScope inputScope) {
         public Stage {
+            Objects.requireNonNull(inputScope, "inputScope");
             requirements = List.copyOf(requirements);
             fallbackIndices = List.copyOf(fallbackIndices);
             outputPolicies = List.copyOf(outputPolicies);
@@ -57,6 +59,11 @@ public record CompiledRecipeProgram(ResourceLocation recipeId, int duration, lon
                     throw new IllegalArgumentException("invalid or duplicate fallback index");
                 }
             }
+        }
+
+        public Stage(List<AsyncRequirementPlanner.Requirement> requirements,
+                     List<Integer> fallbackIndices, List<OutputPolicy> outputPolicies) {
+            this(requirements, fallbackIndices, outputPolicies, InputScope.legacy());
         }
 
         public static Stage empty() {

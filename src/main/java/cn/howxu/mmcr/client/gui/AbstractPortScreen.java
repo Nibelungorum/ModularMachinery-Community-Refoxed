@@ -13,6 +13,7 @@ import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktEjectPortContentsPayload;
 import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
@@ -80,6 +81,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     private final List<HiddenSlotPosition> hiddenSlotPositions = new ArrayList<>();
     private final List<RelocatedSlotPosition> relocatedPlayerSlotPositions = new ArrayList<>();
     private final List<TooltipEntry> tooltipEntries = new ArrayList<>();
+    private IsolationToggleButton isolationButton;
 
     protected AbstractPortScreen(M menu, Inventory inventory, Component title, int imageHeight) {
         super(menu, inventory, title, 176, imageHeight);
@@ -115,6 +117,14 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     protected final void init() {
         super.init();
         initAutoIOButtons();
+        if (!supportsAutoIOControlPage()) return;
+        isolationButton = addRenderableWidget(new IsolationToggleButton(leftPos - 18, topPos + 1,
+                Component.translatable("mmcr.input_isolation.button"), menu.inputIsolation()::enabled, button -> {
+            if (minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId,
+                    menu.inputIsolation().enabled() ? InputIsolationMenuState.DISABLE : InputIsolationMenuState.ENABLE);
+            button.setFocused(false);
+        }));
+        updateAutoIOWidgets();
     }
 
     @Override
@@ -278,6 +288,12 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
 
     private void updateAutoIOWidgets() {
         updateAutoIOSlotVisibility();
+        if (isolationButton != null) {
+            isolationButton.updateState(menu.inputIsolation(), false);
+            int preceding = autoIOPageButton == null ? 0 : 1;
+            if (secondaryAutoIOPageButton != null && !autoIOPage) preceding++;
+            isolationButton.setPosition(leftPos - 18, topPos + 1 + preceding * 18);
+        }
         if (autoIOPageButton != null) {
             autoIOPageButton.setMessage(Component.translatable(
                     autoIOPage ? "mmcr.auto_io.page_back" : "mmcr.auto_io.page"));

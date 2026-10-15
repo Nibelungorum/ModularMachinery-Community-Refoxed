@@ -2,6 +2,9 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
+import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
 import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData;
 import cn.howxu.mmcr.internal.runtime.ui.ControllerUiSnapshotData.HeaderData;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -45,8 +48,16 @@ class ControllerActionButtonsTest {
             unsafe.putObject(screen, unsafe.objectFieldOffset(type.getDeclaredField("snapshot")), snapshots);
             var poolButton = new StyledButton(0, 0, 16, 16, Component.empty(), button -> {});
             var checkButton = new StyledButton(0, 0, 16, 16, Component.empty(), button -> {});
+            var isolation = InputIsolationMenuState.forController(null);
+            isolation.dataSlot().set(1);
+            Object menu = unsafe.allocateInstance(type == MachineControllerScreen.class
+                    ? MachineControllerMenu.class : FactoryControllerMenu.class);
+            setField(menu, "inputIsolation", isolation);
+            setField(screen, "menu", menu);
+            var isolationButton = new IsolationToggleButton(0, 0, Component.empty(), isolation::enabled, button -> {});
             setField(screen, "recipePoolButton", poolButton);
             setField(screen, "structureCheckButton", checkButton);
+            setField(screen, "isolationButton", isolationButton);
             setField(screen, "leftPos", 50);
             setField(screen, "topPos", 40);
             int backgroundWidth = type == MachineControllerScreen.class ? 176 : 280;
@@ -65,6 +76,10 @@ class ControllerActionButtonsTest {
                 assertThat(poolButton.active).isEqualTo(showPools);
                 assertThat(checkButton.visible).isTrue();
                 assertThat(checkButton.active).isTrue();
+                assertThat(isolationButton.visible).isTrue();
+                assertThat(isolationButton.active).isTrue();
+                assertThat(isolationButton.getX()).isEqualTo(checkButton.getX());
+                assertThat(isolationButton.getY()).isEqualTo(checkButton.getY() + 18);
                 assertThat(checkButton.getX()).isEqualTo(poolButton.getX());
                 assertThat(checkButton.getX()).isEqualTo(50 + backgroundWidth + 2);
                 assertThat(poolButton.getY()).isEqualTo(41);

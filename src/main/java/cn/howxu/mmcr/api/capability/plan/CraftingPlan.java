@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.capability.plan;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.InputScope;
 
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
@@ -35,6 +36,8 @@ public final class CraftingPlan {
     private final List<RequirementPlan> requirements;
     private final long parallelism;
     private final Map<Integer, RecipeModifier.IOType> directions;
+    private final InputScope inputScope;
+    private final long inputRoutingRevision;
     private @Nullable ExecutionStatus failure;
     private final Set<Integer> nativeExecutedRequirements = new HashSet<>();
 
@@ -44,11 +47,19 @@ public final class CraftingPlan {
 
     public CraftingPlan(List<RequirementPlan> requirements, long parallelism,
                         Map<Integer, RecipeModifier.IOType> directions) {
+        this(requirements, parallelism, directions, InputScope.legacy(), -1L);
+    }
+
+    public CraftingPlan(List<RequirementPlan> requirements, long parallelism,
+                        Map<Integer, RecipeModifier.IOType> directions, InputScope inputScope,
+                        long inputRoutingRevision) {
         if (requirements == null) throw new IllegalArgumentException("requirements must not be null");
         if (parallelism <= 0) throw new IllegalArgumentException("parallelism must be positive");
         this.requirements = List.copyOf(requirements);
         this.parallelism = parallelism;
         this.directions = Map.copyOf(directions == null ? Map.of() : directions);
+        this.inputScope = Objects.requireNonNull(inputScope, "inputScope");
+        this.inputRoutingRevision = inputRoutingRevision;
         for (RequirementPlan requirement : this.requirements) {
             if (requirement.failure() != null) {
                 failure = requirement.failure();
@@ -149,6 +160,14 @@ public final class CraftingPlan {
 
     public long parallelism() {
         return parallelism;
+    }
+
+    public InputScope inputScope() {
+        return inputScope;
+    }
+
+    public long inputRoutingRevision() {
+        return inputRoutingRevision;
     }
 
     public @Nullable ExecutionStatus failure() {

@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
@@ -37,6 +39,7 @@ import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -60,15 +63,62 @@ public final class CraftingContext {
     private List<MachineCapability> capabilities;
     private List<RecipeModifier> modifiers;
     private @Nullable Object reservationOwner;
+    private CapabilitySnapshot snapshot;
+    private @Nullable InputRoutingFacet inputRouting;
+    private @Nullable InputScope inputScope;
 
     public CraftingContext(CapabilitySnapshot snapshot) {
         this(snapshot, List.of());
     }
 
     public CraftingContext(CapabilitySnapshot snapshot, List<RecipeModifier> modifiers) {
+        this(snapshot, modifiers, null);
+    }
+
+    public CraftingContext(CapabilitySnapshot snapshot, List<RecipeModifier> modifiers, @Nullable InputScope scope) {
         if (snapshot == null) throw new IllegalArgumentException("snapshot must not be null");
+        this.snapshot = snapshot;
         capabilities = snapshot.capabilities();
+        inputRouting = snapshot.facets(InputRoutingFacet.class).stream().findFirst().orElse(null);
+        inputScope = scope;
         this.modifiers = modifiers == null ? List.of() : List.copyOf(modifiers);
+    }
+
+    public @Nullable InputScope inputScope() { return inputScope; }
+    public @Nullable InputRoutingFacet inputRouting() { return inputRouting; }
+    public CapabilitySnapshot capabilitySnapshot() { return snapshot; }
+
+    /** Binds transient pattern material views exclusively to the actual requesting input port. */
+    public CraftingContext forPatternStart(List<MachineCapability> requestCapabilities, BlockPos requestSource) {
+        List<MachineCapability> combined = new ArrayList<>(capabilities);
+        combined.addAll(requestCapabilities);
+        if (inputRouting == null) return new CraftingContext(new CapabilitySnapshot(combined,
+                snapshot.additionalFacets()), modifiers, inputScope).withReservationOwner(reservationOwner);
+        InputRoutingFacet.Port host = inputRouting.inputPorts().stream()
+                .filter(port -> port.position().equals(requestSource)).findFirst().orElse(null);
+        List<InputRoutingFacet.Source> sources = new ArrayList<>();
+        for (InputRoutingFacet.Source source : inputRouting.sources()) {
+            if (source.capabilityIndex() >= capabilities.size()) continue;
+            MachineCapability capability = capabilities.get(source.capabilityIndex());
+            // Physical inputs may supplement the request within its scope; return-only views may not.
+            if (!RequirementPlanner.isMaterialInput(IOType.INPUT, capability.view().type().id())
+                    || capability.view().directions().supports(IOType.INPUT)) sources.add(source);
+        }
+        if (host != null) {
+            for (int index = capabilities.size(); index < combined.size(); index++) {
+                if (combined.get(index).view().directions().supports(IOType.INPUT)) {
+                    sources.add(new InputRoutingFacet.Source(index, requestSource));
+                }
+            }
+        }
+        InputScope scope = inputScope != null ? inputScope : host != null && host.isolated()
+                ? new InputScope(InputScope.Kind.ISOLATED, List.of(host.position()))
+                : host == null ? new InputScope(InputScope.Kind.ORDINARY, List.of()) : inputRouting.ordinaryScope();
+        List<CapabilityFacet> facets = new ArrayList<>(snapshot.additionalFacets());
+        facets.removeIf(InputRoutingFacet.class::isInstance);
+        facets.add(new InputRoutingFacet(inputRouting.revision(), sources, inputRouting.inputPorts()));
+        return new CraftingContext(new CapabilitySnapshot(combined, facets), modifiers, scope)
+                .withReservationOwner(reservationOwner);
     }
 
     public PlanningResult planInputs(MachineRecipe recipe, long parallelism) {
@@ -83,7 +133,7 @@ public final class CraftingContext {
         if (requirements == null || parallelism <= 0L) {
             throw new IllegalArgumentException("requirements must not be null and parallelism must be positive");
         }
-        return prepareAsyncPlan(requirements, parallelism, captureAsyncCapabilities());
+        return prepareAsyncPlan(requirements, parallelism, captureAsyncCapabilities(), inputRouting, inputScope);
     }
 
     public AsyncRequirementPlanner.PreparedPlan planAsync(List<MachineRequirement> requirements, long parallelism,
@@ -92,17 +142,12 @@ public final class CraftingContext {
                 || parallelism <= 0L) {
             throw new IllegalArgumentException("requirements and indexes must match and parallelism must be positive");
         }
-        List<AsyncRequirementPlanner.Capability> asyncCapabilities = captureAsyncCapabilities();
-        List<AsyncRequirementPlanner.Requirement> preparedRequirements = new ArrayList<>();
-        List<Integer> fallback = new ArrayList<>();
-        for (int index = 0; index < requirements.size(); index++) {
-            int originalIndex = requirementIndexes.get(index);
-            AsyncRequirementPlanner.Requirement prepared = prepareAsyncRequirement(originalIndex,
-                    requirements.get(index), parallelism, asyncCapabilities);
-            if (prepared == null) fallback.add(originalIndex);
-            else preparedRequirements.add(prepared);
-        }
-        return new AsyncRequirementPlanner.PreparedPlan(preparedRequirements, asyncCapabilities, fallback);
+        AsyncRequirementPlanner.PreparedPlan prepared = planAsync(requirements, parallelism);
+        return new AsyncRequirementPlanner.PreparedPlan(prepared.requirements().stream().map(requirement ->
+                new AsyncRequirementPlanner.Requirement(requirementIndexes.get(requirement.index()),
+                        requirement.amount(), requirement.direction(), requirement.requests())).toList(),
+                prepared.capabilities(), prepared.initialMainThreadRequirements().stream()
+                        .map(requirementIndexes::get).toList(), prepared.routing(), prepared.inputScope());
     }
 
     public List<AsyncRequirementPlanner.Capability> captureAsyncCapabilities() {
@@ -119,7 +164,8 @@ public final class CraftingContext {
         boolean energyFallback = capabilities.stream().anyMatch(capability ->
                 capability.type().equals(BuiltinCapabilityDefinitions.ENERGY_TYPE)
                         && capability.facet(AsyncPlanningFacet.class).isEmpty());
-        for (MachineCapability capability : capabilities) {
+        for (int index = 0; index < capabilities.size(); index++) {
+            MachineCapability capability = capabilities.get(index);
             if (capabilityIds != null && !capabilityIds.contains(capability.type().id())) continue;
             if (chemicalFallback && capability.type().id().equals(MekanismRecipeTypes.CHEMICAL)) continue;
             if (energyFallback && capability.type().equals(BuiltinCapabilityDefinitions.ENERGY_TYPE)) continue;
@@ -129,25 +175,45 @@ public final class CraftingContext {
                     ignored -> facet.captureSnapshot());
             AsyncCapabilityPlanner planner = facet.workerPlanner();
             asyncCapabilities.add(new AsyncRequirementPlanner.Capability(planner, snapshot,
-                    capability.directions().values()));
+                    capability.directions().values(), index));
         }
         return List.copyOf(asyncCapabilities);
     }
 
     public static AsyncRequirementPlanner.PreparedPlan prepareAsyncPlan(List<MachineRequirement> requirements,
             long parallelism, List<AsyncRequirementPlanner.Capability> asyncCapabilities) {
+        return prepareAsyncPlan(requirements, parallelism, asyncCapabilities, null, InputScope.legacy());
+    }
+
+    public static AsyncRequirementPlanner.PreparedPlan prepareAsyncPlan(List<MachineRequirement> requirements,
+            long parallelism, List<AsyncRequirementPlanner.Capability> asyncCapabilities,
+            @Nullable InputRoutingFacet routing, @Nullable InputScope scope) {
         if (requirements == null || parallelism <= 0L) {
             throw new IllegalArgumentException("requirements must not be null and parallelism must be positive");
         }
+        // Multiple alternative sources require a synchronous selection before worker execution.
+        InputScope selected = scope == null ? routing == null ? InputScope.legacy() : routing.ordinaryScope() : scope;
+        boolean materialInputs = requirements.stream().anyMatch(requirement -> requirement.type().capabilityIds().stream()
+                .anyMatch(id -> RequirementPlanner.isMaterialInput(IOType.valueOf(requirement.io().name()), id)));
+        boolean unresolved = routing != null && scope == null && routing.scopes(materialInputs).size() > 1;
         List<AsyncRequirementPlanner.Requirement> preparedRequirements = new ArrayList<>();
         List<Integer> fallback = new ArrayList<>();
         for (int index = 0; index < requirements.size(); index++) {
-            AsyncRequirementPlanner.Requirement prepared = prepareAsyncRequirement(index, requirements.get(index),
-                    parallelism, asyncCapabilities);
+            MachineRequirement requirement = requirements.get(index);
+            boolean unknownSource = selected.kind() != InputScope.Kind.LEGACY
+                    && requirement.type().capabilityIds().stream().anyMatch(id ->
+                    RequirementPlanner.isMaterialInput(IOType.valueOf(requirement.io().name()), id)
+                            && asyncCapabilities.stream().anyMatch(capability -> capability.capabilityId().equals(id)
+                            && capability.directions().contains(IOType.INPUT)
+                            && (capability.sourceCapabilityIndex() < 0 || routing == null
+                            || routing.sources().stream().noneMatch(source -> source.capabilityIndex()
+                            == capability.sourceCapabilityIndex()))));
+            AsyncRequirementPlanner.Requirement prepared = unresolved || unknownSource || !requirement.tags().isEmpty()
+                    ? null : prepareAsyncRequirement(index, requirement, parallelism, asyncCapabilities);
             if (prepared == null) fallback.add(index);
             else preparedRequirements.add(prepared);
         }
-        return new AsyncRequirementPlanner.PreparedPlan(preparedRequirements, asyncCapabilities, fallback);
+        return new AsyncRequirementPlanner.PreparedPlan(preparedRequirements, asyncCapabilities, fallback, routing, selected);
     }
 
     /** Captures pure stage rules on the main thread, discarding captured capability quantities. */
@@ -171,7 +237,7 @@ public final class CraftingContext {
             boolean probabilisticOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
                     && (requirement instanceof ItemRequirement item && item.chance() != 1F
                     || requirement instanceof FluidRequirement fluid && fluid.chance() != 1F);
-            AsyncRequirementPlanner.Requirement description = probabilisticOutput ? null
+            AsyncRequirementPlanner.Requirement description = probabilisticOutput || !requirement.tags().isEmpty() ? null
                     : prepareAsyncRequirement(index, requirement, parallelism, asyncCapabilities);
             if (description == null) fallback.add(index);
             else prepared.add(description);
@@ -342,8 +408,7 @@ public final class CraftingContext {
                                                 Map<Integer, OutputPolicy> outputPolicies,
                                                 List<Integer> requirementIndexes) {
         return new RequirementPlanner().planFixed(requirements, capabilities,
-                new PlanningContext(parallelism, 0, false, new PlanningReservations(), outputPolicies,
-                        reservationOwner), requirementIndexes);
+                planningContext(parallelism, outputPolicies), requirementIndexes);
     }
 
     public PlanningResult planRequirements(List<MachineRequirement> requirements, long parallelism,
@@ -389,6 +454,9 @@ public final class CraftingContext {
     void resetFor(CapabilitySnapshot snapshot, List<RecipeModifier> modifiers) {
         if (snapshot == null) throw new IllegalArgumentException("snapshot must not be null");
         capabilities = snapshot.capabilities();
+        this.snapshot = snapshot;
+        inputRouting = snapshot.facets(InputRoutingFacet.class).stream().findFirst().orElse(null);
+        inputScope = null;
         setModifiers(modifiers);
         reservationOwner = null;
     }
@@ -406,6 +474,7 @@ public final class CraftingContext {
                                                                                 long parallelism,
                                                                                 List<AsyncRequirementPlanner.Capability> capabilities) {
         if (requirement instanceof ItemRequirement item) {
+            if (item.io() == RecipeModifier.IOType.OUTPUT && item.chance() != 1F) return null;
             long amount = item.io() == RecipeModifier.IOType.INPUT
                     ? scaled(item.count(), parallelism) : scaled(item.stack(null).getCount(), parallelism);
             if (amount <= 0L || (item.io() == RecipeModifier.IOType.INPUT
@@ -432,6 +501,7 @@ public final class CraftingContext {
                     IOType.valueOf(item.io().name()), requests);
         }
         if (requirement instanceof FluidRequirement fluid) {
+            if (fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.chance() != 1F) return null;
             long amount = fluid.io() == RecipeModifier.IOType.INPUT
                     ? scaled(fluid.amount(), parallelism) : scaled(fluid.stack().getAmount(), parallelism);
             if (amount <= 0L || (fluid.io() == RecipeModifier.IOType.INPUT
@@ -501,7 +571,7 @@ public final class CraftingContext {
         return null;
     }
 
-    private static AsyncCapabilityRequest.Resource resourceRequest(net.minecraft.resources.ResourceLocation capabilityId,
+    private static AsyncCapabilityRequest.Resource resourceRequest(ResourceLocation capabilityId,
                                                                     long parallelism, AsyncResourceValue resource,
                                                                     long amount, boolean insert) {
         return new AsyncCapabilityRequest.Resource(capabilityId, parallelism,
@@ -509,7 +579,7 @@ public final class CraftingContext {
     }
 
     private static List<AsyncResourceValue> resources(List<AsyncRequirementPlanner.Capability> capabilities,
-                                                       net.minecraft.resources.ResourceLocation capabilityId,
+                                                        ResourceLocation capabilityId,
                                                        IOType direction) {
         List<AsyncResourceValue> values = new ArrayList<>();
         for (AsyncRequirementPlanner.Capability capability : capabilities) {
@@ -572,8 +642,12 @@ public final class CraftingContext {
             throw new IllegalArgumentException("requirements and indexes must match");
         }
         return new RequirementPlanner().plan(requirements, capabilities,
-                new PlanningContext(parallelism, 0, false, new PlanningReservations(), outputPolicies,
-                        reservationOwner), requirementIndexes);
+                planningContext(parallelism, outputPolicies), requirementIndexes);
+    }
+
+    private PlanningContext planningContext(long parallelism, Map<Integer, OutputPolicy> policies) {
+        return new PlanningContext(parallelism, 0, false, new PlanningReservations(),
+                policies, inputRouting, inputScope, null, reservationOwner);
     }
 
     private PlanningResult planSelectedExact(List<MachineRequirement> source, List<Integer> sourceIndexes,
@@ -591,8 +665,7 @@ public final class CraftingContext {
             requirementIndexes.add(sourceIndexes.get(index));
         }
         return new RequirementPlanner().planExact(requirements, capabilities,
-                new PlanningContext(parallelism, 0, false, new PlanningReservations(), outputPolicies,
-                        reservationOwner), requirementIndexes);
+                planningContext(parallelism, outputPolicies), requirementIndexes);
     }
 
     private static Map<Integer, OutputPolicy> partialOutputPolicies(int size) {

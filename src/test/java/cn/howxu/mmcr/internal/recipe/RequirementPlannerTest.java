@@ -13,6 +13,9 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
 import cn.howxu.mmcr.api.capability.facet.FluidHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
+import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -162,6 +165,69 @@ class RequirementPlannerTest {
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().parallelism()).isEqualTo(2);
         assertThat(result.plan().requirements()).hasSize(2);
+    }
+
+    @Test
+    void real_item_handlers_reuse_probability_samples_after_an_earlier_group_fails() {
+        List<RequirementHandlerSupport.ConsumeProfile> profiles = new ArrayList<>();
+        List<Boolean> outputs = new ArrayList<>();
+        register(TYPE, new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                assertThat(context.requirementIndex()).isEqualTo(9);
+                var profile = (RequirementHandlerSupport.ConsumeProfile) cachedDecision(context.sampling(), "inputs", 4);
+                var produced = (Boolean) cachedDecision(context.sampling(), "outputs", 8);
+                assertThat(profile).isNotNull();
+                assertThat(produced).isNotNull();
+                profiles.add(profile);
+                outputs.add(produced);
+                return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+            }
+        });
+        BulkItemStorage first = new BulkItemStorage(64, null);
+        BulkItemStorage second = new BulkItemStorage(64, null);
+        BulkItemStorage gold = new BulkItemStorage(64, null);
+        BulkItemStorage output = new BulkItemStorage(64, null);
+        first.insertItem(0, ironResource(), false);
+        second.insertItem(0, ironResource(), false);
+        gold.insertItem(0, new ItemStack(Items.GOLD_INGOT), false);
+        BlockPos a = new BlockPos(1, 0, 0);
+        BlockPos b = new BlockPos(2, 0, 0);
+        InputRoutingFacet routing = new InputRoutingFacet(3,
+                List.of(new InputRoutingFacet.Source(0, a), new InputRoutingFacet.Source(1, b),
+                        new InputRoutingFacet.Source(2, b)),
+                List.of(new InputRoutingFacet.Port(a, true), new InputRoutingFacet.Port(b, true)));
+        var result = new RequirementPlanner().plan(List.of(
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                                1F, List.of(), DataComponentPredicateSet.EMPTY, 0.5F),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.DIAMOND), 0.5F, List.of()),
+                        new TestRequirement(TYPE, RecipeModifier.IOType.INPUT),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.GOLD_INGOT), 1, ItemStack.EMPTY)),
+                List.of(new ItemBusCapability(first, IOType.INPUT), new ItemBusCapability(second, IOType.INPUT),
+                        new ItemBusCapability(gold, IOType.INPUT), new ItemBusCapability(output, IOType.OUTPUT)),
+                new PlanningContext(1, 0, false, new PlanningReservations(), Map.of(), routing, null, null),
+                List.of(4, 8, 9, 12));
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().inputScope()).isEqualTo(new InputScope(InputScope.Kind.ISOLATED, List.of(b)));
+        assertThat(profiles).hasSize(2);
+        assertThat(profiles.get(1)).isSameAs(profiles.getFirst());
+        assertThat(outputs.get(1)).isEqualTo(outputs.getFirst());
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(first.amount(0)).isEqualTo(1);
+        assertThat(second.amount(0)).isEqualTo(1 - profiles.getFirst().consumedBatches(result.plan().parallelism()));
+        assertThat(gold.amount(0)).isZero();
+        assertThat(output.amount(0)).isEqualTo(outputs.getFirst() ? 1 : 0);
+    }
+
+    private static Object cachedDecision(RequirementHandlerSupport.Sampling sampling, String kind, int index) {
+        try {
+            var field = RequirementHandlerSupport.Sampling.class.getDeclaredField(kind);
+            field.setAccessible(true);
+            return ((Map<?, ?>) field.get(sampling)).get(index);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError(exception);
+        }
     }
 
     @Test

@@ -410,7 +410,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     @Override
     public StartResult searchAndStartRecipe(List<MachineRecipe> candidates, long availableParallelism, long structureVersion) {
         FactorySearchContext context = new FactorySearchContext(controller.currentRuntimeSnapshot(), List.of(),
-                controller.componentRuntime().capabilities(), controller.componentRuntime().modifierList(),
+                controller.componentRuntime().capabilitySnapshot(), controller.componentRuntime().modifierList(),
                 currentRecipeCatalog().version(), controller.resourceAvailabilityEpoch(), availableParallelism,
                 controller.getLevel() == null ? 0L : controller.getLevel().getGameTime());
         return searchAndStartRecipe(context, candidates, structureVersion);
@@ -469,7 +469,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                 }
             }
             RecipeSearchResult result = new RecipeSearchTask(context.snapshot(), machineId, recipePoolId, structureVersion,
-                    context.maxParallelism(), eligible, context.capabilities(),
+                    context.maxParallelism(), eligible, context.capabilitySnapshot(),
                     MachineModifier.recipeModifiers(context.modifiers())).compute(prefetchOwner);
             if (!result.success() && !rejected.isEmpty()) {
                 FailureReport report = result.failureReport();
@@ -497,6 +497,7 @@ public final class FactoryRecipeThread extends RecipeThread {
                                      long structureVersion, SearchResult searchResult) {
         if (context == null || searchResult == null) return StartResult.NO_MATCH;
         if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
+        if (!searchSnapshotCurrent(context.snapshot())) return StartResult.DEFERRED;
         setSearchContextKey(contextSearchContextKey(context));
         setSearchGameTime(context.gameTime());
         List<MachineRecipe> filtered = candidatesFor(candidates, context.catalogVersion());

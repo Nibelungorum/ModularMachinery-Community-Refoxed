@@ -13,6 +13,8 @@ import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -63,6 +65,10 @@ import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
+import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
+import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
@@ -87,6 +93,8 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
+import cn.howxu.mmcr.internal.recipe.RecipeThread.StartResult;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -209,6 +217,355 @@ class CraftingRuntimeTest {
         ItemStack result = item(output.itemHandler(), 0);
         assertThat(result.getItem()).isEqualTo(Items.IRON_NUGGET);
         assertThat(result.getCount()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void paid_execution_keeps_its_physical_catalyst_scope_after_isolation_changes(boolean isolated) {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity other = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        first.setInputIsolated(isolated);
+        other.setInputIsolated(true);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, other);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_frozen_catalyst", 4, List.of(new ItemRequirement(
+                RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        InputScope scope = runtime.activeInputScope();
+        assertThat(scope.kind()).isEqualTo(isolated ? InputScope.Kind.ISOLATED : InputScope.Kind.ORDINARY);
+        assertThat(scope.sources()).containsExactly(first.getBlockPos());
+        InstalledRecipeProgram installed = runtime.ensureInstalledProgram();
+
+        first.setInputIsolated(!isolated);
+        other.setInputIsolated(false);
+        controller.onInputIsolationChanged();
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(installed.current()).isTrue();
+        assertThat(installed.program().tick().inputScope()).isEqualTo(scope);
+        assertThat(runtime.tick().isCrafting()).isTrue();
+        int paidTick = runtime.tickCount();
+        setItem(first.itemHandler(), 0, ItemStack.EMPTY);
+        setItem(other.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        LevelStub.setGameTime(controller.getLevel(), 2L);
+        runtime.tick();
+        assertThat(runtime.tickCount()).isEqualTo(paidTick);
+        assertThat(runtime.failure()).isNotNull();
+        assertThat(runtime.activeInputScope()).isEqualTo(scope);
+        assertThat(other.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void save_restore_keeps_the_paid_source_even_when_it_is_now_ordinary() {
+        var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity other = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        first.setInputIsolated(true);
+        other.setInputIsolated(true);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, other);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_restore_scope", 4, List.of(new ItemRequirement(
+                RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        InputScope paidScope = runtime.activeInputScope();
+        first.setInputIsolated(false);
+        controller.onInputIsolationChanged();
+        CompoundTag saved = new CompoundTag();
+        runtime.save(saved, lookup);
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(saved, null, lookup);
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.activeInputScope()).isEqualTo(paidScope);
+        assertThat(restored.tick().isCrafting()).isTrue();
+        int tick = restored.tickCount();
+        setItem(first.itemHandler(), 0, ItemStack.EMPTY);
+        setItem(other.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        restored.tick();
+        assertThat(restored.tickCount()).isEqualTo(tick);
+        assertThat(restored.failure()).isNotNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"version", "kind", "sources", "node"})
+    void explicitly_corrupt_input_scope_rejects_restore_instead_of_loading_legacy(String corrupt) {
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        MachineRecipe recipe = recipe("runtime_bad_input_scope", 2, List.of());
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        CompoundTag saved = new CompoundTag();
+        runtime.save(saved, EMPTY_LOOKUP);
+        CompoundTag scope = saved.getCompound("input_scope");
+        switch (corrupt) {
+            case "version" -> scope.putInt("version", 2);
+            case "kind" -> scope.putString("kind", "UNKNOWN");
+            case "sources" -> scope.putString("sources", "invalid");
+            case "node" -> saved.putString("input_scope", "invalid");
+        }
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(saved, null, EMPTY_LOOKUP);
+        assertThat(restored.active()).isFalse();
+        assertThat(restored.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
+    }
+
+    @Test
+    void before_start_isolation_change_is_planned_once_against_the_new_routing() {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity second = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        setItem(second.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        AtomicInteger callbacks = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder().beforeStart(context -> {
+            callbacks.incrementAndGet();
+            controller.setFullyInputIsolated(true);
+        }).build()));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe("runtime_before_start_routing", 2, List.of(input(Items.IRON_INGOT, 2))), 1)
+                .isCrafting()).isFalse();
+        assertThat(callbacks).hasValue(1);
+        assertThat(first.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(second.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void search_does_not_delay_a_group_for_a_retained_mold_in_another_group() {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity mold = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, mold);
+        controller.setFullyInputIsolated(true);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        setItem(mold.itemHandler(), 0, stack(Items.GOLD_INGOT, 1));
+        MachineRecipe specific = recipe("runtime_specific_other_group", 2, List.of(input(Items.IRON_INGOT, 2),
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.GOLD_INGOT), 1,
+                        ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
+        MachineRecipe fallback = recipe("runtime_fallback_group", 2, List.of(input(Items.IRON_INGOT, 1)));
+        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        var result = new RecipeSearchTask(snapshot, controller.machineId(), snapshot.structure().version(), 1L,
+                List.of(fallback, specific), controller.componentRuntime().capabilitySnapshot()).compute();
+        assertThat(result.recipe()).isSameAs(fallback);
+        assertThat(result.hasMoreSpecificPendingInputCandidate()).isFalse();
+        FactorySearchContext factory = new FactorySearchContext(snapshot, List.of(specific, fallback),
+                controller.componentRuntime().capabilitySnapshot(), List.of(), 0L, 0L, 1L, 0L);
+        var factoryResult = FactoryRecipeThread.search(factory, factory.orderedCandidates(), snapshot.structure().version());
+        assertThat(factoryResult.result().recipe()).isSameAs(fallback);
+        assertThat(factoryResult.result().hasMoreSpecificPendingInputCandidate()).isFalse();
+        assertThat(first.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void native_start_saves_its_selected_scope_during_routing_notification_reentry() {
+        var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        AtomicReference<Runnable> notification = new AtomicReference<>(() -> { });
+        LongItemStorage storage = new LongItemStorage(2, 64L, () -> notification.get().run());
+        ItemInputBusBlockEntity input = new ItemInputBusBlockEntity(new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState()) {
+            @Override public LongItemStorage itemHandler() { return storage; }
+            @Override public LongItemStorage nativeItemHandler() { return storage; }
+        };
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        controller.setFullyInputIsolated(true);
+        setItem(storage, 0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_paid_scope_reentry", 2, List.of(input(Items.IRON_INGOT, 1)));
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        AtomicReference<CompoundTag> saved = new AtomicReference<>();
+        notification.set(() -> {
+            controller.setFullyInputIsolated(false);
+            assertThat(runtime.activeInputScope()).isEqualTo(new InputScope(InputScope.Kind.ISOLATED,
+                    List.of(input.getBlockPos())));
+            CompoundTag output = new CompoundTag();
+            runtime.save(output, lookup);
+            saved.set(output);
+        });
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(runtime.activeInputScope()).isEqualTo(new InputScope(InputScope.Kind.ISOLATED, List.of(input.getBlockPos())));
+        assertThat(saved.get()).isNotNull();
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(saved.get(), null, lookup);
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.activeInputScope()).isEqualTo(runtime.activeInputScope());
+        assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
+    void quarantined_native_start_persists_its_selected_source_after_the_payment_frame_is_cleared() {
+        var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        AtomicReference<Runnable> notification = new AtomicReference<>(() -> {});
+        LongItemStorage storage = new LongItemStorage(2, 64L, () -> notification.get().run());
+        ItemInputBusBlockEntity input = new ItemInputBusBlockEntity(new BlockPos(1, 0, 0),
+                ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState()) {
+            @Override public LongItemStorage nativeItemHandler() { return storage; }
+        };
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        controller.setFullyInputIsolated(true);
+        setItem(storage, 0, stack(Items.IRON_INGOT, 2));
+        MachineRecipe recipe = recipe("runtime_quarantined_scope", 2,
+                List.of(input(Items.IRON_INGOT, 1), input(Items.IRON_INGOT, 1)));
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        notification.set(() -> { throw new IllegalStateException("native partial payment notification"); });
+        assertThat(runtime.start(recipe, 1).isCrafting()).isFalse();
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+        InputScope scope = new InputScope(InputScope.Kind.ISOLATED, List.of(input.getBlockPos()));
+        assertThat(runtime.activeInputScope()).isEqualTo(scope);
+        assertThat(storage.amount(0)).isEqualTo(1);
+        CompoundTag saved = new CompoundTag();
+        runtime.save(saved, lookup);
+        controller.setFullyInputIsolated(false);
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(saved, null, lookup);
+        assertThat(restored.activeInputScope()).isEqualTo(scope);
+        assertThat(restored.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+        restored.resume();
+        restored.tick();
+        assertThat(storage.amount(0)).isEqualTo(1);
+    }
+
+    @Test
+    void last_recipe_restart_selects_a_new_group_using_current_configuration() {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity second = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        first.setInputIsolated(true);
+        second.setInputIsolated(true);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+        controller.setFormed(true);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        setItem(second.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_last_recipe_reselects_group", 1, List.of(input(Items.IRON_INGOT, 1)));
+        RecipeRegistry.registerStatic(recipe);
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L, controller.currentStructureSnapshot().version()))
+                .isEqualTo(StartResult.STARTED);
+        assertThat(thread.runtime().activeInputScope().sources()).containsExactly(first.getBlockPos());
+        thread.runtime().tick();
+        thread.runtime().finish();
+        assertThat(thread.runtime().activeInputScope()).isNull();
+        thread.markRecipeFinished();
+        first.setInputIsolated(false);
+        controller.onInputIsolationChanged();
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+
+        assertThat(thread.tryRestartLastRecipe(List.of(recipe), 1L, controller.currentStructureSnapshot().version()))
+                .isEqualTo(StartResult.STARTED);
+        assertThat(thread.runtime().activeInputScope().sources()).containsExactly(second.getBlockPos());
+        assertThat(first.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(second.itemHandler().amount(0)).isZero();
+    }
+
+    @Test
+    void async_material_operation_outside_the_paid_scope_falls_back_as_one_pinned_stage() {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity other = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, other);
+        controller.setFullyInputIsolated(true);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        setItem(other.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_async_scope_fence", 4, List.of(new ItemRequirement(
+                RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
+        var captured = new CraftingContext(controller.componentRuntime().capabilitySnapshot()).captureAsyncCapabilities();
+        AsyncCapabilitySnapshot.Resource second = (AsyncCapabilitySnapshot.Resource) captured.get(1).snapshot();
+        var wrongSource = new AsyncRequirementPlanner.PlanResult(List.of(new AsyncRequirementPlanner.PlannedOperation(
+                0, 1, new AsyncCapabilityOperation.Resource(second.capabilityId(), 0,
+                second.slots().getFirst().resource().orElseThrow(), 1L, false))), List.of());
+        controller.setFullyInputIsolated(false);
+        setItem(first.itemHandler(), 0, ItemStack.EMPTY);
+
+        assertThat(runtime.commitAsyncTick(wrongSource)).isFalse();
+        assertThat(runtime.tickCount()).isZero();
+        assertThat(runtime.activeInputScope().sources()).containsExactly(first.getBlockPos());
+        assertThat(other.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void factory_search_hint_cannot_start_after_its_routing_revision_changes() {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity second = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        setItem(second.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_factory_stale_routing", 2, List.of(input(Items.IRON_INGOT, 2)));
+        RecipeRegistry.registerStatic(recipe);
+        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        FactorySearchContext context = new FactorySearchContext(snapshot, List.of(recipe),
+                controller.componentRuntime().capabilitySnapshot(), List.of(),
+                RecipeRegistry.catalogForPool(recipe.recipePoolId()).version(), 0L, 1L, 0L);
+        var result = FactoryRecipeThread.search(context, List.of(recipe), snapshot.structure().version());
+        assertThat(result.result().success()).isTrue();
+        controller.setFullyInputIsolated(true);
+        FactoryRecipeThread thread = FactoryRecipeThread.simple(controller);
+
+        assertThat(thread.startSearchResult(context, List.of(recipe), snapshot.structure().version(), result))
+                .isEqualTo(StartResult.DEFERRED);
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(first.itemHandler().amount(0)).isEqualTo(1L);
+        assertThat(second.itemHandler().amount(0)).isEqualTo(1L);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void thread_recaptures_routing_after_one_before_start_callback(boolean maskedByFullIsolation) {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity second = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+        if (maskedByFullIsolation) controller.setFullyInputIsolated(true);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 2));
+        setItem(second.itemHandler(), 0, stack(Items.IRON_INGOT, 2));
+        AtomicInteger starts = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder().beforeStart(context -> {
+            starts.incrementAndGet();
+            if (maskedByFullIsolation) {
+                first.setInputIsolated(true);
+                controller.onInputIsolationChanged();
+            } else {
+                controller.setFullyInputIsolated(true);
+            }
+        }).build()));
+        MachineRecipe recipe = recipe("runtime_thread_recaptures_group", 2, List.of(input(Items.IRON_INGOT, 2)));
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+
+        assertThat(thread.searchAndStartRecipe(List.of(recipe), 1L, controller.currentStructureSnapshot().version()))
+                .isEqualTo(StartResult.STARTED);
+        assertThat(starts).hasValue(1);
+        assertThat(thread.runtime().activeInputScope()).isEqualTo(new InputScope(InputScope.Kind.ISOLATED,
+                List.of(first.getBlockPos())));
+        assertThat(first.itemHandler().amount(0)).isZero();
+        assertThat(second.itemHandler().amount(0)).isEqualTo(2L);
+    }
+
+    @Test
+    void old_active_save_without_scope_retains_legacy_global_input_behavior() {
+        var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity second = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+        controller.setFullyInputIsolated(true);
+        setItem(first.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("runtime_legacy_input_scope", 4, List.of(new ItemRequirement(
+                RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)));
+        RecipeRegistry.registerStatic(recipe);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        CompoundTag saved = new CompoundTag();
+        runtime.save(saved, lookup);
+        saved.remove("input_scope");
+        setItem(first.itemHandler(), 0, ItemStack.EMPTY);
+        setItem(second.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(saved, null, lookup);
+        assertThat(restored.activeInputScope()).isEqualTo(InputScope.legacy());
+        assertThat(restored.tick().isCrafting()).isTrue();
+        assertThat(restored.tickCount()).isEqualTo(1);
     }
 
     @Test

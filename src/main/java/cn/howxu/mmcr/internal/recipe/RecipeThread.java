@@ -77,7 +77,7 @@ public abstract class RecipeThread {
 
     private record StartSnapshot(ControllerRuntimeSnapshot runtime, long structureVersion, long catalogVersion,
                                  ResourceLocation recipePoolId, @Nullable RecipeSearchContextKey searchContextKey,
-                                 StartOrigin origin, long lifecycleEpoch) {
+                                 StartOrigin origin, long lifecycleEpoch, long inputIsolationChangeVersion) {
     }
 
     private record PendingAsyncStart(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
@@ -114,7 +114,7 @@ public abstract class RecipeThread {
         RecipeSearchResult result;
         try {
             result = new RecipeSearchTask(snapshot, machineId, controller.currentRecipePoolId(), structureVersion,
-                    availableParallelism, machineCandidates, controller.componentRuntime().capabilities()).compute(runtime);
+                    availableParallelism, machineCandidates, controller.componentRuntime().capabilitySnapshot()).compute(runtime);
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);
@@ -125,6 +125,7 @@ public abstract class RecipeThread {
             onRecipeSearchFailed(result);
             return StartResult.NO_MATCH;
         }
+        if (!searchSnapshotCurrent(snapshot)) return StartResult.DEFERRED;
         if (controller.shouldDelayConflictProneStart(result)) return StartResult.DEFERRED;
         return startRecipe(result.recipe(), availableParallelism, structureVersion);
     }
@@ -143,7 +144,7 @@ public abstract class RecipeThread {
         try {
             result = new RecipeSearchTask(snapshot, machineId, controller.currentRecipePoolId(), structureVersion,
                     context.maxParallelism(), machineCandidates,
-                    context.capabilities(), MachineModifier.recipeModifiers(context.modifiers())).compute(runtime);
+                    context.capabilitySnapshot(), MachineModifier.recipeModifiers(context.modifiers())).compute(runtime);
         } catch (RuntimeException exception) {
             controller.clearPendingConflictStart();
             onStartSearchFailed(null);
@@ -154,6 +155,7 @@ public abstract class RecipeThread {
             onRecipeSearchFailed(result);
             return StartResult.NO_MATCH;
         }
+        if (!searchSnapshotCurrent(snapshot)) return StartResult.DEFERRED;
         if (controller.shouldDelayConflictProneStart(result)) return StartResult.DEFERRED;
         return startRecipe(result.recipe(), context.maxParallelism(), structureVersion, context);
     }
@@ -273,6 +275,7 @@ public abstract class RecipeThread {
     protected StartResult startRecipe(MachineRecipe next, long requestedParallelism, long structureVersion,
                                       @Nullable FactorySearchContext context, StartOrigin origin) {
         if (runtime.active() || isStartPending()) return reportStartResult(origin, StartResult.DEFERRED);
+        if (context != null && !searchSnapshotCurrent(context.snapshot())) return reportStartResult(origin, StartResult.DEFERRED);
         long epoch = controller.lifecycleEpoch();
         long generation = nextStartToken;
         StartResult rejected = startCandidateFailure(next, requestedParallelism);
@@ -321,6 +324,7 @@ public abstract class RecipeThread {
                 finishPendingStart(token, next, result);
                 return result;
             }
+            snapshot = recaptureRoutingAfterBeforeStart(snapshot);
             StartResult invalid = pendingStartInvalidResult(next);
             if (invalid != null) {
                 finishPendingStart(token, next, invalid);
@@ -363,7 +367,35 @@ public abstract class RecipeThread {
         ControllerRuntimeSnapshot snapshot = context == null ? controller.currentRuntimeSnapshot() : context.snapshot();
         return new StartSnapshot(snapshot,
                 snapshot.structure().version(), context == null ? currentCatalogVersion() : context.catalogVersion(),
-                controller.currentRecipePoolId(), searchContextKeyForStart(), origin, controller.lifecycleEpoch());
+                controller.currentRecipePoolId(), searchContextKeyForStart(), origin, controller.lifecycleEpoch(),
+                controller.componentRuntime().inputIsolationChangeVersion());
+    }
+
+    protected final boolean searchSnapshotCurrent(ControllerRuntimeSnapshot captured) {
+        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        return captured.structure().version() == current.structure().version()
+                && captured.capabilityVersion() == current.capabilityVersion()
+                && captured.modifierVersion() == current.modifierVersion()
+                && captured.stateVersion() == current.stateVersion();
+    }
+
+    private StartSnapshot recaptureRoutingAfterBeforeStart(StartSnapshot captured) {
+        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        long isolationChangeVersion = controller.componentRuntime().inputIsolationChangeVersion();
+        if (isolationChangeVersion == captured.inputIsolationChangeVersion()
+                || current.stateVersion() - captured.runtime().stateVersion()
+                != isolationChangeVersion - captured.inputIsolationChangeVersion()
+                || captured.runtime().structure().version() != current.structure().version()
+                || captured.runtime().capabilityVersion() != current.capabilityVersion()
+                || captured.runtime().modifierVersion() != current.modifierVersion()
+                || captured.runtime().upgradeContentRevision() != current.upgradeContentRevision()
+                || !captured.runtime().linkedPortPositions().equals(current.linkedPortPositions())) return captured;
+        StartSnapshot refreshed = new StartSnapshot(current, captured.structureVersion(), captured.catalogVersion(),
+                captured.recipePoolId(), searchContextKeyForStart(), captured.origin(), captured.lifecycleEpoch(),
+                isolationChangeVersion);
+        pendingStartComponentStateVersion = current.stateVersion();
+        pendingStartSearchContextKey = refreshed.searchContextKey();
+        return refreshed;
     }
 
     private boolean currentStartOwner(long epoch) {
@@ -577,8 +609,9 @@ public abstract class RecipeThread {
                 finishPendingStart(pending.token(), pending.recipe(), result);
                 return result;
             }
+            StartSnapshot preparedSnapshot = recaptureRoutingAfterBeforeStart(pending.snapshot());
             result = requestStart(pending.level(), pending.domain(), pending.recipe(), pending.parallelism(),
-                    pending.token(), pending.snapshot(), preparation.execution(),
+                    pending.token(), preparedSnapshot, preparation.execution(),
                     () -> {
                         if (isPendingStart(pending.token(), pending.recipe())) failAsyncStart(pending);
                     });
@@ -1074,6 +1107,8 @@ public abstract class RecipeThread {
                     return MainThreadStep.Result.value(false);
                 }
                 pendingAsyncStartExecution = preparation.execution();
+                pendingAsyncStart = new PendingAsyncStart(pending.level(), pending.domain(), pending.recipe(),
+                        pending.parallelism(), pending.token(), recaptureRoutingAfterBeforeStart(pending.snapshot()));
             } else if (lifecycle.kind() == MainThreadStep.Kind.BEFORE_FINISH) {
                 asyncFinishPrepared = runtime.prepareAsyncFinish();
             }

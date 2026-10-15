@@ -1,17 +1,21 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservationTest.PaidPatternFixture;
 import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -104,6 +108,70 @@ class PatternStartBatchReservationTest {
                 assertThat(fixture.afterCommit).hasValue(0);
             }
             assertThat(batch.commit()).isFalse();
+        }
+    }
+
+    static Stream<Arguments> finalBatchWriteChanges() {
+        return Stream.of(false, true).flatMap(laterLane -> Stream.of("full", "local", "lifecycle", "ledger")
+                .map(change -> Arguments.of(laterLane, change)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("finalBatchWriteChanges")
+    void native_batch_keeps_paid_lanes_after_later_lane_or_ownership_changes(boolean laterLane, String change)
+            throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture first = new PaidPatternFixture("batch_final_first", true);
+            PaidPatternFixture second = new PaidPatternFixture("batch_final_second", true);
+            PatternStartBatchReservation batch = PatternStartBatchReservation.reserved(List.of(first.reserve(), second.reserve()));
+            RecipeCommitLedger firstPayment = first.runtime.ledger();
+            RecipeCommitLedger secondPayment = second.runtime.ledger();
+            AtomicInteger callerWrites = new AtomicInteger();
+            if (laterLane) second.prefetchWrite.set(() -> {
+                first.assertProvisionalJointPayment(firstPayment);
+                first.changeUnpaidFence(change);
+            });
+
+            assertThat(batch.commit(() -> {
+                callerWrites.incrementAndGet();
+                second.assertProvisionalJointPayment(secondPayment);
+                if (!laterLane) {
+                    first.assertProvisionalJointPayment(firstPayment);
+                    first.changeUnpaidFence(change);
+                }
+            })).isTrue();
+
+            assertThat(callerWrites).hasValue(1);
+            assertThat(batch.status()).isEqualTo(PatternStartBatchReservation.Status.COMMITTED);
+            assertThat(batch.reservations()).allSatisfy(reservation -> {
+                assertThat(reservation.rolledBack()).isFalse();
+                assertThat(reservation.commit()).isFalse();
+            });
+            assertThat(firstPayment.state().paidAttempts()).isEqualTo(1L);
+            assertThat(secondPayment.state().paidAttempts()).isEqualTo(1L);
+            assertThat(first.inputs.amount(0)).isZero();
+            assertThat(second.inputs.amount(0)).isZero();
+        }
+    }
+
+    @Test
+    void root_notification_isolation_change_keeps_every_paid_joint_lane() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture first = new PaidPatternFixture("batch_final_paid_first", true);
+            PaidPatternFixture second = new PaidPatternFixture("batch_final_paid_second", true);
+            PatternStartBatchReservation batch = PatternStartBatchReservation.reserved(List.of(first.reserve(), second.reserve()));
+            first.notification.set(() -> first.controller.setFullyInputIsolated(true));
+
+            assertThat(batch.commit()).isTrue();
+            assertThat(batch.status()).isEqualTo(PatternStartBatchReservation.Status.COMMITTED);
+            assertThat(first.controller.isFullyInputIsolated()).isTrue();
+            for (PaidPatternFixture fixture : List.of(first, second)) {
+                assertThat(fixture.runtime.active()).isTrue();
+                assertThat(fixture.runtime.activeInputScope().kind()).isEqualTo(InputScope.Kind.ORDINARY);
+                assertThat(fixture.runtime.activeInputScope().sources()).contains(fixture.physicalInput.getBlockPos());
+                fixture.assertProvisionalJointPayment(fixture.runtime.ledger());
+                assertThat(fixture.afterCommit).hasValue(1);
+            }
         }
     }
 

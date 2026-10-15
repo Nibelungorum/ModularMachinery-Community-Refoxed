@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -433,6 +434,28 @@ class CraftingRuntimeStressTest {
         assertThat(plan.plan().commit()).isTrue();
         assertThat(input.indexes(owner)).containsExactly(3);
         owner.releaseAll();
+    }
+
+    @Test
+    void pattern_context_preserves_the_real_stress_owner_with_and_without_routing() {
+        for (boolean routed : List.of(false, true)) {
+            StressCapability input = new StressCapability(IOType.INPUT);
+            StressSession owner = new StressSession();
+            BlockPos position = new BlockPos(1, 0, 0);
+            CapabilitySnapshot snapshot = routed ? new CapabilitySnapshot(List.of(input),
+                    List.of(new InputRoutingFacet(1, List.of(new InputRoutingFacet.Source(0, position)),
+                            List.of(new InputRoutingFacet.Port(position, true)))))
+                    : new CapabilitySnapshot(List.of(input));
+            CraftingContext context = new CraftingContext(snapshot).withReservationOwner(owner)
+                    .forPatternStart(List.of(), position);
+            var result = context.planRequirements(List.of(stressInput()), 1, Map.of(), List.of(3));
+            assertThat(result.successful()).isTrue();
+            assertThat(result.plan().commit()).isTrue();
+            assertThat(input.onlyOwner()).isSameAs(owner);
+            assertThat(input.indexes(owner)).containsExactly(3);
+            owner.releaseAll();
+            assertThat(input.baseStress()).isZero();
+        }
     }
 
     @Test

@@ -1,4 +1,13 @@
 {
+  "mmcr.input_isolation.button": "I",
+  "mmcr.input_isolation.enabled": "Enabled",
+  "mmcr.input_isolation.disabled": "Disabled",
+  "mmcr.input_isolation.port.enabled": "Interface isolation: %s",
+  "mmcr.input_isolation.port.disabled": "Interface isolation: %s",
+  "mmcr.input_isolation.full.enabled": "Full isolation: %s",
+  "mmcr.input_isolation.full.disabled": "Full isolation: %s",
+  "mmcr.input_isolation.port.tooltip": "%s\nIsolates this interface's inputs\nChanges apply starting with the next recipe process",
+  "mmcr.input_isolation.full.tooltip": "%s\nIsolates item, fluid and chemical inputs from all interfaces\nFull isolation overrides individual interface isolation settings\nChanges apply starting with the next recipe process",
   "gui.mmcr.ui.loading": "Loading controller…",
   "gui.mmcr.ui.rejected": "The controller rejected this operation.",
   "gui.mmcr.ui.unsupported": "This controller does not support this operation.",

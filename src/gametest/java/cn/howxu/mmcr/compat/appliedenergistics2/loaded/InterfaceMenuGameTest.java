@@ -9,6 +9,7 @@ import appeng.core.definitions.AEBlocks;
 import appeng.helpers.InventoryAction;
 import appeng.helpers.IPriorityHost;
 import appeng.helpers.InterfaceLogicHost;
+import appeng.helpers.patternprovider.PatternProviderLogicHost;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.menu.AEBaseMenu;
 import appeng.menu.MenuOpener;
@@ -32,12 +33,14 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlo
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import com.glodblock.github.extendedae.client.ExSemantics;
 import com.glodblock.github.extendedae.common.EAESingletons;
 import com.glodblock.github.extendedae.common.tileentities.TileExInterface;
 import com.glodblock.github.extendedae.container.ContainerExInterface;
 import com.mojang.authlib.GameProfile;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -46,6 +49,8 @@ import net.minecraft.network.PacketSendListener;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.ClientboundContainerSetDataPacket;
+import net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
@@ -58,8 +63,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.network.connection.ConnectionType;
+import net.neoforged.neoforge.network.registration.ChannelAttributes;
 
 import java.util.ArrayList;
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -73,27 +81,28 @@ import java.util.UUID;
 public class InterfaceMenuGameTest {
     public void ae2HostsOpenAndReturnOwnTypes(GameTestHelper helper) {
         hostsOpenAndReturnOwnTypes(helper, List.of(
-                new MenuRoute("ae2_me_input_interface", AE2MenuTypes.INTERFACE, AE2InterfaceMenu.class, "ae2_interface"),
-                new MenuRoute("ae2_me_stocking_input_interface", AE2MenuTypes.INTERFACE, AE2InterfaceMenu.class, "ae2_interface"),
-                new MenuRoute("ae2_me_output_interface", AE2MenuTypes.INTERFACE, AE2InterfaceMenu.class, "ae2_interface"),
-                new MenuRoute("ae2_me_async_output_interface", AE2MenuTypes.INTERFACE, AE2InterfaceMenu.class, "ae2_interface"),
-                new MenuRoute("ae2_me_pattern_interface", AE2MenuTypes.PATTERN, PatternInterfaceMenu.class, "ae2_pattern_interface")));
+                new MenuRoute("ae2_me_input_interface", AE2MenuTypes.INTERFACE, AE2InterfaceMenu.class, "ae2_interface", true),
+                new MenuRoute("ae2_me_stocking_input_interface", AE2MenuTypes.INTERFACE, AE2InterfaceMenu.class, "ae2_interface", true),
+                new MenuRoute("ae2_me_output_interface", AE2MenuTypes.INTERFACE, AE2InterfaceMenu.class, "ae2_interface", false),
+                new MenuRoute("ae2_me_async_output_interface", AE2MenuTypes.INTERFACE, AE2InterfaceMenu.class, "ae2_interface", false),
+                new MenuRoute("ae2_me_pattern_interface", AE2MenuTypes.PATTERN, PatternInterfaceMenu.class, "ae2_pattern_interface", true)));
     }
 
     public void extendedHostsOpenAndReturnOwnTypes(GameTestHelper helper) {
         hostsOpenAndReturnOwnTypes(helper, List.of(
-                new MenuRoute("eae_me_extended_input_interface", ExtendedAEMenuTypes.INTERFACE, ExtendedInterfaceMenu.class, "eae_interface"),
-                new MenuRoute("eae_me_extended_stocking_input_interface", ExtendedAEMenuTypes.INTERFACE, ExtendedInterfaceMenu.class, "eae_interface"),
-                new MenuRoute("eae_me_extended_output_interface", ExtendedAEMenuTypes.INTERFACE, ExtendedInterfaceMenu.class, "eae_interface"),
-                new MenuRoute("eae_me_oversize_input_interface", ExtendedAEMenuTypes.OVERSIZE, ExtendedInterfaceMenu.class, "eae_oversize_interface"),
-                new MenuRoute("eae_me_oversize_output_interface", ExtendedAEMenuTypes.OVERSIZE, ExtendedInterfaceMenu.class, "eae_oversize_interface"),
-                new MenuRoute("eae_me_extended_pattern_interface", ExtendedAEMenuTypes.PATTERN, PatternInterfaceMenu.class, "eae_pattern_interface")));
+                new MenuRoute("eae_me_extended_input_interface", ExtendedAEMenuTypes.INTERFACE, ExtendedInterfaceMenu.class, "eae_interface", true),
+                new MenuRoute("eae_me_extended_stocking_input_interface", ExtendedAEMenuTypes.INTERFACE, ExtendedInterfaceMenu.class, "eae_interface", true),
+                new MenuRoute("eae_me_extended_output_interface", ExtendedAEMenuTypes.INTERFACE, ExtendedInterfaceMenu.class, "eae_interface", false),
+                new MenuRoute("eae_me_oversize_input_interface", ExtendedAEMenuTypes.OVERSIZE, ExtendedInterfaceMenu.class, "eae_oversize_interface", true),
+                new MenuRoute("eae_me_oversize_output_interface", ExtendedAEMenuTypes.OVERSIZE, ExtendedInterfaceMenu.class, "eae_oversize_interface", false),
+                new MenuRoute("eae_me_extended_pattern_interface", ExtendedAEMenuTypes.PATTERN, PatternInterfaceMenu.class, "eae_pattern_interface", true)));
     }
 
     private static void hostsOpenAndReturnOwnTypes(GameTestHelper helper, List<MenuRoute> routes) {
         for (int i = 0; i < routes.size(); i++) {
             MenuRoute route = routes.get(i);
-            BlockPos pos = new BlockPos(i * 2, 0, 0);
+            // Routes run synchronously; reuse the footprint instead of spilling into neighboring tests.
+            BlockPos pos = BlockPos.ZERO;
             helper.setBlock(pos, ModBlocks.BLOCKS.get(route.blockId()).get().defaultBlockState());
             IOPortBlockEntity host = helper.getBlockEntity(pos);
             var player = player(helper);
@@ -105,6 +114,18 @@ public class InterfaceMenuGameTest {
                              && main.getClass() == route.menuClass()
                              && MMCR.id(route.menuId()).equals(BuiltInRegistries.MENU.getKey(main.getType())),
                     "Bridge uses the independently specified factory, registration and target for " + route.blockId());
+            AEBaseMenu client = attachClientMirror(player, host);
+            helper.assertTrue(client.getClass() == main.getClass() && client.getTarget() != host,
+                    "Client data receiver uses the same actual menu constructor with an independent host");
+            assertIsolation(helper, main, route.input(), false, "Server initial state: " + route.blockId());
+            assertIsolation(helper, client, route.input(), false, "Native initial data reaches the client: " + route.blockId());
+            var observer = player(helper);
+            helper.assertTrue(AE2Bridge.get().openMenu(observer, helper.getLevel(), helper.absolutePos(pos)),
+                    "A second viewer opens the same real host: " + route.blockId());
+            var other = (AEBaseMenu) observer.containerMenu;
+            AEBaseMenu otherClient = attachClientMirror(observer, host);
+            assertIsolation(helper, otherClient, route.input(), false, "Second viewer receives independent initial data");
+            exerciseIsolation(helper, route, host, player, main, client, observer, other, otherClient);
             var locator = MenuLocators.forBlockEntity(host);
             var priorityHost = (IPriorityHost) host;
             MenuOpener.open(PriorityMenu.TYPE, player, locator);
@@ -113,13 +134,140 @@ public class InterfaceMenuGameTest {
                             .equals(priority.getHost().getMainMenuIcon().getHoverName()),
                     "Priority back button names the MMCR interface for " + route.blockId());
             priority.setPriority(43);
+            helper.assertFalse(main.clickMenuButton(player, InputIsolationMenuState.DISABLE),
+                    "The old main menu cannot change isolation while a priority submenu is current");
+            clickIsolation(player, main.containerId, InputIsolationMenuState.DISABLE);
+            helper.assertTrue(host.isInputIsolated() == route.input(), "A stale vanilla menu packet cannot change the host");
             priorityHost.returnToMainMenu(player, priority);
             helper.assertTrue(player.containerMenu.getType() == type
                              && player.containerMenu.getClass() == route.menuClass()
                             && ((AEBaseMenu) player.containerMenu).getTarget() == host && priorityHost.getPriority() == 43,
                     "Priority sub-menu returns to the specified own factory and located host for " + route.blockId());
+            client = attachClientMirror(player, host);
+            assertIsolation(helper, client, route.input(), route.input(), "Priority return initial data preserves isolation");
+            if (route.input() && host instanceof InterfaceLogicHost logicHost) {
+                var returned = player.containerMenu;
+                int slot = returned instanceof ExtendedInterfaceMenu ? 35 : 0;
+                if (returned instanceof ExtendedInterfaceMenu extended) extended.setPage(1);
+                var filter = new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L);
+                logicHost.getConfig().setStack(slot, filter);
+                helper.assertTrue(filter.equals(logicHost.getConfig().getStack(slot)),
+                        "Quantity fixture has a real configured key in the selected slot: " + route.blockId());
+                if (returned instanceof ExtendedInterfaceMenu extended) extended.openSetAmountMenu(slot);
+                else ((AE2InterfaceMenu) returned).openSetAmountMenu(slot);
+                if (host instanceof StockingInterfaceBlockEntity) {
+                    helper.assertTrue(player.containerMenu == returned && filter.equals(logicHost.getConfig().getStack(slot)),
+                            "Stocking input rejects quantity editing and preserves its normalized filter: " + route.blockId());
+                    assertIsolation(helper, client, true, true, "Rejected stocking quantity edit preserves the synchronized isolation cache");
+                } else {
+                    helper.assertTrue(player.containerMenu instanceof SetStockAmountMenu,
+                            "Real input quantity submenu opens: " + route.blockId());
+                    var amount = (SetStockAmountMenu) player.containerMenu;
+                    helper.assertTrue(amount.getInitialAmount() == 1 && filter.what().equals(amount.getWhatToStock()),
+                            "Native quantity submenu receives the selected slot's actual key and initial amount: " + route.blockId());
+                    amount.confirm(7);
+                    helper.assertTrue(player.containerMenu.getType() == type && logicHost.getConfig().getAmount(slot) == 7L,
+                            "Quantity confirmation returns to the same menu family and applies its real configuration: " + route.blockId());
+                    client = attachClientMirror(player, host);
+                    assertIsolation(helper, client, true, true, "Quantity return initial data preserves isolation");
+                }
+            }
+            if (route.input()) {
+                clickIsolation(observer, other.containerId, InputIsolationMenuState.DISABLE);
+                assertIsolation(helper, otherClient, true, false, "Second viewer receives its own accepted disable delta");
+                assertIsolation(helper, client, true, true, "Returned main cache waits for its own broadcast");
+                player.containerMenu.broadcastChanges();
+                assertIsolation(helper, client, true, false, "Returned main receives the other viewer's disable delta");
+            }
+            player.closeContainer();
+            observer.closeContainer();
         }
         helper.succeed();
+    }
+
+    private static void exerciseIsolation(GameTestHelper helper, MenuRoute route, IOPortBlockEntity host,
+                                          ServerPlayer player, AEBaseMenu main, AEBaseMenu client,
+                                          ServerPlayer observer, AEBaseMenu other, AEBaseMenu otherClient) {
+        var connection = (MenuTestConnection) player.connection;
+        helper.assertTrue(connection.dataPackets(main.containerId) > 0,
+                "The real ServerPlayer synchronizer emitted initial DataSlot packets");
+        if (!route.input()) {
+            helper.assertFalse(main.clickMenuButton(player, InputIsolationMenuState.ENABLE)
+                            || main.clickMenuButton(player, InputIsolationMenuState.DISABLE),
+                    "Output and async-output menus reject both isolation button IDs");
+            long packets = connection.dataPackets(main.containerId);
+            clickIsolation(player, main.containerId, InputIsolationMenuState.ENABLE);
+            helper.assertFalse(host.isInputIsolated(), "Vanilla serverbound handling cannot isolate an output");
+            assertIsolation(helper, client, false, false, "Rejected output packet leaves client cache unsupported");
+            helper.assertTrue(connection.dataPackets(main.containerId) == packets,
+                    "Rejected output packet emits no isolation delta");
+            return;
+        }
+        main.setValidMenu(false);
+        helper.assertFalse(main.clickMenuButton(player, InputIsolationMenuState.ENABLE),
+                "The isolation helper respects AE's native invalid-menu flag");
+        clickIsolation(player, main.containerId, InputIsolationMenuState.ENABLE);
+        helper.assertFalse(host.isInputIsolated(), "The vanilla listener also rejects a native-invalid AE menu");
+        main.setValidMenu(true);
+        clickIsolation(player, main.containerId, InputIsolationMenuState.ENABLE);
+        helper.assertTrue(host.isInputIsolated(), "The vanilla button packet enables the real input host");
+        assertIsolation(helper, client, true, true, "Accepted packet broadcasts the enable delta to the initiating client");
+        assertIsolation(helper, otherClient, true, false, "Other client does not read the shared server BE before synchronization");
+        other.broadcastChanges();
+        assertIsolation(helper, otherClient, true, true, "Second native menu broadcasts the same host change independently");
+        long packets = connection.dataPackets(main.containerId);
+        clickIsolation(player, main.containerId, InputIsolationMenuState.ENABLE);
+        helper.assertTrue(connection.dataPackets(main.containerId) == packets && host.isInputIsolated(),
+                "Repeated expected-value packet is idempotent and emits no redundant data delta");
+        other.setValidMenu(false);
+        helper.assertFalse(other.clickMenuButton(observer, InputIsolationMenuState.DISABLE),
+                "Native invalid state also rejects disabling an already isolated host");
+        clickIsolation(observer, other.containerId, InputIsolationMenuState.DISABLE);
+        helper.assertTrue(host.isInputIsolated(), "Invalid second-viewer packets preserve enabled isolation");
+        other.setValidMenu(true);
+    }
+
+    private static void clickIsolation(ServerPlayer player, int containerId, int buttonId) {
+        player.connection.handleContainerButtonClick(new ServerboundContainerButtonClickPacket(containerId, buttonId));
+    }
+
+    private static InputIsolationMenuState isolation(AEBaseMenu menu) {
+        if (menu instanceof AE2InterfaceMenu ordinary) return ordinary.inputIsolation();
+        if (menu instanceof ExtendedInterfaceMenu extended) return extended.inputIsolation();
+        return ((PatternInterfaceMenu) menu).inputIsolation();
+    }
+
+    private static void assertIsolation(GameTestHelper helper, AEBaseMenu menu, boolean supported, boolean enabled,
+                                        String message) {
+        helper.assertTrue(isolation(menu).supported() == supported && isolation(menu).enabled() == enabled, message);
+    }
+
+    private static AEBaseMenu attachClientMirror(ServerPlayer player, IOPortBlockEntity host) {
+        var server = (AEBaseMenu) player.containerMenu;
+        var shadow = (IOPortBlockEntity) host.getType().create(host.getBlockPos(), host.getBlockState());
+        AEBaseMenu client;
+        if (server instanceof AE2InterfaceMenu) {
+            client = new AE2InterfaceMenu(AE2MenuTypes.INTERFACE, server.containerId, player.getInventory(),
+                    (InterfaceLogicHost) shadow);
+        } else if (server instanceof ExtendedInterfaceMenu) {
+            var type = server.getType() == ExtendedAEMenuTypes.OVERSIZE
+                    ? ExtendedAEMenuTypes.OVERSIZE : ExtendedAEMenuTypes.INTERFACE;
+            client = new ExtendedInterfaceMenu(type, server.containerId, player.getInventory(), (InterfaceLogicHost) shadow);
+        } else {
+            var type = server.getType() == AE2MenuTypes.PATTERN ? AE2MenuTypes.PATTERN : ExtendedAEMenuTypes.PATTERN;
+            client = new PatternInterfaceMenu(type, server.containerId, player.getInventory(), (PatternProviderLogicHost) shadow);
+        }
+        // A dedicated server cannot create ClientLevel. Detach only the receiver helper's owner;
+        // keep the real AE constructor, registered DataSlot and setData dispatch untouched.
+        try {
+            Field owner = InputIsolationMenuState.class.getDeclaredField("owner");
+            owner.setAccessible(true);
+            owner.set(isolation(client), null);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Unable to detach the native client menu receiver", exception);
+        }
+        ((MenuTestConnection) player.connection).attachClient(client);
+        return client;
     }
 
     public void mirrorSyncPreservesWrappedAmounts(GameTestHelper helper) {
@@ -604,7 +752,7 @@ public class InterfaceMenuGameTest {
 
     /** @author howxu <dev@howxu.cn> */
     private record MenuRoute(String blockId, MenuType<?> type, Class<? extends AEBaseMenu> menuClass,
-                             String menuId) {
+                             String menuId, boolean input) {
     }
 
     private static long physicalItems(AEBaseMenu menu, ServerPlayer player, GenericStackInv storage,
@@ -649,17 +797,47 @@ public class InterfaceMenuGameTest {
      * @author howxu <dev@howxu.cn>
      */
     private static final class MenuTestConnection extends ServerGamePacketListenerImpl {
+        private final List<Packet<?>> packets = new ArrayList<>();
+        private AEBaseMenu client;
+
         private MenuTestConnection(ServerPlayer player, GameProfile profile) {
-            super(player.level().getServer(), new Connection(PacketFlow.CLIENTBOUND), player,
+            super(player.level().getServer(), connected(), player,
                     CommonListenerCookie.createInitial(profile, false));
+        }
+
+        private static Connection connected() {
+            var connection = new Connection(PacketFlow.SERVERBOUND);
+            new EmbeddedChannel(connection);
+            ChannelAttributes.setConnectionType(connection, ConnectionType.NEOFORGE);
+            return connection;
+        }
+
+        private void attachClient(AEBaseMenu client) {
+            this.client = client;
+            packets.forEach(this::deliverData);
+        }
+
+        private void deliverData(Packet<?> packet) {
+            if (client != null && packet instanceof ClientboundContainerSetDataPacket data
+                    && data.getContainerId() == client.containerId) {
+                client.setData(data.getId(), data.getValue());
+            }
+        }
+
+        private long dataPackets(int containerId) {
+            return packets.stream().filter(packet -> packet instanceof ClientboundContainerSetDataPacket data
+                    && data.getContainerId() == containerId).count();
         }
 
         @Override
         public void send(Packet<?> packet) {
+            packets.add(packet);
+            deliverData(packet);
         }
 
         @Override
         public void send(Packet<?> packet, PacketSendListener listener) {
+            send(packet);
         }
     }
 }

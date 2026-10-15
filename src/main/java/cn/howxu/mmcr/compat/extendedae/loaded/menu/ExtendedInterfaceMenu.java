@@ -8,6 +8,8 @@ import appeng.menu.slot.FakeSlot;
 import appeng.util.ConfigMenuInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.InterfaceMenuSlots;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InterfaceMenuPageHost;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import com.glodblock.github.extendedae.container.ContainerExInterface;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
@@ -24,12 +26,25 @@ import net.minecraft.world.item.ItemStack;
  */
 public final class ExtendedInterfaceMenu extends ContainerExInterface {
     private int visiblePage = -1;
+    private final InputIsolationMenuState inputIsolation;
 
     public ExtendedInterfaceMenu(MenuType<? extends ExtendedInterfaceMenu> type, int id,
                                  Inventory inventory, InterfaceLogicHost host) {
         super(type, id, inventory, host);
+        inputIsolation = InputIsolationMenuState.forPort(host instanceof IOPortBlockEntity port ? port : null);
+        addDataSlot(inputIsolation.dataSlot());
         page = host instanceof InterfaceMenuPageHost paged ? paged.getInterfaceMenuPage() : 0;
         showPage(page);
+    }
+
+    public InputIsolationMenuState inputIsolation() { return inputIsolation; }
+
+    @Override
+    public boolean clickMenuButton(Player player, int buttonId) {
+        if (buttonId == InputIsolationMenuState.DISABLE || buttonId == InputIsolationMenuState.ENABLE) {
+            return inputIsolation.handleClick(this, player, buttonId);
+        }
+        return super.clickMenuButton(player, buttonId);
     }
 
     @Override

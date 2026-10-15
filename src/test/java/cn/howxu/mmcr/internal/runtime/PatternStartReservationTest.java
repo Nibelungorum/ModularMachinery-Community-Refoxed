@@ -9,6 +9,8 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -18,6 +20,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -28,6 +31,7 @@ import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapabil
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -64,6 +68,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.Arguments;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -98,6 +104,144 @@ class PatternStartReservationTest {
         formForPattern(controller, false);
         assertThat(controller.reservePatternStart(PATTERN_PORT, List.of(), List.of()).status())
                 .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void pattern_request_cannot_top_up_materials_from_another_input_group(boolean isolatedHost) {
+        ItemInputBusBlockEntity host = RuntimeTestFixtures.itemInput(PATTERN_PORT);
+        ItemInputBusBlockEntity other = RuntimeTestFixtures.itemInput(new BlockPos(4, 0, 0));
+        host.setInputIsolated(isolatedHost);
+        other.setInputIsolated(!isolatedHost);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host, other);
+        controller.componentRuntime().replaceLinkedPortPositions(Set.of(PATTERN_PORT));
+        setItem(other.itemHandler(), 0, stack(Items.IRON_INGOT, 2));
+        var requested = new LongItemStorage(1, 64L, () -> { });
+        setItem(requested, 0, stack(Items.IRON_INGOT, 1));
+        MachineRecipe recipe = recipe("pattern_request_group_boundary", List.of(input(Items.IRON_INGOT, 2)));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+
+        assertThat(runtime.preparePatternStart(recipe, 1L,
+                List.of(new ItemBusCapability(requested, IOType.INPUT)), PATTERN_PORT)).isNull();
+        assertThat(requested.amount(0)).isEqualTo(1L);
+        assertThat(other.itemHandler().amount(0)).isEqualTo(2L);
+
+        setItem(requested, 0, stack(Items.IRON_INGOT, 2));
+        var prepared = runtime.preparePatternStart(recipe, 1L,
+                List.of(new ItemBusCapability(requested, IOType.INPUT)), PATTERN_PORT);
+        assertThat(prepared).isNotNull();
+        assertThat(prepared.plan().inputScope().kind()).isEqualTo(isolatedHost
+                ? InputScope.Kind.ISOLATED : InputScope.Kind.ORDINARY);
+        assertThat(prepared.plan().inputScope().sources()).containsExactly(PATTERN_PORT);
+        assertThat(runtime.reservePatternStart()).isTrue();
+        assertThat(runtime.commitPatternStart(prepared)).isTrue();
+        assertThat(requested.amount(0)).isZero();
+        assertThat(other.itemHandler().amount(0)).isEqualTo(2L);
+        assertThat(runtime.activeInputScope()).isEqualTo(prepared.plan().inputScope());
+    }
+
+    @Test
+    void unpaid_pattern_plan_is_rejected_when_input_routing_changes() {
+        ItemInputBusBlockEntity host = RuntimeTestFixtures.itemInput(PATTERN_PORT);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
+        controller.componentRuntime().replaceLinkedPortPositions(Set.of(PATTERN_PORT));
+        var requested = new LongItemStorage(1, 64L, () -> { });
+        setItem(requested, 0, stack(Items.IRON_INGOT, 1));
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        var prepared = runtime.preparePatternStart(recipe("pattern_request_stale_scope", List.of(input(Items.IRON_INGOT, 1))),
+                1L, List.of(new ItemBusCapability(requested, IOType.INPUT)), PATTERN_PORT);
+        assertThat(prepared).isNotNull();
+        assertThat(runtime.reservePatternStart()).isTrue();
+        controller.setFullyInputIsolated(true);
+        assertThat(runtime.commitPatternStart(prepared)).isFalse();
+        assertThat(runtime.active()).isFalse();
+        assertThat(requested.amount(0)).isEqualTo(1L);
+    }
+
+    static Stream<Arguments> patternCallbackChanges() {
+        return Stream.of(false, true).flatMap(factory -> Stream.of("full", "masked_local_roundtrip", "unlink",
+                "linked_roundtrip", "capability", "catalog", "module_roundtrip", "lifecycle")
+                .map(change -> Arguments.of(factory, change)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("patternCallbackChanges")
+    void pattern_before_start_only_recaptures_pure_isolation_changes(boolean factory, String change) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            AtomicReference<PaidPatternFixture> owner = new AtomicReference<>();
+            AtomicInteger callbacks = new AtomicInteger();
+            RecipeBehavior behavior = RecipeBehavior.builder().beforeStart(context -> {
+                callbacks.incrementAndGet();
+                PaidPatternFixture fixture = owner.get();
+                MachineControllerBlockEntity controller = fixture.controller;
+                controller.setFullyInputIsolated(true);
+                var components = controller.componentRuntime();
+                switch (change) {
+                    case "masked_local_roundtrip" -> {
+                        ItemInputBusBlockEntity host = (ItemInputBusBlockEntity) components.components().stream()
+                                .filter(component -> PATTERN_PORT.equals(component.getPos())).findFirst().orElseThrow().getContainer();
+                        host.setInputIsolated(true);
+                        controller.onInputIsolationChanged();
+                        host.setInputIsolated(false);
+                        controller.onInputIsolationChanged();
+                    }
+                    case "unlink" -> components.replaceLinkedPortPositions(Set.of());
+                    case "linked_roundtrip" -> {
+                        var linked = components.linkedPortPositions();
+                        components.replaceLinkedPortPositions(Set.of());
+                        components.replaceLinkedPortPositions(linked);
+                    }
+                    case "capability" -> {
+                        ItemInputBusBlockEntity replacement = RuntimeTestFixtures.itemInput(PATTERN_PORT);
+                        replacement.setLevel(controller.getLevel());
+                        components.replaceComponents(components.components().stream().map(component ->
+                                PATTERN_PORT.equals(component.getPos()) ? new ProcessingComponent(
+                                        new MachineComponent(replacement.kind(), replacement.ioType()), replacement,
+                                        PATTERN_PORT, PATTERN_PORT, (String) null) : component).toList());
+                    }
+                    case "catalog" -> RecipeRegistry.clearForTesting();
+                    case "module_roundtrip" -> {
+                        var status = components.moduleConnectionStatus();
+                        int installed = components.installedModuleCount();
+                        components.replaceModuleConnectionState(ModuleConnectionStatus.connected(MMCR.id("pattern_callback_host")), 1);
+                        components.replaceModuleConnectionState(status, installed);
+                    }
+                    case "lifecycle" -> controller.setMachine(null);
+                }
+            }).build();
+            PaidPatternFixture fixture = new PaidPatternFixture("pattern_callback_fence", behavior);
+            owner.set(fixture);
+            if (change.equals("masked_local_roundtrip")) fixture.controller.setFullyInputIsolated(true);
+            List<MachineCapability> request = List.of(new ItemBusCapability(fixture.inputs, IOType.INPUT));
+            PatternStartReservation admission;
+            CraftingRuntime runtime = fixture.runtime;
+            if (factory) {
+                FactoryRuntime lanes = new FactoryRuntime();
+                lanes.ensureBaseLane(fixture.controller);
+                var lane = lanes.reservePatternStart(fixture.recipe, 1L, request, PATTERN_PORT);
+                admission = lane == null ? PatternStartReservation.unavailable() : reservation(fixture.recipe, lanes, lane);
+                if (lane != null) runtime = lane.runtime();
+            } else {
+                admission = fixture.controller.reservePatternStart(PATTERN_PORT, List.of(), request);
+            }
+            assertThat(callbacks).hasValue(1);
+            if (change.equals("full") || change.equals("masked_local_roundtrip")) {
+                assertThat(admission.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(admission.commit()).isTrue();
+                assertThat(runtime.activeInputScope()).isEqualTo(new InputScope(InputScope.Kind.ISOLATED, List.of(PATTERN_PORT)));
+                assertThat(fixture.inputs.amount(0)).isEqualTo(1L);
+                assertThat(fixture.network.amount()).isEqualTo(96L);
+                assertThat(fixture.buffer.reserved()).isEqualTo(4L);
+            } else {
+                assertThat(admission.status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+                assertThat(runtime.active()).isFalse();
+                assertThat(fixture.inputs.amount(0)).isEqualTo(2L);
+                assertThat(fixture.network.amount()).isEqualTo(100L);
+                assertThat(fixture.buffer.amount()).isZero();
+                assertThat(fixture.buffer.reserved()).isZero();
+                assertThat(fixture.networkCommits).hasValue(0);
+            }
+        }
     }
 
     @Test
@@ -328,8 +472,7 @@ class PatternStartReservationTest {
     @Test
     void factory_reserves_a_concrete_idle_lane_until_commit_or_rollback() {
         MachineControllerBlockEntity controller = factoryController();
-        controller.componentRuntime().replaceLinkedPortPositions(Set.of(PATTERN_PORT));
-        RuntimeTestFixtures.republish(controller);
+        formForPattern(controller, true);
         assertThat(controller.hasFactoryController()).isTrue();
         assertThat(controller.runtimeSnapshot().linkedPortPositions()).contains(PATTERN_PORT);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("reservation_factory"), MMCR.id("reservation_factory"),
@@ -516,6 +659,73 @@ class PatternStartReservationTest {
         }
     }
 
+    static Stream<Arguments> finalPatternWriteChanges() {
+        return Stream.of(false, true).flatMap(direct -> Stream.of("full", "local", "lifecycle", "ledger")
+                .map(change -> Arguments.of(direct, change)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("finalPatternWriteChanges")
+    void native_ownership_write_after_payment_never_rolls_back_joint_inputs(boolean direct, String change) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("pattern_final_write", true);
+            RecipeCommitLedger payment;
+            if (direct) {
+                var prepared = fixture.runtime.preparePatternStart(fixture.recipe, 1L,
+                        List.of(new ItemBusCapability(fixture.inputs, IOType.INPUT)), PATTERN_PORT);
+                assertThat(prepared).isNotNull();
+                assertThat(fixture.runtime.reservePatternStart()).isTrue();
+                payment = fixture.runtime.ledger();
+                assertThat(fixture.runtime.commitPatternStart(prepared, () -> {
+                    fixture.assertProvisionalJointPayment(payment);
+                    fixture.changeUnpaidFence(change);
+                })).isTrue();
+            } else {
+                PatternStartReservation reservation = fixture.reserve();
+                payment = fixture.runtime.ledger();
+                assertThat(reservation.commit(() -> {
+                    fixture.assertProvisionalJointPayment(payment);
+                    fixture.changeUnpaidFence(change);
+                })).isTrue();
+                assertThat(reservation.rolledBack()).isFalse();
+                assertThat(reservation.commit()).isFalse();
+            }
+            assertThat(payment.state().paidAttempts()).isEqualTo(1L);
+            assertThat(fixture.inputs.amount(0)).isZero();
+            assertThat(fixture.physicalInput.itemHandler().amount(0)).isZero();
+            assertThat(fixture.network.amount()).isEqualTo(96L);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void root_notification_isolation_change_keeps_paid_joint_scope(boolean direct) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("pattern_final_paid_scope", true);
+            fixture.notification.set(() -> fixture.controller.setFullyInputIsolated(true));
+            if (direct) {
+                var prepared = fixture.runtime.preparePatternStart(fixture.recipe, 1L,
+                        List.of(new ItemBusCapability(fixture.inputs, IOType.INPUT)), PATTERN_PORT);
+                assertThat(prepared).isNotNull();
+                assertThat(fixture.runtime.reservePatternStart()).isTrue();
+                assertThat(fixture.runtime.commitPatternStart(prepared)).isTrue();
+            } else {
+                assertThat(fixture.reserve().commit()).isTrue();
+                assertThat(fixture.afterCommit).hasValue(1);
+            }
+            assertThat(fixture.controller.isFullyInputIsolated()).isTrue();
+            assertThat(fixture.runtime.active()).isTrue();
+            assertThat(fixture.runtime.activeInputScope()).isEqualTo(new InputScope(InputScope.Kind.ORDINARY,
+                    List.of(fixture.physicalInput.getBlockPos(), PATTERN_PORT)));
+            assertThat(fixture.runtime.ledger().state().paidAttempts()).isEqualTo(1L);
+            assertThat(fixture.inputs.amount(0)).isZero();
+            assertThat(fixture.physicalInput.itemHandler().amount(0)).isZero();
+            assertThat(fixture.network.amount()).isEqualTo(96L);
+            assertThat(fixture.buffer.amount()).isEqualTo(4L);
+            assertThat(fixture.buffer.reserved()).isEqualTo(4L);
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void factory_old_paid_release_keeps_reentrant_lane_reservation_accounting(boolean notifyThrow) throws Exception {
@@ -524,7 +734,7 @@ class PatternStartReservationTest {
             FactoryRuntime factory = new FactoryRuntime();
             factory.ensureBaseLane(fixture.controller);
             List<MachineCapability> capabilities = List.of(new ItemBusCapability(fixture.inputs, IOType.INPUT));
-            FactoryRuntime.PatternLane oldLane = factory.reservePatternStart(fixture.recipe, 1L, capabilities);
+            FactoryRuntime.PatternLane oldLane = factory.reservePatternStart(fixture.recipe, 1L, capabilities, PATTERN_PORT);
             assertThat(oldLane).isNotNull();
             PatternStartReservation old = reservation(fixture.recipe, factory, oldLane)
                     .afterCommit(fixture.afterCommit::incrementAndGet);
@@ -533,7 +743,7 @@ class PatternStartReservationTest {
             AtomicReference<RecipeCommitLedger> payment = new AtomicReference<>();
             fixture.notification.set(() -> {
                 factory.cancelAsyncState();
-                newLane.set(factory.reservePatternStart(fixture.recipe, 1L, capabilities));
+                newLane.set(factory.reservePatternStart(fixture.recipe, 1L, capabilities, PATTERN_PORT));
                 assertThat(newLane.get()).isNotNull();
                 replacement.set(reservation(fixture.recipe, factory, newLane.get())
                         .afterCommit(fixture.afterCommit::incrementAndGet));
@@ -548,7 +758,7 @@ class PatternStartReservationTest {
             assertThat(newLane.get().runtime().ledger()).isSameAs(payment.get());
             assertThat(payment.get().state().paidAttempts()).isZero();
             assertThat(payment.get().state().phase()).isEqualTo(RecipeCommitLedger.Phase.READY);
-            assertThat(factory.reservePatternStart(fixture.recipe, 1L, capabilities)).isNull();
+            assertThat(factory.reservePatternStart(fixture.recipe, 1L, capabilities, PATTERN_PORT)).isNull();
             assertThat(fixture.afterCommit).hasValue(0);
             fixture.assertCancelledPayment();
             assertThat(replacement.get().commit()).isTrue();
@@ -611,6 +821,7 @@ class PatternStartReservationTest {
      */
     static final class PaidPatternFixture {
         final AtomicReference<Runnable> notification = new AtomicReference<>();
+        final AtomicReference<Runnable> prefetchWrite = new AtomicReference<>();
         final AtomicInteger afterCommit = new AtomicInteger();
         final AtomicInteger networkCommits = new AtomicInteger();
         final FluxEnergyBuffer buffer = new FluxEnergyBuffer();
@@ -621,25 +832,56 @@ class PatternStartReservationTest {
             if (action != null) action.run();
         });
         final MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        final ItemInputBusBlockEntity physicalInput = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         final CraftingRuntime runtime;
         final MachineRecipe recipe;
 
         PaidPatternFixture(String name) {
+            this(name, null);
+        }
+
+        PaidPatternFixture(String name, RecipeBehavior behavior) {
+            this(name, behavior, false);
+        }
+
+        PaidPatternFixture(String name, boolean jointInputs) {
+            this(name, null, jointInputs);
+        }
+
+        private PaidPatternFixture(String name, RecipeBehavior behavior, boolean jointInputs) {
             network.setAmount(100L);
-            inputs.setContents(0, stack(Items.IRON_INGOT, 2), 2L);
+            int requestAmount = jointInputs ? 1 : 2;
+            inputs.setContents(0, stack(Items.IRON_INGOT, requestAmount), requestAmount);
             var flux = new FluxEnergyInputCapability(buffer, "pattern", amount -> Optional.of(() -> {
                 networkCommits.incrementAndGet();
                 assertThat(network.extract(amount, false)).isEqualTo(amount);
+                Runnable action = prefetchWrite.getAndSet(null);
+                if (action != null) action.run();
                 return CapabilityResult.successful();
             }));
+            if (behavior != null) {
+                Machine original = controller.currentStructureSnapshot().configuredMachine();
+                controller.setMachine(new Machine() {
+                    @Override public ResourceLocation registryName() { return original.registryName(); }
+                    @Override public BlockArray pattern() { return original.pattern(); }
+                    @Override public MachineControllerSpec controller() { return original.controller(); }
+                    @Override public RecipeBehavior behavior() { return behavior; }
+                });
+            }
             var components = new ArrayList<>(controller.componentRuntime().components());
+            if (jointInputs) {
+                physicalInput.setLevel(controller.getLevel());
+                setItem(physicalInput.itemHandler(), 0, stack(Items.IRON_INGOT, 1));
+                components.add(new ProcessingComponent(new MachineComponent(physicalInput.kind(), physicalInput.ioType()),
+                        physicalInput, physicalInput.getBlockPos(), physicalInput.getBlockPos(), (String) null));
+            }
             components.add(new ProcessingComponent(null, new PatternFluxHost(flux), BlockPos.ZERO, BlockPos.ZERO,
                     (String) null));
             controller.componentRuntime().replaceComponents(components);
             formForPattern(controller, true);
             runtime = RuntimeTestFixtures.craftingRuntime(controller);
             recipe = MachineRecipe.fromCanonical(MMCR.id(name), MMCR.id("test_cube"), 2,
-                    List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(2L)), List.of(),
+                    List.of(input(Items.IRON_INGOT, jointInputs ? 2 : 1), new EnergyRequirement(2L)), List.of(),
                     List.of(), 0, 1, false, false, false, Set.of());
             RecipeRegistry.registerStatic(recipe);
         }
@@ -649,6 +891,28 @@ class PatternStartReservationTest {
                     List.of(new ItemBusCapability(inputs, IOType.INPUT)));
             assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
             return reservation.afterCommit(afterCommit::incrementAndGet);
+        }
+
+        void changeUnpaidFence(String change) {
+            switch (change) {
+                case "full" -> controller.setFullyInputIsolated(true);
+                case "local" -> {
+                    physicalInput.setInputIsolated(true);
+                    controller.onInputIsolationChanged();
+                }
+                case "lifecycle" -> controller.setMachine(null);
+                case "ledger" -> runtime.invalidate();
+                default -> throw new IllegalArgumentException(change);
+            }
+        }
+
+        void assertProvisionalJointPayment(RecipeCommitLedger payment) {
+            assertThat(payment.state().paidAttempts()).isEqualTo(1L);
+            assertThat(inputs.amount(0)).isZero();
+            assertThat(physicalInput.itemHandler().amount(0)).isZero();
+            assertThat(network.amount()).isEqualTo(96L);
+            assertThat(buffer.amount()).isEqualTo(4L);
+            assertThat(buffer.reserved()).isEqualTo(4L);
         }
 
         void assertPausedPayment(RecipeCommitLedger payment) {
@@ -763,6 +1027,15 @@ class PatternStartReservationTest {
     }
 
     private static void formForPattern(MachineControllerBlockEntity controller, boolean linked) {
+        if (linked && controller.componentRuntime().components().stream()
+                .noneMatch(component -> PATTERN_PORT.equals(component.getPos()))) {
+            ItemInputBusBlockEntity source = RuntimeTestFixtures.itemInput(PATTERN_PORT);
+            source.setLevel(controller.getLevel());
+            List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+            components.add(new ProcessingComponent(new MachineComponent(source.kind(), source.ioType()), source,
+                    PATTERN_PORT, PATTERN_PORT, (String) null));
+            controller.componentRuntime().replaceComponents(components);
+        }
         controller.setFormed(true);
         controller.componentRuntime().replaceLinkedPortPositions(linked ? Set.of(PATTERN_PORT) : Set.of());
         RuntimeTestFixtures.republish(controller);

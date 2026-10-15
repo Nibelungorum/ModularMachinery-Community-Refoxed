@@ -8,15 +8,28 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
+import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import net.minecraft.core.BlockPos;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -32,6 +45,15 @@ import net.minecraft.util.debugchart.SampleLogger;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
+import net.minecraft.core.Direction;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.common.crafting.ICustomIngredient;
+import net.neoforged.neoforge.common.crafting.IngredientType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Field;
 import java.io.IOException;
@@ -75,6 +97,306 @@ class AsyncRequirementPlannerTest {
         assertThat(result.operations()).allSatisfy(operation ->
                 assertThat(operation.operation()).isInstanceOf(AsyncCapabilityOperation.Group.class));
         assertThat(result.mainThreadRequirements()).isEmpty();
+    }
+
+    @Test
+    void routed_ordinary_material_can_combine_sources_but_cannot_borrow_an_isolated_source() {
+        var id = BuiltinCapabilityDefinitions.ITEM_TYPE.id();
+        BlockPos first = new BlockPos(1, 0, 0);
+        BlockPos second = new BlockPos(2, 0, 0);
+        InputRoutingFacet routing = new InputRoutingFacet(4,
+                List.of(new InputRoutingFacet.Source(3, first), new InputRoutingFacet.Source(8, second)),
+                List.of(new InputRoutingFacet.Port(first, false), new InputRoutingFacet.Port(second, false)));
+        var a = resourceCapability(id, IRON, 1, 64);
+        var b = resourceCapability(id, IRON, 1, 64);
+        List<AsyncRequirementPlanner.Capability> capabilities = List.of(
+                new AsyncRequirementPlanner.Capability(a.planner(), a.snapshot(), Set.of(IOType.INPUT), 3),
+                new AsyncRequirementPlanner.Capability(b.planner(), b.snapshot(), Set.of(IOType.INPUT), 8));
+        var requirement = new AsyncRequirementPlanner.Requirement(9, 2, IOType.INPUT,
+                resourceRequirement(9, id, IRON, 2, false).requests());
+        var ordinary = new AsyncRequirementPlanner.PreparedPlan(List.of(requirement), capabilities, List.of(),
+                routing, routing.ordinaryScope()).plan();
+        assertThat(ordinary.mainThreadRequirements()).isEmpty();
+        assertThat(ordinary.operations()).extracting(AsyncRequirementPlanner.PlannedOperation::capabilityIndex)
+                .containsExactly(0, 1);
+        assertThat(ordinary.operations()).extracting(AsyncRequirementPlanner.PlannedOperation::requirementIndex)
+                .containsOnly(9);
+        var isolated = new AsyncRequirementPlanner.PreparedPlan(List.of(requirement), capabilities, List.of(),
+                routing, new InputScope(InputScope.Kind.ISOLATED, List.of(first))).plan();
+        assertThat(isolated.operations()).isEmpty();
+        assertThat(isolated.mainThreadRequirements()).containsExactly(9);
+    }
+
+    @Test
+    void material_with_unknown_direction_or_source_falls_back_while_outputs_remain_shared() {
+        var id = BuiltinCapabilityDefinitions.ITEM_TYPE.id();
+        BlockPos host = new BlockPos(1, 0, 0);
+        InputRoutingFacet routing = new InputRoutingFacet(4, List.of(new InputRoutingFacet.Source(6, host)),
+                List.of(new InputRoutingFacet.Port(host, true)));
+        InputScope scope = new InputScope(InputScope.Kind.ISOLATED, List.of(host));
+        var base = resourceCapability(id, IRON, 4, 64);
+        var known = new AsyncRequirementPlanner.Capability(base.planner(), base.snapshot(), Set.of(IOType.INPUT), 6);
+        var directionless = resourceRequirement(7, id, IRON, 1, false);
+        assertThat(new AsyncRequirementPlanner.PreparedPlan(List.of(directionless), List.of(known), List.of(), routing, scope)
+                .plan().mainThreadRequirements()).containsExactly(7);
+        var input = new AsyncRequirementPlanner.Requirement(7, 1, IOType.INPUT, directionless.requests());
+        assertThat(new AsyncRequirementPlanner.PreparedPlan(List.of(input), List.of(base), List.of(), routing, scope)
+                .plan().mainThreadRequirements()).containsExactly(7);
+        var output = new AsyncRequirementPlanner.Requirement(8, 1, IOType.OUTPUT,
+                resourceRequirement(8, id, IRON, 1, true).requests());
+        assertThat(new AsyncRequirementPlanner.PreparedPlan(List.of(output), List.of(base), List.of(), routing, scope)
+                .plan().operations()).hasSize(1);
+    }
+
+    @Test
+    void filtered_async_capture_keeps_full_capability_occurrence_indices() throws Exception {
+        CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(
+                new EnergyHatchCapability(new LongEnergyStorage(20, 20, null), IOType.INPUT),
+                new ItemBusCapability(new BulkItemStorage(64, null), IOType.INPUT),
+                new EnergyHatchCapability(new LongEnergyStorage(20, 20, null), IOType.INPUT),
+                new ItemBusCapability(new BulkItemStorage(64, null), IOType.INPUT))));
+        installCurrentServerForTesting();
+        List<AsyncRequirementPlanner.Capability> captured;
+        try {
+            captured = context.captureAsyncCapabilities(Set.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id()));
+        } finally {
+            clearCurrentServerForTesting();
+        }
+        assertThat(captured).extracting(AsyncRequirementPlanner.Capability::sourceCapabilityIndex).containsExactly(1, 3);
+    }
+
+    @Test
+    void indexed_context_capture_preserves_scope_guards_tags_and_original_fallback_indexes() throws Exception {
+        installCurrentServerForTesting();
+        try {
+            for (String mode : List.of("isolated", "unmapped", "tagged")) {
+                CapabilitySnapshot snapshot = searchCapabilities(mode.equals("isolated"));
+                if (mode.equals("unmapped")) {
+                    var routing = snapshot.facets(InputRoutingFacet.class).getFirst();
+                    snapshot = new CapabilitySnapshot(snapshot.capabilities(),
+                            List.of(new InputRoutingFacet(3, List.of(), routing.inputPorts())));
+                }
+                ItemRequirement requirement = mode.equals("tagged")
+                        ? new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT),
+                        1, ItemStack.EMPTY, List.of("north"))
+                        : searchInput(Ingredient.of(Items.IRON_INGOT), 2, 1F);
+                CraftingContext context = new CraftingContext(snapshot);
+                var ordinary = context.planAsync(List.of(requirement, requirement), 1);
+                var indexed = context.planAsync(List.of(requirement, requirement), 1, List.of(3, 7));
+                assertThat(ordinary.initialMainThreadRequirements()).containsExactly(0, 1);
+                assertThat(indexed.initialMainThreadRequirements()).containsExactly(3, 7);
+                assertThat(indexed.routing()).isSameAs(ordinary.routing());
+                assertThat(indexed.inputScope()).isEqualTo(ordinary.inputScope());
+                assertThat(indexed.plan().operations()).isEmpty();
+            }
+        } finally {
+            clearCurrentServerForTesting();
+        }
+    }
+
+    @Test
+    void indexed_pinned_plan_keeps_capability_sources_and_nonconsecutive_operation_indexes() throws Exception {
+        CapabilitySnapshot snapshot = searchCapabilities(true);
+        BlockPos source = new BlockPos(2, 0, 0);
+        CraftingContext context = new CraftingContext(snapshot, List.of(),
+                new InputScope(InputScope.Kind.ISOLATED, List.of(source)));
+        installCurrentServerForTesting();
+        try {
+            var prepared = context.planAsync(List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 1F)), 1, List.of(7));
+            var planned = prepared.plan();
+            assertThat(planned.mainThreadRequirements()).isEmpty();
+            assertThat(planned.operations()).singleElement().satisfies(operation -> {
+                assertThat(operation.requirementIndex()).isEqualTo(7);
+                assertThat(prepared.capabilities().get(operation.capabilityIndex()).sourceCapabilityIndex()).isEqualTo(1);
+            });
+        } finally {
+            clearCurrentServerForTesting();
+        }
+    }
+
+    @Test
+    void snapshot_search_keeps_routing_and_requires_recheck_instead_of_pooling_isolated_inputs() throws Exception {
+        MachineRecipe recipe = searchRecipe("isolated", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 2, 1F)));
+        CapabilitySnapshot capabilities = searchCapabilities(true);
+        var request = captureSearch(recipe, capabilities);
+        var result = CompletableFuture.supplyAsync(request::search).join();
+
+        assertThat(request.inputRouting()).isSameAs(capabilities.facets(InputRoutingFacet.class).getFirst());
+        assertThat(result.failure()).isNull();
+        assertThat(result.result().success()).isTrue();
+        assertThat(result.requiresMainThreadReplan()).isTrue();
+        assertThat(new CraftingContext(capabilities).planStartResult(recipe, 1).successful()).isFalse();
+    }
+
+    @Test
+    void snapshot_search_retains_the_ordinary_single_group_worker_fast_path() throws Exception {
+        MachineRecipe recipe = searchRecipe("ordinary", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 2, 1F)));
+        var request = captureSearch(recipe, searchCapabilities(false));
+        var result = CompletableFuture.supplyAsync(request::search).join();
+
+        assertThat(result.failure()).isNull();
+        assertThat(result.result().recipe()).isSameAs(recipe);
+        assertThat(result.requiresMainThreadReplan()).isFalse();
+    }
+
+    @Test
+    void missing_material_source_mapping_requires_main_thread_recheck() throws Exception {
+        MachineRecipe recipe = searchRecipe("unmapped", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 1F)));
+        CapabilitySnapshot source = searchCapabilities(false);
+        InputRoutingFacet routing = source.facets(InputRoutingFacet.class).getFirst();
+        CapabilitySnapshot unmapped = new CapabilitySnapshot(source.capabilities(),
+                List.of(new InputRoutingFacet(3, List.of(), routing.inputPorts())));
+        var result = CompletableFuture.supplyAsync(captureSearch(recipe, unmapped)::search).join();
+        assertThat(result.failure()).isNull();
+        assertThat(result.requiresMainThreadReplan()).isTrue();
+    }
+
+    @Test
+    void energy_only_search_keeps_worker_fast_path_when_material_ports_are_isolated() throws Exception {
+        MachineRecipe recipe = searchRecipe("energy", List.of(new EnergyRequirement(5)));
+        CapabilitySnapshot materials = searchCapabilities(true);
+        LongEnergyStorage storage = new LongEnergyStorage(20, 20, null);
+        storage.setAmount(10);
+        CapabilitySnapshot capabilities = new CapabilitySnapshot(List.of(materials.capabilities().get(0),
+                materials.capabilities().get(1), new EnergyHatchCapability(storage, IOType.INPUT)), materials.additionalFacets());
+        var result = CompletableFuture.supplyAsync(captureSearch(recipe, capabilities)::search).join();
+        assertThat(result.failure()).isNull();
+        assertThat(result.result().recipe()).isSameAs(recipe);
+        assertThat(result.requiresMainThreadReplan()).isFalse();
+    }
+
+    @Test
+    void legacy_list_search_cannot_claim_material_success_after_dropping_routing_metadata() throws Exception {
+        MachineRecipe recipe = searchRecipe("legacy_material", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 2, 1F)));
+        var capabilities = searchCapabilities(true);
+        installCurrentServerForTesting();
+        AsyncRequirementPlanner.RecipeSearchRequest request;
+        try {
+            request = AsyncRequirementPlanner.captureRecipeSearch(searchSnapshot(), List.of(recipe), 1,
+                    capabilities.capabilities(), List.of(), 0, new EffectiveRecipeSet.Cache());
+        } finally {
+            clearCurrentServerForTesting();
+        }
+        var result = CompletableFuture.supplyAsync(request::search).join();
+        assertThat(result.failure()).isNull();
+        assertThat(result.requiresMainThreadReplan()).isTrue();
+    }
+
+    @Test
+    void probabilistic_inputs_are_pending_main_thread_proof_even_in_an_ordinary_group() throws Exception {
+        MachineRecipe recipe = searchRecipe("probability", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 0.5F)));
+        var result = CompletableFuture.supplyAsync(captureSearch(recipe, searchCapabilities(false))::search).join();
+        assertThat(result.failure()).isNull();
+        assertThat(result.requiresMainThreadReplan()).isTrue();
+    }
+
+    @Test
+    void probabilistic_outputs_are_not_worker_success_even_when_output_capacity_is_available() throws Exception {
+        MachineRecipe recipe = searchRecipe("output_probability", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 1F),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT), 0.5F, List.of())));
+        CapabilitySnapshot materials = searchCapabilities(false);
+        CapabilitySnapshot capabilities = new CapabilitySnapshot(List.of(materials.capabilities().get(0),
+                materials.capabilities().get(1), new ItemBusCapability(new BulkItemStorage(64, null), IOType.OUTPUT)),
+                materials.additionalFacets());
+        var result = CompletableFuture.supplyAsync(captureSearch(recipe, capabilities)::search).join();
+        assertThat(result.failure()).isNull();
+        assertThat(result.requiresMainThreadReplan()).isTrue();
+    }
+
+    @Test
+    void custom_ingredient_and_conflict_checks_never_run_on_the_worker() throws Exception {
+        Thread captureThread = Thread.currentThread();
+        AtomicInteger matches = new AtomicInteger();
+        AtomicInteger itemQueries = new AtomicInteger();
+        Ingredient ingredient = new Ingredient(new ICustomIngredient() {
+            @Override
+            public boolean test(ItemStack stack) {
+                assertThat(Thread.currentThread()).isSameAs(captureThread);
+                matches.incrementAndGet();
+                return stack.is(Items.IRON_INGOT);
+            }
+
+            @Override
+            public Stream<ItemStack> getItems() {
+                assertThat(Thread.currentThread()).isSameAs(captureThread);
+                itemQueries.incrementAndGet();
+                return Stream.of(new ItemStack(Items.IRON_INGOT));
+            }
+
+            @Override
+            public boolean isSimple() { return false; }
+
+            @Override
+            public IngredientType<?> getType() { return null; }
+        });
+        MachineRecipe earlier = searchRecipe("captured_predicate_earlier", List.of(searchInput(ingredient, 1, 1F),
+                searchInput(Ingredient.of(Items.GOLD_INGOT), 1, 1F), StageRequirement.input(2)));
+        MachineRecipe recipe = searchRecipe("captured_predicate", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 1F)));
+        var request = captureSearch(List.of(earlier, recipe), searchCapabilities(false));
+        int capturedMatches = matches.get();
+        int capturedItemQueries = itemQueries.get();
+        assertThat(capturedItemQueries).isPositive();
+        var result = CompletableFuture.supplyAsync(request::search).join();
+        assertThat(result.failure()).isNull();
+        assertThat(result.result().recipe()).isSameAs(recipe);
+        assertThat(result.requiresMainThreadReplan()).isTrue();
+        assertThat(matches).hasValue(capturedMatches);
+        assertThat(itemQueries).hasValue(capturedItemQueries);
+    }
+
+    private static AsyncRequirementPlanner.RecipeSearchRequest captureSearch(MachineRecipe recipe,
+                                                                              CapabilitySnapshot capabilities) throws Exception {
+        return captureSearch(List.of(recipe), capabilities);
+    }
+
+    private static AsyncRequirementPlanner.RecipeSearchRequest captureSearch(List<MachineRecipe> recipes,
+                                                                              CapabilitySnapshot capabilities) throws Exception {
+        installCurrentServerForTesting();
+        try {
+            return AsyncRequirementPlanner.captureRecipeSearch(searchSnapshot(), recipes, 1,
+                    capabilities, List.of(), 0, new EffectiveRecipeSet.Cache());
+        } finally {
+            clearCurrentServerForTesting();
+        }
+    }
+
+    private static ItemRequirement searchInput(Ingredient ingredient, int count, float consumeChance) {
+        return new ItemRequirement(RecipeModifier.IOType.INPUT, ingredient, count, ItemStack.EMPTY, 1F, List.of(),
+                DataComponentPredicateSet.EMPTY, consumeChance);
+    }
+
+    private static MachineRecipe searchRecipe(String path, List<MachineRequirement> requirements) {
+        return RecipeTestSupport.create(MMCR.id("async_search_" + path), MMCR.id("async_search_machine"), 20,
+                requirements, List.of(), List.of(), 0, 1, false, false, List.of(), false, Set.of());
+    }
+
+    private static CapabilitySnapshot searchCapabilities(boolean isolated) {
+        BulkItemStorage first = new BulkItemStorage(64, null);
+        BulkItemStorage second = new BulkItemStorage(64, null);
+        first.insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        second.insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+        BlockPos a = new BlockPos(1, 0, 0);
+        BlockPos b = new BlockPos(2, 0, 0);
+        return new CapabilitySnapshot(List.of(new ItemBusCapability(first, IOType.INPUT),
+                new ItemBusCapability(second, IOType.INPUT)), List.of(new InputRoutingFacet(3,
+                List.of(new InputRoutingFacet.Source(0, a), new InputRoutingFacet.Source(1, b)),
+                List.of(new InputRoutingFacet.Port(a, isolated), new InputRoutingFacet.Port(b, isolated)))));
+    }
+
+    private static ControllerRuntimeSnapshot searchSnapshot() {
+        Machine machine = new Machine() {
+            @Override
+            public ResourceLocation registryName() { return MMCR.id("async_search_machine"); }
+            @Override
+            public BlockArray pattern() { return null; }
+            @Override
+            public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(registryName()); }
+        };
+        StructureSnapshot structure = new StructureSnapshot(machine, machine, null, null, Direction.NORTH, Direction.SOUTH,
+                1, true, 1, null, null, null, false, true, Set.of());
+        return new ControllerRuntimeSnapshot(structure, 0, 0, 0, Map.of(), Map.of(), Set.of(),
+                ModuleConnectionStatus.notRequired(), 0, null, null, List.of(), List.of(), List.of(),
+                machine.registryName().toString(), "", 0, false, false, 0, 0, 1);
     }
 
     @Test

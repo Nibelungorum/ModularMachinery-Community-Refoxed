@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
 import cn.howxu.mmcr.client.controller.ui.ControllerUiClientEvents;
 import cn.howxu.mmcr.client.controller.ControllerScreenTextCache;
 import cn.howxu.mmcr.internal.menu.MachineControllerMenu;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.internal.network.PktControllerStructureCheckPayload;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
@@ -43,6 +44,7 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
     private static final int ACTION_BUTTON_GAP = 2;
     private StyledButton recipePoolButton;
     private StyledButton structureCheckButton;
+    private IsolationToggleButton isolationButton;
     private final Supplier<ControllerUiSnapshot> snapshot;
 
     public MachineControllerScreen(MachineControllerMenu menu, Inventory inventory, Component title) {
@@ -77,6 +79,12 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
                     button.setFocused(false);
                 }));
         structureCheckButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.controller.check_structure")));
+        isolationButton = addRenderableWidget(new IsolationToggleButton(buttonX, topPos + 1,
+                Component.translatable("mmcr.input_isolation.button"), menu.inputIsolation()::enabled, button -> {
+            if (minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId,
+                    menu.inputIsolation().enabled() ? InputIsolationMenuState.DISABLE : InputIsolationMenuState.ENABLE);
+            button.setFocused(false);
+        }));
         updateControllerButtons();
     }
 
@@ -97,6 +105,10 @@ public final class MachineControllerScreen extends AbstractScrollableTextScreen<
         if (structureCheckButton != null) {
             structureCheckButton.setPosition(buttonX,
                     topPos + 1 + (showRecipePools ? ACTION_BUTTON_SIZE + ACTION_BUTTON_GAP : 0));
+        }
+        if (isolationButton != null) {
+            isolationButton.updateState(menu.inputIsolation(), true);
+            isolationButton.setPosition(buttonX, topPos + 1 + (showRecipePools ? 2 : 1) * 18);
         }
     }
 

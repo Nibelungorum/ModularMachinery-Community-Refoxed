@@ -79,6 +79,22 @@ public final class GameTestRegistry {
     @GameTestGenerator
     public static Collection<TestFunction> generateTests() {
         List<TestFunction> event = new ArrayList<>();
+        register(event, "input_isolation_item_sources", 20, InputIsolationGameTest::itemSourcesCannotPoolAcrossIsolation);
+        register(event, "input_isolation_fluid_sources", 20, InputIsolationGameTest::fluidSourcesCannotPoolAcrossIsolation);
+        register(event, "input_isolation_combined_atomic", 20, InputIsolationGameTest::combinedInputSharesEnergyAndOutputAtomically);
+        register(event, "input_isolation_full_local_replacement", 20, InputIsolationGameTest::fullIsolationPreservesLocalAndIncludesReplacement);
+        register(event, "input_isolation_menu_two_viewers", 20, InputIsolationGameTest::menusPersistAndSynchronizeTwoViewers);
+        register(event, "input_isolation_paid_ordinary_reload", 20, InputIsolationGameTest::paidOrdinaryScopeSurvivesReload);
+        register(event, "input_isolation_paid_isolated_reload", 20, InputIsolationGameTest::paidIsolatedScopeSurvivesReload);
+        if (ModList.get().isLoaded("ae2")) {
+            register(event, "input_isolation_native_ae_input", 20, InputIsolationGameTest::nativeAeInputUsesOnePhysicalSource);
+            register(event, "input_isolation_ordinary_pattern_request", 20, InputIsolationGameTest::ordinaryPatternRequestIsAtomic);
+            register(event, "input_isolation_isolated_pattern_request", 20, InputIsolationGameTest::isolatedPatternRequestIsAtomic);
+            register(event, "input_isolation_ordinary_pattern_topup", 20, InputIsolationGameTest::ordinaryPatternRequestCanTopUpAndRollback);
+        }
+        if (ModList.get().isLoaded("mekanism")) {
+            register(event, "input_isolation_chemical_shared_heat", 20, InputIsolationGameTest::chemicalIsolationStillSharesHeatAndEnergy);
+        }
         register(event, "running_installed_fluid_probability", 20, RunningRecipeGameTest::installedFluidProbabilityAttempts);
         register(event, "running_mixed_input_native_partial", 20, RunningRecipeGameTest::mixedInputCommitRetainsNativePaymentAfterEnergyChanges);
         register(event, "running_retained_input_removed", 20, RunningRecipeGameTest::removedRetainedInputStopsContinuousPayment);

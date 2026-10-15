@@ -21,6 +21,7 @@ import com.extendedae_plus.ae.wireless.endpoint.GenericNodeEndpointImpl;
 import com.extendedae_plus.init.ModItems;
 import com.extendedae_plus.items.materials.ChannelCardItem;
 import com.mojang.authlib.GameProfile;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -36,6 +37,8 @@ import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
+import net.neoforged.neoforge.network.connection.ConnectionType;
+import net.neoforged.neoforge.network.registration.ChannelAttributes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -164,8 +167,15 @@ public class ChannelCardMenuGameTest {
     /** @author howxu <dev@howxu.cn> */
     private static final class MenuConnection extends ServerGamePacketListenerImpl {
         private MenuConnection(ServerPlayer player, GameProfile profile) {
-            super(player.level().getServer(), new Connection(PacketFlow.CLIENTBOUND), player,
+            super(player.level().getServer(), connected(), player,
                     CommonListenerCookie.createInitial(profile, false));
+        }
+
+        private static Connection connected() {
+            var connection = new Connection(PacketFlow.SERVERBOUND);
+            new EmbeddedChannel(connection);
+            ChannelAttributes.setConnectionType(connection, ConnectionType.NEOFORGE);
+            return connection;
         }
 
         @Override public void send(Packet<?> packet) { }

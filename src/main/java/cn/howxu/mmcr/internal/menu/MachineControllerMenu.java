@@ -130,6 +130,7 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         this.clientConnectedHostId = owner == null ? null
                 : machineState(owner).connectedHostId().isEmpty() ? null : ResourceLocation.parse(machineState(owner).connectedHostId());
         addControllerPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forController(owner));
     }
 
     public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos, @Nullable ResourceLocation machineId,
@@ -167,6 +168,7 @@ public class MachineControllerMenu extends AbstractMachineMenu implements Contro
         this.moduleConnected.set(openData.connectedHostId().isPresent() ? 1 : 0);
         this.controllerRole.set(openData.role().ordinal());
         addControllerPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forController(null));
     }
 
     public MachineControllerMenu(int containerId, Inventory playerInv, BlockPos pos) {

@@ -48,6 +48,7 @@ import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
@@ -56,6 +57,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.CraftingStatus;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
@@ -149,6 +151,7 @@ import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.ChunkPos;
@@ -454,6 +457,148 @@ class MachineControllerBlockEntityTest {
             ConfigTestSupport.setMachineWorkMode(previousMode);
             RecipeRegistry.clearForTesting();
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,full", "true,full", "false,local", "true,local",
+            "false,masked", "true,masked", "false,roundtrip", "true,roundtrip"})
+    void sync_be_start_replans_after_one_callback_using_current_isolation(boolean shared, String change)
+            throws Exception {
+        MachineWorkMode previousMode = ServerConfig.machineWorkMode();
+        try (ServerThreadTestScope ignored = ServerThreadTestScope.open()) {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+            TestBootstrap.bootstrapCapabilities();
+            AtomicInteger starts = new AtomicInteger();
+            FinishRecordingController controller = isolationStartController(RecipeBehavior.builder().beforeStart(context -> {
+                starts.incrementAndGet();
+                MachineControllerBlockEntity owner = context.machineContext().controller();
+                if (change.equals("local") || change.equals("masked")) {
+                    ((IOPortBlockEntity) owner.getLevel().getBlockEntity(new BlockPos(3, 0, 0))).setInputIsolated(true);
+                } else {
+                    owner.setFullyInputIsolated(true);
+                    if (change.equals("roundtrip")) owner.setFullyInputIsolated(false);
+                }
+            }).build(), shared);
+            if (change.equals("masked")) controller.setFullyInputIsolated(true);
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("be_routing_" + shared + "_" + change),
+                    MMCR.id("test_cube"), 20,
+                    List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT),
+                            2, ItemStack.EMPTY)), List.of());
+            RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+            SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+            coordinator.beginLevelTick(level.getGameTime());
+
+            controller.tickRuntimeWork(level, controller.getBlockPos());
+            coordinator.resolve(level);
+
+            CraftingRuntime crafting = RuntimeTestFixtures.craftingRuntime(controller);
+            assertThat(starts).hasValue(1);
+            assertThat(crafting.active()).isTrue();
+            assertThat(controller.hasPendingNormalRecipeStart()).isFalse();
+            ItemInputBusBlockEntity first = (ItemInputBusBlockEntity) level.getBlockEntity(new BlockPos(2, 0, 0));
+            ItemInputBusBlockEntity second = (ItemInputBusBlockEntity) level.getBlockEntity(new BlockPos(3, 0, 0));
+            boolean usesSecond = change.equals("local");
+            assertThat(first.itemHandler().amount(0)).isEqualTo(usesSecond ? 2L : 0L);
+            assertThat(second.itemHandler().amount(0)).isEqualTo(usesSecond ? 0L : 2L);
+            assertThat(crafting.activeInputScope()).isEqualTo(change.equals("roundtrip")
+                    ? new InputScope(InputScope.Kind.ORDINARY, List.of(first.getBlockPos(), second.getBlockPos()))
+                    : new InputScope(InputScope.Kind.ISOLATED, List.of(usesSecond ? second.getBlockPos() : first.getBlockPos())));
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(previousMode);
+            RecipeRegistry.clearForTesting();
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,structure", "true,structure", "false,capability", "true,capability",
+            "false,modifier", "true,modifier", "false,catalog", "true,catalog",
+            "false,module", "true,module", "false,linked-roundtrip", "true,linked-roundtrip",
+            "false,lifecycle", "true,lifecycle"})
+    void isolation_callback_does_not_hide_other_be_start_invalidations(boolean shared, String change)
+            throws Exception {
+        MachineWorkMode previousMode = ServerConfig.machineWorkMode();
+        try (ServerThreadTestScope ignored = ServerThreadTestScope.open()) {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+            TestBootstrap.bootstrapCapabilities();
+            AtomicInteger starts = new AtomicInteger();
+            FinishRecordingController controller = isolationStartController(RecipeBehavior.builder().beforeStart(context -> {
+                starts.incrementAndGet();
+                MachineControllerBlockEntity owner = context.machineContext().controller();
+                owner.setFullyInputIsolated(true);
+                switch (change) {
+                    case "structure" -> owner.setFormed(false);
+                    case "capability" -> owner.componentRuntime().replaceComponents(List.of());
+                    case "modifier" -> owner.componentRuntime().replaceModifiers(Map.of("changed",
+                            List.of(MachineModifier.numeric("energy", "input", 2D, "multiply", false))));
+                    case "catalog" -> RecipeRegistry.replaceDynamic(Map.of());
+                    case "module" -> owner.componentRuntime().replaceModuleConnectionState(
+                            ModuleConnectionStatus.connected(MMCR.id("callback_other_host")), 1);
+                    case "linked-roundtrip" -> {
+                        Set<BlockPos> original = owner.componentRuntime().linkedPortPositions();
+                        owner.componentRuntime().replaceLinkedPortPositions(Set.of(new BlockPos(99, 0, 0)));
+                        owner.componentRuntime().replaceLinkedPortPositions(original);
+                    }
+                    case "lifecycle" -> owner.setMachine(null);
+                    default -> throw new AssertionError(change);
+                }
+            }).build(), shared);
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            ItemInputBusBlockEntity first = (ItemInputBusBlockEntity) level.getBlockEntity(new BlockPos(2, 0, 0));
+            ItemInputBusBlockEntity second = (ItemInputBusBlockEntity) level.getBlockEntity(new BlockPos(3, 0, 0));
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("be_routing_fence_" + shared + "_" + change),
+                    MMCR.id("test_cube"), 20,
+                    List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT),
+                            2, ItemStack.EMPTY)), List.of());
+            RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+            SharedIoCoordinator coordinator = SharedIoCoordinator.get(level);
+            coordinator.beginLevelTick(level.getGameTime());
+
+            assertThatCode(() -> {
+                controller.tickRuntimeWork(level, controller.getBlockPos());
+                coordinator.resolve(level);
+            }).doesNotThrowAnyException();
+
+            assertThat(starts).hasValue(1);
+            if (change.equals("lifecycle")) assertThat(controller.currentStructureSnapshot().configuredMachine()).isNull();
+            assertThat(RuntimeTestFixtures.craftingRuntime(controller).active()).isFalse();
+            assertThat(controller.hasPendingNormalRecipeStart()).isFalse();
+            assertThat(first.itemHandler().amount(0)).isEqualTo(2L);
+            assertThat(second.itemHandler().amount(0)).isEqualTo(2L);
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(previousMode);
+            RecipeRegistry.clearForTesting();
+        }
+    }
+
+    private FinishRecordingController isolationStartController(RecipeBehavior behavior, boolean shared) {
+        FinishRecordingController controller = finishRecordingController(behavior);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        runtimeStateBatchLevels.add(level);
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+        for (BlockPos position : List.of(new BlockPos(2, 0, 0), new BlockPos(3, 0, 0))) {
+            ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(position);
+            RuntimeTestFixtures.replaceBlockEntity(controller, input);
+            components.add(new ProcessingComponent(new MachineComponent(input.kind(), input.ioType()), input,
+                    position, position, (String) null));
+            input.linkControllerAppearance(controller.getBlockPos(), null);
+            input.itemHandler().insertItem(0, new ItemStack(Items.IRON_INGOT, 2), false);
+        }
+        controller.componentRuntime().replaceComponents(components);
+        controller.componentRuntime().replaceLinkedPortPositions(Set.of(new BlockPos(1, 0, 0),
+                new BlockPos(2, 0, 0), new BlockPos(3, 0, 0)));
+        RuntimeTestFixtures.republish(controller);
+        if (shared) {
+            MachineControllerBlockEntity other = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"),
+                    new BlockPos(4, 0, 0));
+            RuntimeTestFixtures.replaceBlockEntity(controller, other);
+            StructureClaimRegistry claims = StructureClaimRegistry.get(level);
+            List<StructureClaimRegistry.Claim> sharedClaims = List.of(new StructureClaimRegistry.Claim(
+                    new BlockPos(2, 0, 0), ComponentClaimPolicy.SHARED_SERIALIZED));
+            assertThat(claims.claim(controller.getBlockPos(), sharedClaims).accepted()).isTrue();
+            assertThat(claims.claim(other.getBlockPos(), sharedClaims).accepted()).isTrue();
+        }
+        return controller;
     }
 
     @ParameterizedTest

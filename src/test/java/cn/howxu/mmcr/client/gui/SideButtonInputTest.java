@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -127,6 +128,28 @@ class SideButtonInputTest {
         assertThat(screen.mouseReleased(65, 125, 0)).isTrue();
         assertThat(screen.clicks).isEmpty();
         assertNormalSlotGesture(screen);
+    }
+
+    @Test
+    void isolation_sidebar_uses_confirmed_state_and_captures_drag_and_release() throws Exception {
+        for (int[] position : List.of(new int[]{32, 77}, new int[]{228, 77}, new int[]{332, 77})) {
+            FixtureScreen screen = screen(position[0] > 300 ? 280 : 176);
+            var state = InputIsolationMenuState.forPort(null);
+            state.dataSlot().set(1);
+            List<Boolean> requested = new ArrayList<>();
+            var button = screen.addIsolationButton(position[0], position[1], state, requested);
+            for (int attempt = 0; attempt < 3; attempt++) {
+                if (attempt == 2) state.dataSlot().set(3);
+                assertThat(screen.mouseClicked(button.getX() + 4, button.getY() + 4, 0)).isTrue();
+                assertThat(screen.mouseDragged(65, 125, 0, 0, 40)).isTrue();
+                assertThat(screen.mouseReleased(65, 125, 0)).isTrue();
+                assertThat(state.enabled()).isEqualTo(attempt == 2);
+                assertThat(screen.clicks).isEmpty();
+                assertThat(screen.getMenu().getCarried().getCount()).isEqualTo(32);
+            }
+            assertThat(requested).containsExactly(true, true, false);
+            assertNormalSlotGesture(screen);
+        }
     }
 
     @Test
@@ -264,6 +287,15 @@ class SideButtonInputTest {
 
         StyledButton addButton(int x, int y, Button.OnPress action) {
             return addRenderableWidget(new SilentStyledButton(x, y, action));
+        }
+
+        IsolationToggleButton addIsolationButton(int x, int y, InputIsolationMenuState state, List<Boolean> requested) {
+            var button = new IsolationToggleButton(x, y, Component.empty(), state::enabled,
+                    ignored -> requested.add(!state.enabled())) {
+                @Override public void playDownSound(SoundManager soundManager) {}
+            };
+            button.updateState(state, false);
+            return addRenderableWidget(button);
         }
 
         boolean hasQuickCraftSlots() {

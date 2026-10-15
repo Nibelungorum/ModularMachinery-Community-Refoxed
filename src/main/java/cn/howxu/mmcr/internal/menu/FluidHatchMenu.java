@@ -34,6 +34,7 @@ public class FluidHatchMenu extends AbstractMachineMenu {
         this.capacity = addLongDataSlot(owner == null ? LongDataSlot.standalone()
                 : new LongDataSlot(() -> fluidCapacity(owner.nativeFluidHandler())));
         addPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forPort(owner));
     }
 
     public FluidHatchMenu(int containerId, Inventory playerInv, BlockPos pos) {
@@ -44,6 +45,7 @@ public class FluidHatchMenu extends AbstractMachineMenu {
         this.amount = addLongDataSlot(LongDataSlot.standalone());
         this.capacity = addLongDataSlot(LongDataSlot.standalone());
         addPlayerSlots(playerInv);
+        bindInputIsolation(InputIsolationMenuState.forPort(null));
     }
 
     public static FluidHatchMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buf) {

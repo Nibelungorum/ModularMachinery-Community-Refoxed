@@ -36,6 +36,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
                 : owner.nativeFluidHandler().getTanks();
         this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.fluidEntries(owner.nativeFluidHandler());
         addPlayerSlots(playerInv, 47);
+        bindInputIsolation(InputIsolationMenuState.forPort(owner));
     }
 
     public ExtendedFluidMenu(int containerId, Inventory playerInv, BlockPos pos, String kind, int tankCount) {
@@ -50,6 +51,7 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu {
         this.tankCount = tankCount;
         this.entries = List.of();
         addPlayerSlots(playerInv, 47);
+        bindInputIsolation(InputIsolationMenuState.forPort(null));
     }
 
     public static ExtendedFluidMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buffer) {

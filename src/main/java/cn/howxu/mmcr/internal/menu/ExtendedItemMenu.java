@@ -36,6 +36,7 @@ public final class ExtendedItemMenu extends AbstractMachineMenu {
                 : owner.nativeItemHandler().getSlots();
         this.entries = owner == null ? List.of() : PktPortStorageSyncPayload.itemEntries(owner.nativeItemHandler());
         addPlayerSlots(playerInv, 47);
+        bindInputIsolation(InputIsolationMenuState.forPort(owner));
     }
 
     public ExtendedItemMenu(int containerId, Inventory playerInv, BlockPos pos, String kind, int slotCount) {
@@ -50,6 +51,7 @@ public final class ExtendedItemMenu extends AbstractMachineMenu {
         this.slotCount = slotCount;
         this.entries = List.of();
         addPlayerSlots(playerInv, 47);
+        bindInputIsolation(InputIsolationMenuState.forPort(null));
     }
 
     public static ExtendedItemMenu clientOpen(int containerId, Inventory playerInv, FriendlyByteBuf buffer) {

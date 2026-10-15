@@ -154,15 +154,15 @@ public final class MachineControllerRuntime {
     }
 
     public MachineBehaviorContext behaviorContext() {
-        return behaviorContext(new CapabilitySnapshot(components.capabilities()));
+        return behaviorContext(components.capabilitySnapshot());
     }
 
     public MachineBehaviorContext behaviorContext(ControllerScreenText recipeScreenText) {
-        return behaviorContext(new CapabilitySnapshot(components.capabilities()), recipeScreenText);
+        return behaviorContext(components.capabilitySnapshot(), recipeScreenText);
     }
 
     public TickBehaviorContext tickBehaviorContext() {
-        CapabilitySnapshot capabilitySnapshot = new CapabilitySnapshot(components.capabilities());
+        CapabilitySnapshot capabilitySnapshot = components.capabilitySnapshot();
         StructureSnapshot structureSnapshot = structure.snapshot();
         Machine machine = structureSnapshot.machine() == null
                 ? structureSnapshot.configuredMachine() : structureSnapshot.machine();

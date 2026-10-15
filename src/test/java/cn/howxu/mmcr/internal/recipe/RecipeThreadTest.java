@@ -38,6 +38,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
@@ -902,6 +903,73 @@ class RecipeThreadTest {
             assertThat(thread.runtime().recipe()).isSameAs(recipe);
             assertThat(thread.isStartPending()).isFalse();
             assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(93L);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    static Stream<Arguments> isolationCallbackRoundtrips() {
+        return Arrays.stream(MachineWorkMode.values()).flatMap(mode -> Stream.of(false, true)
+                .flatMap(factory -> Stream.of("isolation", "linked", "module")
+                        .map(change -> Arguments.of(mode, factory, change))));
+    }
+
+    @ParameterizedTest
+    @MethodSource("isolationCallbackRoundtrips")
+    void before_start_only_attributes_pure_isolation_state_increments(MachineWorkMode mode, boolean factory,
+                                                                      String change) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        var controller = controllerWithPorts(input);
+        controller.setFullyInputIsolated(true);
+        var callbacks = new AtomicInteger();
+        installBehavior(controller, RecipeBehavior.builder().beforeStart(context -> {
+            callbacks.incrementAndGet();
+            input.setInputIsolated(true);
+            controller.onInputIsolationChanged();
+            input.setInputIsolated(false);
+            controller.onInputIsolationChanged();
+            var components = controller.componentRuntime();
+            if (change.equals("linked")) {
+                var linked = components.linkedPortPositions();
+                components.replaceLinkedPortPositions(Set.of(new BlockPos(99, 0, 0)));
+                components.replaceLinkedPortPositions(linked);
+            } else if (change.equals("module")) {
+                var status = components.moduleConnectionStatus();
+                int installed = components.installedModuleCount();
+                components.replaceModuleConnectionState(ModuleConnectionStatus.connected(MMCR.id("callback_roundtrip_host")), 1);
+                components.replaceModuleConnectionState(status, installed);
+            }
+        }).build());
+        var level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(Runnable::run));
+        try {
+            input.itemHandler().insertItem(0, new ItemStack(Items.IRON_INGOT), false);
+            var recipe = RecipeTestSupport.create(MMCR.id("callback_state_attribution"), controller.currentRecipePoolId(), 20,
+                    List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)), List.of());
+            RecipeRegistry.registerStatic(recipe);
+            RecipeThread thread = factory ? FactoryRecipeThread.simple(controller) : new MachineRecipeThread(controller);
+            var linked = controller.componentRuntime().linkedPortPositions();
+            var modules = controller.componentRuntime().moduleConnectionStatus();
+            thread.startRecipe(recipe, 1L, controller.currentStructureSnapshot().version(), null, RecipeThread.StartOrigin.LAST_RECIPE);
+            completeAsyncLevelTick(level);
+
+            assertThat(callbacks).hasValue(1);
+            assertThat(input.isInputIsolated()).isFalse();
+            assertThat(controller.componentRuntime().linkedPortPositions()).isEqualTo(linked);
+            assertThat(controller.componentRuntime().moduleConnectionStatus()).isEqualTo(modules);
+            assertThat(thread.isStartPending()).isFalse();
+            if (change.equals("isolation")) {
+                assertThat(thread.runtime().active()).isTrue();
+                assertThat(input.itemHandler().amount(0)).isZero();
+            } else {
+                assertThat(thread.runtime().active()).isFalse();
+                assertThat(thread.runtime().ledger().state().paidAttempts()).isZero();
+                assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
+            }
         } finally {
             MachineAsyncCoordinator.discard(level);
             SharedIoCoordinator.discard(level);
