@@ -53,7 +53,7 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
 
     @Override
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-        List<MachineOutputAmount> outputs = RecipeOutputCodec.read(accessor.getServerData());
+        List<MachineOutputAmount> outputs = RecipeOutputCodec.read(accessor.getServerData(), accessor.nbtOps());
         boolean labelAdded = false;
         for (MachineOutputAmount output : outputs) {
             MachineOutput owned = output.output();

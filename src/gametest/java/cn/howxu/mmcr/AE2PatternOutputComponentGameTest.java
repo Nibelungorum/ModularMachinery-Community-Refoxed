@@ -30,6 +30,8 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.jade.RecipeOutputCodec;
+import cn.howxu.mmcr.compat.jade.RecipeOutputDataProvider;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -41,11 +43,13 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.enchantment.Enchantments;
+import snownee.jade.impl.BlockAccessorImpl;
 
 import java.util.List;
 import java.util.Map;
@@ -232,6 +236,17 @@ public class AE2PatternOutputComponentGameTest {
                     "CPU pushes the pattern whose recipe enchantment is stored independently");
             helper.assertTrue(cpu.getWaitingFor(outputKey) == 9L,
                     "CPU waits for the exact enchanted and named output");
+            var accessor = new BlockAccessorImpl.Builder().level(helper.getLevel())
+                    .blockState(controller.getBlockState()).blockEntity(() -> controller).build();
+            CompoundTag jadeData = new CompoundTag();
+            RecipeOutputDataProvider.INSTANCE.appendServerData(jadeData, accessor);
+            var jadeOutputs = RecipeOutputCodec.read(jadeData, accessor.nbtOps());
+            helper.assertTrue(jadeOutputs.size() == 1,
+                    "Jade receives the active enchanted output immediately after ME pattern admission");
+            helper.assertTrue(jadeOutputs.getFirst().amount() == 9L
+                            && ItemStack.isSameItemSameComponents(expected,
+                            ((MachineOutput.ItemOutput) jadeOutputs.getFirst().output()).resolvedStack()),
+                    "ME pattern output reaches Jade with the exact custom name and enchantments");
         }).thenWaitUntil(() -> {
             helper.assertTrue(chest.getInventory().extract(outputKey, 9L, Actionable.SIMULATE,
                             new BaseActionSource()) == 9L,

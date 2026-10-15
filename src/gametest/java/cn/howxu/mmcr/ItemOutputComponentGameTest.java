@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeSerializer;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
@@ -14,6 +15,7 @@ import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.compat.jade.RecipeOutputCodec;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.api.facade.recipe.RequirementAdapters;
@@ -32,6 +34,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.RegistryOps;
@@ -166,6 +170,32 @@ public class ItemOutputComponentGameTest {
         } finally {
             buf.release();
         }
+        helper.succeed();
+    }
+
+    public void jadeOutputPreservesEnchantmentComponents(GameTestHelper helper) {
+        ItemRequirement requirement = output();
+        ItemStack base = requirement.stack();
+        base.setCount(9);
+        base.set(DataComponents.CUSTOM_NAME, Component.literal("What a magic recipe"));
+        var declared = new MachineOutput.ItemOutput(base, 1F, requirement.components());
+        ItemStack expected = declared.resolvedStack();
+        var ops = helper.getLevel().registryAccess().createSerializationContext(NbtOps.INSTANCE);
+
+        for (MachineOutput output : List.of(declared, new MachineOutput.ItemOutput(expected, 1F))) {
+            CompoundTag data = new CompoundTag();
+            RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(output, 36L)), ops);
+            List<MachineOutputAmount> decoded = RecipeOutputCodec.read(data, ops);
+
+            helper.assertTrue(decoded.size() == 1, "Jade must retain registry-backed recipe outputs");
+            MachineOutputAmount transported = decoded.getFirst();
+            ItemStack stack = ((MachineOutput.ItemOutput) transported.output()).resolvedStack();
+            helper.assertTrue(ItemStack.isSameItemSameComponents(expected, stack)
+                            && stack.getCount() == 1 && transported.amount() == 36L,
+                    "Jade must preserve the enchanted custom-named output and its four-way parallel total");
+        }
+        helper.assertTrue(base.getCount() == 9 && base.get(DataComponents.ENCHANTMENTS).isEmpty(),
+                "Jade serialization must preserve the recipe-owned base stack");
         helper.succeed();
     }
 

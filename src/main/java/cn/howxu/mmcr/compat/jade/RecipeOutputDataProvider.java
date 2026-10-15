@@ -25,6 +25,6 @@ public enum RecipeOutputDataProvider implements IServerDataProvider<BlockAccesso
     @Override
     public void appendServerData(CompoundTag data, BlockAccessor accessor) {
         if (!(accessor.getTarget() instanceof MachineControllerBlockEntity controller)) return;
-        RecipeOutputCodec.write(data, controller.recipeOutputs());
+        RecipeOutputCodec.write(data, controller.recipeOutputs(), accessor.nbtOps());
     }
 }

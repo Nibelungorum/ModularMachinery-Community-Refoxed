@@ -3,9 +3,9 @@ package cn.howxu.mmcr.compat.jade;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 
@@ -25,9 +25,13 @@ public final class RecipeOutputCodec {
     private RecipeOutputCodec() {}
 
     public static void write(CompoundTag data, List<MachineOutputAmount> outputs) {
+        write(data, outputs, NbtOps.INSTANCE);
+    }
+
+    public static void write(CompoundTag data, List<MachineOutputAmount> outputs, DynamicOps<Tag> ops) {
         ListTag list = new ListTag();
         for (MachineOutputAmount output : outputs) {
-            DataResult<Tag> encoded = MachineOutput.CODEC.encodeStart(NbtOps.INSTANCE,
+            DataResult<Tag> encoded = MachineOutput.CODEC.encodeStart(ops,
                     templateForTransport(output.output()));
             encoded.result().ifPresent(tag -> {
                 if (tag instanceof CompoundTag compound) {
@@ -46,6 +50,10 @@ public final class RecipeOutputCodec {
     }
 
     public static List<MachineOutputAmount> read(CompoundTag data) {
+        return read(data, NbtOps.INSTANCE);
+    }
+
+    public static List<MachineOutputAmount> read(CompoundTag data, DynamicOps<Tag> ops) {
         if (data == null) return List.of();
         ListTag list = data.getList(OUTPUT_KEY, Tag.TAG_COMPOUND);
         List<MachineOutputAmount> decoded = new ArrayList<>(list.size());
@@ -53,7 +61,7 @@ public final class RecipeOutputCodec {
             if (!(element instanceof CompoundTag compound)) continue;
             CompoundTag encodedOutput = compound.contains(OUTPUT_FIELD)
                     ? compound.getCompound(OUTPUT_FIELD) : compound;
-            DataResult<MachineOutput> parsed = MachineOutput.CODEC.parse(NbtOps.INSTANCE, encodedOutput);
+            DataResult<MachineOutput> parsed = MachineOutput.CODEC.parse(ops, encodedOutput);
             parsed.result().ifPresent(output -> decoded.add(new MachineOutputAmount(output,
                     compound.contains(AMOUNT_FIELD) ? compound.getLong(AMOUNT_FIELD)
                             : MachineOutput.scaledAmount(output))));

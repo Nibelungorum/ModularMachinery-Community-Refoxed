@@ -19,6 +19,7 @@ import cn.howxu.mmcr.compat.jei.RecipeIoEntry;
 import cn.howxu.mmcr.test.TestBootstrap;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -149,6 +150,7 @@ class SourcePresentationTest {
         return (BlockAccessor) Proxy.newProxyInstance(SourcePresentationTest.class.getClassLoader(),
                 new Class<?>[]{BlockAccessor.class}, (proxy, method, arguments) -> {
                     if (method.getName().equals("getServerData")) return data;
+                    if (method.getName().equals("nbtOps")) return NbtOps.INSTANCE;
                     throw new AssertionError("Presentation must only read server data: " + method.getName());
                 });
     }

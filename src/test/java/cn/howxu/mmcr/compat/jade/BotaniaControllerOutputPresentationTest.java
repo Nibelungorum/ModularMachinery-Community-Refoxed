@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.compat.botania.ManaOutput;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -39,6 +40,7 @@ class BotaniaControllerOutputPresentationTest {
             BlockAccessor accessor = (BlockAccessor) Proxy.newProxyInstance(getClass().getClassLoader(),
                     new Class<?>[]{BlockAccessor.class}, (proxy, method, arguments) -> {
                         if (method.getName().equals("getServerData")) return data;
+                        if (method.getName().equals("nbtOps")) return NbtOps.INSTANCE;
                         throw new AssertionError("Controller output must not query native inventory: " + method.getName());
                     });
             List<Component> text = new ArrayList<>();

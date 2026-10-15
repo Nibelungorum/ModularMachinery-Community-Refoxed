@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -85,6 +86,7 @@ class RecipeOutputDataProviderTest {
                 BlockAccessor.class.getClassLoader(), new Class<?>[]{BlockAccessor.class},
                 (proxy, method, args) -> {
                     if ("getTarget".equals(method.getName())) return target;
+                    if ("nbtOps".equals(method.getName())) return NbtOps.INSTANCE;
                     throw new UnsupportedOperationException(method.getName());
                 });
     }

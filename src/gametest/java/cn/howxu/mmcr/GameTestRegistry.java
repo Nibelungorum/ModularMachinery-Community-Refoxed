@@ -149,6 +149,8 @@ public final class GameTestRegistry {
                 helper -> new ItemOutputComponentGameTest().patternOutputsMatchResolvedComponentsStrictly(helper));
         register(event, "recipe_serializer_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().recipeSerializerPreservesEnchantmentComponents(helper));
+        register(event, "jade_output_enchantment_components", 20,
+                helper -> new ItemOutputComponentGameTest().jadeOutputPreservesEnchantmentComponents(helper));
         register(event, "async_item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().asyncOutputPreservesEnchantmentComponents(helper));
         register(event, "cached_item_output_enchantment_components", 20,
