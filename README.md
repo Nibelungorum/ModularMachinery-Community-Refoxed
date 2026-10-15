@@ -12,7 +12,7 @@ Release artifacts are published on the [CurseForge](https://www.curseforge.com/m
 
 Distribution of this project is governed by the GNU General Public License version 3.0 (GPL-3.0).
 
-You are permitted to include MMCR in your own ModPack freely, provided that your ModPack as a whole complies with the terms of GPL-3.0.
+You are permitted to include MMCR in your own ModPack freely.
 
 If you choose to fork MMCR and redistribute it in any modified form, you must retain all original copyright notices, disclaimers, and other author attributions in their entirety, and you must clearly indicate any modifications you have made to the original code.
 
