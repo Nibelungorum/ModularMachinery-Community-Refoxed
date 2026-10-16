@@ -41,8 +41,7 @@ Include the Minecraft and NeoForge versions, MMCR version, installed mods, logs 
 ### Building
 
 ```bash
-gradle runClientData
-gradle runServerData
+gradle runData
 gradle build
 ```
 
