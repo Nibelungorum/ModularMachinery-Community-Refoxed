@@ -79,6 +79,7 @@ public final class GameTestRegistry {
     @GameTestGenerator
     public static Collection<TestFunction> generateTests() {
         List<TestFunction> event = new ArrayList<>();
+        register(event, "block_map_color", 20, BlockMapColorGameTest::registeredBlocksAreVisibleMapSurfaces);
         register(event, "input_isolation_item_sources", 20, InputIsolationGameTest::itemSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_fluid_sources", 20, InputIsolationGameTest::fluidSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_combined_atomic", 20, InputIsolationGameTest::combinedInputSharesEnergyAndOutputAtomically);
@@ -207,6 +208,8 @@ public final class GameTestRegistry {
         // register(event, "wrench_dismantles_item_bus", 100,
         //         helper -> new WrenchDismantleGameTest().wrenchDismantlesItemBusAndDropsItsContents(helper));
         register(event, "dynamic_controller_drops_self", 100, ItemBusCapabilityGameTest::dynamicControllerDropsItself);
+        register(event, "auto_io_adjacent_picked_icons", 20,
+                helper -> new AutoIOGameTest().adjacentIconsUsePickedItems(helper));
         // Disabled: CPU scheduling delays can cause this otherwise-correct test to fail intermittently.
         register(event, "auto_io_fluid_output", 120, helper -> new AutoIOGameTest().fluidOutputAutoExports(helper));
         register(event, "auto_io_energy_output", 120, helper -> new AutoIOGameTest().energyOutputAutoExports(helper));

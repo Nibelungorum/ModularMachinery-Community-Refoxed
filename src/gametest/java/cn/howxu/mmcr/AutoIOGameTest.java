@@ -14,6 +14,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.material.Fluids;
@@ -23,6 +24,27 @@ import net.neoforged.neoforge.fluids.FluidStack;
  * @author howxu <dev@howxu.cn>
  */
 public class AutoIOGameTest {
+
+    public void adjacentIconsUsePickedItems(GameTestHelper helper) {
+        BlockPos portPos = new BlockPos(1, 1, 1);
+        helper.setBlock(portPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        helper.setBlock(portPos.relative(Direction.EAST), Blocks.POTTED_POPPY.defaultBlockState());
+        helper.setBlock(portPos.relative(Direction.WEST), Blocks.CHEST.defaultBlockState());
+        helper.setBlock(portPos.relative(Direction.UP), Blocks.AIR.defaultBlockState());
+
+        ItemBusBlockEntity port = helper.getBlockEntity(portPos);
+        var player = helper.makeMockPlayer(GameType.SURVIVAL);
+        IOPortBlockEntity.AdjacentSide flower = port.adjacentSide(Direction.EAST, player);
+        helper.assertTrue(flower.icon().is(Items.POPPY),
+                "Adjacent potted flowers use the picked flower rather than the block's flower pot item");
+        helper.assertTrue(flower.name().equals(flower.icon().getHoverName()),
+                "Adjacent display names describe the picked item");
+        helper.assertTrue(port.adjacentSide(Direction.WEST, player).icon().is(Items.CHEST),
+                "Ordinary adjacent blocks still display their picked items");
+        helper.assertTrue(port.adjacentSide(Direction.UP, player).icon().isEmpty(),
+                "Adjacent air has no icon");
+        helper.succeed();
+    }
 
     public void itemInputAutoImports(GameTestHelper helper) {
         BlockPos inputPos = new BlockPos(0, 1, 0);

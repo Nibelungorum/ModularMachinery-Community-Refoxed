@@ -335,7 +335,11 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             Button button = entry.getValue();
             button.visible = autoIOPage;
             button.active = autoIOPage;
-            button.setTooltip(Tooltip.create(autoIOSideTooltip(entry.getKey())));
+            Component tooltip = autoIOSideTooltip(entry.getKey());
+            if (button instanceof AutoIOSideButton sideButton && !sideButton.icon.isEmpty()) {
+                tooltip = tooltip.copy().append("\n").append(sideButton.icon.getHoverName());
+            }
+            button.setTooltip(Tooltip.create(tooltip));
         }
     }
 
@@ -546,15 +550,15 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     static class AutoIOSideButton extends AutoIOStyledButton {
-        private final Direction side;
         private final BooleanSupplier selected;
-        private final Supplier<IOPortBlockEntity> portSupplier;
+        private final ItemStack icon;
 
         AutoIOSideButton(int x, int y, Direction side, OnPress onPress, BooleanSupplier selected, Supplier<IOPortBlockEntity> portSupplier) {
             super(x, y, AUTO_IO_SIDE_BUTTON_SIZE, AUTO_IO_SIDE_BUTTON_SIZE, Component.empty(), onPress);
-            this.side = side;
             this.selected = selected;
-            this.portSupplier = portSupplier;
+            IOPortBlockEntity port = portSupplier.get();
+            this.icon = port == null ? ItemStack.EMPTY
+                    : port.adjacentSide(side, Minecraft.getInstance().player).icon();
         }
 
         @Override
@@ -567,7 +571,6 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                 graphics.fill(getX() + 2, getY() + 2, getX() + 3, getY() + getHeight() - 2, 0xFF66BB6A);
                 graphics.fill(getX() + getWidth() - 3, getY() + 2, getX() + getWidth() - 2, getY() + getHeight() - 2, 0xFF66BB6A);
             }
-            ItemStack icon = portSupplier.get() == null ? ItemStack.EMPTY : portSupplier.get().adjacentSide(side).icon();
             if (!icon.isEmpty()) graphics.renderItem(icon, getX() + 2, getY() + 2, 0);
         }
     }
