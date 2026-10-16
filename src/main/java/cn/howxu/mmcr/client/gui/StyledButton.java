@@ -4,6 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Shared button presentation for MMCR screens.
@@ -11,14 +13,25 @@ import net.minecraft.network.chat.Component;
  * @author howxu <dev@howxu.cn>
  */
 public class StyledButton extends Button {
+    @Nullable
+    private ResourceLocation icon;
+
     public StyledButton(int x, int y, int width, int height, Component message, OnPress onPress) {
         super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
+    }
+
+    public void setIcon(ResourceLocation icon) {
+        this.icon = icon;
     }
 
     @Override
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         drawBackground(graphics);
-        renderString(graphics, Minecraft.getInstance().font, getFGColor());
+        if (icon != null) {
+            graphics.blit(icon, getX(), getY(), getWidth(), getHeight(), 0, 0, 16, 16, 16, 16);
+        } else {
+            renderString(graphics, Minecraft.getInstance().font, getFGColor());
+        }
     }
 
     protected void drawBackground(GuiGraphics graphics) {

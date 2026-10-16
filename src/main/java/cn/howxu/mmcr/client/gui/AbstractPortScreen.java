@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
@@ -73,8 +74,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     protected boolean autoIOPage;
     private boolean containerTankClickConsumed;
     private ResourceLocation selectedCapabilityId;
-    private Button autoIOPageButton;
-    private Button secondaryAutoIOPageButton;
+    private StyledButton autoIOPageButton;
+    private StyledButton secondaryAutoIOPageButton;
     private Button autoIOToggleButton;
     private Button ejectButton;
     private final EnumMap<Direction, Button> autoIOSideButtons = new EnumMap<>(Direction.class);
@@ -124,6 +125,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                     menu.inputIsolation().enabled() ? InputIsolationMenuState.DISABLE : InputIsolationMenuState.ENABLE);
             button.setFocused(false);
         }));
+        isolationButton.setIcon(MMCR.id("textures/gui/button/isolation.png"));
         updateAutoIOWidgets();
     }
 
@@ -271,8 +273,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         updateAutoIOWidgets();
     }
 
-    private Button createAutoIOPageButton(int x, int y, ResourceLocation capabilityId) {
-        return addRenderableWidget(new StyledButton(x, y, AUTO_IO_PAGE_BUTTON_SIZE, AUTO_IO_PAGE_BUTTON_SIZE,
+    private StyledButton createAutoIOPageButton(int x, int y, ResourceLocation capabilityId) {
+        StyledButton pageButton = addRenderableWidget(new StyledButton(x, y, AUTO_IO_PAGE_BUTTON_SIZE, AUTO_IO_PAGE_BUTTON_SIZE,
                 Component.translatable("mmcr.auto_io.page"), button -> {
             if (autoIOPage) {
                 autoIOPage = false;
@@ -284,17 +286,23 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
             updateAutoIOWidgets();
             button.setFocused(false);
         }));
+        pageButton.setIcon(MMCR.id("textures/gui/button/io.png"));
+        return pageButton;
     }
 
     private void updateAutoIOWidgets() {
         updateAutoIOSlotVisibility();
         if (isolationButton != null) {
             isolationButton.updateState(menu.inputIsolation(), false);
+            isolationButton.visible = isolationButton.visible && !autoIOPage;
+            isolationButton.active = isolationButton.visible;
             int preceding = autoIOPageButton == null ? 0 : 1;
             if (secondaryAutoIOPageButton != null && !autoIOPage) preceding++;
             isolationButton.setPosition(leftPos - 18, topPos + 1 + preceding * 18);
         }
         if (autoIOPageButton != null) {
+            autoIOPageButton.setIcon(MMCR.id(autoIOPage
+                    ? "textures/gui/button/back.png" : "textures/gui/button/io.png"));
             autoIOPageButton.setMessage(Component.translatable(
                     autoIOPage ? "mmcr.auto_io.page_back" : "mmcr.auto_io.page"));
             autoIOPageButton.setTooltip(Tooltip.create(autoIOPage

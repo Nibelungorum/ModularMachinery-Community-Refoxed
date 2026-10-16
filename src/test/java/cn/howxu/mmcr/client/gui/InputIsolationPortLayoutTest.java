@@ -28,7 +28,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** One isolation control stays usable on every port page and compacts visible rows.
+/** Isolation is limited to the port main page and compacts after visible navigation rows.
  * @author howxu <dev@howxu.cn>
  */
 class InputIsolationPortLayoutTest {
@@ -57,7 +57,7 @@ class InputIsolationPortLayoutTest {
     }
 
     @Test
-    void isolation_compacts_after_navigation_and_returns_to_the_combined_main_page() throws Exception {
+    void isolation_hides_on_io_page_and_restores_compacted_main_page_position() throws Exception {
         for (int navigationCount : List.of(0, 1, 2)) {
             FixtureScreen screen = screen(navigationCount);
             var update = AbstractPortScreen.class.getDeclaredMethod("updateAutoIOWidgets");
@@ -66,8 +66,8 @@ class InputIsolationPortLayoutTest {
                 screen.autoIOPage = ioPage;
                 update.invoke(screen);
                 IsolationToggleButton isolation = (IsolationToggleButton) getField(screen, "isolationButton");
-                assertThat(isolation.visible).isTrue();
-                assertThat(isolation.active).isTrue();
+                assertThat(isolation.visible).isEqualTo(!ioPage);
+                assertThat(isolation.active).isEqualTo(!ioPage);
                 assertThat(isolation.getX()).isEqualTo(32);
                 int preceding = ioPage ? Math.min(1, navigationCount) : navigationCount;
                 assertThat(isolation.getY()).isEqualTo(41 + preceding * 18);

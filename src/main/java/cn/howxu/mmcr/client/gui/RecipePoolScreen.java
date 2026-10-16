@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -58,8 +59,11 @@ public final class RecipePoolScreen extends Screen {
 
     @Override
     protected void init() {
-        addRenderableWidget(new StyledButton(left() + RETURN_X, top() + RETURN_Y, RETURN_SIZE, RETURN_SIZE,
-                Component.literal("<"), button -> minecraft.setScreen(parent)));
+        StyledButton returnButton = addRenderableWidget(new StyledButton(
+                left() + RETURN_X, top() + RETURN_Y, RETURN_SIZE, RETURN_SIZE,
+                Component.translatable("gui.back"), button -> minecraft.setScreen(parent)));
+        returnButton.setIcon(MMCR.id("textures/gui/button/back.png"));
+        returnButton.setTooltip(Tooltip.create(Component.translatable("gui.back")));
     }
 
     @Override
