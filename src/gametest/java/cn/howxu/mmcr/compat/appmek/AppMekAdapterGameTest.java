@@ -61,6 +61,29 @@ import cn.howxu.mmcr.util.IOType;
  * @author howxu <dev@howxu.cn>
  */
 public final class AppMekAdapterGameTest {
+    public void networkChemicalRecipesReserveLongOutputsAcrossInterfaces(GameTestHelper helper) {
+        MekanismKey oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical("oxygen", 1L));
+        long amount = 2_147_487_744L;
+        var network = new AppMekGameTestFixtures.LimitedStorage(amount);
+        var first = AppMekGameTestFixtures.inventory(9, 0L);
+        var second = AppMekGameTestFixtures.inventory(9, 0L);
+        var context = new CraftingContext(new CapabilitySnapshot(List.of(
+                new MEChemicalCapability(null, new OutputChemicalHandler(first, () -> network,
+                        new BaseActionSource(), () -> {}), CapabilityDirections.output(), false),
+                new MEChemicalCapability(null, new OutputChemicalHandler(second, () -> network,
+                        new BaseActionSource(), () -> {}), CapabilityDirections.output(), false))));
+        var requirement = LoadedChemicalRequirement.output(oxygen.getId(), amount, 1F);
+        var blocked = context.planOutputRequirements(List.of(requirement, requirement), 1L, false);
+        helper.assertTrue(!blocked.successful() && network.amount(oxygen) == 0L,
+                "Distinct chemical interfaces share the same long network admission budget without writing in simulation");
+        var result = context.planOutputRequirements(List.of(requirement), 1L, false);
+        helper.assertTrue(result.successful() && result.plan().commit(),
+                "Chemical recipe output admits and commits quantities beyond the int boundary");
+        helper.assertTrue(network.amount(oxygen) == 2_147_487_744L && first.isEmpty() && second.isEmpty(),
+                "Network chemical output conserves the exact long amount without local duplicates");
+        helper.succeed();
+    }
+
     public void patternReturnBudgetsAndSyncRemainExact(GameTestHelper helper) {
         helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
         PatternInterfaceBlockEntity host = helper.getBlockEntity(BlockPos.ZERO);

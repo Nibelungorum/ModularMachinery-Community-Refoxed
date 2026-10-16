@@ -154,16 +154,19 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
     private CapabilityResult commitNative(CapabilityRequests.ItemRequest request) {
         for (CapabilityRequests.ItemAction action : request.actions()) {
             if (itemHandler instanceof NativeReservationAccess access) {
-                long simulated = access.transfer(action.slot(), action.stack(), action.amount(), action.insert(), true);
+                long simulated = action.slot() == -1 ? access.insertOutput(action.stack(), action.amount(), true)
+                        : access.transfer(action.slot(), action.stack(), action.amount(), action.insert(), true);
                 if (simulated >= 0L) {
                     if (simulated != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
                             : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), simulated));
-                    long committed = access.transfer(action.slot(), action.stack(), action.amount(), action.insert(), false);
+                    long committed = action.slot() == -1 ? access.insertOutput(action.stack(), action.amount(), false)
+                            : access.transfer(action.slot(), action.stack(), action.amount(), action.insert(), false);
                     if (committed != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
                             : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), committed));
                     continue;
                 }
             }
+            if (action.slot() < 0) return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             if (!action.insert() && itemHandler instanceof LongItemStorage storage) {
                 long simulated = ItemStack.isSameItemSameComponents(storage.resource(action.slot()), action.stack())
                         ? storage.forceExtract(action.slot(), action.amount(), true) : 0L;

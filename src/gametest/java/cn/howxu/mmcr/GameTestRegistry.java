@@ -443,6 +443,8 @@ public final class GameTestRegistry {
                 helper -> new AppMekInterfaceGameTest().normalOutputFlushesDisconnectedChemicalCache(helper));
         register(event, "appmek_async_real_cell_partial_output", 400,
                 helper -> new AppMekInterfaceGameTest().asyncOutputConservesRealCellPartialAcceptance(helper));
+        register(event, "appmek_network_long_output_reservations", 100,
+                helper -> new AppMekAdapterGameTest().networkChemicalRecipesReserveLongOutputsAcrossInterfaces(helper));
         register(event, "appmek_oversize_last_slot_long_recipe", 200,
                 helper -> new AppMekInterfaceGameTest().oversizeLastSlotConsumesLongRecipeAmount(helper));
         register(event, "appmek_chemical_native_save_load", 100,

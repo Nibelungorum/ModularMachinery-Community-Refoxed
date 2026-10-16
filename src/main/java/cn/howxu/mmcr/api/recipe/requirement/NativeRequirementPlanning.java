@@ -19,6 +19,7 @@ import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
+import cn.howxu.mmcr.internal.capability.NativeReservationAccess;
 import cn.howxu.mmcr.util.IOType;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +54,8 @@ final class NativeRequirementPlanning {
             ItemHandlerFacet facet = capability.facet(ItemHandlerFacet.class).orElse(null);
             if (facet == null || facet.itemHandler() == null) continue;
             available = RequirementHandlerSupport.saturatingAdd(available,
-                    itemAvailable(facet.itemHandler(), requirement, requested, insert, facet.supportsLargeStacks()));
+                    itemAvailable(facet.itemHandler(), requirement, requested, insert, facet.supportsLargeStacks(),
+                            context.reservations()));
         }
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
@@ -87,7 +89,7 @@ final class NativeRequirementPlanning {
             FluidHandlerFacet facet = capability.facet(FluidHandlerFacet.class).orElse(null);
             if (facet == null || facet.fluidHandler() == null) continue;
             available = RequirementHandlerSupport.saturatingAdd(available,
-                    fluidAvailable(facet.fluidHandler(), requirement, requested, insert));
+                    fluidAvailable(facet.fluidHandler(), requirement, requested, insert, context.reservations()));
         }
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
@@ -139,6 +141,16 @@ final class NativeRequirementPlanning {
             if (facet == null || facet.itemHandler() == null || remaining <= 0L) continue;
             List<CapabilityRequests.ItemAction> actions = new ArrayList<>();
             IItemHandler handler = facet.itemHandler();
+            if (insert && handler instanceof NativeReservationAccess access) {
+                long moved = access.reserveOutput(output, remaining, reservations);
+                if (moved >= 0L) {
+                    if (materialize && moved > 0L) operations.add(capability.prepare(new CapabilityRequests.ItemRequest(
+                            capability.type(), IOType.OUTPUT, parallelism,
+                            List.of(new CapabilityRequests.ItemAction(-1, output, moved, true)))));
+                    remaining -= moved;
+                    continue;
+                }
+            }
             for (int slot = 0; slot < handler.getSlots() && remaining > 0L; slot++) {
                 ItemStack current = reservations.item(handler, slot);
                 if (!insert && (current.isEmpty() || requirement.item() == null || !requirement.item().test(current)
@@ -176,6 +188,16 @@ final class NativeRequirementPlanning {
             FluidHandlerFacet facet = capability.facet(FluidHandlerFacet.class).orElse(null);
             if (facet == null || facet.fluidHandler() == null || remaining <= 0L) continue;
             IFluidHandler handler = facet.fluidHandler();
+            if (insert && handler instanceof NativeReservationAccess access) {
+                long moved = access.reserveOutput(output, remaining, reservations);
+                if (moved >= 0L) {
+                    if (materialize && moved > 0L) operations.add(capability.prepare(new CapabilityRequests.FluidRequest(
+                            capability.type(), IOType.OUTPUT, parallelism,
+                            List.of(new CapabilityRequests.FluidAction(-1, output, moved, true)))));
+                    remaining -= moved;
+                    continue;
+                }
+            }
             List<CapabilityRequests.FluidAction> actions = new ArrayList<>();
             for (int tank = 0; tank < handler.getTanks() && remaining > 0L; tank++) {
                 FluidStack current = reservations.fluid(handler, tank);
@@ -279,7 +301,11 @@ final class NativeRequirementPlanning {
     }
 
     private static long itemAvailable(IItemHandler handler, ItemRequirement requirement, ItemStack output, boolean insert,
-                                     boolean supportsLargeStacks) {
+                                     boolean supportsLargeStacks, PlanningReservations reservations) {
+        if (insert && handler instanceof NativeReservationAccess access) {
+            long available = access.outputAvailable(output, reservations);
+            if (available >= 0L) return available;
+        }
         long result = 0L;
         for (int slot = 0; slot < handler.getSlots(); slot++) {
             ItemStack stack = handler.getStackInSlot(slot);
@@ -302,7 +328,12 @@ final class NativeRequirementPlanning {
         return maximum;
     }
 
-    private static long fluidAvailable(IFluidHandler handler, FluidRequirement requirement, FluidStack output, boolean insert) {
+    private static long fluidAvailable(IFluidHandler handler, FluidRequirement requirement, FluidStack output, boolean insert,
+                                      PlanningReservations reservations) {
+        if (insert && handler instanceof NativeReservationAccess access) {
+            long available = access.outputAvailable(output, reservations);
+            if (available >= 0L) return available;
+        }
         long result = 0L;
         for (int tank = 0; tank < handler.getTanks(); tank++) {
             FluidStack stack = handler.getFluidInTank(tank);

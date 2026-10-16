@@ -145,16 +145,19 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
     private CapabilityResult commitNative(CapabilityRequests.FluidRequest request) {
         for (CapabilityRequests.FluidAction action : request.actions()) {
             if (fluidHandler instanceof NativeReservationAccess access) {
-                long simulated = access.transfer(action.tank(), action.stack(), action.amount(), action.insert(), true);
+                long simulated = action.tank() == -1 ? access.insertOutput(action.stack(), action.amount(), true)
+                        : access.transfer(action.tank(), action.stack(), action.amount(), action.insert(), true);
                 if (simulated >= 0L) {
                     if (simulated != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
                             : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), simulated));
-                    long committed = access.transfer(action.tank(), action.stack(), action.amount(), action.insert(), false);
+                    long committed = action.tank() == -1 ? access.insertOutput(action.stack(), action.amount(), false)
+                            : access.transfer(action.tank(), action.stack(), action.amount(), action.insert(), false);
                     if (committed != action.amount()) return failure(action.insert() ? BuiltinFailureReasons.MISSING_OUTPUT
                             : BuiltinFailureReasons.MISSING_INPUT, movementDetails(action.amount(), committed));
                     continue;
                 }
             }
+            if (action.tank() < 0) return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
             if (fluidHandler instanceof LongFluidStorage storage) {
                 long simulated = action.insert()
                         ? storage.forceInsert(action.tank(), action.stack(), action.amount(), true)

@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
@@ -194,7 +195,24 @@ public final class AppMekInterfaceGameTest {
         MekanismKey oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical("oxygen", 1L));
         helper.startSequence().thenWaitUntil(() -> network.connectWhenReady(helper))
                 .thenExecute(() -> {
+                    host.getStorage().setCapacity(MekanismKeyType.TYPE, 0L);
+                    CraftingContext context = new CraftingContext(host.capabilitySnapshot());
+                    var large = LoadedChemicalRequirement.output(oxygen.getId(), 114_514L, 1F);
+                    var result = context.planOutputRequirements(List.of(large), 1L, false);
+                    helper.assertTrue(result.successful() && host.getStorage().isEmpty(),
+                            "Actual async interface plans chemical output beyond its local capacity without inserting");
+                    helper.assertTrue(network.storage().extract(oxygen, Long.MAX_VALUE, Actionable.SIMULATE,
+                                    new BaseActionSource()) == 0L && result.plan().commit(),
+                            "Chemical recipe simulation is read-only and native output admission commits successfully");
+                    helper.assertTrue(network.storage().extract(oxygen, Long.MAX_VALUE, Actionable.MODULATE,
+                                    new BaseActionSource()) == 114_514L && host.getStorage().isEmpty(),
+                            "The real chemical cell receives the exact large recipe output with no duplicate cache");
                     long capacity = network.storage().insert(oxygen, Long.MAX_VALUE, Actionable.SIMULATE, new BaseActionSource());
+                    var repeated = LoadedChemicalRequirement.output(oxygen.getId(), capacity / 2L + 1L, 1F);
+                    var blocked = context.planOutputRequirements(List.of(repeated, repeated), 1L, false);
+                    helper.assertTrue(!blocked.successful() && network.storage().extract(oxygen, Long.MAX_VALUE,
+                                    Actionable.SIMULATE, new BaseActionSource()) == 0L,
+                            "Multiple chemical requirements cannot reserve the same live ME network space twice");
                     helper.assertTrue(capacity > 600L, "Chemical cell has room for a partial acceptance scenario");
                     long before = network.storage().insert(oxygen, capacity - 600L, Actionable.MODULATE, new BaseActionSource());
                     host.getStorage().setCapacity(MekanismKeyType.TYPE, 300L);

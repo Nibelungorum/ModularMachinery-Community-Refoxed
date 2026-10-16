@@ -11,6 +11,7 @@ import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.internal.capability.NativeStackSync;
 import cn.howxu.mmcr.internal.capability.NativeReservationAccess;
@@ -597,6 +598,7 @@ public final class AE2NativeAdapters {
         private final IActionSource source;
         private final Runnable changed;
         private final IItemHandler local;
+        private final NetworkOutputAdmission admission;
 
         private OutputItems(GenericStackInv inventory, Supplier<@Nullable MEStorage> storage, IActionSource source,
                             Runnable changed) {
@@ -604,9 +606,20 @@ public final class AE2NativeAdapters {
             this.source = source;
             this.changed = changed;
             this.local = items(inventory);
+            this.admission = new NetworkOutputAdmission(inventory, storage, source, changed);
         }
 
         @Override public int getSlots() { return local.getSlots(); }
+        @Override public boolean requiresServerOutputPlanning() { return true; }
+        @Override public long outputAvailable(Object resource, PlanningReservations reservations) {
+            return admission.available(AEItemKey.of((ItemStack) resource), reservations);
+        }
+        @Override public long reserveOutput(Object resource, long amount, PlanningReservations reservations) {
+            return admission.reserve(AEItemKey.of((ItemStack) resource), amount, reservations);
+        }
+        @Override public long insertOutput(Object resource, long amount, boolean simulate) {
+            return admission.insert(AEItemKey.of((ItemStack) resource), amount, simulate);
+        }
         @Override public Object reservationIdentity() { return ((NativeReservationAccess) local).reservationIdentity(); }
         @Override public Object reservationSlot(int slot) { return slot; }
         @Override public Object resourceKey(Object resource) { return ((NativeReservationAccess) local).resourceKey(resource); }
@@ -650,6 +663,7 @@ public final class AE2NativeAdapters {
         private final IActionSource source;
         private final Runnable changed;
         private final IFluidHandler local;
+        private final NetworkOutputAdmission admission;
 
         private OutputFluids(GenericStackInv inventory, Supplier<@Nullable MEStorage> storage, IActionSource source,
                              Runnable changed) {
@@ -657,9 +671,20 @@ public final class AE2NativeAdapters {
             this.source = source;
             this.changed = changed;
             this.local = fluids(inventory);
+            this.admission = new NetworkOutputAdmission(inventory, storage, source, changed);
         }
 
         @Override public int getTanks() { return local.getTanks(); }
+        @Override public boolean requiresServerOutputPlanning() { return true; }
+        @Override public long outputAvailable(Object resource, PlanningReservations reservations) {
+            return admission.available(AEFluidKey.of((FluidStack) resource), reservations);
+        }
+        @Override public long reserveOutput(Object resource, long amount, PlanningReservations reservations) {
+            return admission.reserve(AEFluidKey.of((FluidStack) resource), amount, reservations);
+        }
+        @Override public long insertOutput(Object resource, long amount, boolean simulate) {
+            return admission.insert(AEFluidKey.of((FluidStack) resource), amount, simulate);
+        }
         @Override public Object reservationIdentity() { return ((NativeReservationAccess) local).reservationIdentity(); }
         @Override public Object reservationSlot(int tank) { return tank; }
         @Override public Object resourceKey(Object resource) { return ((NativeReservationAccess) local).resourceKey(resource); }

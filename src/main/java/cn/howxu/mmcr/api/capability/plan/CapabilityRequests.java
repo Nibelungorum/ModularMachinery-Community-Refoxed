@@ -17,9 +17,10 @@ public final class CapabilityRequests {
     private CapabilityRequests() {
     }
 
+    /** Slot -1 denotes a whole-destination insertion handled by native output admission. */
     public record ItemAction(int slot, ItemStack stack, long amount, boolean insert) {
         public ItemAction {
-            if (slot < 0) throw new IllegalArgumentException("slot must be non-negative");
+            if (slot < -1 || slot == -1 && !insert) throw new IllegalArgumentException("Invalid item action slot");
             if (stack == null || stack.isEmpty()) throw new IllegalArgumentException("stack must not be empty");
             if (amount <= 0) throw new IllegalArgumentException("amount must be positive");
             stack = stack.copyWithCount(1);
@@ -40,9 +41,10 @@ public final class CapabilityRequests {
         }
     }
 
+    /** Tank -1 denotes a whole-destination insertion handled by native output admission. */
     public record FluidAction(int tank, FluidStack stack, long amount, boolean insert) {
         public FluidAction {
-            if (tank < 0) throw new IllegalArgumentException("tank must be non-negative");
+            if (tank < -1 || tank == -1 && !insert) throw new IllegalArgumentException("Invalid fluid action tank");
             if (stack == null || stack.isEmpty()) throw new IllegalArgumentException("stack must not be empty");
             if (amount <= 0) throw new IllegalArgumentException("amount must be positive");
             stack = stack.copyWithAmount(1);
@@ -63,10 +65,10 @@ public final class CapabilityRequests {
         }
     }
 
-    /** Compatibility request for external resource families not backed by native handlers. */
+    /** Compatibility request for external families; slot -1 denotes a whole-destination insertion. */
     public record ResourceAction<R>(int slot, R resource, long amount, boolean insert) {
         public ResourceAction {
-            if (slot < 0) throw new IllegalArgumentException("slot must be non-negative");
+            if (slot < -1 || slot == -1 && !insert) throw new IllegalArgumentException("Invalid resource action slot");
             if (resource == null) throw new IllegalArgumentException("resource must not be null");
             if (amount <= 0) throw new IllegalArgumentException("amount must be positive");
         }

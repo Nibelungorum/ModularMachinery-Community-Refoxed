@@ -15,6 +15,10 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
@@ -38,6 +42,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 
 import java.lang.reflect.Method;
+import java.util.List;
 
 /**
  * End-to-end GameTest coverage for the AE2 async output interface MMCR integration.
@@ -66,7 +71,7 @@ public class AE2AsyncOutputInterfaceGameTest {
         MEChestBlockEntity itemChest = helper.getBlockEntity(itemChestPos);
         MEChestBlockEntity fluidChest = helper.getBlockEntity(fluidChestPos);
         CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
-        itemChest.setCell(AEItems.ITEM_CELL_1K.stack());
+        itemChest.setCell(AEItems.ITEM_CELL_64K.stack());
         fluidChest.setCell(AEItems.FLUID_CELL_1K.stack());
 
         helper.runAtTickTime(2, () -> {
@@ -130,24 +135,26 @@ public class AE2AsyncOutputInterfaceGameTest {
         });
 
         helper.runAtTickTime(4, () -> {
-            ItemStack itemRemainder = port.nativeItemHandler().insertItem(0,
-                    new ItemStack(Items.IRON_INGOT, (int) ITEM_AMOUNT), false);
-            int fluidInserted = port.nativeFluidHandler().fill(
-                    new FluidStack(Fluids.WATER, (int) FLUID_AMOUNT), IFluidHandler.FluidAction.EXECUTE);
-            helper.assertTrue(itemRemainder.isEmpty(),
-                    "Async output item handler accepts the requested amount");
-            helper.assertTrue(fluidInserted == FLUID_AMOUNT,
-                    "Async output fluid handler accepts the requested amount");
+            var result = new CraftingContext(port.capabilitySnapshot()).planOutputRequirements(List.of(
+                    new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                            new ItemStack(Items.IRON_INGOT, 114_514)),
+                    new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                            new FluidStack(Fluids.WATER, 114_514))), 1L, false);
+            helper.assertTrue(result.successful(), "Recipe planning includes live ME item and fluid storage capacity");
+            helper.assertTrue(itemChest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT),
+                            Long.MAX_VALUE, Actionable.SIMULATE, IActionSource.empty()) == 0L,
+                    "Output planning does not write items to the network");
+            helper.assertTrue(result.plan().commit(), "Large recipe outputs commit directly without transfer energy");
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
                     "Async output interface storage stays empty immediately after planning");
         });
 
         helper.runAtTickTime(20, () -> {
             helper.assertTrue(itemChest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT),
-                            ITEM_AMOUNT, Actionable.SIMULATE, IActionSource.empty()) == ITEM_AMOUNT,
+                            114_514L, Actionable.SIMULATE, IActionSource.empty()) == 114_514L,
                     "Async ticker drains the queued iron into the ME Chest");
             helper.assertTrue(fluidChest.getInventory().extract(AEFluidKey.of(Fluids.WATER),
-                            FLUID_AMOUNT, Actionable.SIMULATE, IActionSource.empty()) == FLUID_AMOUNT,
+                            114_514L, Actionable.SIMULATE, IActionSource.empty()) == 114_514L,
                     "Async ticker drains the queued water into the ME Chest");
             helper.assertTrue(port.getInterfaceLogic().getStorage().isEmpty(),
                     "Async output interface storage remains empty after the service drain");
