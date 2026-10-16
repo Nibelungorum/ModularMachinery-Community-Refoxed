@@ -508,12 +508,13 @@ public final class MachineAsyncCoordinator {
     }
 
     private boolean schedule(TickBatch batch, Task task, AsyncContinuation continuation) {
-        if (task.terminationRequested.get()) return true;
+        // Validators may read live controller snapshots and must stay on the scheduling/server thread.
+        if (!taskActive(batch, task)) return true;
         batch.runningWorkers.incrementAndGet();
         try {
             executor.execute(() -> {
                 try {
-                    if (taskActive(batch, task)) handleYield(batch, task,
+                    if (!task.terminationRequested.get()) handleYield(batch, task,
                             continuation.advance(new AsyncExecutionContext(task.key)));
                 } catch (Throwable throwable) {
                     fail(batch, task, throwable);
@@ -783,6 +784,7 @@ public final class MachineAsyncCoordinator {
         void complete(TaskKey key, TaskOutcome outcome);
     }
 
+    /** Validator and completion callbacks run on the server thread. */
     public record TaskHooks(BooleanSupplier validator, TaskCompletion completion) {
         private static final TaskHooks DEFAULTS = new TaskHooks(() -> true, (key, outcome) -> { });
 

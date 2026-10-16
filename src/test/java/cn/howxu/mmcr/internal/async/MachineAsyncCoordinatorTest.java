@@ -1251,6 +1251,53 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void live_task_validation_stays_on_the_server_thread_across_worker_resumption() throws Exception {
+        Thread serverThread = Thread.currentThread();
+        Queue<Runnable> workers = new ArrayDeque<>();
+        var coordinator = MachineAsyncCoordinator.forTesting(workers::add);
+        List<Thread> validations = new CopyOnWriteArrayList<>();
+        List<Thread> computations = new CopyOnWriteArrayList<>();
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        coordinator.submitDetailed(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L), ignored -> {
+            computations.add(Thread.currentThread());
+            return AsyncContinuation.Yield.mainThread(MainThreadStep.Result::success, result -> context -> {
+                computations.add(Thread.currentThread());
+                return AsyncContinuation.Yield.complete();
+            });
+        }, null, new MachineAsyncCoordinator.TaskHooks(() -> {
+            validations.add(Thread.currentThread());
+            return true;
+        }, (key, outcome) -> outcomes.add(outcome)));
+
+        var first = new FutureTask<Void>(workers.remove(), null);
+        Thread.ofPlatform().start(first);
+        first.get(5, TimeUnit.SECONDS);
+        coordinator.completeTick();
+        var resumed = new FutureTask<Void>(workers.remove(), null);
+        Thread.ofPlatform().start(resumed);
+        resumed.get(5, TimeUnit.SECONDS);
+        coordinator.completeTick();
+
+        assertThat(computations).hasSize(2).doesNotContain(serverThread);
+        assertThat(validations).isNotEmpty().containsOnly(serverThread);
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Succeeded.class);
+    }
+
+    @Test
+    void stale_task_is_cancelled_before_dispatching_worker_computation() {
+        Queue<Runnable> workers = new ArrayDeque<>();
+        var coordinator = MachineAsyncCoordinator.forTesting(workers::add);
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        coordinator.submitDetailed(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 7L),
+                ignored -> AsyncContinuation.Yield.complete(), null,
+                new MachineAsyncCoordinator.TaskHooks(() -> false, (key, outcome) -> outcomes.add(outcome)));
+        coordinator.completeTick();
+
+        assertThat(workers).isEmpty();
+        assertThat(outcomes).singleElement().isInstanceOf(MachineAsyncCoordinator.TaskOutcome.Cancelled.class);
+    }
+
+    @Test
     void validation_after_a_callback_prevents_safe_forwarding_of_a_stale_epoch() {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(Runnable::run, 4);
         AtomicBoolean current = new AtomicBoolean(true);
@@ -1378,6 +1425,7 @@ class MachineAsyncCoordinatorTest {
     void cancelled_and_stale_worker_polls_count_toward_the_entry_capture() {
         AtomicReference<MachineAsyncCoordinator> owner = new AtomicReference<>();
         AtomicInteger tailValidations = new AtomicInteger();
+        AtomicBoolean stale = new AtomicBoolean();
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(command -> {
             throw new RejectedExecutionException("saturated");
         }, 2, false);
@@ -1392,14 +1440,19 @@ class MachineAsyncCoordinatorTest {
         coordinator.cancel(cancelled);
         coordinator.submitDetailed(new MachineAsyncCoordinator.TaskKey(new BlockPos(2, 0, 0), 8L),
                 ignored -> AsyncContinuation.Yield.complete(), null, new MachineAsyncCoordinator.TaskHooks(() -> {
+                    if (!stale.get()) return true;
+                    AtomicBoolean tailWaiting = new AtomicBoolean();
                     owner.get().submitDetailed(new MachineAsyncCoordinator.TaskKey(new BlockPos(3, 0, 0), 8L),
                             ignored -> AsyncContinuation.Yield.complete(), null,
                             new MachineAsyncCoordinator.TaskHooks(() -> {
+                                if (!tailWaiting.get()) return true;
                                 tailValidations.incrementAndGet();
                                 return false;
                             }, (key, outcome) -> { }));
+                    tailWaiting.set(true);
                     return false;
                 }, (key, outcome) -> { }));
+        stale.set(true);
         coordinator.beginLevelTick(8L);
         coordinator.completeTick();
         assertThat(tailValidations).hasValue(0);
