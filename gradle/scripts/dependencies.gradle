@@ -17,10 +17,10 @@ dependencies {
     runtimeOnly "org.appliedenergistics:appliedenergistics2:${ae2_version}"
     implementation "org.appliedenergistics:appliedenergistics2:${ae2_version}:api"
     compileOnly "org.appliedenergistics:appliedenergistics2:${ae2_version}"
-    // AE2 Lightning Tech 2.1.1, NeoForge 1.21.1
-    implementation "maven.modrinth:ArHeh5Fz:S2Li22o0"
-    // Required by AE2LT 2.1.1
-    runtimeOnly "maven.modrinth:M5jhzZXH:TVoZndZv"
+    // AE2 Lightning Tech 2.1.1
+    implementation "maven.modrinth:${ae2lt_id}:${ae2lt_version}"
+    // Required by AE2LT 2.1.1 闪电Core
+    runtimeOnly "maven.modrinth:${th_core_id}:${th_core_version}"
     // In 1.21.1 AE2's JEI transfer implementation lives in this optional addon.
     compileOnly("curse.maven:ae2-jei-integration-1074338:7727898") { transitive = false }
     // guide me from maven central
