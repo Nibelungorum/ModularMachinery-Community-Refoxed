@@ -373,6 +373,12 @@ public class MirrorPatternInterfaceGameTest {
                             new KeyCounter[]{request}), "Native mirror logic dispatches the real MMCR recipe");
             helper.assertTrue(mirror.getLogic().getCraftingLockedReason() == LockCraftingMode.LOCK_UNTIL_RESULT,
                     "Accepted mirror dispatch takes its own native result lock");
+            long now = helper.getLevel().getGameTime();
+            mirror.pendingScheduler().tick(now);
+            helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
+                            && sourceController.runtimeSnapshot().crafting().recipeId() == null,
+                    "Native mirror acceptance only queues work and never starts it in the admission tick");
+            mirror.pendingScheduler().tick(now + 5L);
             helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId())
                             && sourceController.runtimeSnapshot().crafting().recipeId() == null,
                     "Only the mirror's linked controller starts the pattern recipe");

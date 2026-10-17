@@ -7,11 +7,7 @@
     "ConfigInventoryAccessor",
     "GenericStackInvAccessor",
     "InterfaceLogicMixin",
-    "PatternProviderLogicMixin",
-    "PatternProviderLogicBatchAccessMixin",
-    "ExecutingCraftingJobAccessor",
-    "ExecutingCraftingJobTaskProgressAccessor",
-    "CraftingCpuLogicMixin"
+    "PatternProviderLogicMixin"
   ],
   "injectors": {
     "defaultRequire": 1

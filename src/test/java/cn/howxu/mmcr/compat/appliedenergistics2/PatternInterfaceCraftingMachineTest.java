@@ -1,7 +1,5 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
-
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
@@ -15,16 +13,17 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
-import cn.howxu.mmcr.mixin.compat.appliedenergistics2.CraftingCpuLogicMixin;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -46,6 +45,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -57,7 +57,6 @@ import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -88,49 +87,43 @@ class PatternInterfaceCraftingMachineTest {
     }
 
     @Test
-    void cpu_counter_merges_bound_each_complete_key_without_mutation() throws Exception {
-        Method merge = CraftingCpuLogicMixin.class.getDeclaredMethod("mmcr$canMergeCounters", KeyCounter.class, KeyCounter.class);
-        merge.setAccessible(true);
-        KeyCounter current = counter(Items.IRON_INGOT, Long.MAX_VALUE - 1L);
-        assertThat(merge.invoke(null, current, counter(Items.IRON_INGOT, 1L))).isEqualTo(true);
-        assertThat(merge.invoke(null, current, counter(Items.IRON_INGOT, 2L))).isEqualTo(false);
-        assertThat(merge.invoke(null, current, counter(Items.GOLD_INGOT, Long.MAX_VALUE))).isEqualTo(true);
-        assertThat(current.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(Long.MAX_VALUE - 1L);
+    void rejects_unrepresentable_single_outputs_without_taking_material() {
+        ItemStack definition = new ItemStack(Items.PAPER);
+        AEProcessingPattern.encode(definition, List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
+                List.of(new GenericStack(AEItemKey.of(Items.IRON_NUGGET), (long) Integer.MAX_VALUE + 1L)));
+        PatternInterfaceBlockEntity host = patternHost();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
+        host.linkControllerAppearance(controller.getBlockPos(), null);
+        formForPattern(controller, true);
+        RecipeRegistry.registerStatic(recipe("bridge_unrepresentable_output", Items.IRON_NUGGET, 2));
+        KeyCounter request = counter(Items.IRON_INGOT, 1L);
+        assertThat(host.craftingMachine().pushPattern(new AEProcessingPattern(AEItemKey.of(definition)),
+                new KeyCounter[]{request}, null)).isFalse();
+        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isOne();
+        assertThat(host.pendingPatterns().isEmpty()).isTrue();
     }
 
     @Test
-    void cpu_output_budget_includes_waiting_outputs_and_container_items() throws Exception {
-        Method track = CraftingCpuLogicMixin.class.getDeclaredMethod("mmcr$canTrackOutputs", KeyCounter.class, KeyCounter[].class);
-        track.setAccessible(true);
-        KeyCounter waiting = counter(Items.IRON_INGOT, Long.MAX_VALUE - 5L);
-        assertThat(track.invoke(null, waiting, new KeyCounter[]{counter(Items.IRON_INGOT, 5L)})).isEqualTo(true);
-        assertThat(track.invoke(null, waiting, new KeyCounter[]{counter(Items.IRON_INGOT, 6L)})).isEqualTo(false);
-        assertThat(track.invoke(null, waiting, new KeyCounter[]{counter(Items.IRON_INGOT, 3L),
-                counter(Items.IRON_INGOT, 3L)})).isEqualTo(false);
-        assertThat(track.invoke(null, waiting, new KeyCounter[]{counter(Items.IRON_INGOT, 5L),
-                counter(Items.GOLD_INGOT, Long.MAX_VALUE)})).isEqualTo(true);
-        assertThat(waiting.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(Long.MAX_VALUE - 5L);
-    }
-
-    @Test
-    void factory_batch_capacity_saturates_and_rejects_exhausted_thread_limits() throws Exception {
-        Method capacity = PatternInterfaceBlockEntity.class.getDeclaredMethod("batchCapacity", long.class, long.class);
-        capacity.setAccessible(true);
-        assertThat(capacity.invoke(null, 2L, Long.MAX_VALUE)).isEqualTo(Long.MAX_VALUE);
-        assertThat(capacity.invoke(null, 2L, Long.MAX_VALUE / 2L)).isEqualTo(Long.MAX_VALUE - 1L);
-        assertThat(capacity.invoke(null, 0L, Long.MAX_VALUE)).isEqualTo(0L);
-        assertThat(capacity.invoke(null, -2L, Long.MAX_VALUE)).isEqualTo(0L);
-    }
-
-    @Test
-    void batch_resource_limit_combines_equal_keys_without_cross_resource_overflow() throws Exception {
-        Method limit = PatternInterfaceCraftingMachine.class.getDeclaredMethod("batchResourceLimit", List.class);
-        limit.setAccessible(true);
-        var iron = AEItemKey.of(Items.IRON_INGOT);
-        var gold = AEItemKey.of(Items.GOLD_INGOT);
-        assertThat(limit.invoke(null, List.of(new GenericStack(iron, 2L), new GenericStack(iron, 3L)))).isEqualTo(Long.MAX_VALUE / 5L);
-        assertThat(limit.invoke(null, List.of(new GenericStack(iron, Long.MAX_VALUE), new GenericStack(iron, 1L)))).isEqualTo(0L);
-        assertThat(limit.invoke(null, List.of(new GenericStack(iron, Long.MAX_VALUE), new GenericStack(gold, Long.MAX_VALUE)))).isEqualTo(1L);
+    void rejects_nonstandard_input_amounts_and_slot_layout_without_taking_material() {
+        PatternInterfaceBlockEntity host = patternHost();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
+        host.linkControllerAppearance(controller.getBlockPos(), null);
+        formForPattern(controller, true);
+        RecipeRegistry.registerStatic(recipe("bridge_invalid_inputs", Items.IRON_NUGGET, 2));
+        var pattern = processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2);
+        for (long amount : new long[]{1L, 4L, 6L, Long.MAX_VALUE}) {
+            KeyCounter request = counter(Items.IRON_INGOT, amount);
+            assertThat(host.craftingMachine().pushPattern(pattern, new KeyCounter[]{request}, null)).isFalse();
+            assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(amount);
+        }
+        KeyCounter request = counter(Items.IRON_INGOT, 5L);
+        assertThat(host.craftingMachine().pushPattern(pattern, new KeyCounter[]{request, new KeyCounter()}, null)).isFalse();
+        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
+        KeyCounter wrongKey = counter(Items.GOLD_INGOT, 5L);
+        assertThat(host.craftingMachine().pushPattern(pattern, new KeyCounter[]{wrongKey}, null)).isFalse();
+        assertThat(wrongKey.get(AEItemKey.of(Items.GOLD_INGOT))).isEqualTo(5L);
+        assertThat(host.craftingMachine().pushPattern(pattern, new KeyCounter[]{null}, null)).isFalse();
+        assertThat(host.pendingPatterns().isEmpty()).isTrue();
     }
 
     @Test
@@ -141,7 +134,7 @@ class PatternInterfaceCraftingMachineTest {
         RecipeRegistry.registerStatic(recipe("bridge_reject", Items.IRON_NUGGET, 2));
         KeyCounter request = counter(Items.IRON_INGOT, 5L);
 
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
+        assertThat(host.craftingMachine().pushPattern(
                 processingPattern(Items.IRON_INGOT, Items.GOLD_NUGGET, 2), new KeyCounter[]{request}, null)).isFalse();
 
         assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
@@ -151,7 +144,7 @@ class PatternInterfaceCraftingMachineTest {
 
         host.linkControllerAppearance(controller.getBlockPos(), null);
         formForPattern(controller, true);
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
+        assertThat(host.craftingMachine().pushPattern(
                 processingPattern(Items.IRON_INGOT, Items.GOLD_NUGGET, 2), new KeyCounter[]{request}, null)).isFalse();
         assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
         assertThat(host.getLogic().getReturnInv().isEmpty()).isTrue();
@@ -167,17 +160,89 @@ class PatternInterfaceCraftingMachineTest {
         RecipeRegistry.registerStatic(recipe);
         KeyCounter request = counter(Items.IRON_INGOT, 5L);
 
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
+        assertThat(host.craftingMachine().pushPattern(
                 processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2), new KeyCounter[]{request}, null)).isTrue();
 
-        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isNull();
         assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isZero();
+        assertThat(host.pendingPatterns().totalCopies()).isOne();
+        request.add(AEItemKey.of(Items.IRON_INGOT), 1L);
+        assertThat(host.pendingPatterns().groups().getFirst().inputs()[0].get(AEItemKey.of(Items.IRON_INGOT)))
+                .isEqualTo(5L);
+        assertThat(host.getLogic().getReturnInv().isEmpty()).isTrue();
+        host.pendingScheduler().tick(0L);
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isNull();
+        host.pendingScheduler().tick(1L);
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isOne();
+        assertThat(host.pendingPatterns().isEmpty()).isTrue();
         assertThat(host.getLogic().getReturnInv().getStack(0))
                 .isEqualTo(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 3L));
     }
 
     @Test
-    void partitions_one_ae2_input_counter_across_linked_controller_batch() {
+    void distinct_groups_share_effective_total_capacity_not_the_machine_raw_parallelism() {
+        PatternInterfaceBlockEntity host = patternHost();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
+        host.linkControllerAppearance(controller.getBlockPos(), null);
+        controller.setMachine(parallelMachine(10));
+        controller.componentRuntime().replaceModifiers(Map.of("parallel", List.of(
+                MachineModifier.numeric("parallelism", "machine", 9D, "add", false))));
+        formForPattern(controller, true);
+        RecipeRegistry.registerStatic(recipe("bridge_nonparallel_total", Items.IRON_NUGGET, 2));
+        var first = processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2);
+        ItemStack secondDefinition = first.getDefinition().toStack(1);
+        secondDefinition.set(DataComponents.CUSTOM_NAME, Component.literal("second request group"));
+        var second = new AEProcessingPattern(AEItemKey.of(secondDefinition));
+        assertThat(host.craftingMachine().pushPattern(first, new KeyCounter[]{counter(Items.IRON_INGOT, 5L)}, null)).isTrue();
+        var rejected = counter(Items.IRON_INGOT, 5L);
+        assertThat(host.craftingMachine().pushPattern(second, new KeyCounter[]{rejected}, null)).isFalse();
+        assertThat(rejected.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
+        assertThat(host.pendingPatterns().totalCopies()).isOne();
+    }
+
+    @Test
+    void capacity_shrink_starts_only_a_parallel_prefix_and_keeps_unstarted_material_owned() {
+        PatternInterfaceBlockEntity host = patternHost();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
+        host.linkControllerAppearance(controller.getBlockPos(), null);
+        controller.setMachine(parallelMachine(10));
+        controller.componentRuntime().replaceModifiers(Map.of("parallel", List.of(
+                MachineModifier.numeric("parallelism", "machine", 9D, "add", false))));
+        formForPattern(controller, true);
+        var base = recipe("bridge_partial_parallel", Items.IRON_NUGGET, 2);
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(base.id(), base.recipePoolId(), 20,
+                base.requirements(), base.machineOutputs(), List.of(), 0, 1, false, true, false, Set.of()));
+        var pattern = processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2);
+        for (int copy = 0; copy < 10; copy++) {
+            assertThat(host.craftingMachine().pushPattern(pattern,
+                    new KeyCounter[]{counter(Items.IRON_INGOT, 5L)}, null)).isTrue();
+        }
+        controller.componentRuntime().replaceModifiers(Map.of("parallel", List.of(
+                MachineModifier.numeric("parallelism", "machine", 2D, "add", false))));
+        formForPattern(controller, true);
+        var rejected = counter(Items.IRON_INGOT, 5L);
+        assertThat(host.craftingMachine().pushPattern(pattern, new KeyCounter[]{rejected}, null)).isFalse();
+        assertThat(rejected.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
+        assertThat(host.pendingPatterns().totalCopies()).isEqualTo(10L);
+        host.pendingScheduler().tick(1L);
+        assertThat(controller.runtimeSnapshot().crafting().parallelism()).isEqualTo(3L);
+        assertThat(host.pendingPatterns().totalCopies()).isEqualTo(7L);
+        assertThat(host.pendingPatterns().groups().getFirst().inputs(7)[0].get(AEItemKey.of(Items.IRON_INGOT)))
+                .isEqualTo(35L);
+        assertThat(host.getLogic().getReturnInv().getStack(0))
+                .isEqualTo(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 9L));
+    }
+
+    private static DynamicMachine parallelMachine(long parallelism) {
+        var id = MMCR.id("test_cube");
+        return new DynamicMachine(id, "runtime test", new BlockArray(Map.of()),
+                MachineControllerSpec.defaultsFor(id), PortRequirementSpec.none(), List.of(), Map.of(),
+                parallelism, true, false, 1);
+    }
+
+    @Test
+    void distributes_two_standard_requests_across_linked_controllers_without_losing_material() {
         PatternInterfaceBlockEntity host = patternHost();
         List<MachineControllerBlockEntity> controllers = linkedControllers(host);
         MachineControllerBlockEntity first = controllers.get(0);
@@ -188,14 +253,24 @@ class PatternInterfaceCraftingMachineTest {
         formForPattern(second, true);
         MachineRecipe recipe = recipe("bridge_batch", Items.IRON_NUGGET, 2);
         RecipeRegistry.registerStatic(recipe);
-        KeyCounter request = counter(Items.IRON_INGOT, 10L);
-
-        assertThat(new PatternInterfaceCraftingMachine(host).pushBatchPattern(
-                processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2), new KeyCounter[]{request}, 2L, null)).isTrue();
-
+        KeyCounter request = counter(Items.IRON_INGOT, 5L);
+        KeyCounter nextRequest = counter(Items.IRON_INGOT, 5L);
+        var machine = host.craftingMachine();
+        var pattern = processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2);
+        assertThat(machine.pushPattern(pattern, new KeyCounter[]{request}, null)).isTrue();
+        assertThat(machine.pushPattern(pattern, new KeyCounter[]{nextRequest}, null)).isTrue();
+        assertThat(host.pendingPatterns().totalCopies()).isEqualTo(2L);
+        assertThat(first.runtimeSnapshot().crafting().recipeId()).isNull();
+        assertThat(second.runtimeSnapshot().crafting().recipeId()).isNull();
+        host.pendingScheduler().tick(1L);
         assertThat(first.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+        assertThat(second.runtimeSnapshot().crafting().recipeId()).isNull();
+        assertThat(host.pendingPatterns().totalCopies()).isOne();
+        host.pendingScheduler().tick(2L);
         assertThat(second.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
         assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isZero();
+        assertThat(nextRequest.get(AEItemKey.of(Items.IRON_INGOT))).isZero();
+        assertThat(host.pendingPatterns().isEmpty()).isTrue();
         assertThat(host.getLogic().getReturnInv().getStack(0))
                 .isEqualTo(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 6L));
     }
@@ -205,7 +280,7 @@ class PatternInterfaceCraftingMachineTest {
         PatternInterfaceBlockEntity host = patternHost();
         KeyCounter request = counter(Items.IRON_INGOT, 5L);
 
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(new IPatternDetails() {
+        assertThat(host.craftingMachine().pushPattern(new IPatternDetails() {
             @Override
             public AEItemKey getDefinition() {
                 return AEItemKey.of(Items.IRON_INGOT);
@@ -234,7 +309,7 @@ class PatternInterfaceCraftingMachineTest {
         formForPattern(controller, true);
         KeyCounter request = counter(Items.IRON_INGOT, 5L);
 
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
+        assertThat(host.craftingMachine().pushPattern(
                 processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2), new KeyCounter[]{request}, null)).isFalse();
 
         assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
@@ -248,7 +323,7 @@ class PatternInterfaceCraftingMachineTest {
         host.linkControllerAppearance(controller.getBlockPos(), null);
         KeyCounter request = counter(Items.IRON_INGOT, 5L);
 
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
+        assertThat(host.craftingMachine().pushPattern(
                 processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2), new KeyCounter[]{request}, null)).isFalse();
 
         assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
@@ -256,16 +331,24 @@ class PatternInterfaceCraftingMachineTest {
     }
 
     @Test
-    void rejects_when_the_only_normal_controller_is_already_active() {
+    void accepts_one_pending_round_while_the_normal_controller_is_active() {
         PatternInterfaceBlockEntity host = patternHost();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
         host.linkControllerAppearance(controller.getBlockPos(), null);
         formForPattern(controller, true);
         RecipeRegistry.registerStatic(recipe("bridge_busy", Items.IRON_NUGGET, 2));
-        PatternInterfaceCraftingMachine machine = new PatternInterfaceCraftingMachine(host);
+        PatternInterfaceCraftingMachine machine = host.craftingMachine();
 
         assertThat(machine.pushPattern(processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2),
                 new KeyCounter[]{counter(Items.IRON_INGOT, 5L)}, null)).isTrue();
+        host.pendingScheduler().tick(1L);
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(MMCR.id("bridge_busy"));
+        KeyCounter pending = counter(Items.IRON_INGOT, 5L);
+        assertThat(machine.pushPattern(processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2),
+                new KeyCounter[]{pending}, null)).isTrue();
+        assertThat(pending.get(AEItemKey.of(Items.IRON_INGOT))).isZero();
+        host.pendingScheduler().tick(5L);
+        assertThat(host.pendingPatterns().totalCopies()).isOne();
         KeyCounter rejected = counter(Items.IRON_INGOT, 5L);
         assertThat(machine.pushPattern(processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2),
                 new KeyCounter[]{rejected}, null)).isFalse();
@@ -274,7 +357,7 @@ class PatternInterfaceCraftingMachineTest {
     }
 
     @Test
-    void rejects_insufficient_native_return_capacity_without_taking_requested_material() {
+    void accepts_request_but_keeps_it_pending_until_return_capacity_recovers() {
         PatternInterfaceBlockEntity host = patternHost();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
         host.linkControllerAppearance(controller.getBlockPos(), null);
@@ -286,19 +369,27 @@ class PatternInterfaceCraftingMachineTest {
         }
         KeyCounter request = counter(Items.IRON_INGOT, 5L);
 
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
-                processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2), new KeyCounter[]{request}, null)).isFalse();
+        assertThat(host.craftingMachine().pushPattern(
+                processingPattern(Items.IRON_INGOT, Items.IRON_NUGGET, 2), new KeyCounter[]{request}, null)).isTrue();
 
-        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
+        host.pendingScheduler().tick(1L);
+        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isZero();
+        assertThat(host.pendingPatterns().totalCopies()).isOne();
         for (int slot = 0; slot < host.getLogic().getReturnInv().size(); slot++) {
             assertThat(host.getLogic().getReturnInv().getStack(slot))
                     .isEqualTo(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 64L));
         }
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isNull();
+        host.getLogic().getReturnInv().setStack(0, null);
+        host.pendingScheduler().tick(2L);
+        assertThat(host.pendingPatterns().isEmpty()).isTrue();
+        assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(MMCR.id("bridge_return_capacity"));
+        assertThat(host.getLogic().getReturnInv().getStack(0))
+                .isEqualTo(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 3L));
     }
 
     @Test
-    void preflights_cumulative_mixed_return_capacity_before_starting_recipe() {
+    void keeps_mixed_request_owned_when_cumulative_return_preflight_rejects() {
         PatternInterfaceBlockEntity host = patternHost();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
         host.linkControllerAppearance(controller.getBlockPos(), null);
@@ -309,13 +400,19 @@ class PatternInterfaceCraftingMachineTest {
                     new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 64L));
         }
         KeyCounter request = counter(Items.IRON_INGOT, 5L);
-        request.add(AEFluidKey.of(Fluids.WATER), 1_000L);
+        KeyCounter fluidRequest = new KeyCounter();
+        fluidRequest.add(AEFluidKey.of(Fluids.WATER), 1_000L);
 
-        assertThat(new PatternInterfaceCraftingMachine(host).pushPattern(
-                mixedProcessingPattern(), new KeyCounter[]{request}, null)).isFalse();
+        assertThat(host.craftingMachine().pushPattern(
+                mixedProcessingPattern(), new KeyCounter[]{request, fluidRequest}, null)).isTrue();
 
-        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
-        assertThat(request.get(AEFluidKey.of(Fluids.WATER))).isEqualTo(1_000L);
+        host.pendingScheduler().tick(1L);
+        assertThat(request.get(AEItemKey.of(Items.IRON_INGOT))).isZero();
+        assertThat(fluidRequest.get(AEFluidKey.of(Fluids.WATER))).isZero();
+        assertThat(host.pendingPatterns().totalCopies()).isOne();
+        var pending = host.pendingPatterns().groups().getFirst().inputs();
+        assertThat(pending[0].get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(5L);
+        assertThat(pending[1].get(AEFluidKey.of(Fluids.WATER))).isEqualTo(1_000L);
         assertThat(host.getLogic().getReturnInv().getStack(0)).isNull();
         for (int slot = 1; slot < host.getLogic().getReturnInv().size(); slot++) {
             assertThat(host.getLogic().getReturnInv().getStack(slot))
@@ -415,7 +512,7 @@ class PatternInterfaceCraftingMachineTest {
     private static AEProcessingPattern processingPattern(Item input, Item output, int amount) {
         ItemStack definition = new ItemStack(Items.PAPER);
         AEProcessingPattern.encode(definition,
-                List.of(new GenericStack(AEItemKey.of(input), 1L)),
+                List.of(new GenericStack(AEItemKey.of(input), 5L)),
                 List.of(new GenericStack(AEItemKey.of(output), amount)));
         return new AEProcessingPattern(AEItemKey.of(definition));
     }
@@ -423,7 +520,7 @@ class PatternInterfaceCraftingMachineTest {
     private static AEProcessingPattern mixedProcessingPattern() {
         ItemStack definition = new ItemStack(Items.PAPER);
         AEProcessingPattern.encode(definition,
-                List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L),
+                List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 5L),
                         new GenericStack(AEFluidKey.of(Fluids.WATER), 1_000L)),
                 List.of(new GenericStack(AEItemKey.of(Items.IRON_NUGGET), 2L)));
         return new AEProcessingPattern(AEItemKey.of(definition));

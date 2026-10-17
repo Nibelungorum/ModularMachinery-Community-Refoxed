@@ -6,9 +6,11 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.data.loot.BlockLootSubProvider;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.storage.loot.functions.CopyComponentsFunction;
 
 import java.util.Set;
 
@@ -37,6 +39,10 @@ public final class BlockLoot extends BlockLootSubProvider {
             String id = BuiltInRegistries.BLOCK.getKey(block).getPath();
             if (FluxNetworksIds.INPUT.equals(id) || FluxNetworksIds.OUTPUT.equals(id)) {
                 add(block, FluxNetworksBridge.get().deviceLoot(block));
+            } else if (id.equals("ae2_me_pattern_interface") || id.equals("eae_me_extended_pattern_interface")
+                    || id.equals("eaep_me_mirror_pattern_interface")) {
+                add(block, createSingleItemTable(block).apply(CopyComponentsFunction.copyComponents(
+                        CopyComponentsFunction.Source.BLOCK_ENTITY).include(DataComponents.BLOCK_ENTITY_DATA)));
             } else {
                 dropSelf(block);
             }

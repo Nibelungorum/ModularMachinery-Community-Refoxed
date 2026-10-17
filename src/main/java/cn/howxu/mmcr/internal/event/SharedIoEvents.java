@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.network.NetworkServerState;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.event.level.LevelEvent;
@@ -39,6 +40,7 @@ public final class SharedIoEvents {
 
     public static void completeLevelTick(ServerLevel level) {
         IOPortBlockEntity.flushStorageChanges(level);
+        AE2Bridge.get().tickPendingPatterns(level);
         ModuleConnectionCoordinator.tick(level);
         SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
         MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);

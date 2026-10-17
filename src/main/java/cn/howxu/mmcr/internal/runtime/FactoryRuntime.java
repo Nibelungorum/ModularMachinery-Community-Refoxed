@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.LongFunction;
 
 /**
  * Owns factory lanes, their execution state, and their published snapshots.
@@ -837,6 +838,21 @@ public final class FactoryRuntime {
     public @Nullable PatternLane reservePatternStart(MachineRecipe recipe, long requestedParallelism,
                                                      List<MachineCapability> requestCapabilities,
                                                      @Nullable BlockPos requestSource) {
+        return reservePatternStart(recipe, requestedParallelism, requestCapabilities, requestSource, null);
+    }
+
+    /** Reserves at most one lane with inputs rebuilt to the actual admitted copy count. */
+    public @Nullable PatternLane reservePendingPatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                            LongFunction<List<MachineCapability>> capabilitiesForParallelism,
+                                                            @Nullable BlockPos requestSource) {
+        if (requestedParallelism <= 0L || capabilitiesForParallelism == null) return null;
+        return reservePatternStart(recipe, requestedParallelism, null, requestSource, capabilitiesForParallelism);
+    }
+
+    private @Nullable PatternLane reservePatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                      List<MachineCapability> requestCapabilities,
+                                                      @Nullable BlockPos requestSource,
+                                                      @Nullable LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
         if (recipe == null || controller == null || paused) return null;
         EffectiveRecipe effective = effectiveRecipe(recipe);
         if (effective.recipeThreadLimit() > 0) {
@@ -846,12 +862,20 @@ public final class FactoryRuntime {
             if (projected > effective.recipeThreadLimit()) return null;
         }
         for (FactoryRecipeThread lane : lanes) {
-            PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities, requestSource);
+            if (capabilitiesForParallelism != null) {
+                if (patternStartReservations.contains(lane) || !lane.isIdle()
+                        || !lane.candidatesFor(List.of(recipe)).contains(recipe)) continue;
+                return reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities,
+                        requestSource, capabilitiesForParallelism);
+            }
+            PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities,
+                    requestSource, capabilitiesForParallelism);
             if (reservation != null) return reservation;
         }
         if (lanes.size() >= laneLimit) return null;
         FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
-        PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities, requestSource);
+        PatternLane reservation = reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities,
+                requestSource, capabilitiesForParallelism);
         if (reservation == null) {
             if (controller.getLevel() instanceof ServerLevel level) {
                 SharedIoCoordinator.get(level).forgetExecutionLane(lane.runtime(), lane.laneId());
@@ -1440,15 +1464,18 @@ public final class FactoryRuntime {
     private @Nullable PatternLane reservePatternStart(FactoryRecipeThread lane, MachineRecipe recipe,
                                                        long requestedParallelism,
                                                        List<MachineCapability> requestCapabilities,
-                                                       @Nullable BlockPos requestSource) {
+                                                       @Nullable BlockPos requestSource,
+                                                       @Nullable LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
         if (patternStartReservations.contains(lane) || !lane.isIdle()
                 || !lane.candidatesFor(List.of(recipe)).contains(recipe)) return null;
         SharedIoCoordinator coordinator = controller.getLevel() instanceof ServerLevel level
                 ? SharedIoCoordinator.get(level) : null;
         if (coordinator != null && !coordinator.reserveExecution(lane.runtime(), lane.laneId())) return null;
-        CraftingRuntime.PreparedStart prepared = lane.runtime()
-                .preparePatternStart(recipe, requestedParallelism, requestCapabilities, requestSource);
+        CraftingRuntime.PreparedStart prepared = capabilitiesForParallelism == null
+                ? lane.runtime().preparePatternStart(recipe, requestedParallelism, requestCapabilities, requestSource)
+                : lane.runtime().preparePendingPatternStart(recipe, requestedParallelism, capabilitiesForParallelism, requestSource);
         if (prepared == null || !lane.runtime().reservePatternStart()) {
+            if (prepared != null && capabilitiesForParallelism != null) lane.runtime().releasePatternStart(prepared);
             if (coordinator != null) coordinator.releaseExecutionReservation(lane.runtime(), lane.laneId());
             return null;
         }

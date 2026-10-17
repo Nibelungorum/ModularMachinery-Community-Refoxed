@@ -504,6 +504,8 @@ public final class GameTestRegistry {
                         helper -> new LightningPatternGameTest().mixedPatternAdmissionAndPersistence(helper));
                 register(event, "lightning_mixed_batch", 200,
                         helper -> new LightningPatternGameTest().mixedBatchPreservesOneMaterialOwner(helper));
+                register(event, "lightning_pending_long_material_owner", 40,
+                        helper -> new LightningPatternGameTest().mixedLaneLongPersistenceAndNativeReturn(helper));
             }
             register(event, "ae2_pattern_return_long_balances", 40,
                     helper -> new PatternReturnInventoryGameTest().nativeSlotsAndExactLongBalances(helper));
@@ -603,6 +605,42 @@ public final class GameTestRegistry {
                     helper -> new AE2PatternInterfaceGameTest().nativeReturnDrainNotifiesWithoutBlockEntityPolling(helper));
             register(event, "ae2_me_pattern_interface_request", 100,
                     helper -> new AE2PatternInterfaceGameTest().patternRequestStartsControllerWithRemainingOrdinaryInput(helper));
+            register(event, "ae2_pending_pattern_save", 40, PendingPatternLifecycleGameTest::pendingSaveAndOldSave);
+            register(event, "ae2_pending_prepare_removal", 100,
+                    PendingPatternLifecycleGameTest::preparationRemovalCannotSpendCarriedInputs);
+            register(event, "ae2_standard_cpu_pattern_accounting", 240,
+                    helper -> new AE2PatternInterfaceGameTest().craftingCpuDispatchesStandardRequestsAndAccountsForOutputs(helper));
+            register(event, "ae2_standard_cpu_pattern_cancellation", 240,
+                    helper -> new AE2PatternInterfaceGameTest().craftingCpuCancellationKeepsAcceptedRequests(helper));
+            register(event, "ae2_pending_queue_long_returns", 40,
+                    helper -> new PatternReturnInventoryGameTest().pendingQueueLongBalancesAndPersistence(helper));
+            register(event, "ae2_pending_queue_signatures", 20,
+                    helper -> new PendingPatternQueueGameTest().mergesOnlyIdenticalSlotTemplates(helper));
+            register(event, "ae2_pending_queue_ownership", 20,
+                    helper -> new PendingPatternQueueGameTest().offerOwnsDeepCopies(helper));
+            register(event, "ae2_pending_queue_restore", 20,
+                    helper -> new PendingPatternQueueGameTest().removeAndRestorePreserveIdentityAndAge(helper));
+            register(event, "ae2_pending_queue_overflow", 20,
+                    helper -> new PendingPatternQueueGameTest().overflowRejectsWithoutMutation(helper));
+            register(event, "ae2_pending_queue_capacity", 20,
+                    helper -> new PendingPatternQueueGameTest().capacityAndDistinctKeyLimitsPreserveExistingWork(helper));
+            register(event, "ae2_pending_queue_large", 20,
+                    helper -> new PendingPatternQueueGameTest().largeCompressedGroupCanSplitAndRestore(helper));
+            register(event, "ae2_pending_queue_legacy", 20,
+                    helper -> new PendingPatternQueueGameTest().oldSaveHasEmptyPendingQueue(helper));
+            register(event, "ae2_pending_queue_persistence", 20,
+                    helper -> new PendingPatternQueueGameTest().pendingQueueRoundTripPreservesComponentsAndLongCounts(helper));
+            register(event, "ae2_pending_queue_age", 20,
+                    helper -> new PendingPatternQueueGameTest().reloadKeepsAgeWithoutOfflineAdvance(helper));
+            register(event, "ae2_pending_queue_damaged", 20,
+                    helper -> new PendingPatternQueueGameTest().damagedOrFutureDataIsPreservedAndBlocked(helper));
+            register(event, "ae2_pending_pattern_carrier", 40, PendingPatternLifecycleGameTest::ordinaryCarrierRoundTrip);
+            if (ModList.get().isLoaded("extendedae")) {
+                register(event, "eae_pending_pattern_carrier", 40, PendingPatternLifecycleGameTest::extendedCarrierRoundTrip);
+            }
+            if (ModList.get().isLoaded("extendedae_plus")) {
+                register(event, "eaep_pending_pattern_carrier", 40, PendingPatternLifecycleGameTest::mirrorCarrierRoundTrip);
+            }
             register(event, "ae2_me_pattern_cpu_output_components", 100,
                     helper -> new AE2PatternOutputComponentGameTest().craftingCpuPushesResolvedEnchantmentOutput(helper));
             // No need for this gameTest

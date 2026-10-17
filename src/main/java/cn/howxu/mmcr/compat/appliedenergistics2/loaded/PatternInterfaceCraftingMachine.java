@@ -19,17 +19,21 @@ import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
 import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PendingPatternQueue.GroupSnapshot;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
-import cn.howxu.mmcr.internal.runtime.PatternStartBatchReservation;
+import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity.PendingPatternCursor;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -37,6 +41,7 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 
 /**
  * Virtual AE2 crafting machine that forwards processing patterns to linked MMCR controllers.
@@ -61,95 +66,96 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
     @Override
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, Direction ejectionDirection) {
-        return pushBatchPattern(patternDetails, inputHolders, 1L, ejectionDirection);
-    }
-
-    public long maxBatchSize(IPatternDetails patternDetails) {
-        if (pushing || settling || pendingRequest != null) return 0L;
-        if (!(patternDetails instanceof AEProcessingPattern pattern) || !hasSupportedInputs(pattern)) return 0L;
-        List<MachineOutput> outputs = outputs(pattern);
-        if (outputs == null) return 0L;
-        long machineCap = host.maxPatternBatchSize();
-        long recipeCap = host.maxRecipeBatchSize(outputs);
-        long resourceCap = Math.min(batchResourceLimit(pattern.getSparseInputs()), batchResourceLimit(pattern.getOutputs()));
-        return Math.min(resourceCap, Math.min(machineCap, recipeCap));
-    }
-
-    private static long batchResourceLimit(List<GenericStack> stacks) {
-        Map<AEKey, Long> amounts = new HashMap<>();
-        for (GenericStack stack : stacks) {
-            if (stack == null) continue;
-            if (stack.amount() <= 0L) return 0L;
-            long previous = amounts.getOrDefault(stack.what(), 0L);
-            if (stack.amount() > Long.MAX_VALUE - previous) return 0L;
-            amounts.put(stack.what(), previous + stack.amount());
+        if (pushing || settling || !hostCurrent()) return false;
+        var queue = host.pendingPatterns();
+        long now = host.getLevel().getGameTime();
+        if (!queue.canAttempt(now)) return false;
+        pushing = true;
+        boolean accepted = false;
+        try {
+            var limits = host.pendingScheduler().admissionLimits(patternDetails, inputHolders, now);
+            if (limits == null || !validInputs(patternDetails, inputHolders, host.getLevel()) || !hostCurrent()) return false;
+            // Queue writes are synchronous and callback-free. Only notify after both owners agree.
+            if (!queue.offer(patternDetails.getDefinition(), patternDetails.getOutputs(), inputHolders, limits, now)) {
+                return false;
+            }
+            for (KeyCounter holder : inputHolders) holder.clear();
+            accepted = true;
+            host.setChanged();
+            return true;
+        } catch (RuntimeException exception) {
+            if (accepted) MMCR.LOG.warn("Pattern admission accepted before notification failure at {}",
+                    host.getBlockPos(), exception);
+            return accepted;
+        } finally {
+            pushing = false;
         }
-        long limit = Long.MAX_VALUE;
-        for (long amount : amounts.values()) limit = Math.min(limit, Long.MAX_VALUE / amount);
-        return limit;
     }
 
-    public boolean pushBatchPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, long batchSize,
-                                    Direction ejectionDirection) {
-        if (pushing || settling) return false;
+    /** Starts one prepared prefix; native payments are never replayed or transactionally rolled back. */
+    public boolean startPending(GroupSnapshot group, MachineControllerBlockEntity controller,
+                                PendingPatternCursor cursor, BooleanSupplier budget) {
+        if (pushing || settling || !hostCurrent()) return false;
         flushPendingReturns();
-        if (pendingRequest != null) return false;
-        if (!(patternDetails instanceof AEProcessingPattern pattern)) return false;
-        List<MachineOutput> outputs = outputs(pattern);
-        if (batchSize <= 0L || outputs == null || !hasSupportedInputs(pattern)
-                || !hasSupportedHolderKeys(inputHolders)) return false;
-
+        if (pendingRequest != null || !hostCurrent()) return false;
         pushing = true;
         PendingRequest owned = null;
-        PatternStartBatchReservation reservation = null;
+        PatternStartReservation reservation = null;
+        long copies = 0L;
         try {
-            // Admission can reduce a lane or reject a proposal. Those proposals must not manufacture material slices.
-            GenericStackInv inventory = AE2NativeAdapters.requestInventory(inputHolders);
-            AppMekBridge bridge = AppMekBridge.get();
-            reservation = host.reservePatternStarts(outputs, batchSize, parallelism -> {
-                GenericStackInv view = AE2NativeAdapters.requestInventoryView(inventory, parallelism, batchSize);
-                AppMekBridge.PatternRequest chemicalRequest = bridge.available()
-                        ? bridge.patternRequestFromInventory(view) : bridge.patternRequest(inputHolders);
-                LaneRequest request = new LaneRequest(view, view, chemicalRequest);
-                List<MachineCapability> inputs = new ArrayList<>(List.of(
-                        new ItemBusCapability(AE2NativeAdapters.items(request.itemRequest()), IOType.INPUT),
-                        new FluidHatchCapability(AE2NativeAdapters.fluids(request.fluidRequest()), IOType.INPUT)));
-                inputs.addAll(request.chemicalRequest().capabilities());
-                inputs.addAll(LightningBridge.get().patternInputs(view));
-                return List.copyOf(inputs);
-            });
-            if (reservation.status() != PatternStartBatchReservation.Status.RESERVED
-                    || reservation.parallelism() != batchSize) return false;
+            List<MachineOutput> outputs = outputs(group.outputs());
+            if (outputs == null) return false;
+            // Each proposal has exactly p copies. Every resource family shares that proposal's sole scratch owner.
+            Map<Long, GenericStackInv> proposals = new HashMap<>();
+            reservation = controller.reservePendingPatternStart(host.getBlockPos(), outputs, group.copies(), parallelism -> {
+                GenericStackInv inventory = proposals.computeIfAbsent(parallelism,
+                        count -> AE2NativeAdapters.requestInventory(group.inputs(count)));
+                return requestCapabilities(inventory, group.inputs(parallelism));
+            }, budget, cursor);
+            if (reservation.status() != PatternStartReservation.Status.RESERVED) return false;
+            copies = reservation.parallelism();
+            GenericStackInv inventory = proposals.get(copies);
+            if (copies <= 0L || copies > group.copies() || inventory == null) return false;
 
+            // Preparation is side-effect-free; conservatively reserve room for every possible leftover.
             GenericStackInv simulatedReturns = AE2NativeAdapters.copyForSimulation(host.getLogic().getReturnInv());
             for (int slot = 0; slot < inventory.size(); slot++) {
                 GenericStack stack = inventory.getStack(slot);
                 if (stack != null && simulatedReturns.insert(stack.what(), stack.amount(), Actionable.MODULATE,
                         IActionSource.ofMachine(host)) != stack.amount()) return false;
             }
-            owned = new PendingRequest(inventory, inputHolders, reservation);
+            if (!hostCurrent()) return false;
+            PendingRequest proposal = new PendingRequest(inventory, reservation);
+            // No callback/save window may observe both the queued prefix and its scratch copy.
+            host.pendingPatterns().removeCopies(group.id(), copies);
+            owned = proposal;
             pendingRequest = owned;
+            host.setChanged();
+            if (!hostCurrent()) return false;
             boolean committed = reservation.commit(owned::accept);
             if (committed) owned.accept();
-            return owned.claimIfPaid();
         } catch (RuntimeException exception) {
-            try {
-                if (owned != null) owned.claimIfPaid();
-            } catch (RuntimeException ownershipFailure) {
-                MMCR.LOG.warn("Native pattern ownership was claimed before notification failure at {}", host.getBlockPos(), ownershipFailure);
-            }
-            boolean accepted = owned != null && owned.accepted;
-            if (accepted) MMCR.LOG.warn("Accepted native pattern retains pending returns at {}", host.getBlockPos(), exception);
-            return accepted;
+            MMCR.LOG.warn("Native pending pattern start interrupted at {}", host.getBlockPos(), exception);
         } finally {
             if (owned != null) {
                 try {
-                    owned.claimIfPaid();
+                    if (owned.claimIfPaid()) {
+                        // Payment (including an uncertain prefix) owns only the live scratch balance.
+                        owned.accept();
+                    } else {
+                        // Restore first and unpublish scratch without any callback between these writes.
+                        host.pendingPatterns().restoreCopies(group, copies);
+                        if (pendingRequest == owned) pendingRequest = null;
+                        owned.restored = true;
+                        host.setChanged();
+                    }
                 } catch (RuntimeException exception) {
-                    MMCR.LOG.warn("Native pattern ownership was claimed before final notification failure at {}", host.getBlockPos(), exception);
+                    // A failed restoration must not invite replay of material still owned by scratch.
+                    if (!owned.restored) owned.accepted = true;
+                    MMCR.LOG.warn("Native pattern ownership retained before final notification failure at {}",
+                            host.getBlockPos(), exception);
                 }
                 owned.releaseReferences();
-                if (!owned.accepted && pendingRequest == owned) pendingRequest = null;
             }
             if (reservation != null) {
                 try {
@@ -161,12 +167,31 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
             pushing = false;
             flushPendingReturns();
         }
+        return owned != null && owned.accepted;
+    }
+
+    private boolean hostCurrent() {
+        Level level = host.getLevel();
+        return !host.isRemoved() && level != null && !level.isClientSide()
+                && level.hasChunkAt(host.getBlockPos()) && level.getBlockEntity(host.getBlockPos()) == host;
+    }
+
+    private static List<MachineCapability> requestCapabilities(GenericStackInv inventory, KeyCounter[] inputs) {
+        AppMekBridge bridge = AppMekBridge.get();
+        AppMekBridge.PatternRequest chemicals = bridge.available()
+                ? bridge.patternRequestFromInventory(inventory) : bridge.patternRequest(inputs);
+        List<MachineCapability> capabilities = new ArrayList<>(List.of(
+                new ItemBusCapability(AE2NativeAdapters.items(inventory), IOType.INPUT),
+                new FluidHatchCapability(AE2NativeAdapters.fluids(inventory), IOType.INPUT)));
+        capabilities.addAll(chemicals.capabilities());
+        capabilities.addAll(LightningBridge.get().patternInputs(inventory));
+        return List.copyOf(capabilities);
     }
 
     /** Settles only owned leftovers; never retries a recipe start or holds a live controller after admission. */
     public void flushPendingReturns() {
         if (host.getLevel() != null && host.getLevel().isClientSide()) return;
-        if (pushing || settling || pendingRequest == null || !pendingRequest.claimIfPaid()) return;
+        if (pushing || settling || pendingRequest == null || !pendingRequest.accepted) return;
         PendingRequest owned = pendingRequest;
         GenericStackInv returns = host.getLogic().getReturnInv();
         settling = true;
@@ -216,7 +241,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     }
 
     public void savePendingReturns(CompoundTag output, HolderLookup.Provider registries) {
-        if (pendingRequest != null && pendingRequest.claimIfPaid()) {
+        // Includes the published pre-payment scratch: a native callback can save at any point during payment.
+        if (pendingRequest != null) {
             pendingRequest.inventory.writeToChildTag(output, PENDING_RETURNS_KEY, registries);
         } else output.remove(PENDING_RETURNS_KEY);
     }
@@ -224,12 +250,14 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     public void loadPendingReturns(CompoundTag input, HolderLookup.Provider registries) {
         pendingRequest = input.contains(PENDING_RETURNS_KEY, Tag.TAG_LIST)
                 ? new PendingRequest(AE2NativeAdapters.restoreRequestInventory(
-                        input.getList(PENDING_RETURNS_KEY, Tag.TAG_COMPOUND), registries), null, null) : null;
+                        input.getList(PENDING_RETURNS_KEY, Tag.TAG_COMPOUND), registries), null) : null;
     }
 
     /** Uses the same AE key drop policy as the native return inventory, including fluid/chemical wrappers. */
     public void addPendingDrops(List<ItemStack> drops) {
-        if (pendingRequest == null || !pendingRequest.claimIfPaid()) return;
+        if (pendingRequest == null) return;
+        // Breaking the host can reenter during the pre-payment notification. Dropped ownership cannot be restored.
+        pendingRequest.accepted = true;
         for (int slot = 0; slot < pendingRequest.inventory.size(); slot++) {
             GenericStack stack = pendingRequest.inventory.getStack(slot);
             if (stack == null) continue;
@@ -245,14 +273,12 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
      */
     private final class PendingRequest {
         private final GenericStackInv inventory;
-        private @Nullable KeyCounter[] holders;
-        private @Nullable PatternStartBatchReservation reservation;
+        private @Nullable PatternStartReservation reservation;
         private boolean accepted;
+        private boolean restored;
 
-        private PendingRequest(GenericStackInv inventory, @Nullable KeyCounter[] holders,
-                               @Nullable PatternStartBatchReservation reservation) {
+        private PendingRequest(GenericStackInv inventory, @Nullable PatternStartReservation reservation) {
             this.inventory = inventory;
-            this.holders = holders;
             this.reservation = reservation;
             accepted = reservation == null;
         }
@@ -265,19 +291,12 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         private void accept() {
             if (accepted) return;
             accepted = true;
-            for (KeyCounter holder : holders) holder.clear();
-            holders = null;
             host.setChanged();
         }
 
         private void releaseReferences() {
-            holders = null;
             reservation = null;
         }
-    }
-
-    private record LaneRequest(GenericStackInv itemRequest, GenericStackInv fluidRequest,
-                               AppMekBridge.PatternRequest chemicalRequest) {
     }
 
     @Override
@@ -285,30 +304,45 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         return true;
     }
 
-    private static boolean hasSupportedHolderKeys(KeyCounter[] holders) {
-        for (KeyCounter holder : holders) {
-            for (var entry : holder) {
-                if (entry.getLongValue() > 0L && !(entry.getKey() instanceof AEItemKey)
-                        && !(entry.getKey() instanceof AEFluidKey)
-                        && !AppMekBridge.get().supportsPatternInput(entry.getKey())
-                        && !LightningBridge.get().supportsPatternInput(entry.getKey())) return false;
+    private static boolean hasSupportedKey(AEKey key) {
+        return key instanceof AEItemKey || key instanceof AEFluidKey
+                || AppMekBridge.get().supportsPatternInput(key)
+                || LightningBridge.get().supportsPatternInput(key);
+    }
+
+    static boolean validInputs(IPatternDetails details, KeyCounter[] inputs, Level level) {
+        if (!(details instanceof AEProcessingPattern pattern) || inputs == null || level == null
+                || outputs(pattern.getOutputs()) == null) return false;
+        var expected = pattern.getInputs();
+        if (inputs.length != expected.length || inputs.length == 0) return false;
+        try {
+            for (int index = 0; index < inputs.length; index++) {
+                if (inputs[index] == null) return false;
+                long units = 0L;
+                for (var entry : inputs[index]) {
+                    long amount = entry.getLongValue();
+                    if (amount <= 0L || !hasSupportedKey(entry.getKey())
+                            || !expected[index].isValid(entry.getKey(), level)) return false;
+                    long templateAmount = 0L;
+                    for (var template : expected[index].getPossibleInputs()) {
+                        if (entry.getKey().matches(template)) { templateAmount = template.amount(); break; }
+                    }
+                    if (templateAmount <= 0L || amount % templateAmount != 0L) return false;
+                    units = Math.addExact(units, amount / templateAmount);
+                }
+                if (units != expected[index].getMultiplier()) return false;
             }
+            return true;
+        } catch (ArithmeticException exception) {
+            return false;
         }
-        return true;
     }
 
-    private static boolean hasSupportedInputs(AEProcessingPattern pattern) {
-        return pattern.getSparseInputs().stream().filter(stack -> stack != null).allMatch(stack ->
-                stack.amount() > 0L && (stack.what() instanceof AEItemKey || stack.what() instanceof AEFluidKey
-                        || AppMekBridge.get().supportsPatternInput(stack.what())
-                        || LightningBridge.get().supportsPatternInput(stack.what())));
-    }
-
-    private static List<MachineOutput> outputs(AEProcessingPattern pattern) {
+    static List<MachineOutput> outputs(List<GenericStack> stacks) {
         List<MachineOutput> outputs = new ArrayList<>();
         Map<AEKey, Long> lightningAmounts = new HashMap<>();
-        for (GenericStack stack : pattern.getOutputs()) {
-            if (stack.amount() <= 0L) return null;
+        for (GenericStack stack : stacks) {
+            if (stack == null || stack.amount() <= 0L) return null;
             if (stack.what() instanceof AEItemKey item) {
                 if (stack.amount() > Integer.MAX_VALUE) return null;
                 outputs.add(new MachineOutput.ItemOutput(item.toStack((int) stack.amount()), 1F));
@@ -327,7 +361,7 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                 outputs.add(chemical.get());
             }
         }
-        return List.copyOf(outputs);
+        return outputs.isEmpty() ? null : List.copyOf(outputs);
     }
 
 }

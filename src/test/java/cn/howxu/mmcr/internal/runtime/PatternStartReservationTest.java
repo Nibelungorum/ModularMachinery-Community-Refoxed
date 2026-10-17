@@ -2,9 +2,17 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -29,10 +37,14 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksTestBootstrap;
+import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInputCapability;
+import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkPointHandler;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -48,6 +60,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongFunction;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -70,8 +84,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Controller admission and reservation boundary tests.
@@ -161,12 +177,12 @@ class PatternStartReservationTest {
     static Stream<Arguments> patternCallbackChanges() {
         return Stream.of(false, true).flatMap(factory -> Stream.of("full", "masked_local_roundtrip", "unlink",
                 "linked_roundtrip", "capability", "catalog", "module_roundtrip", "lifecycle")
-                .map(change -> Arguments.of(factory, change)));
+                .flatMap(change -> Stream.of(false, true).map(pending -> Arguments.of(factory, change, pending))));
     }
 
     @ParameterizedTest
     @MethodSource("patternCallbackChanges")
-    void pattern_before_start_only_recaptures_pure_isolation_changes(boolean factory, String change) throws Exception {
+    void pattern_before_start_only_recaptures_pure_isolation_changes(boolean factory, String change, boolean pending) throws Exception {
         try (var ignored = ServerThreadTestScope.open()) {
             AtomicReference<PaidPatternFixture> owner = new AtomicReference<>();
             AtomicInteger callbacks = new AtomicInteger();
@@ -218,11 +234,13 @@ class PatternStartReservationTest {
             if (factory) {
                 FactoryRuntime lanes = new FactoryRuntime();
                 lanes.ensureBaseLane(fixture.controller);
-                var lane = lanes.reservePatternStart(fixture.recipe, 1L, request, PATTERN_PORT);
+                var lane = pending ? lanes.reservePendingPatternStart(fixture.recipe, 1L, copies -> request, PATTERN_PORT)
+                        : lanes.reservePatternStart(fixture.recipe, 1L, request, PATTERN_PORT);
                 admission = lane == null ? PatternStartReservation.unavailable() : reservation(fixture.recipe, lanes, lane);
                 if (lane != null) runtime = lane.runtime();
             } else {
-                admission = fixture.controller.reservePatternStart(PATTERN_PORT, List.of(), request);
+                admission = pending ? fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(), 1L, copies -> request)
+                        : fixture.controller.reservePatternStart(PATTERN_PORT, List.of(), request);
             }
             assertThat(callbacks).hasValue(1);
             if (change.equals("full") || change.equals("masked_local_roundtrip")) {
@@ -262,6 +280,493 @@ class PatternStartReservationTest {
         assertThat(retried.commit()).isTrue();
         assertThat(retried.status()).isEqualTo(PatternStartReservation.Status.COMMITTED);
         assertThat(controller.runtimeSnapshot().crafting().recipeId()).isEqualTo(recipe.id());
+    }
+
+    @Test
+    void pendingStartAdmitsAvailablePrefix() {
+        PendingStartFixture fixture = new PendingStartFixture("pending_prefix", RecipeBehavior.defaults(),
+                List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1L)));
+        PatternStartReservation reservation = fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(),
+                10L, copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)));
+
+        assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+        assertThat(reservation.ownershipAccepted()).isFalse();
+        assertThat(reservation.parallelism()).isEqualTo(3L);
+        assertThat(fixture.plannedCopies).containsExactly(10L, 3L);
+        assertThat(fixture.views.getLast().amount(0)).isEqualTo(3L);
+        assertThat(fixture.energy.energyStorage().getAmountAsLong()).isEqualTo(3L);
+        assertThat(reservation.commit()).isTrue();
+        assertThat(reservation.ownershipAccepted()).isTrue();
+        assertThat(fixture.runtime.parallelism()).isEqualTo(3L);
+        assertThat(fixture.views.getLast().amount(0)).isZero();
+        assertThat(fixture.views.getFirst().amount(0)).isEqualTo(10L);
+    }
+
+    @Test
+    void alternativeInputsReplanWithinAdmittedCopies() {
+        AtomicInteger beforeStart = new AtomicInteger();
+        PendingStartFixture fixture = new PendingStartFixture("pending_alternative",
+                RecipeBehavior.builder().beforeStart(context -> beforeStart.incrementAndGet()).build(), List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.OAK_PLANKS, Items.BIRCH_PLANKS),
+                        2, ItemStack.EMPTY), new EnergyRequirement(1L)));
+        PatternStartReservation reservation = fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(),
+                10L, copies -> fixture.view(copies, stack(Items.OAK_PLANKS, (int) copies),
+                        stack(Items.BIRCH_PLANKS, (int) copies)));
+
+        assertThat(beforeStart).hasValue(1);
+        assertThat(reservation.parallelism()).isEqualTo(3L);
+        assertThat(fixture.plannedCopies).containsExactly(10L, 3L);
+        assertThat(fixture.views.getLast().amount(0)).isEqualTo(3L);
+        assertThat(fixture.views.getLast().amount(1)).isEqualTo(3L);
+        assertThat(reservation.commit()).isTrue();
+        assertThat(fixture.views.getLast().amount(0)).isZero();
+        assertThat(fixture.views.getLast().amount(1)).isZero();
+        assertThat(fixture.views.getFirst().amount(0)).isEqualTo(10L);
+        assertThat(fixture.views.getFirst().amount(1)).isEqualTo(10L);
+    }
+
+    @Test
+    void pendingStartKeepsTheSuccessfulCandidatesFinalView() {
+        PendingStartFixture fixture = new PendingStartFixture("pending_candidate_success", RecipeBehavior.defaults(),
+                List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1L)));
+        MachineRecipe blocked = MachineRecipe.fromCanonical(MMCR.id("pending_candidate_blocked"), MMCR.id("test_cube"),
+                20, List.of(input(Items.GOLD_INGOT, 1)), List.of(), List.of(), Integer.MIN_VALUE, 2,
+                false, true, false, Set.of());
+        RecipeRegistry.clearForTesting();
+        RecipeRegistry.registerStatic(blocked);
+        RecipeRegistry.registerStatic(fixture.recipe);
+        assertThat(fixture.controller.recipesForMachine().getFirst()).isEqualTo(blocked);
+
+        PatternStartReservation reservation = fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(),
+                10L, copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)));
+
+        assertThat(reservation.recipe()).isSameAs(fixture.recipe);
+        assertThat(fixture.plannedCopies).containsExactly(10L, 1L, 10L, 3L);
+        assertThat(reservation.parallelism()).isEqualTo(3L);
+        assertThat(reservation.commit()).isTrue();
+        assertThat(fixture.views.getLast().amount(0)).isZero();
+        assertThat(fixture.views.subList(0, 3)).allSatisfy(view -> assertThat(view.amount(0)).isPositive());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void fallbackToOneIsBoundedAndDoesNotRepeatBeforeStart(boolean lastPlanFails) {
+        AtomicInteger beforeStart = new AtomicInteger();
+        PendingStartFixture fixture = new PendingStartFixture("pending_bounded",
+                RecipeBehavior.builder().beforeStart(context -> {
+                    beforeStart.incrementAndGet();
+                    context.setDuration(7);
+                }).build(), List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1L)));
+        PatternStartReservation reservation = fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(),
+                10L, copies -> fixture.view(copies, stack(Items.IRON_INGOT,
+                        copies == 3L ? 2 : copies == 1L && lastPlanFails ? 0 : (int) copies)));
+
+        assertThat(beforeStart).hasValue(1);
+        assertThat(fixture.plannedCopies).containsExactly(10L, 3L, 1L);
+        assertThat(fixture.views.getFirst().amount(0)).isEqualTo(10L);
+        assertThat(fixture.views.get(1).amount(0)).isEqualTo(2L);
+        if (lastPlanFails) {
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+            assertThat(reservation.parallelism()).isZero();
+            assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
+            assertThat(fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(), 1L,
+                    copies -> fixture.view(copies, stack(Items.IRON_INGOT, 1))).commit()).isTrue();
+            assertThat(beforeStart).hasValue(2);
+        } else {
+            assertThat(reservation.parallelism()).isEqualTo(1L);
+            assertThat(reservation.commit()).isTrue();
+            assertThat(fixture.views.getLast().amount(0)).isZero();
+            assertThat(fixture.runtime.totalTick()).isEqualTo(7);
+        }
+    }
+
+    @Test
+    void pendingFactoryStartReservesOneLane() {
+        PendingStartFixture fixture = new PendingStartFixture("pending_factory", RecipeBehavior.defaults(),
+                List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1L)));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(fixture.controller);
+        factory.setLaneLimit(3);
+        var first = factory.reservePendingPatternStart(fixture.recipe, 10L,
+                copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)), PATTERN_PORT);
+        assertThat(first).isNotNull();
+        assertThat(first.laneId()).isEqualTo("base");
+        assertThat(first.preparedStart().plan().parallelism()).isEqualTo(3L);
+        assertThat(factory.laneCount()).isEqualTo(1);
+        var second = factory.reservePendingPatternStart(fixture.recipe, 10L,
+                copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)), PATTERN_PORT);
+        assertThat(second).isNotNull();
+        assertThat(second.laneId()).isNotEqualTo(first.laneId());
+        int attempts = fixture.plannedCopies.size();
+        assertThat(factory.reservePendingPatternStart(fixture.recipe, 10L,
+                copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)), PATTERN_PORT)).isNull();
+        assertThat(fixture.plannedCopies).hasSize(attempts);
+        factory.releasePatternStart(first);
+        factory.releasePatternStart(second);
+    }
+
+    @Test
+    void blockedPendingFactoryPreparesOnlyOneApplicableIdleLane() {
+        AtomicInteger beforeStart = new AtomicInteger();
+        ResourceLocation blockedId = MMCR.id("pending_factory_blocked_once");
+        PendingStartFixture fixture = new PendingStartFixture("pending_factory_blocked_once",
+                RecipeBehavior.builder().beforeStart(context -> {
+                    if (context.recipeId().equals(blockedId)) {
+                        beforeStart.incrementAndGet();
+                        context.cancel();
+                    }
+                }).build(), List.of());
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(fixture.controller);
+        factory.setLaneLimit(1024);
+        MachineRecipe warmup = MachineRecipe.fromCanonical(MMCR.id("pending_factory_warmup"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), 0, 0, false, true, false, Set.of());
+        var reservations = factory.reservePatternStarts(warmup, 10240L, List.of(), PATTERN_PORT);
+        assertThat(reservations).hasSize(1024);
+        reservations.forEach(factory::releasePatternStart);
+
+        assertThat(factory.reservePendingPatternStart(fixture.recipe, 10L,
+                copies -> fixture.view(copies), PATTERN_PORT)).isNull();
+
+        assertThat(beforeStart).hasValue(1);
+        assertThat(factory.laneCount()).isEqualTo(1024);
+        assertThat(fixture.plannedCopies).isEmpty();
+    }
+
+    @Test
+    void pendingCandidateBudgetResumesWithoutSkippingAnUnattemptedRecipe() {
+        List<ResourceLocation> preparedRecipes = new ArrayList<>();
+        ResourceLocation viableId = MMCR.id("pending_budget_viable");
+        PendingStartFixture fixture = new PendingStartFixture("pending_budget_viable",
+                RecipeBehavior.builder().beforeStart(context -> {
+                    preparedRecipes.add(context.recipeId());
+                    if (!context.recipeId().equals(viableId)) context.cancel();
+                }).build(), List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1L)));
+        for (int index = 0; index < 9; index++) {
+            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id("pending_budget_blocked_" + index),
+                    MMCR.id("test_cube"), 20, List.of(), List.of(), List.of(), -100 + index, 2,
+                    false, true, false, Set.of()));
+        }
+        var candidates = fixture.controller.recipesForMachine();
+        AtomicInteger remaining = new AtomicInteger(8);
+        var cursor = new MachineControllerBlockEntity.PendingPatternCursor();
+        Supplier<PatternStartReservation> reserve = () -> fixture.controller.reservePendingPatternStart(PATTERN_PORT,
+                List.of(), 10L, copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)),
+                () -> remaining.getAndUpdate(value -> Math.max(0, value - 1)) > 0, cursor);
+
+        assertThat(reserve.get().status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(preparedRecipes).containsExactlyElementsOf(candidates.subList(0, 8).stream()
+                .map(MachineRecipe::id).toList());
+        assertThat(reserve.get().status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(preparedRecipes).hasSize(8);
+        AtomicInteger otherBudget = new AtomicInteger(1);
+        assertThat(fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(), 10L,
+                copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)),
+                () -> otherBudget.getAndDecrement() > 0, new MachineControllerBlockEntity.PendingPatternCursor()).status())
+                .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(preparedRecipes.removeLast()).isEqualTo(candidates.getFirst().id());
+        remaining.set(1);
+        assertThat(reserve.get().status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(preparedRecipes).hasSize(9);
+        assertThat(preparedRecipes.getLast()).isEqualTo(candidates.get(8).id());
+        remaining.set(1);
+        PatternStartReservation admitted = reserve.get();
+        assertThat(admitted.recipe()).isSameAs(fixture.recipe);
+        assertThat(preparedRecipes).hasSize(10);
+        assertThat(preparedRecipes.getLast()).isEqualTo(viableId);
+        assertThat(admitted.commit()).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,close", "false,rollback", "false,commit", "false,ownership_failure",
+            "true,close", "true,rollback", "true,commit", "true,ownership_failure"})
+    void pendingFluxPrefetchFallsBackWithinPlanningBudgetAndConservesNativeOwnership(boolean materialLimited,
+                                                                                     String outcome) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            AtomicInteger beforeStart = new AtomicInteger();
+            PendingStartFixture fixture = new PendingStartFixture("pending_flux_fallback",
+                    RecipeBehavior.builder().beforeStart(context -> {
+                        beforeStart.incrementAndGet();
+                        context.setDuration(2);
+                    }).build(), List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1L)));
+            LongValueStorage network = new LongValueStorage(3L, 3L, null);
+            network.setAmount(3L);
+            FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+            List<Long> prefetchAttempts = new ArrayList<>();
+            var flux = new FluxEnergyInputCapability(buffer, "pending-limited", requested -> {
+                prefetchAttempts.add(requested);
+                if (requested > network.amount()) return Optional.empty();
+                return Optional.of(() -> {
+                    assertThat(network.extract(requested, false)).isEqualTo(requested);
+                    return CapabilityResult.successful();
+                });
+            });
+            var components = new ArrayList<>(fixture.controller.componentRuntime().components().stream()
+                    .filter(component -> component.getContainer() != fixture.energy).toList());
+            components.add(new ProcessingComponent(null, new PatternFluxHost(flux), BlockPos.ZERO, BlockPos.ZERO,
+                    (String) null));
+            fixture.controller.componentRuntime().replaceComponents(components);
+            formForPattern(fixture.controller, true);
+            LongFunction<List<MachineCapability>> views = copies -> fixture.view(copies,
+                    stack(Items.IRON_INGOT, materialLimited && copies == 10L ? 3 : (int) copies));
+            PatternStartReservation reservation = fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(),
+                    10L, views);
+
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+            assertThat(reservation.parallelism()).isEqualTo(1L);
+            assertThat(beforeStart).hasValue(1);
+            assertThat(fixture.plannedCopies).containsExactlyElementsOf(materialLimited
+                    ? List.of(10L, 3L, 1L) : List.of(10L, 1L));
+            assertThat(prefetchAttempts).containsExactlyElementsOf(materialLimited ? List.of(6L, 2L) : List.of(20L, 2L));
+            assertThat(network.amount()).isEqualTo(3L);
+            assertThat(buffer.amount()).isZero();
+            assertThat(buffer.reserved()).isZero();
+            if (outcome.equals("close") || outcome.equals("rollback")) {
+                if (outcome.equals("close")) reservation.close();
+                else reservation.rollback();
+                assertThat(reservation.rolledBack()).isTrue();
+                assertThat(reservation.ownershipAccepted()).isFalse();
+                assertThat(fixture.views.getLast().amount(0)).isEqualTo(1L);
+                assertThat(network.amount()).isEqualTo(3L);
+                assertThat(buffer.amount()).isZero();
+                assertThat(buffer.reserved()).isZero();
+                assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
+                var retried = fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(), 10L, views);
+                assertThat(retried.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                retried.close();
+            } else {
+                if (outcome.equals("ownership_failure")) {
+                    // Native resources have already been paid; this is not a transactional rollback.
+                    assertThat(reservation.commit(() -> { throw new IllegalStateException("native holder settlement"); }))
+                            .isTrue();
+                    assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+                } else assertThat(reservation.commit()).isTrue();
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.COMMITTED);
+                assertThat(reservation.ownershipAccepted()).isTrue();
+                assertThat(reservation.rolledBack()).isFalse();
+                assertThat(fixture.views.getLast().amount(0)).isZero();
+                assertThat(network.amount()).isEqualTo(1L);
+                assertThat(buffer.amount()).isEqualTo(2L);
+                assertThat(reservation.commit()).isFalse();
+                reservation.close();
+                fixture.runtime.invalidate();
+                assertThat(buffer.reserved()).isZero();
+                assertThat(buffer.idleExcess()).isEqualTo(2L);
+                assertThat(network.amount() + buffer.amount()).isEqualTo(3L);
+            }
+            assertThat(fixture.views.getFirst().amount(0)).isEqualTo(materialLimited ? 3L : 10L);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    void failedSearchFinishedReleasesRealFluxCandidatesBeforeRetry(boolean pending, boolean cleanupThrows) throws Exception {
+        FluxNetworksTestBootstrap.bootstrap();
+        try (var ignored = ServerThreadTestScope.open()) {
+            AtomicInteger beforeStart = new AtomicInteger();
+            PendingStartFixture fixture = new PendingStartFixture("pending_flux_search_finished",
+                    RecipeBehavior.builder().beforeStart(context -> {
+                        beforeStart.incrementAndGet();
+                        context.setDuration(2);
+                    }).build(), List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(2L)));
+            var first = new SearchFinishedFluxCapability("pending-first", 20L);
+            var second = new SearchFinishedFluxCapability("pending-second", 20L);
+            first.throwOnFinished = true;
+            first.throwOnRestore = cleanupThrows;
+            var components = new ArrayList<>(fixture.controller.componentRuntime().components().stream()
+                    .filter(component -> component.getContainer() != fixture.energy).toList());
+            components.add(new ProcessingComponent(null, new PatternFluxHost(first), new BlockPos(1, 0, 0),
+                    new BlockPos(1, 0, 0), (String) null));
+            components.add(new ProcessingComponent(null, new PatternFluxHost(second), new BlockPos(2, 0, 0),
+                    new BlockPos(2, 0, 0), (String) null));
+            fixture.controller.componentRuntime().replaceComponents(components);
+            formForPattern(fixture.controller, true);
+            Supplier<PatternStartReservation> reserve = () -> {
+                if (pending) return fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(), 10L,
+                        copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)));
+                var prepared = fixture.runtime.preparePatternStart(fixture.recipe, 10L,
+                        fixture.view(10L, stack(Items.IRON_INGOT, 10)), PATTERN_PORT);
+                assertThat(prepared).isNotNull();
+                assertThat(fixture.runtime.reservePatternStart()).isTrue();
+                return PatternStartReservation.reserved(fixture.recipe, "", fixture.runtime, prepared,
+                        () -> fixture.runtime.releasePatternStart(prepared));
+            };
+
+            assertThatThrownBy(reserve::get).isInstanceOf(IllegalStateException.class)
+                    .hasMessage("prefetch search finished");
+            assertThat(beforeStart).hasValue(1);
+            assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
+            for (var capability : List.of(first, second)) {
+                assertThat(capability.planned).hasValue(1);
+                assertThat(capability.restored).hasValue(1);
+                assertThat(capability.handler.availableForPrefetch()).isEqualTo(20L);
+                assertThat(capability.handler.getBuffer()).isEqualTo(20L);
+                assertThat(capability.handler.reserved()).isZero();
+                assertThat(capability.nativeCommits).hasValue(0);
+            }
+            first.throwOnFinished = false;
+            first.throwOnRestore = false;
+            PatternStartReservation retried = reserve.get();
+            assertThat(retried.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+            assertThat(retried.parallelism()).isEqualTo(10L);
+            assertThat(beforeStart).hasValue(2);
+            for (var capability : List.of(first, second)) {
+                assertThat(capability.planned).hasValue(2);
+                assertThat(capability.restored).hasValue(1);
+                assertThat(capability.handler.availableForPrefetch()).isZero();
+            }
+            retried.close();
+            retried.close();
+            for (var capability : List.of(first, second)) {
+                assertThat(capability.restored).hasValue(2);
+                assertThat(capability.handler.availableForPrefetch()).isEqualTo(20L);
+                assertThat(capability.handler.getBuffer()).isEqualTo(20L);
+                assertThat(capability.handler.reserved()).isZero();
+                assertThat(capability.nativeCommits).hasValue(0);
+            }
+            assertThat(fixture.runtime.ledger().state().paidAttempts()).isZero();
+            assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
+            assertThat(fixture.views).allSatisfy(view -> assertThat(view.amount(0)).isEqualTo(10L));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void pendingStartCloseAndRollbackReleaseUnpaidSlot(boolean factoryLane) {
+        PendingStartFixture fixture = new PendingStartFixture("pending_rollback", RecipeBehavior.defaults(),
+                List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1L)));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(fixture.controller);
+        Supplier<PatternStartReservation> reserve = () -> {
+            if (!factoryLane) return fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(), 10L,
+                    copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)));
+            var lane = factory.reservePendingPatternStart(fixture.recipe, 10L,
+                    copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)), PATTERN_PORT);
+            return lane == null ? PatternStartReservation.unavailable() : reservation(fixture.recipe, factory, lane);
+        };
+        PatternStartReservation first = reserve.get();
+        assertThat(first.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+        assertThat(reserve.get().status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        var firstView = fixture.views.getLast();
+        first.close();
+        assertThat(first.rolledBack()).isTrue();
+        assertThat(firstView.amount(0)).isEqualTo(3L);
+        PatternStartReservation retried = reserve.get();
+        assertThat(retried.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+        var secondView = fixture.views.getLast();
+        retried.rollback();
+        assertThat(retried.rolledBack()).isTrue();
+        assertThat(secondView.amount(0)).isEqualTo(3L);
+        assertThat(fixture.energy.energyStorage().getAmountAsLong()).isEqualTo(3L);
+        assertThat(reserve.get().commit()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"catalog", "linked", "structure"})
+    void pendingStartRejectsStalePreparation(String change) {
+        PendingStartFixture fixture = new PendingStartFixture("pending_stale", RecipeBehavior.defaults(),
+                List.of(input(Items.IRON_INGOT, 1), new EnergyRequirement(1L)));
+        PatternStartReservation reservation = fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(),
+                10L, copies -> fixture.view(copies, stack(Items.IRON_INGOT, (int) copies)));
+        assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+        switch (change) {
+            case "catalog" -> RecipeRegistry.clearForTesting();
+            case "linked" -> fixture.controller.componentRuntime().replaceLinkedPortPositions(Set.of());
+            case "structure" -> fixture.controller.setFormed(false);
+        }
+        assertThat(reservation.commit()).isFalse();
+        assertThat(fixture.views.getLast().amount(0)).isEqualTo(3L);
+        assertThat(fixture.runtime.active()).isFalse();
+    }
+
+    @Test
+    void effectivePatternRecipeDoesNotPrepareOrRunBeforeStart() {
+        AtomicInteger beforeStart = new AtomicInteger();
+        PendingStartFixture fixture = new PendingStartFixture("pending_effective",
+                RecipeBehavior.builder().beforeStart(context -> {
+                    beforeStart.incrementAndGet();
+                    context.setDuration(1);
+                }).build(), List.of());
+        fixture.controller.componentRuntime().replaceModifiers(Map.of("effective", List.of(
+                MachineModifier.numeric("parallelism", "machine", 9D, "add", false),
+                MachineModifier.numeric("duration", "input", 0.2D, "multiply", false))));
+        var effective = fixture.controller.effectivePatternRecipe(fixture.recipe);
+        assertThat(effective).isNotNull();
+        assertThat(effective.duration()).isEqualTo(4);
+        assertThat(effective.parallelismLimit()).isEqualTo(10L);
+        assertThat(effective.recipeThreadLimit()).isEqualTo(2);
+        assertThat(beforeStart).hasValue(0);
+        assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
+        var reservation = fixture.controller.reservePendingPatternStart(PATTERN_PORT, List.of(), 1L,
+                copies -> fixture.view(copies));
+        assertThat(reservation.commit()).isTrue();
+        assertThat(beforeStart).hasValue(1);
+        assertThat(fixture.controller.effectivePatternRecipe(fixture.recipe)).isNotNull();
+    }
+
+    @Test
+    void pendingCursorRestartsAfterCatalogChanges() {
+        List<ResourceLocation> preparedRecipes = new ArrayList<>();
+        PendingStartFixture fixture = new PendingStartFixture("pending_catalog_last",
+                RecipeBehavior.builder().beforeStart(context -> {
+                    preparedRecipes.add(context.recipeId());
+                    context.cancel();
+                }).build(), List.of());
+        MachineRecipe first = MachineRecipe.fromCanonical(MMCR.id("pending_catalog_first"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), -100, 2, false, true, false, Set.of());
+        RecipeRegistry.registerStatic(first);
+        var cursor = new MachineControllerBlockEntity.PendingPatternCursor();
+        AtomicInteger budget = new AtomicInteger(1);
+        Supplier<PatternStartReservation> reserve = () -> fixture.controller.reservePendingPatternStart(PATTERN_PORT,
+                List.of(), 10L, copies -> fixture.view(copies), () -> budget.getAndDecrement() > 0, cursor);
+        assertThat(reserve.get().status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(preparedRecipes).containsExactly(first.id());
+
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id("pending_catalog_added"), MMCR.id("test_cube"),
+                20, List.of(), List.of(), List.of(), -200, 2, false, true, false, Set.of()));
+        MachineRecipe newFirst = fixture.controller.recipesForMachine().getFirst();
+        budget.set(1);
+        assertThat(reserve.get().status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        assertThat(preparedRecipes).containsExactly(first.id(), newFirst.id());
+    }
+
+    @Test
+    void nativeOwnershipIsAcceptedDuringUncertainPaymentAndAfterFailure() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            PaidPatternFixture fixture = new PaidPatternFixture("pending_uncertain_ownership");
+            assertThat(PatternStartReservation.unavailable().ownershipAccepted()).isFalse();
+            PatternStartReservation reservation = fixture.controller.reservePendingPatternStart(PATTERN_PORT,
+                    List.of(), 1L, copies -> List.of(new ItemBusCapability(fixture.inputs, IOType.INPUT)));
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+            assertThat(reservation.ownershipAccepted()).isFalse();
+            AtomicInteger uncertainCallbacks = new AtomicInteger();
+            fixture.prefetchWrite.set(() -> {
+                uncertainCallbacks.incrementAndGet();
+                assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.UNCERTAIN);
+                assertThat(fixture.runtime.ledger().state().paidAttempts()).isZero();
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(reservation.ownershipAccepted()).isTrue();
+                throw new IllegalStateException("native prefetch debited before failure");
+            });
+
+            assertThat(reservation.commit(() -> {
+                assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+                assertThat(fixture.runtime.ledger().state().paidAttempts()).isZero();
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(reservation.ownershipAccepted()).isTrue();
+            })).isTrue();
+            assertThat(uncertainCallbacks).hasValue(1);
+            assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+            assertThat(fixture.runtime.ledger().state().paidAttempts()).isZero();
+            assertThat(reservation.ownershipAccepted()).isTrue();
+            assertThat(reservation.rolledBack()).isFalse();
+            assertThat(fixture.inputs.amount(0)).isEqualTo(2L);
+            assertThat(fixture.network.amount()).isEqualTo(96L);
+            reservation.close();
+            assertThat(reservation.ownershipAccepted()).isTrue();
+            assertThat(reservation.commit()).isFalse();
+            assertThat(fixture.networkCommits).hasValue(1);
+        }
     }
 
     @Test
@@ -813,6 +1318,108 @@ class PatternStartReservationTest {
             assertThat(fixture.networkCommits).hasValue(2);
             assertThat(fixture.buffer.reserved()).isEqualTo(4L);
             assertThat(fixture.afterCommit).hasValue(notifyThrow ? 1 : 2);
+        }
+    }
+
+    /** Real Point candidate reservations with failures injected only at lifecycle notifications.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class SearchFinishedFluxCapability implements MachineCapability, RecipeEnergyPrefetchFacet {
+        private final FluxNetworkPointHandler handler = new FluxNetworkPointHandler(() -> true, () -> 1L, () -> { });
+        private final FluxNetworkInputCapability delegate;
+        private final AtomicInteger planned = new AtomicInteger();
+        private final AtomicInteger restored = new AtomicInteger();
+        private final AtomicInteger nativeCommits = new AtomicInteger();
+        private boolean throwOnFinished;
+        private boolean throwOnRestore;
+
+        private SearchFinishedFluxCapability(String key, long energy) {
+            handler.setLimit(1000L);
+            handler.requestWarmup(energy);
+            handler.onCycleStart();
+            handler.addToBuffer(energy);
+            handler.clearDemand();
+            delegate = new FluxNetworkInputCapability(handler, () -> key);
+        }
+
+        @Override public CapabilityType type() { return delegate.type(); }
+        @Override public CapabilityDirections directions() { return delegate.directions(); }
+        @Override public CapabilityView view() { return delegate.view(); }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+        @Override public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) {
+            return type == RecipeEnergyPrefetchFacet.class ? Optional.of(type.cast(this)) : delegate.facet(type);
+        }
+        @Override public String reservationKey() { return delegate.reservationKey(); }
+        @Override public Optional<PrefetchPlan> planPrefetch(long requested) {
+            return delegate.planPrefetch(requested).map(plan -> {
+                planned.incrementAndGet();
+                return new PrefetchPlan(plan.amount(), (NativeCapabilityOperation) () -> {
+                    nativeCommits.incrementAndGet();
+                    return plan.operation().commit();
+                }, plan.committedAmount());
+            });
+        }
+        @Override public void restoreReservation(long amount) {
+            restored.incrementAndGet();
+            delegate.restoreReservation(amount);
+            if (throwOnRestore) throw new IllegalStateException("prefetch restore notification");
+        }
+        @Override public long releaseReservation(long amount) { return delegate.releaseReservation(amount); }
+        @Override public void onRecipeSearchStarted(Object owner) { delegate.onRecipeSearchStarted(owner); }
+        @Override public void onRecipeSearchCandidate(Object owner, boolean eligible) {
+            delegate.onRecipeSearchCandidate(owner, eligible);
+        }
+        @Override public void onRecipeSearchFinished(Object owner, boolean found, boolean patternRequest) {
+            delegate.onRecipeSearchFinished(owner, found, patternRequest);
+            if (throwOnFinished) {
+                assertThat(found).isTrue();
+                assertThat(planned).hasValue(1);
+                assertThat(handler.availableForPrefetch()).isZero();
+                throw new IllegalStateException("prefetch search finished");
+            }
+        }
+    }
+
+    /** Pending views use real input routing and a physical energy limit, never a mocked plan.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class PendingStartFixture {
+        final EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        final MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
+        final CraftingRuntime runtime;
+        final MachineRecipe recipe;
+        final List<Long> plannedCopies = new ArrayList<>();
+        final List<LongItemStorage> views = new ArrayList<>();
+
+        PendingStartFixture(String name, RecipeBehavior behavior, List<MachineRequirement> requirements) {
+            Machine original = controller.currentStructureSnapshot().configuredMachine();
+            controller.setMachine(new Machine() {
+                @Override public ResourceLocation registryName() { return original.registryName(); }
+                @Override public BlockArray pattern() { return original.pattern(); }
+                @Override public MachineControllerSpec controller() { return original.controller(); }
+                @Override public RecipeBehavior behavior() { return behavior; }
+                @Override public boolean parallelizable() { return true; }
+                @Override public long maxParallelism() { return 10L; }
+            });
+            controller.componentRuntime().replaceModifiers(Map.of("parallelism", List.of(
+                    MachineModifier.numeric("parallelism", "machine", 9D, "add", false))));
+            energy.energyStorage().setAmount(3L);
+            formForPattern(controller, true);
+            runtime = RuntimeTestFixtures.craftingRuntime(controller);
+            recipe = MachineRecipe.fromCanonical(MMCR.id(name), MMCR.id("test_cube"), 20, requirements, List.of(),
+                    List.of(), 0, 2, false, true, false, Set.of());
+            RecipeRegistry.registerStatic(recipe);
+        }
+
+        List<MachineCapability> view(long copies, ItemStack... inputs) {
+            plannedCopies.add(copies);
+            var storage = new LongItemStorage(Math.max(1, inputs.length), 64L, null);
+            for (int slot = 0; slot < inputs.length; slot++) {
+                ItemStack stack = inputs[slot];
+                if (!stack.isEmpty()) storage.setContents(slot, stack, stack.getCount());
+            }
+            views.add(storage);
+            return List.of(new ItemBusCapability(storage, IOType.INPUT));
         }
     }
 

@@ -62,11 +62,20 @@ public final class PatternStartReservation implements AutoCloseable {
     }
 
     long preparedParallelism() {
+        return parallelism();
+    }
+
+    public long parallelism() {
         return preparedStart == null ? 0L : preparedStart.plan().parallelism();
     }
 
     public boolean rolledBack() {
         return rolledBack;
+    }
+
+    /** Native payment, including uncertain execution, forbids restoring the queued request. */
+    public boolean ownershipAccepted() {
+        return status == Status.COMMITTED || paid();
     }
 
     public boolean commit() { return commit(() -> { }); }

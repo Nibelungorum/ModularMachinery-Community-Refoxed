@@ -99,6 +99,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.LongFunction;
 import java.util.stream.IntStream;
 
 /**
@@ -720,6 +721,21 @@ public final class CraftingRuntime {
     public @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
                                                        List<MachineCapability> requestCapabilities,
                                                        @Nullable BlockPos requestSource) {
+        return preparePatternStart(recipe, requestedParallelism, requestCapabilities, requestSource, null);
+    }
+
+    /** Rebuilds transient inputs at most at q, the admitted p, and finally one copy. */
+    public @Nullable PreparedStart preparePendingPatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                              LongFunction<List<MachineCapability>> capabilitiesForParallelism,
+                                                              @Nullable BlockPos requestSource) {
+        if (capabilitiesForParallelism == null) return null;
+        return preparePatternStart(recipe, requestedParallelism, null, requestSource, capabilitiesForParallelism);
+    }
+
+    private @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
+                                                        List<MachineCapability> requestCapabilities,
+                                                        @Nullable BlockPos requestSource,
+                                                        @Nullable LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
         if (recipe == null || requestedParallelism <= 0 || active() || errorPaused() || patternStartReserved
                 || pendingPatternStart != null || !patternOwnerCurrent()) return null;
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
@@ -779,45 +795,81 @@ public final class CraftingRuntime {
         runtime = current;
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRequirement::copyOf).toList();
-        List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
-        CraftingContext patternContext = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime))
-                .withReservationOwner(stressSession);
-        if (requestSource == null) {
-            if (requestCapabilities != null && !requestCapabilities.isEmpty()) {
-                if (patternContext.inputRouting() != null) return null;
-                patternContext = legacyPatternContext(runtime, requestCapabilities);
+        long viewParallelism = effectiveParallelism;
+        for (int attempt = 0; attempt < (capabilitiesForParallelism == null ? 1 : 3); attempt++) {
+            if (capabilitiesForParallelism != null) {
+                requestCapabilities = capabilitiesForParallelism.apply(viewParallelism);
+                if (requestCapabilities == null) return null;
             }
-        } else {
-            if (patternContext.inputRouting() != null && patternContext.inputRouting().inputPorts().stream()
-                    .noneMatch(port -> port.position().equals(requestSource))) return null;
-            patternContext = patternContext.forPatternStart(requestCapabilities, requestSource);
-        }
-        PlanningResult result = planStartInputs(patternContext, requirements, facets, effectiveParallelism);
-        if (ledger != originalLedger || lifecycle != controller.lifecycleEpoch() || active() || patternStartReserved) return null;
-        CraftingPlan plan = result.plan();
-        if (!result.successful() || plan == null) {
-            restoreFailure(result.failure() == null ? missingInputStatus() : result.failure());
-            return null;
-        }
-        for (RecipeEnergyPrefetchFacet facet : facets) {
-            facet.onRecipeSearchStarted(this);
-            facet.onRecipeSearchCandidate(this, true);
-        }
-        List<PreparedPrefetch> prefetches = null;
-        try {
-            prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
-        } finally {
+            List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
+            CraftingContext patternContext = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime))
+                    .withReservationOwner(stressSession);
+            if (requestSource == null) {
+                if (requestCapabilities != null && !requestCapabilities.isEmpty()) {
+                    if (patternContext.inputRouting() != null) return null;
+                    patternContext = legacyPatternContext(runtime, requestCapabilities);
+                }
+            } else {
+                if (patternContext.inputRouting() != null && patternContext.inputRouting().inputPorts().stream()
+                        .noneMatch(port -> port.position().equals(requestSource))) return null;
+                patternContext = patternContext.forPatternStart(requestCapabilities, requestSource);
+            }
+            PlanningResult result = planStartInputs(patternContext, requirements, facets, viewParallelism);
+            if (ledger != originalLedger || lifecycle != controller.lifecycleEpoch() || active() || patternStartReserved) return null;
+            CraftingPlan plan = result.plan();
+            if (capabilitiesForParallelism != null
+                    && (!result.successful() || plan == null || plan.parallelism() != viewParallelism)) {
+                if (viewParallelism == 1L) {
+                    restoreFailure(result.failure() == null ? missingInputStatus() : result.failure());
+                    return null;
+                }
+                viewParallelism = attempt == 0 && result.successful() && plan != null
+                        && plan.parallelism() > 0L && plan.parallelism() < viewParallelism ? plan.parallelism() : 1L;
+                continue;
+            }
+            if (!result.successful() || plan == null) {
+                restoreFailure(result.failure() == null ? missingInputStatus() : result.failure());
+                return null;
+            }
             for (RecipeEnergyPrefetchFacet facet : facets) {
-                facet.onRecipeSearchFinished(this, prefetches != null, true);
+                facet.onRecipeSearchStarted(this);
+                facet.onRecipeSearchCandidate(this, true);
+            }
+            List<PreparedPrefetch> prefetches = null;
+            boolean published = false;
+            try {
+                try {
+                    prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
+                } finally {
+                    for (RecipeEnergyPrefetchFacet facet : facets) {
+                        facet.onRecipeSearchFinished(this, prefetches != null, true);
+                    }
+                }
+                if (prefetches == null) {
+                    if (capabilitiesForParallelism == null || viewParallelism == 1L || attempt >= 2) return null;
+                    viewParallelism = 1L;
+                    continue;
+                }
+                PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches);
+                if (capabilitiesForParallelism != null && (!startAttemptCurrent(lifecycle, originalLedger)
+                        || !patternOwnerCurrent() || pendingPatternStart != null || pendingPaymentStart != null
+                        || patternStartReserved || !Objects.equals(domain, controller.resourceDomain())
+                        || !preparedStartCurrent(prepared)
+                        || requestSource != null && !controller.currentRuntimeSnapshot().linkedPortPositions().contains(requestSource))) {
+                    return null;
+                }
+                pendingPatternSource = requestSource == null ? null : requestSource.immutable();
+                pendingPatternDomain = domain;
+                pendingPatternLifecycle = lifecycle;
+                ledger = new RecipeCommitLedger();
+                pendingPatternStart = prepared;
+                published = true;
+                return pendingPatternStart;
+            } finally {
+                if (!published && prefetches != null) releaseUnpaidPrefetches(prefetches);
             }
         }
-        if (prefetches == null) return null;
-        pendingPatternStart = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches);
-        pendingPatternSource = requestSource == null ? null : requestSource.immutable();
-        pendingPatternDomain = domain;
-        pendingPatternLifecycle = lifecycle;
-        ledger = new RecipeCommitLedger();
-        return pendingPatternStart;
+        return null;
     }
 
     public boolean reservePatternStart() {
@@ -931,11 +983,11 @@ public final class CraftingRuntime {
     private void releaseUnpaidPrefetches(List<PreparedPrefetch> prefetches) {
         for (PreparedPrefetch prefetch : prefetches) {
             if (prefetch.released || prefetch.transferred || prefetch.inFlight) continue;
-            long acquired = prefetch.confirmedAmount();
-            // An opaque throwing operation cannot authorize releasing somebody else's reservation.
-            if (acquired < 0L) continue;
-            prefetch.released = true;
             try {
+                long acquired = prefetch.confirmedAmount();
+                // An opaque throwing operation cannot authorize releasing somebody else's reservation.
+                if (acquired < 0L) continue;
+                prefetch.released = true;
                 if (acquired > 0L && prefetch.facet().releaseReservation(acquired) != acquired) prefetch.releaseFailed = true;
                 if (acquired < prefetch.plan().amount()) prefetch.facet().restoreReservation(prefetch.plan().amount() - acquired);
             } catch (RuntimeException exception) {
@@ -3482,6 +3534,17 @@ public final class CraftingRuntime {
     /** Returns outputs using the same runtime modifier context as pattern-start preparation. */
     public List<MachineOutput> runtimeMachineOutputs(MachineRecipe recipe, ControllerRuntimeSnapshot runtime) {
         return recipe.runtimeMachineOutputs(contextModifiers(runtime));
+    }
+
+    /** Resolves candidate limits and duration without beforeStart, planning, or reserving a slot. */
+    public @Nullable EffectiveRecipe effectivePatternRecipe(MachineRecipe recipe) {
+        if (recipe == null || !patternOwnerCurrent() || !recipeBelongsToMachine(recipe)) return null;
+        ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
+        if (!runtime.structure().formed() || !runtime.structure().structureAreaLoaded() || controller.isRedstonePaused()
+                || recipeBehavior(runtime) == null
+                || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())
+                || !controller.recipesForMachine().contains(recipe)) return null;
+        return resolve(recipe, runtime);
     }
 
     private void captureVersions(ControllerRuntimeSnapshot runtime) {
