@@ -89,7 +89,7 @@ class ManaRecipeDeclarationTest {
     }
 
     @Test
-    void validatesPositiveAmountsImmutableTagsAndDeterministicOutputs() {
+    void validatesPositiveAmountsImmutableTagsAndProbabilities() {
         for (long amount : new long[]{0L, -1L, Long.MIN_VALUE}) {
             assertThatThrownBy(() -> ManaRequirement.input(amount)).isInstanceOf(IllegalArgumentException.class);
             assertThatThrownBy(() -> ManaRequirement.output(amount)).isInstanceOf(IllegalArgumentException.class);
@@ -105,9 +105,46 @@ class ManaRecipeDeclarationTest {
         assertThatThrownBy(() -> new ManaRequirement(null, 1L, List.of())).isInstanceOf(NullPointerException.class);
         ManaOutput output = new ManaOutput(700L);
         assertThat(output.withChance(1F)).isSameAs(output);
-        for (float chance : new float[]{0F, 0.5F, -1F, 2F, Float.NaN}) {
+        for (float chance : new float[]{-1F, 2F, Float.NaN}) {
             assertThatThrownBy(() -> output.withChance(chance)).isInstanceOf(IllegalArgumentException.class);
         }
+    }
+
+    @Test
+    void probabilityRoundTripsCopiesSyncsAndAppliesOnlyMatchingModifiers() {
+        assertThat(ManaRequirement.input(700L).consumeChance()).isEqualTo(1F);
+        for (float chance : new float[]{0F, 0.5F, 1F}) {
+            ManaRequirement input = ManaRequirement.input(700L, chance);
+            ManaOutput output = new ManaOutput(700L).withChance(chance);
+            assertThat(ManaRequirement.CODEC.codec().parse(JsonOps.INSTANCE,
+                    ManaRecipeDeclarations.inputPayload(700L, chance)).getOrThrow()).isEqualTo(input);
+            assertThat(ManaOutput.CODEC.codec().parse(JsonOps.INSTANCE,
+                    ManaRecipeDeclarations.outputPayload(700L, chance)).getOrThrow()).isEqualTo(output);
+            assertThat(MachineRequirement.copyOf(input)).isEqualTo(input);
+            assertThat(MachineOutput.copyOf(output)).isEqualTo(output);
+            MachineRequirement converted = OutputRegistry.toRequirement(output, List.of("arcane"));
+            assertThat(converted).isEqualTo(new ManaRequirement(IOType.OUTPUT, 700L, chance, 1F, List.of("arcane")));
+            assertThat(OutputRegistry.fromRequirement(converted)).isEqualTo(output);
+            assertThat(RequirementHandlerRegistry.applyLevelModifiers(converted, 2D, 3D))
+                    .isEqualTo(new ManaRequirement(IOType.OUTPUT, 2100L, chance, 1F, List.of("arcane")));
+            RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+            try {
+                ManaRequirement.SYNC_CODEC.encode(buffer, input);
+                ManaOutput.SYNC_CODEC.encode(buffer, output);
+                assertThat(ManaRequirement.SYNC_CODEC.decode(buffer)).isEqualTo(input);
+                assertThat(ManaOutput.SYNC_CODEC.decode(buffer)).isEqualTo(output);
+            } finally {
+                buffer.release();
+            }
+        }
+        List<RecipeModifier> modifiers = List.of(
+                new RecipeModifier("mana", IOType.INPUT, 0.5F, Operation.MULTIPLY, true),
+                new RecipeModifier("mana", IOType.OUTPUT, 0.25F, Operation.MULTIPLY, true));
+        assertThat(RequirementHandlerRegistry.applyModifiers(ManaRequirement.input(700L, 0.5F), modifiers))
+                .isEqualTo(ManaRequirement.input(700L, 0.25F));
+        assertThat(RequirementHandlerRegistry.applyModifiers(ManaRequirement.output(700L, 0.5F), modifiers))
+                .isEqualTo(ManaRequirement.output(700L, 0.125F));
+        assertThat(new ManaOutput(700L).applyModifiers(modifiers)).isEqualTo(new ManaOutput(700L, 0.25F));
     }
 
     @Test

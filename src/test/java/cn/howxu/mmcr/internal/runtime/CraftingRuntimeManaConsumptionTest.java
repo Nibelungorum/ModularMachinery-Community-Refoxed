@@ -2,6 +2,8 @@ package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
@@ -145,6 +147,39 @@ class CraftingRuntimeManaConsumptionTest {
         assertThat(readField(restored, "consumedAtStart")).isEqualTo(Set.of(0));
         assertThat(requirements(restored, "perTickRequirements")).isEmpty();
         assertThat(storage.amount()).isEqualTo(300);
+    }
+
+    @Test
+    void retainedManaDoesNotRerollItsStartupConsumeChanceAfterProgressOrRestore() throws Exception {
+        List<MachineRequirement> requirements = List.of(ManaRequirement.input(300L, 0.25F));
+        var active = activeRecipe("mana_retained_chance", requirements);
+        var runtime = runtime(active, requirements);
+        capture(runtime, requirements, new CraftingPlan(List.of(new RequirementPlan(0, 1L, List.of(), null)),
+                1L, Map.of(0, RecipeModifier.IOType.INPUT)));
+
+        var tickInput = (ManaRequirement) requirements(runtime, "perTickRequirements").getFirst();
+        assertThat(tickInput.amount()).isEqualTo(300L);
+        assertThat(tickInput.consumeChance()).isZero();
+        assertThat(active.inputConsumptionPlan().consumedInputBatches()).containsExactly(0);
+
+        var restored = runtime(null, List.of());
+        restored.restore(active, null, 0L, 0L, 0L, 0L);
+        assertThat(restored.active()).isTrue();
+        assertThat(((ManaRequirement) requirements(restored, "perTickRequirements").getFirst()).consumeChance()).isZero();
+    }
+
+    @Test
+    void craftingContextRetainedManaOnlyChecksTheInputWithoutReconsuming() {
+        var storage = new ManaStorage(() -> {});
+        storage.setAmount(600L);
+        var input = new ManaPortCapability(null, storage, IOType.INPUT);
+        var context = new CraftingContext(new CapabilitySnapshot(List.of(input)));
+        var result = context.planInputs(List.of(ManaRequirement.input(300L, 0.25F)), 1L, Set.of(), Set.of(0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().hasOperations(0)).isFalse();
+        assertThat(result.plan().commitInputs()).isTrue();
+        assertThat(storage.amount()).isEqualTo(600L);
     }
 
     @Test

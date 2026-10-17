@@ -9,4 +9,6 @@ import org.jetbrains.annotations.ApiStatus;
 public interface AirRequirementSpec extends RequirementSpec {
     long airPerTick();
     float minPressure();
+    float chance();
+    float consumeChance();
 }

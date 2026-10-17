@@ -15,7 +15,7 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public record AirRequirement(RecipeModifier.IOType io, long airPerTick, float minPressure,
-                             List<String> tags) implements MachineRequirement {
+                              float chance, float consumeChance, List<String> tags) implements MachineRequirement {
     public static final MapCodec<AirRequirement> CODEC = RecordCodecBuilder.<Fields>mapCodec(instance -> instance.group(
             Codec.STRING.validate(value -> "pneumaticcraft:air".equals(value) ? DataResult.success(value)
                     : DataResult.error(() -> "Expected pneumaticcraft:air")).fieldOf("type").forGetter(Fields::type),
@@ -26,17 +26,29 @@ public record AirRequirement(RecipeModifier.IOType io, long airPerTick, float mi
             }, value -> DataResult.success(value.getKey())).fieldOf("io").forGetter(Fields::io),
             Codec.LONG.fieldOf("air_per_tick").forGetter(Fields::airPerTick),
             Codec.FLOAT.optionalFieldOf("min_pressure").forGetter(Fields::minPressure),
+            Codec.floatRange(0F, 1F).optionalFieldOf("chance", 1F).forGetter(Fields::chance),
+            Codec.floatRange(0F, 1F).optionalFieldOf("consume_chance", 1F).forGetter(Fields::consumeChance),
             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(Fields::tags)
     ).apply(instance, Fields::new)).flatXmap(AirRequirement::decode, value -> DataResult.success(new Fields(
             "pneumaticcraft:air", value.io(), value.airPerTick(),
-            value.io() == RecipeModifier.IOType.INPUT ? Optional.of(value.minPressure()) : Optional.empty(), value.tags())));
+            value.io() == RecipeModifier.IOType.INPUT ? Optional.of(value.minPressure()) : Optional.empty(),
+            value.chance(), value.consumeChance(), value.tags())));
     public static final RequirementType<AirRequirement> TYPE = new RequirementType.Definition<>(
             PneumaticIds.AIR, CODEC, new AirRequirementHandler(), value -> new AirRequirement(
-            value.io(), value.airPerTick(), value.minPressure(), value.tags()), RecipeSyncCodec.json(CODEC.codec()));
+            value.io(), value.airPerTick(), value.minPressure(), value.chance(), value.consumeChance(), value.tags()),
+            RecipeSyncCodec.json(CODEC.codec()));
+
+    public AirRequirement(RecipeModifier.IOType io, long airPerTick, float minPressure, List<String> tags) {
+        this(io, airPerTick, minPressure, 1F, 1F, tags);
+    }
 
     public AirRequirement {
         if (io == null) throw new IllegalArgumentException("air direction is required");
         if (airPerTick < 0L) throw new IllegalArgumentException("air_per_tick must be non-negative");
+        if (!Float.isFinite(chance) || chance < 0F || chance > 1F
+                || !Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+            throw new IllegalArgumentException("chance and consume_chance must be between 0 and 1");
+        }
         if (!Float.isFinite(minPressure) || minPressure < 0F) {
             throw new IllegalArgumentException("min_pressure must be finite and non-negative");
         }
@@ -52,7 +64,15 @@ public record AirRequirement(RecipeModifier.IOType io, long airPerTick, float mi
     }
 
     public static AirRequirement input(long airPerTick, float minPressure, List<String> tags) {
-        return new AirRequirement(RecipeModifier.IOType.INPUT, airPerTick, minPressure, tags);
+        return input(airPerTick, minPressure, 1F, tags);
+    }
+
+    public static AirRequirement input(long airPerTick, float minPressure, float consumeChance) {
+        return input(airPerTick, minPressure, consumeChance, List.of());
+    }
+
+    public static AirRequirement input(long airPerTick, float minPressure, float consumeChance, List<String> tags) {
+        return new AirRequirement(RecipeModifier.IOType.INPUT, airPerTick, minPressure, 1F, consumeChance, tags);
     }
 
     public static AirRequirement output(long airPerTick) {
@@ -60,7 +80,15 @@ public record AirRequirement(RecipeModifier.IOType io, long airPerTick, float mi
     }
 
     public static AirRequirement output(long airPerTick, List<String> tags) {
-        return new AirRequirement(RecipeModifier.IOType.OUTPUT, airPerTick, 0F, tags);
+        return output(airPerTick, 1F, tags);
+    }
+
+    public static AirRequirement output(long airPerTick, float chance) {
+        return output(airPerTick, chance, List.of());
+    }
+
+    public static AirRequirement output(long airPerTick, float chance, List<String> tags) {
+        return new AirRequirement(RecipeModifier.IOType.OUTPUT, airPerTick, 0F, chance, 1F, tags);
     }
 
     @Override
@@ -74,7 +102,7 @@ public record AirRequirement(RecipeModifier.IOType io, long airPerTick, float mi
         }
         try {
             return DataResult.success(new AirRequirement(fields.io(), fields.airPerTick(),
-                    fields.minPressure().orElse(0F), fields.tags()));
+                    fields.minPressure().orElse(0F), fields.chance(), fields.consumeChance(), fields.tags()));
         } catch (IllegalArgumentException exception) {
             return DataResult.error(exception::getMessage);
         }
@@ -84,6 +112,6 @@ public record AirRequirement(RecipeModifier.IOType io, long airPerTick, float mi
      * @author howxu <dev@howxu.cn>
      */
     private record Fields(String type, RecipeModifier.IOType io, long airPerTick,
-                          Optional<Float> minPressure, List<String> tags) {
+                          Optional<Float> minPressure, float chance, float consumeChance, List<String> tags) {
     }
 }

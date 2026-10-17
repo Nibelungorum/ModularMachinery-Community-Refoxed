@@ -31,6 +31,8 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.StockingInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedAEMenuTypes;
@@ -193,13 +195,14 @@ public class AE2StockingInterfaceGameTest {
             menu.setCarried(ItemStack.EMPTY);
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
-            helper.assertTrue(snapshot.capabilities().size() == (AppMekBridge.get().available() ? 3 : 2),
+            helper.assertTrue(snapshot.capabilities().size() == 2 + (AppMekBridge.get().available() ? 1 : 0) + (LightningBridge.get().available() ? 1 : 0),
                     "Stocking interface exposes its loaded resource families");
             for (MachineCapability capability : snapshot.capabilities()) {
                 helper.assertTrue(capability.type().id().equals(PortFamilyIds.ITEM)
                                 || capability.type().id().equals(PortFamilyIds.FLUID)
-                                || AppMekBridge.get().available() && capability.type().id().equals(MekanismPortFamilies.CHEMICAL),
-                        "Stocking capability has an item or fluid family");
+                                || AppMekBridge.get().available() && capability.type().id().equals(MekanismPortFamilies.CHEMICAL)
+                                || LightningBridge.get().available() && capability.type().id().equals(LightningRecipeTypes.LIGHTNING),
+                        "Stocking capability belongs to a supported family");
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "Stocking capability does not expose TransferFacet");
             }

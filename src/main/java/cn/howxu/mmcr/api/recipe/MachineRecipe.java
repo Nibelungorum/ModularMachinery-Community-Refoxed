@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
@@ -123,6 +124,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.requirements = MachineRequirement.copyList(requirements == null ? List.of() : requirements);
         validateLevelRequirements(this.requirements);
         this.outputs = MachineOutput.copyList(outputs == null ? List.of() : outputs);
+        LightningRecipeTypes.validateRecipeAmounts(runtimeRequirementSource());
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);
         this.priority = priority;
         this.maxThreads = maxThreads;
@@ -157,6 +159,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             if (requirement != null && !represented) newRequirements.add(requirement);
         }
         this.requirements = List.copyOf(newRequirements);
+        LightningRecipeTypes.validateRecipeAmounts(runtimeRequirementSource());
     }
 
     private MachineRecipe(ResourceLocation id, MachineRecipe recipe) {
@@ -364,6 +367,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                     RequirementHandlerRegistry.applyLevelModifiers(requirement, energyMultiplier, outputMultiplier),
                     effective));
         }
+        LightningRecipeTypes.validateRecipeAmounts(derived);
         return List.copyOf(derived);
     }
 

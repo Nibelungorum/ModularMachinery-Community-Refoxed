@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
@@ -246,31 +247,55 @@ public record MachineRecipeDisplay(
                 .filter(AirRequirement.class::isInstance)
                 .map(AirRequirement.class::cast)
                 .filter(requirement -> requirement.io() == io)
-                .map(requirement -> new AirDisplay(requirement.airPerTick(), requirement.minPressure(), requirement.tags()))
+                .map(requirement -> new AirDisplay(requirement.airPerTick(), requirement.minPressure(), requirement.tags(),
+                        io == IOType.INPUT ? requirement.consumeChance() : requirement.chance()))
                 .toList();
     }
 
     /** Air is the resource; minimum pressure is an input condition, including zero-rate inputs.
      * @author howxu <dev@howxu.cn>
      */
-    public record AirDisplay(long airPerTick, float minPressure, List<String> tags) {
+    public record AirDisplay(long airPerTick, float minPressure, List<String> tags, float chance) {
         public AirDisplay { tags = List.copyOf(tags); }
+
+        public AirDisplay(long airPerTick, float minPressure, List<String> tags) {
+            this(airPerTick, minPressure, tags, 1F);
+        }
 
         private String pressureText() {
             return new BigDecimal(Float.toString(minPressure)).stripTrailingZeros().toPlainString();
         }
 
         public Component label(boolean input) {
-            if (!input) return Component.translatable("jei.mmcr.machine_recipe.air_out", ReadableNumber.format(airPerTick));
+            if (!input) return withChanceLabel(Component.translatable("jei.mmcr.machine_recipe.air_out",
+                    ReadableNumber.format(airPerTick)), chance, false);
             if (airPerTick == 0) return Component.translatable("jei.mmcr.machine_recipe.air_condition", pressureText());
-            return Component.translatable("jei.mmcr.machine_recipe.air_in", ReadableNumber.format(airPerTick), pressureText());
+            return withChanceLabel(Component.translatable("jei.mmcr.machine_recipe.air_in",
+                    ReadableNumber.format(airPerTick), pressureText()), chance, true);
         }
 
         public List<Component> tooltip(boolean input) {
-            if (!input) return List.of(Component.translatable("jei.mmcr.machine_recipe.air_out.tooltip", airPerTick));
-            if (airPerTick == 0) return List.of(Component.translatable("jei.mmcr.machine_recipe.air_condition.tooltip", pressureText()));
-            return List.of(Component.translatable("jei.mmcr.machine_recipe.air_in.tooltip", airPerTick, pressureText()));
+            List<Component> tooltip = new ArrayList<>();
+            if (!input) tooltip.add(Component.translatable("jei.mmcr.machine_recipe.air_out.tooltip", airPerTick));
+            else if (airPerTick == 0) return List.of(Component.translatable("jei.mmcr.machine_recipe.air_condition.tooltip", pressureText()));
+            else tooltip.add(Component.translatable("jei.mmcr.machine_recipe.air_in.tooltip", airPerTick, pressureText()));
+            if (chance < 1F) {
+                tooltip.add(chanceComponent(chance, input));
+                tooltip.add(Component.translatable("jei.mmcr.machine_recipe.air_chance_per_tick"));
+            }
+            return List.copyOf(tooltip);
         }
+    }
+
+    static Component withChanceLabel(Component label, float chance, boolean input) {
+        return chance >= 1F ? label : Component.translatable("jei.mmcr.machine_recipe.chanced_resource",
+                label, chanceComponent(chance, input));
+    }
+
+    private static Component chanceComponent(float chance, boolean input) {
+        if (input && chance == 0F) return Component.translatable("jei.mmcr.machine_recipe.keep");
+        return Component.translatable(input ? "jei.mmcr.machine_recipe.consume_chance"
+                : "jei.mmcr.machine_recipe.output_chance", Math.round(chance * 100F) + "%");
     }
 
     public static Component minimumTemperatureLabel(double kelvin) {
@@ -297,7 +322,8 @@ public record MachineRecipeDisplay(
                         && !(requirement instanceof SmartInterfaceRequirement)
                         && !(requirement instanceof LevelRequirement)
                         && !(requirement instanceof StageRequirement)
-                        && !(requirement instanceof StressRequirement)
+                         && !(requirement instanceof StressRequirement)
+                         && !(requirement instanceof LightningRequirement)
                         && !(requirement instanceof AirRequirement))
                 .map(requirement -> new RecipeIoEntry(
                         requirement.io() == RecipeModifier.IOType.INPUT
@@ -332,6 +358,12 @@ public record MachineRecipeDisplay(
         }
         if (requirement instanceof LoadedChemicalRequirement chemical) {
             return chemical.io() == RecipeModifier.IOType.INPUT ? chemical.consumeChance() : chemical.chance();
+        }
+        if (requirement instanceof SourceRequirement source) {
+            return source.io() == IOType.INPUT ? source.consumeChance() : source.chance();
+        }
+        if (requirement instanceof ManaRequirement mana) {
+            return mana.io() == IOType.INPUT ? mana.consumeChance() : mana.chance();
         }
         return 1F;
     }

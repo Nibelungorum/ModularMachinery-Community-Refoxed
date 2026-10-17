@@ -17,4 +17,10 @@ public final class BotaniaIoAdapters {
     public static CustomIoSpec manaOutput(long amount) {
         return IoValues.customIo(BotaniaManaIds.MANA, IoDirection.OUTPUT, ManaRecipeDeclarations.outputPayload(amount));
     }
+    public static CustomIoSpec manaInput(long amount, float consumeChance) {
+        return IoValues.customIo(BotaniaManaIds.MANA, IoDirection.INPUT, ManaRecipeDeclarations.inputPayload(amount, consumeChance));
+    }
+    public static CustomIoSpec manaOutput(long amount, float chance) {
+        return IoValues.customIo(BotaniaManaIds.MANA, IoDirection.OUTPUT, ManaRecipeDeclarations.outputPayload(amount, chance));
+    }
 }

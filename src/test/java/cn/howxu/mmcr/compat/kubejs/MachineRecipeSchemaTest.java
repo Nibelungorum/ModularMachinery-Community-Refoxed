@@ -13,6 +13,10 @@ import cn.howxu.mmcr.compat.botania.ManaRecipeDeclarations;
 import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticRecipeTypes;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
@@ -613,6 +617,64 @@ class MachineRecipeSchemaTest {
                     assertThatIllegalArgumentException().isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get(name).function()
                             .execute(new TestRecipeContext(recipe), List.of(invalid)));
                 }
+            }
+        }
+    }
+
+    @Test
+    void probability_schema_functions_build_canonical_source_mana_and_air_io() {
+        try (var requirements = RequirementHandlerRegistry.openTestScope();
+             var outputs = OutputRegistry.openTestScope()) {
+            ArsNouveauRecipeTypes.register();
+            BotaniaRecipeTypes.register();
+            PneumaticRecipeTypes.register();
+            long amount = 3_000_000_000L;
+            for (float chance : new float[]{0F, 0.25F, 1F}) {
+                var recipe = new KubeRecipe();
+                recipe.json = new JsonObject();
+                var context = new TestRecipeContext(recipe);
+                for (String function : List.of("inputSourceChance", "outputSourceChance", "inputManaChance", "outputManaChance", "outputAirChance")) {
+                    MachineRecipeSchema.SCHEMA.functions.get(function).function().execute(context, List.of(amount, chance));
+                }
+                MachineRecipeSchema.SCHEMA.functions.get("inputAirChance").function().execute(context, List.of(amount, 4F, chance));
+                assertThat(recipe.json.getAsJsonArray("requirements").asList().stream()
+                        .map(value -> MachineRequirement.CODEC.parse(JsonOps.INSTANCE, value).getOrThrow()).toList())
+                        .containsExactly(SourceRequirement.input(amount, chance), ManaRequirement.input(amount, chance),
+                                AirRequirement.output(amount, chance), AirRequirement.input(amount, 4F, chance));
+                assertThat(recipe.json.getAsJsonArray("outputs").asList().stream()
+                        .map(value -> MachineOutput.CODEC.parse(JsonOps.INSTANCE, value).getOrThrow()).toList())
+                        .containsExactly(new SourceOutput(amount).withChance(chance), new ManaOutput(amount).withChance(chance));
+                var tagged = new KubeRecipe();
+                tagged.json = new JsonObject();
+                MachineRecipeSchema.SCHEMA.functions.get("custom").function().execute(new TestRecipeContext(tagged),
+                        List.of(PneumaticIds.AIR.toString(), "input", MachineRecipeBuilder.airInputPayload(amount, 4F, chance, List.of("drive"))));
+                assertThat(MachineRequirement.CODEC.parse(JsonOps.INSTANCE, tagged.json.getAsJsonArray("requirements").get(0)).getOrThrow())
+                        .isEqualTo(AirRequirement.input(amount, 4F, chance, List.of("drive")));
+            }
+            var defaults = new KubeRecipe();
+            defaults.json = new JsonObject();
+            for (String function : List.of("inputSource", "outputSource", "inputMana", "outputMana", "outputAir")) {
+                MachineRecipeSchema.SCHEMA.functions.get(function).function().execute(new TestRecipeContext(defaults), List.of(amount));
+            }
+            MachineRecipeSchema.SCHEMA.functions.get("inputAir").function().execute(new TestRecipeContext(defaults), List.of(0L, 4F));
+            assertThat(defaults.json.getAsJsonArray("requirements").asList().stream()
+                    .map(value -> MachineRequirement.CODEC.parse(JsonOps.INSTANCE, value).getOrThrow()).toList())
+                    .containsExactly(SourceRequirement.input(amount), ManaRequirement.input(amount), AirRequirement.output(amount), AirRequirement.input(0L, 4F));
+            assertThat(defaults.json.getAsJsonArray("outputs").asList().stream()
+                    .map(value -> MachineOutput.CODEC.parse(JsonOps.INSTANCE, value).getOrThrow()).toList())
+                    .containsExactly(new SourceOutput(amount), new ManaOutput(amount));
+        }
+    }
+
+    @Test
+    void probability_schema_functions_delegate_invalid_chances_to_core_validation() {
+        for (float invalid : new float[]{-0.1F, 1.1F, Float.NaN, Float.POSITIVE_INFINITY}) {
+            for (String function : List.of("inputSourceChance", "outputSourceChance", "inputManaChance", "outputManaChance", "outputAirChance", "inputAirChance")) {
+                var recipe = new KubeRecipe();
+                recipe.json = new JsonObject();
+                List<Object> arguments = function.equals("inputAirChance") ? List.of(10L, 4F, invalid) : List.of(10L, invalid);
+                assertThatIllegalArgumentException().isThrownBy(() -> MachineRecipeSchema.SCHEMA.functions.get(function).function()
+                        .execute(new TestRecipeContext(recipe), arguments));
             }
         }
     }

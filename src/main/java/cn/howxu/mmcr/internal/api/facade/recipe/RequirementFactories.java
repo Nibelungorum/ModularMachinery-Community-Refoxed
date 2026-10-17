@@ -31,8 +31,12 @@ public final class RequirementFactories {
     private RequirementFactories() {}
     public static SourceRequirementSpec source(IoDirection direction, long amount, List<String> tags) { return (SourceRequirementSpec) wrap(new SourceRequirement(io(direction), amount, tags)); }
     public static ManaRequirementSpec mana(IoDirection direction, long amount, List<String> tags) { return (ManaRequirementSpec) wrap(new ManaRequirement(io(direction), amount, tags)); }
+    public static SourceRequirementSpec source(IoDirection direction, long amount, float chance, float consumeChance, List<String> tags) { return (SourceRequirementSpec) wrap(new SourceRequirement(io(direction), amount, chance, consumeChance, tags)); }
+    public static ManaRequirementSpec mana(IoDirection direction, long amount, float chance, float consumeChance, List<String> tags) { return (ManaRequirementSpec) wrap(new ManaRequirement(io(direction), amount, chance, consumeChance, tags)); }
     public static AirRequirementSpec airInput(long airPerTick, float minPressure, List<String> tags) { return (AirRequirementSpec) wrap(AirRequirement.input(airPerTick, minPressure, tags)); }
     public static AirRequirementSpec airOutput(long airPerTick, List<String> tags) { return (AirRequirementSpec) wrap(AirRequirement.output(airPerTick, tags)); }
+    public static AirRequirementSpec airInput(long airPerTick, float minPressure, float consumeChance, List<String> tags) { return (AirRequirementSpec) wrap(AirRequirement.input(airPerTick, minPressure, consumeChance, tags)); }
+    public static AirRequirementSpec airOutput(long airPerTick, float chance, List<String> tags) { return (AirRequirementSpec) wrap(AirRequirement.output(airPerTick, chance, tags)); }
     public static StressRequirementSpec stressInput(double stress, double minRpm, List<String> tags) { return (StressRequirementSpec) wrap(StressRequirement.input(stress, minRpm, tags)); }
     public static StressRequirementSpec stressOutput(double stress, double rpm, List<String> tags) { return (StressRequirementSpec) wrap(StressRequirement.output(stress, rpm, tags)); }
     public static ItemRequirementSpec item(IoDirection io, Ingredient item, int count, ItemStack stack) { return (ItemRequirementSpec) wrap(new ItemRequirement(io(io), item, count, stack)); }

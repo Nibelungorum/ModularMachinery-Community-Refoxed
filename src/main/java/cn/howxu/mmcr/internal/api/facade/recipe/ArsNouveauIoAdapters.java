@@ -17,4 +17,10 @@ public final class ArsNouveauIoAdapters {
     public static CustomIoSpec sourceOutput(long amount) {
         return IoValues.customIo(ArsSourceIds.SOURCE, IoDirection.OUTPUT, SourceRecipeDeclarations.outputPayload(amount));
     }
+    public static CustomIoSpec sourceInput(long amount, float consumeChance) {
+        return IoValues.customIo(ArsSourceIds.SOURCE, IoDirection.INPUT, SourceRecipeDeclarations.inputPayload(amount, consumeChance));
+    }
+    public static CustomIoSpec sourceOutput(long amount, float chance) {
+        return IoValues.customIo(ArsSourceIds.SOURCE, IoDirection.OUTPUT, SourceRecipeDeclarations.outputPayload(amount, chance));
+    }
 }

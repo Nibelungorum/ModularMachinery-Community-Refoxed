@@ -491,6 +491,20 @@ public final class GameTestRegistry {
                 helper -> new AppMekAdapterGameTest().chemicalAmountsAreNotTruncated(helper));
         if (ModList.get().isLoaded("ae2")) {
             register(event, "ae2_pattern_native_admission", 20, RunningRecipeGameTest::patternAdmissionPreservesUnpaidRequestAndSettlesRemainderOnce);
+            if (ModList.get().isLoaded("ae2lt")) {
+                register(event, "lightning_local_persistence_and_batch_slots", 40,
+                        helper -> new LightningInterfaceGameTest().localKeysPersistAndReservationsSharePhysicalSlots(helper));
+                register(event, "lightning_pattern_return_long_budget", 40,
+                        helper -> new LightningInterfaceGameTest().patternReturnReservationsKeepExactLongBudgets(helper));
+                register(event, "lightning_stocking_reconnect", 400,
+                        helper -> new LightningInterfaceGameTest().stockingReconnectsAndPreservesTierIdentity(helper));
+                register(event, "lightning_output_budget_async_lifecycle", 400,
+                        helper -> new LightningInterfaceGameTest().outputFlushSharesBudgetAndAsyncHasNoOfflineBuffer(helper));
+                register(event, "lightning_mixed_pattern", 200,
+                        helper -> new LightningPatternGameTest().mixedPatternAdmissionAndPersistence(helper));
+                register(event, "lightning_mixed_batch", 200,
+                        helper -> new LightningPatternGameTest().mixedBatchPreservesOneMaterialOwner(helper));
+            }
             register(event, "ae2_pattern_return_long_balances", 40,
                     helper -> new PatternReturnInventoryGameTest().nativeSlotsAndExactLongBalances(helper));
             register(event, "ae2_pattern_return_components_persistence", 40,

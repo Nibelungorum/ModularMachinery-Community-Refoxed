@@ -21,14 +21,18 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record ManaRequirement(RecipeModifier.IOType io, long amount, List<String> tags) implements MachineRequirement {
+public record ManaRequirement(RecipeModifier.IOType io, long amount, float chance, float consumeChance,
+                              List<String> tags) implements MachineRequirement {
     public static final MapCodec<ManaRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(ignored -> BotaniaManaIds.MANA.toString()),
             RecipeModifier.IO_TYPE_CODEC.optionalFieldOf("io", RecipeModifier.IOType.INPUT)
                     .forGetter(ManaRequirement::io),
             Codec.LONG.fieldOf("amount").forGetter(ManaRequirement::amount),
+            Codec.floatRange(0F, 1F).optionalFieldOf("chance", 1F).forGetter(ManaRequirement::chance),
+            Codec.floatRange(0F, 1F).optionalFieldOf("consume_chance", 1F).forGetter(ManaRequirement::consumeChance),
             Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(ManaRequirement::tags)
-    ).apply(instance, (ignored, io, amount, tags) -> new ManaRequirement(io, amount, tags)));
+    ).apply(instance, (ignored, io, amount, chance, consumeChance, tags) ->
+            new ManaRequirement(io, amount, chance, consumeChance, tags)));
     public static final RecipeSyncCodec<ManaRequirement> SYNC_CODEC = RecipeSyncCodec.json(CODEC.codec());
 
     private static final RequirementHandler<ManaRequirement> UNAVAILABLE = (requirement, capabilities, context) ->
@@ -49,14 +53,19 @@ public record ManaRequirement(RecipeModifier.IOType io, long amount, List<String
         @Override
         public ManaRequirement applyModifiers(ManaRequirement value, List<RecipeModifier> modifiers) {
             return new ManaRequirement(value.io(),
-                    ManaRecipeDeclarations.applyAmount(value.amount(), value.io(), modifiers), value.tags());
+                    ManaRecipeDeclarations.applyAmount(value.amount(), value.io(), modifiers),
+                    value.io() == RecipeModifier.IOType.OUTPUT
+                            ? ManaRecipeDeclarations.applyChance(value.chance(), value.io(), modifiers) : value.chance(),
+                    value.io() == RecipeModifier.IOType.INPUT
+                            ? ManaRecipeDeclarations.applyChance(value.consumeChance(), value.io(), modifiers)
+                            : value.consumeChance(), value.tags());
         }
 
         @Override
         public ManaRequirement applyLevelModifiers(ManaRequirement value, double energy, double output) {
             return value.io() == RecipeModifier.IOType.OUTPUT
                     ? new ManaRequirement(value.io(), ManaRecipeDeclarations.applyOutputMultiplier(value.amount(), output),
-                            value.tags()) : value;
+                            value.chance(), value.consumeChance(), value.tags()) : value;
         }
 
         @Override
@@ -67,21 +76,38 @@ public record ManaRequirement(RecipeModifier.IOType io, long amount, List<String
 
     public static final RequirementType<ManaRequirement> TYPE = new RequirementType.Definition<>(
             BotaniaManaIds.MANA, CODEC, HANDLER,
-            value -> new ManaRequirement(value.io(), value.amount(), value.tags()), SYNC_CODEC);
+            value -> new ManaRequirement(value.io(), value.amount(), value.chance(), value.consumeChance(), value.tags()),
+            SYNC_CODEC);
+
+    public ManaRequirement(RecipeModifier.IOType io, long amount, List<String> tags) {
+        this(io, amount, 1F, 1F, tags);
+    }
 
     public ManaRequirement {
         Objects.requireNonNull(io, "io");
         if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
+        if (!Float.isFinite(chance) || chance < 0F || chance > 1F
+                || !Float.isFinite(consumeChance) || consumeChance < 0F || consumeChance > 1F) {
+            throw new IllegalArgumentException("chance and consume_chance must be between 0 and 1");
+        }
         tags = List.copyOf(Objects.requireNonNull(tags, "tags"));
         if (tags.size() > 1024) throw new IllegalArgumentException("Invalid tag count");
     }
 
     public static ManaRequirement input(long amount) {
-        return new ManaRequirement(RecipeModifier.IOType.INPUT, amount, List.of());
+        return input(amount, 1F);
+    }
+
+    public static ManaRequirement input(long amount, float consumeChance) {
+        return new ManaRequirement(RecipeModifier.IOType.INPUT, amount, 1F, consumeChance, List.of());
     }
 
     public static ManaRequirement output(long amount) {
-        return new ManaRequirement(RecipeModifier.IOType.OUTPUT, amount, List.of());
+        return output(amount, 1F);
+    }
+
+    public static ManaRequirement output(long amount, float chance) {
+        return new ManaRequirement(RecipeModifier.IOType.OUTPUT, amount, chance, 1F, List.of());
     }
 
     @Override

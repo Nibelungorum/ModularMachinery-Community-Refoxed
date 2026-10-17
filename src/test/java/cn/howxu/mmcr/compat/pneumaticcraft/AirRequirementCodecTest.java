@@ -32,7 +32,8 @@ class AirRequirementCodecTest {
     @Test
     void pressureOnlyInputRoundTripsAndOutputRejectsPressureField() {
         for (var requirement : List.of(AirRequirement.input(0, 4F, List.of("drive")), AirRequirement.output(0),
-                AirRequirement.input(Long.MAX_VALUE, 0F), AirRequirement.output(80, List.of("out")))) {
+                AirRequirement.input(Long.MAX_VALUE, 0F), AirRequirement.output(80, List.of("out")),
+                AirRequirement.input(40, 4F, 0F, List.of("drive")), AirRequirement.output(80, 0.5F))) {
             var encoded = AirRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE, requirement).getOrThrow();
             assertThat(AirRequirement.CODEC.codec().parse(JsonOps.INSTANCE, encoded).getOrThrow()).isEqualTo(requirement);
         }
@@ -45,7 +46,9 @@ class AirRequirementCodecTest {
     void codecRejectsInvalidFieldsAndNumbers() {
         for (String fields : List.of("\"io\":\"unknown\",\"air_per_tick\":1", "\"io\":\"input\",\"air_per_tick\":-1",
                 "\"io\":\"input\"", "\"air_per_tick\":1", "\"io\":\"input\",\"air_per_tick\":1,\"min_pressure\":\"bad\"",
-                "\"io\":\"input\",\"air_per_tick\":1,\"tags\":42")) {
+                "\"io\":\"input\",\"air_per_tick\":1,\"tags\":42",
+                "\"io\":\"input\",\"air_per_tick\":1,\"consume_chance\":-1",
+                "\"io\":\"output\",\"air_per_tick\":1,\"chance\":2")) {
             assertInvalid("{\"type\":\"pneumaticcraft:air\"," + fields + "}");
         }
         assertInvalid("{\"type\":\"other:air\",\"io\":\"input\",\"air_per_tick\":1}");
@@ -63,7 +66,7 @@ class AirRequirementCodecTest {
     @Test
     void tagsAreCopiedAndBoundedAndCanonicalCopyPreservesType() {
         var tags = new ArrayList<>(List.of("drive"));
-        var requirement = AirRequirement.input(40, 4F, tags);
+        var requirement = AirRequirement.input(40, 4F, 0.5F, tags);
         tags.add("changed");
         assertThat(requirement.tags()).containsExactly("drive");
         assertThatThrownBy(() -> requirement.tags().add("changed")).isInstanceOf(UnsupportedOperationException.class);
@@ -80,8 +83,8 @@ class AirRequirementCodecTest {
     void completeMachineRecipeSyncRoundTripsAirRequirements() {
         try (var scope = RequirementHandlerRegistry.openTestScope()) {
             PneumaticRecipeTypes.register();
-            List<MachineRequirement> requirements = List.of(AirRequirement.input(0, 4F, List.of("drive")),
-                    AirRequirement.output(Long.MAX_VALUE, List.of("exhaust")));
+            List<MachineRequirement> requirements = List.of(AirRequirement.input(0, 4F, 0F, List.of("drive")),
+                    AirRequirement.output(Long.MAX_VALUE, 0.5F, List.of("exhaust")));
             var recipe = MachineRecipe.fromCanonical(ResourceLocation.parse("test:air_sync"),
                     ResourceLocation.parse("test:machine"), 20, requirements, List.of(), List.of(),
                     2, 3, true, true, true, Set.of());

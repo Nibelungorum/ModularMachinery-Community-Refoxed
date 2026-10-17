@@ -21,6 +21,8 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
@@ -110,13 +112,14 @@ public class AE2AsyncOutputInterfaceGameTest {
                     "Async output interface does not expose an external fluid handler");
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
-            helper.assertTrue(snapshot.capabilities().size() == (AppMekBridge.get().available() ? 3 : 2),
+            helper.assertTrue(snapshot.capabilities().size() == 2 + (AppMekBridge.get().available() ? 1 : 0) + (LightningBridge.get().available() ? 1 : 0),
                     "Async output interface exposes its loaded resource families");
             for (MachineCapability capability : snapshot.capabilities()) {
                 ResourceLocation id = capability.type().id();
                 helper.assertTrue(id.equals(PortFamilyIds.ITEM) || id.equals(PortFamilyIds.FLUID)
-                                || AppMekBridge.get().available() && id.equals(MekanismPortFamilies.CHEMICAL),
-                        "Async output capability is bound to the item or fluid family");
+                                || AppMekBridge.get().available() && id.equals(MekanismPortFamilies.CHEMICAL)
+                                || LightningBridge.get().available() && id.equals(LightningRecipeTypes.LIGHTNING),
+                        "Async output capability belongs to a supported family");
                 helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(),
                         "Async output capability does not expose TransferFacet");
             }

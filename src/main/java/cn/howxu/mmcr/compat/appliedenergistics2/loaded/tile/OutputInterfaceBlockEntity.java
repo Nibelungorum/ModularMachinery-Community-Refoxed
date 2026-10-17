@@ -10,6 +10,7 @@ import appeng.api.storage.MEStorage;
 import appeng.core.settings.TickRates;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -111,6 +112,7 @@ public final class OutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEn
                         256L - moved);
             }
             if (moved < 256L) moved += AppMekBridge.get().flush(OutputInterfaceBlockEntity.this, 256L - moved);
+            if (moved < 256L) moved += LightningBridge.get().flush(OutputInterfaceBlockEntity.this, 256L - moved);
             if (getStorage().isEmpty()) return TickRateModulation.SLEEP;
             return moved > 0L ? TickRateModulation.FASTER : TickRateModulation.SLOWER;
         }

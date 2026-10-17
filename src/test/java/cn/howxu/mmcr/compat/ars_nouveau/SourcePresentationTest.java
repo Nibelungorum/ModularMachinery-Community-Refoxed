@@ -53,13 +53,14 @@ class SourcePresentationTest {
             SourceRequirement requirement = role == RecipeIngredientRole.INPUT
                     ? SourceRequirement.input(Long.MAX_VALUE) : SourceRequirement.output(Long.MAX_VALUE);
             JeiDisplayEntry display = adapter.display(new RecipeIoEntry(role, ArsSourceIds.SOURCE,
-                    requirement, Long.MAX_VALUE, 1F)).orElseThrow();
+                    requirement, Long.MAX_VALUE, 0.25F)).orElseThrow();
 
             assertThat(display.role()).isEqualTo(role);
             assertThat(display.typeId()).isEqualTo(ArsSourceIds.SOURCE);
             assertThat(display.isTextOnly()).isFalse();
             assertThat(display.transferable()).isFalse();
             assertThat(display.count()).isEqualTo(Integer.MAX_VALUE);
+            assertThat(display.chance()).isEqualTo(0.25F);
             assertThat(display.ingredient()).isEqualTo(new SourceJeiIngredient(Long.MAX_VALUE, role == RecipeIngredientRole.INPUT));
             assertThat(((SourceJeiIngredient) display.ingredient()).tooltip()).isEqualTo(Component.translatable(role == RecipeIngredientRole.INPUT
                     ? "jei.mmcr.machine_recipe.source_input" : "jei.mmcr.machine_recipe.source_output",

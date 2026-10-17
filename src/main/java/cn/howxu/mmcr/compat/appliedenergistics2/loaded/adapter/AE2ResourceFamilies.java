@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -40,8 +41,8 @@ public final class AE2ResourceFamilies {
 
     public static PortDefinition definition(ResourceLocation id, List<CapabilityBinding> bindings) {
         CapabilityBinding primary = bindings.getFirst();
-        return PortDefinition.of(id, AppMekBridge.get().appendBindings(bindings,
-                primary.directions(), primary.nativeTransferExposure()));
+        return PortDefinition.of(id, LightningBridge.get().appendBindings(AppMekBridge.get().appendBindings(bindings,
+                primary.directions(), primary.nativeTransferExposure()), primary.directions()));
     }
 
     public static CapabilityBinding itemBinding(CapabilityDirections directions,
@@ -77,14 +78,14 @@ public final class AE2ResourceFamilies {
     }
 
     public static List<PortFamilyDescriptor> inputFamilies() {
-        return AppMekBridge.get().appendFamilies(List.of(ITEM_INPUT, FLUID_INPUT));
+        return LightningBridge.get().appendFamilies(AppMekBridge.get().appendFamilies(List.of(ITEM_INPUT, FLUID_INPUT)));
     }
 
     public static List<PortFamilyDescriptor> outputFamilies() {
-        return AppMekBridge.get().appendFamilies(List.of(ITEM_OUTPUT, FLUID_OUTPUT));
+        return LightningBridge.get().appendFamilies(AppMekBridge.get().appendFamilies(List.of(ITEM_OUTPUT, FLUID_OUTPUT)));
     }
 
     public static List<PortFamilyDescriptor> patternFamilies() {
-        return AppMekBridge.get().appendFamilies(List.of(ITEM_INPUT, FLUID_INPUT, ITEM_OUTPUT, FLUID_OUTPUT));
+        return LightningBridge.get().appendFamilies(AppMekBridge.get().appendFamilies(List.of(ITEM_INPUT, FLUID_INPUT, ITEM_OUTPUT, FLUID_OUTPUT)));
     }
 }

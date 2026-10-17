@@ -121,9 +121,17 @@ public final class MachineRecipeBuilder {
     public MachineRecipeBuilder inputAir(long airPerTick, float minPressure, List<String> tags) {
         return requirement(AirRequirement.input(airPerTick, minPressure, tags));
     }
+    public MachineRecipeBuilder inputAir(long airPerTick, float minPressure, float consumeChance) { return inputAir(airPerTick, minPressure, consumeChance, List.of()); }
+    public MachineRecipeBuilder inputAir(long airPerTick, float minPressure, float consumeChance, List<String> tags) {
+        return requirement(AirRequirement.input(airPerTick, minPressure, consumeChance, tags));
+    }
     public MachineRecipeBuilder outputAir(long airPerTick) { return outputAir(airPerTick, List.of()); }
     public MachineRecipeBuilder outputAir(long airPerTick, List<String> tags) {
         return requirement(AirRequirement.output(airPerTick, tags));
+    }
+    public MachineRecipeBuilder outputAir(long airPerTick, float chance) { return outputAir(airPerTick, chance, List.of()); }
+    public MachineRecipeBuilder outputAir(long airPerTick, float chance, List<String> tags) {
+        return requirement(AirRequirement.output(airPerTick, chance, tags));
     }
 
     public static JsonObject airInputPayload(long airPerTick, float minPressure, List<String> tags) {
@@ -131,9 +139,19 @@ public final class MachineRecipeBuilder {
                 AirRequirement.input(airPerTick, minPressure, tags)).getOrThrow().getAsJsonObject();
     }
 
+    public static JsonObject airInputPayload(long airPerTick, float minPressure, float consumeChance, List<String> tags) {
+        return AirRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE,
+                AirRequirement.input(airPerTick, minPressure, consumeChance, tags)).getOrThrow().getAsJsonObject();
+    }
+
     public static JsonObject airOutputPayload(long airPerTick, List<String> tags) {
         return AirRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE,
                 AirRequirement.output(airPerTick, tags)).getOrThrow().getAsJsonObject();
+    }
+
+    public static JsonObject airOutputPayload(long airPerTick, float chance, List<String> tags) {
+        return AirRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE,
+                AirRequirement.output(airPerTick, chance, tags)).getOrThrow().getAsJsonObject();
     }
 
     public MachineRecipeBuilder inputStress(double stress, double minRpm) { return inputStress(stress, minRpm, List.of()); }
@@ -162,17 +180,30 @@ public final class MachineRecipeBuilder {
     }
     public MachineRecipeBuilder inputEnergy(long fePerTick) { return requirement(new EnergyRequirement(IOType.INPUT, new EnergyInput(fePerTick).fePerTick())); }
     public MachineRecipeBuilder inputSource(long amount) { return requirement(SourceRequirement.input(amount)); }
+    public MachineRecipeBuilder inputSource(long amount, float consumeChance) { return requirement(SourceRequirement.input(amount, consumeChance)); }
     public MachineRecipeBuilder inputMana(long amount) {
         return custom(new CustomRecipeIo(BotaniaManaIds.MANA, IOType.INPUT,
                 ManaRecipeDeclarations.inputPayload(amount)));
+    }
+    public MachineRecipeBuilder inputMana(long amount, float consumeChance) {
+        return custom(new CustomRecipeIo(BotaniaManaIds.MANA, IOType.INPUT,
+                ManaRecipeDeclarations.inputPayload(amount, consumeChance)));
     }
     public MachineRecipeBuilder outputMana(long amount) {
         return custom(new CustomRecipeIo(BotaniaManaIds.MANA, IOType.OUTPUT,
                 ManaRecipeDeclarations.outputPayload(amount)));
     }
+    public MachineRecipeBuilder outputMana(long amount, float chance) {
+        return custom(new CustomRecipeIo(BotaniaManaIds.MANA, IOType.OUTPUT,
+                ManaRecipeDeclarations.outputPayload(amount, chance)));
+    }
     public MachineRecipeBuilder outputSource(long amount) {
         return custom(new CustomRecipeIo(ArsSourceIds.SOURCE, IOType.OUTPUT,
                 SourceRecipeDeclarations.outputPayload(amount)));
+    }
+    public MachineRecipeBuilder outputSource(long amount, float chance) {
+        return custom(new CustomRecipeIo(ArsSourceIds.SOURCE, IOType.OUTPUT,
+                SourceRecipeDeclarations.outputPayload(amount, chance)));
     }
     public MachineRecipeBuilder outputEnergy(long fePerTick) { return requirement(new EnergyRequirement(IOType.OUTPUT, new EnergyInput(fePerTick).fePerTick())); }
 

@@ -32,12 +32,25 @@ public final class ManaRecipeDeclarations {
     }
 
     public static JsonObject inputPayload(long amount) {
-        return ManaRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE, ManaRequirement.input(amount))
+        return inputPayload(amount, 1F);
+    }
+
+    public static float applyChance(float chance, RecipeModifier.IOType io, List<RecipeModifier> modifiers) {
+        float adjusted = RecipeModifier.applyModifiers(modifiers, "mana", io, chance, true);
+        return Float.isNaN(adjusted) ? 0F : Math.clamp(adjusted, 0F, 1F);
+    }
+
+    public static JsonObject inputPayload(long amount, float consumeChance) {
+        return ManaRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE, ManaRequirement.input(amount, consumeChance))
                 .getOrThrow().getAsJsonObject();
     }
 
     public static JsonObject outputPayload(long amount) {
-        return ManaOutput.CODEC.codec().encodeStart(JsonOps.INSTANCE, new ManaOutput(amount))
+        return outputPayload(amount, 1F);
+    }
+
+    public static JsonObject outputPayload(long amount, float chance) {
+        return ManaOutput.CODEC.codec().encodeStart(JsonOps.INSTANCE, new ManaOutput(amount, chance))
                 .getOrThrow().getAsJsonObject();
     }
 }

@@ -2,6 +2,9 @@ package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.create.CreateBridgeBootstrap;
 import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
@@ -54,6 +57,9 @@ public class MMCR {
         PneumaticCraftBridgeBootstrap.bootstrap();
         PneumaticRecipeTypes.register();
         PublicApiBootstrap.begin();
+        LightningBridgeBootstrap.bootstrap();
+        LightningRecipeTypes.register();
+        LightningBridge.get().registerCapabilityDefinitions();
         CreateBridge.get().registerPorts(modBus);
         PneumaticCraftBridge.get().registerPorts(modBus);
         MachineDefinitions.beginRegistryPhase();

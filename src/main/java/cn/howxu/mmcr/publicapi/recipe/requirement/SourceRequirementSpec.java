@@ -8,4 +8,6 @@ import org.jetbrains.annotations.ApiStatus;
 @ApiStatus.NonExtendable
 public interface SourceRequirementSpec extends RequirementSpec {
     long amount();
+    float chance();
+    float consumeChance();
 }

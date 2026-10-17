@@ -25,10 +25,22 @@ public final class Requirements {
     public static ManaRequirementSpec manaInput(long amount, List<String> tags) { return RequirementFactories.mana(IoDirection.INPUT, amount, tags); }
     public static ManaRequirementSpec manaOutput(long amount) { return manaOutput(amount, List.of()); }
     public static ManaRequirementSpec manaOutput(long amount, List<String> tags) { return RequirementFactories.mana(IoDirection.OUTPUT, amount, tags); }
+    public static SourceRequirementSpec sourceInput(long amount, float consumeChance) { return sourceInput(amount, consumeChance, List.of()); }
+    public static SourceRequirementSpec sourceInput(long amount, float consumeChance, List<String> tags) { return RequirementFactories.source(IoDirection.INPUT, amount, 1F, consumeChance, tags); }
+    public static SourceRequirementSpec sourceOutput(long amount, float chance) { return sourceOutput(amount, chance, List.of()); }
+    public static SourceRequirementSpec sourceOutput(long amount, float chance, List<String> tags) { return RequirementFactories.source(IoDirection.OUTPUT, amount, chance, 1F, tags); }
+    public static ManaRequirementSpec manaInput(long amount, float consumeChance) { return manaInput(amount, consumeChance, List.of()); }
+    public static ManaRequirementSpec manaInput(long amount, float consumeChance, List<String> tags) { return RequirementFactories.mana(IoDirection.INPUT, amount, 1F, consumeChance, tags); }
+    public static ManaRequirementSpec manaOutput(long amount, float chance) { return manaOutput(amount, chance, List.of()); }
+    public static ManaRequirementSpec manaOutput(long amount, float chance, List<String> tags) { return RequirementFactories.mana(IoDirection.OUTPUT, amount, chance, 1F, tags); }
     public static AirRequirementSpec airInput(long airPerTick, float minPressure) { return airInput(airPerTick, minPressure, List.of()); }
     public static AirRequirementSpec airInput(long airPerTick, float minPressure, List<String> tags) { return RequirementFactories.airInput(airPerTick, minPressure, tags); }
     public static AirRequirementSpec airOutput(long airPerTick) { return airOutput(airPerTick, List.of()); }
     public static AirRequirementSpec airOutput(long airPerTick, List<String> tags) { return RequirementFactories.airOutput(airPerTick, tags); }
+    public static AirRequirementSpec airInput(long airPerTick, float minPressure, float consumeChance) { return airInput(airPerTick, minPressure, consumeChance, List.of()); }
+    public static AirRequirementSpec airInput(long airPerTick, float minPressure, float consumeChance, List<String> tags) { return RequirementFactories.airInput(airPerTick, minPressure, consumeChance, tags); }
+    public static AirRequirementSpec airOutput(long airPerTick, float chance) { return airOutput(airPerTick, chance, List.of()); }
+    public static AirRequirementSpec airOutput(long airPerTick, float chance, List<String> tags) { return RequirementFactories.airOutput(airPerTick, chance, tags); }
     public static StressRequirementSpec stressInput(double stress, double minRpm) { return stressInput(stress, minRpm, List.of()); }
     public static StressRequirementSpec stressInput(double stress, double minRpm, List<String> tags) { return RequirementFactories.stressInput(stress, minRpm, tags); }
     public static StressRequirementSpec stressOutput(double stress, double rpm) { return stressOutput(stress, rpm, List.of()); }

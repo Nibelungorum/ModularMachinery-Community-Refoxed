@@ -17,6 +17,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirementHandler;
@@ -319,7 +320,8 @@ public final class RequirementPlanner {
     public static boolean isMaterialInput(IOType direction, ResourceLocation capabilityId) {
         return direction == IOType.INPUT && (BuiltinCapabilityDefinitions.ITEM_TYPE.id().equals(capabilityId)
                 || BuiltinCapabilityDefinitions.FLUID_TYPE.id().equals(capabilityId)
-                || MekanismPortFamilies.CHEMICAL.equals(capabilityId));
+                || MekanismPortFamilies.CHEMICAL.equals(capabilityId)
+                || LightningRecipeTypes.LIGHTNING.equals(capabilityId));
     }
 
     public static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,

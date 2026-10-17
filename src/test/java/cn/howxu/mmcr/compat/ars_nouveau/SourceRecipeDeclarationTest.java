@@ -20,6 +20,9 @@ import cn.howxu.mmcr.test.TestBootstrap;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
+import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -181,12 +184,46 @@ class SourceRecipeDeclarationTest {
     }
 
     @Test
-    void outputRejectsProbability() {
+    void probabilityDefaultsRoundTripCopyAndModifiers() {
         SourceOutput value = new SourceOutput(700L);
         assertThat(value.withChance(1F)).isSameAs(value);
-        for (float chance : new float[]{0F, 0.5F, -1F, 2F, Float.NaN, Float.POSITIVE_INFINITY}) {
+        assertThat(SourceRequirement.input(700L).consumeChance()).isEqualTo(1F);
+        for (float chance : new float[]{0F, 0.5F, 1F}) {
+            SourceRequirement input = SourceRequirement.input(700L, chance);
+            SourceOutput output = value.withChance(chance);
+            assertThat(SourceRequirement.CODEC.codec().parse(JsonOps.INSTANCE,
+                    SourceRecipeDeclarations.inputPayload(700L, chance)).getOrThrow()).isEqualTo(input);
+            assertThat(SourceOutput.CODEC.codec().parse(JsonOps.INSTANCE,
+                    SourceRecipeDeclarations.outputPayload(700L, chance)).getOrThrow()).isEqualTo(output);
+            assertThat(MachineRequirement.copyOf(input)).isEqualTo(input);
+            assertThat(MachineOutput.copyOf(output)).isEqualTo(output);
+            MachineRequirement converted = OutputRegistry.toRequirement(output, List.of("arcane"));
+            assertThat(converted).isEqualTo(new SourceRequirement(IOType.OUTPUT, 700L, chance, 1F, List.of("arcane")));
+            assertThat(OutputRegistry.fromRequirement(converted)).isEqualTo(output);
+            assertThat(RequirementHandlerRegistry.applyLevelModifiers(converted, 2D, 3D))
+                    .isEqualTo(new SourceRequirement(IOType.OUTPUT, 2100L, chance, 1F, List.of("arcane")));
+            RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+            try {
+                SourceRequirement.TYPE.syncCodec().encode(buffer, input);
+                SourceOutput.TYPE.syncCodec().encode(buffer, output);
+                assertThat(SourceRequirement.TYPE.syncCodec().decode(buffer)).isEqualTo(input);
+                assertThat(SourceOutput.TYPE.syncCodec().decode(buffer)).isEqualTo(output);
+            } finally {
+                buffer.release();
+            }
+        }
+        List<RecipeModifier> modifiers = List.of(
+                new RecipeModifier("source", IOType.INPUT, 0.5F, Operation.MULTIPLY, true),
+                new RecipeModifier("source", IOType.OUTPUT, 0.25F, Operation.MULTIPLY, true));
+        assertThat(RequirementHandlerRegistry.applyModifiers(SourceRequirement.input(700L, 0.5F), modifiers))
+                .isEqualTo(SourceRequirement.input(700L, 0.25F));
+        assertThat(RequirementHandlerRegistry.applyModifiers(SourceRequirement.output(700L, 0.5F), modifiers))
+                .isEqualTo(SourceRequirement.output(700L, 0.125F));
+        assertThat(value.applyModifiers(modifiers)).isEqualTo(new SourceOutput(700L, 0.25F));
+        for (float chance : new float[]{-1F, 2F, Float.NaN, Float.POSITIVE_INFINITY}) {
             assertThatThrownBy(() -> SourceOutput.TYPE.withChance(value, chance))
                     .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> SourceRequirement.input(700L, chance)).isInstanceOf(IllegalArgumentException.class);
         }
     }
 

@@ -61,6 +61,7 @@ import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
 import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
@@ -68,6 +69,7 @@ import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.VersionStamp;
 import cn.howxu.mmcr.internal.recipe.RecipeProgramCompiler;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -2267,7 +2269,7 @@ public final class CraftingRuntime {
             if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type())
                     || LoadedChemicalRequirement.TYPE.equals(requirement.type())
                     || SourceRequirement.TYPE.equals(requirement.type())
-                    || ManaRequirement.TYPE.equals(requirement.type()))
+                    || ManaRequirement.TYPE.equals(requirement.type()) || requirement instanceof LightningRequirement)
                     || requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (restored.inputConsumptionPlan().consumedBatches(index) > 0) consumed.add(index);
             else retained.add(index);
@@ -2640,10 +2642,12 @@ public final class CraftingRuntime {
         Set<Integer> airInputIndexes = new LinkedHashSet<>();
         List<MachineRequirement> requirements = prepared.effective().requirements();
         PlanningReservations reservations = new PlanningReservations();
+        Sampling airStartSampling = new Sampling();
         for (int index = 0; index < requirements.size(); index++) {
             if (requirements.get(index) instanceof AirRequirement air && air.io() == RecipeModifier.IOType.INPUT) {
                 CapabilityResult result = AirRequirementHandler.preflightStart(air, components.capabilities(),
-                        new PlanningContext(prepared.plan().parallelism(), index, false, reservations));
+                        new PlanningContext(prepared.plan().parallelism(), index, false, reservations, Map.of(),
+                                null, null, airStartSampling));
                 if (!result.success()) return result.status();
                 airInputIndexes.add(index);
             }
@@ -2682,7 +2686,8 @@ public final class CraftingRuntime {
             reservations = new PlanningReservations();
             for (int index : airInputIndexes) {
                 CapabilityResult result = AirRequirementHandler.preflightStart((AirRequirement) requirements.get(index),
-                        components.capabilities(), new PlanningContext(prepared.plan().parallelism(), index, false, reservations));
+                        components.capabilities(), new PlanningContext(prepared.plan().parallelism(), index, false,
+                                reservations, Map.of(), null, null, airStartSampling));
                 if (!result.success()) return result.status();
             }
             if (payment.state().phase() == RecipeCommitLedger.Phase.READY && !preparedStartCurrent(prepared)) {
@@ -2779,7 +2784,8 @@ public final class CraftingRuntime {
         for (MachineRequirement requirement : prepared.effective().requirements()) {
             boolean input = requirement.io() == IOType.INPUT && (ItemRequirement.TYPE.equals(requirement.type())
                     || FluidRequirement.TYPE.equals(requirement.type()) || LoadedChemicalRequirement.TYPE.equals(requirement.type())
-                    || SourceRequirement.TYPE.equals(requirement.type()) || ManaRequirement.TYPE.equals(requirement.type()));
+                    || SourceRequirement.TYPE.equals(requirement.type()) || ManaRequirement.TYPE.equals(requirement.type())
+                    || requirement instanceof LightningRequirement);
             boolean executed = ledger.state().phase() == RecipeCommitLedger.Phase.RESOURCE_PAID
                     ? prepared.plan().hasOperations(planIndex) : prepared.plan().wasNativeExecuted(planIndex);
             consumed.add(input && executed ? 1 : 0);
@@ -3354,6 +3360,16 @@ public final class CraftingRuntime {
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
                 if (!activePrefetches.isEmpty() && requirement instanceof EnergyRequirement) continue;
                 if (consumedAtStart.contains(index)) continue;
+                // Startup probability is already decided; retained one-shot resources only remain conditions.
+                if (retainedInputs.contains(index) && requirement instanceof SourceRequirement sourceInput
+                        && sourceInput.consumeChance() > 0F && sourceInput.consumeChance() < 1F) {
+                    requirement = new SourceRequirement(sourceInput.io(), sourceInput.amount(), sourceInput.chance(),
+                            0F, sourceInput.tags());
+                } else if (retainedInputs.contains(index) && requirement instanceof ManaRequirement manaInput
+                        && manaInput.consumeChance() > 0F && manaInput.consumeChance() < 1F) {
+                    requirement = new ManaRequirement(manaInput.io(), manaInput.amount(), manaInput.chance(),
+                            0F, manaInput.tags());
+                }
                 if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
                         RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
                         net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,
@@ -3486,7 +3502,7 @@ public final class CraftingRuntime {
                     || FluidRequirement.TYPE.equals(requirement.type())
                     || LoadedChemicalRequirement.TYPE.equals(requirement.type())
                     || SourceRequirement.TYPE.equals(requirement.type())
-                    || ManaRequirement.TYPE.equals(requirement.type()))
+                    || ManaRequirement.TYPE.equals(requirement.type()) || requirement instanceof LightningRequirement)
                     || requirement.io() != RecipeModifier.IOType.INPUT) {
                 continue;
             }

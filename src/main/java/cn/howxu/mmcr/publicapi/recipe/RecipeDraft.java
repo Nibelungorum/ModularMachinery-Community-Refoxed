@@ -25,10 +25,14 @@ public interface RecipeDraft {
     RecipeDraft outputFluid(Fluid fluid, int amount);
     RecipeDraft inputAir(long airPerTick, float minPressure); RecipeDraft inputAir(long airPerTick, float minPressure, List<String> tags);
     RecipeDraft outputAir(long airPerTick); RecipeDraft outputAir(long airPerTick, List<String> tags);
+    RecipeDraft inputAir(long airPerTick, float minPressure, float consumeChance); RecipeDraft inputAir(long airPerTick, float minPressure, float consumeChance, List<String> tags);
+    RecipeDraft outputAir(long airPerTick, float chance); RecipeDraft outputAir(long airPerTick, float chance, List<String> tags);
     RecipeDraft inputStress(double stress, double minRpm); RecipeDraft inputStress(double stress, double minRpm, List<String> tags);
     RecipeDraft outputStress(double stress, double rpm); RecipeDraft outputStress(double stress, double rpm, List<String> tags);
     RecipeDraft inputSource(long amount); RecipeDraft outputSource(long amount);
     RecipeDraft inputMana(long amount); RecipeDraft outputMana(long amount);
+    RecipeDraft inputSource(long amount, float consumeChance); RecipeDraft outputSource(long amount, float chance);
+    RecipeDraft inputMana(long amount, float consumeChance); RecipeDraft outputMana(long amount, float chance);
     RecipeDraft inputEnergy(long fePerTick); RecipeDraft outputEnergy(long fePerTick); RecipeDraft iFEt(long fePerTick); RecipeDraft oFEt(long fePerTick);
     RecipeDraft outputItem(Item item, int count); RecipeDraft outputItem(ItemStack stack); RecipeDraft outputItem(ItemStack stack, ComponentConstraints components);
     RecipeDraft outputChance(ItemStack stack, float chance); RecipeDraft outputChance(ItemStack stack, float chance, ComponentConstraints components);

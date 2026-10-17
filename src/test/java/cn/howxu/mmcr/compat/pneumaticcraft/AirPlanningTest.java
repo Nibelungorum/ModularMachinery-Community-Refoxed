@@ -25,6 +25,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.WakeupReason;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -56,6 +57,117 @@ class AirPlanningTest {
     void cleanup() {
         scope.close();
         PneumaticCraftBridgeBootstrap.resetForTesting();
+    }
+
+    @Test
+    void zeroConsumptionChecksFullAirPressureAndSharedBudgetWithoutApplying() {
+        var port = new Port(IOType.INPUT, 120, 10, List.of());
+        assertThat(plan(List.of(AirRequirement.input(121, 4F, 0F)), List.of(port), 1, false)
+                .failure().reason()).isSameAs(AirFailureReasons.INSUFFICIENT_AIR);
+        assertThat(plan(List.of(AirRequirement.input(40, 13F, 0F)), List.of(port), 1, false)
+                .failure().reason()).isSameAs(AirFailureReasons.INSUFFICIENT_PRESSURE);
+        var free = plan(List.of(AirRequirement.input(40, 4F, 0F), AirRequirement.input(40, 4F)),
+                List.of(port, port), 8, false);
+        assertThat(free.plan().parallelism()).isEqualTo(3L);
+        assertThat(free.plan().commit()).isTrue();
+        assertThat(port.state().air()).isZero();
+        assertThat(port.applications).isEqualTo(1);
+        var depleted = new Port(IOType.INPUT, 120, 10, List.of());
+        assertThat(plan(List.of(AirRequirement.input(100, 0F), AirRequirement.input(40, 0F, 0F)),
+                List.of(depleted), 1, false).failure().reason()).isSameAs(AirFailureReasons.INSUFFICIENT_AIR);
+    }
+
+    @Test
+    void zeroConsumptionPreflightsTheEntireSplitBeforeCommit() {
+        var first = new Port(IOType.INPUT, 50, 10, List.of());
+        var second = new Port(IOType.INPUT, 50, 10, List.of());
+        var result = plan(List.of(AirRequirement.input(80, 4F, 0F)), List.of(first, second), 1, false);
+        second.store.air = 39;
+        assertThat(result.plan().commit()).isFalse();
+        assertThat(result.plan().failure().reason()).isSameAs(AirFailureReasons.INSUFFICIENT_PRESSURE);
+        assertThat(first.applications + second.applications).isZero();
+        var reservations = new PlanningReservations();
+        second.store.air = 50;
+        assertThat(AirRequirementHandler.preflightStart(AirRequirement.input(80, 4F, 0F), List.of(first, second),
+                new PlanningContext(1, 0, false, reservations)).success()).isTrue();
+        assertThat(reservations.valueAvailable(first.store, 200, first.store.air, false)).isEqualTo(50L);
+        assertThat(reservations.valueAvailable(second.store, 200, second.store.air, false)).isEqualTo(50L);
+    }
+
+    @Test
+    void skippedOutputNeedsNoInterfaceOrCapacity() {
+        var absent = plan(List.of(AirRequirement.output(Long.MAX_VALUE, 0F)), List.of(), 4, false);
+        assertThat(absent.successful()).isTrue();
+        assertThat(absent.plan().parallelism()).isEqualTo(4L);
+        assertThat(absent.plan().hasOperations(0)).isFalse();
+        assertThat(absent.plan().commit()).isTrue();
+        var full = new Port(IOType.OUTPUT, 200, 10, List.of());
+        var skipped = plan(List.of(AirRequirement.output(100, 0F)), List.of(full), 4, false);
+        assertThat(skipped.plan().commit()).isTrue();
+        assertThat(full.validations + full.applications).isZero();
+        assertThat(full.state().air()).isEqualTo(200);
+    }
+
+    @Test
+    void probabilitySamplingIsStableAcrossBinarySearchReservationMaterializationAndScopes() {
+        var port = new Port(IOType.INPUT, 120, 10, List.of());
+        var context = new PlanningContext(8L, 0, false, new PlanningReservations(), Map.of(), null, null,
+                new RequirementHandlerSupport.Sampling());
+        var handler = new AirRequirementHandler();
+        var requirement = AirRequirement.input(20, 4F, 0.5F);
+        var plan = handler.plan(requirement, List.of(port), context);
+        assertThat(plan.maxParallelism()).isEqualTo(6L);
+        var reserved = new PlanningReservations();
+        assertThat(plan.reserve(4L, reserved)).isNull();
+        long expected = reserved.valueAvailable(port.store, 200, port.store.air, false);
+        var materialized = new PlanningReservations();
+        var operations = plan.materialize(4L, materialized, null);
+        assertThat(materialized.valueAvailable(port.store, 200, port.store.air, false)).isEqualTo(expected);
+        var alternative = handler.plan(requirement, List.of(port), context.forScope(null, context.sampling()));
+        var other = new PlanningReservations();
+        assertThat(alternative.reserve(4L, other)).isNull();
+        assertThat(other.valueAvailable(port.store, 200, port.store.air, false)).isEqualTo(expected);
+        assertThat(operations.operations()).allSatisfy(operation -> assertThat(operation.commit().success()).isTrue());
+        assertThat(port.state().air()).isEqualTo(Math.toIntExact(expected));
+    }
+
+    @Test
+    void outputSamplingIsSharedAcrossScopesAndDeferredAllocation() {
+        var port = new Port(IOType.OUTPUT, -10, 10, List.of());
+        var context = new PlanningContext(4L, 0, false, new PlanningReservations(), Map.of(), null, null,
+                new RequirementHandlerSupport.Sampling());
+        var handler = new AirRequirementHandler();
+        var requirement = AirRequirement.output(40, 0.5F);
+        var plan = handler.plan(requirement, List.of(port), context);
+        assertThat(plan.successful()).isTrue();
+        var reserved = new PlanningReservations();
+        assertThat(plan.reserve(3L, reserved)).isNull();
+        long expected = reserved.valueAvailable(port.store, 200, port.store.air, true);
+        var materialized = new PlanningReservations();
+        var operations = plan.materialize(3L, materialized, null);
+        assertThat(materialized.valueAvailable(port.store, 200, port.store.air, true)).isEqualTo(expected);
+        var alternative = handler.plan(requirement, List.of(port), context.forScope(null, context.sampling()));
+        var other = new PlanningReservations();
+        assertThat(alternative.reserve(3L, other)).isNull();
+        assertThat(other.valueAvailable(port.store, 200, port.store.air, true)).isEqualTo(expected);
+        assertThat(operations.operations()).allSatisfy(operation -> assertThat(operation.commit().success()).isTrue());
+        assertThat(port.state().air()).isEqualTo(Math.toIntExact(200L - expected));
+    }
+
+    @Test
+    void probabilityModifiersPreserveRateTagsAndUnscaledPressure() {
+        var input = AirRequirement.input(9_007_199_254_740_993L, 4F, 0.5F, List.of("drive"));
+        var modifiers = List.of(new RecipeModifier("pneumaticcraft:air", IOType.INPUT, 0.5F,
+                        RecipeModifier.Operation.MULTIPLY, true),
+                new RecipeModifier("pneumaticcraft:air", IOType.OUTPUT, 0.25F, RecipeModifier.Operation.MULTIPLY, true));
+        var adjusted = AirRequirement.TYPE.applyModifiers(input, modifiers);
+        assertThat(adjusted).isEqualTo(AirRequirement.input(input.airPerTick(), 4F, 0.25F, List.of("drive")));
+        assertThat(AirRequirement.TYPE.applyLevelModifiers(adjusted, 0.5D, 9D))
+                .isEqualTo(AirRequirement.input(4_503_599_627_370_496L, 4F, 0.25F, List.of("drive")));
+        assertThat(AirRequirement.TYPE.applyModifiers(AirRequirement.output(20, 0.5F), modifiers))
+                .isEqualTo(AirRequirement.output(20, 0.125F));
+        assertThat(AirRequirement.TYPE.applyLevelModifiers(AirRequirement.output(20, 0.125F), 9D, 2D))
+                .isEqualTo(AirRequirement.output(40, 0.125F));
     }
 
     @Test

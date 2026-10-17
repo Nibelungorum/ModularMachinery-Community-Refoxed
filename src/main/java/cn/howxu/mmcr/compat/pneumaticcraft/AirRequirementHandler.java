@@ -32,6 +32,17 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
     @Override
     public AirRequirement applyModifiers(AirRequirement requirement, List<RecipeModifier> modifiers) {
         if (modifiers == null || modifiers.isEmpty()) return requirement;
+        float probability = requirement.io() == RecipeModifier.IOType.INPUT
+                ? requirement.consumeChance() : requirement.chance();
+        float adjustedChance = RecipeModifier.applyModifiers(modifiers, PneumaticIds.AIR.toString(),
+                requirement.io(), probability, true);
+        adjustedChance = Float.isNaN(adjustedChance) ? 0F : Math.clamp(adjustedChance, 0F, 1F);
+        if (adjustedChance != probability) {
+            requirement = new AirRequirement(requirement.io(), requirement.airPerTick(), requirement.minPressure(),
+                    requirement.io() == RecipeModifier.IOType.OUTPUT ? adjustedChance : requirement.chance(),
+                    requirement.io() == RecipeModifier.IOType.INPUT ? adjustedChance : requirement.consumeChance(),
+                    requirement.tags());
+        }
         BigDecimal add = BigDecimal.ZERO;
         BigDecimal mul = BigDecimal.ONE;
         BigDecimal divisor = BigDecimal.ONE;
@@ -83,7 +94,7 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
     private static AirRequirement withRate(AirRequirement requirement, long rate) {
         if (rate == requirement.airPerTick()) return requirement;
         return new AirRequirement(requirement.io(), rate,
-                requirement.minPressure(), requirement.tags());
+                requirement.minPressure(), requirement.chance(), requirement.consumeChance(), requirement.tags());
     }
 
     private static long floorNonNegative(double value) {
@@ -108,13 +119,19 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
         if (!PneumaticCraftBridge.get().available()) {
             return blockedPlan(requirement, context, AirFailureReasons.UNAVAILABLE);
         }
+        boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
+        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
+            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+        }
+        RequirementHandlerSupport.ConsumeProfile consumption = insert ? null
+                : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism(), context);
         List<PneumaticAirFacet> facets = matchingFacets(requirement, capabilities);
         if (facets.isEmpty()) return blockedPlan(requirement, context, AirFailureReasons.MISSING_INTERFACE);
 
-        AllocationResult minimum = allocate(requirement, facets, context, 1L, context.reservations().copy());
+        AllocationResult minimum = allocate(requirement, facets, context, 1L, context.reservations().copy(), consumption);
         if (minimum.failure() != null) {
             AllocationResult requested = allocate(requirement, facets, context, context.requestedParallelism(),
-                    context.reservations().copy());
+                    context.reservations().copy(), consumption);
             return RequirementPlan.withOutputSimulation(context.requirementIndex(), 0L, List.of(),
                     RequirementHandlerSupport.blocked(requirement, context, minimum.failure()), requested.simulation());
         }
@@ -123,12 +140,12 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
         while (lower < upper) {
             long distance = upper - lower;
             long candidate = lower + (distance >>> 1) + (distance & 1L);
-            if (allocate(requirement, facets, context, candidate, context.reservations().copy()).failure() == null) {
+            if (allocate(requirement, facets, context, candidate, context.reservations().copy(), consumption).failure() == null) {
                 lower = candidate;
             } else upper = candidate - 1L;
         }
         RequirementPlan.OperationFactory factory = (parallelism, reservations) -> {
-            AllocationResult allocation = allocate(requirement, facets, context, parallelism, reservations);
+            AllocationResult allocation = allocate(requirement, facets, context, parallelism, reservations, consumption);
             if (allocation.failure() != null) {
                 return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(
                         requirement, context, allocation.failure()), allocation.simulation());
@@ -147,7 +164,8 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
         List<PneumaticAirFacet> facets = matchingFacets(requirement, capabilities);
         if (facets.isEmpty()) return commitFailure(context, AirFailureReasons.MISSING_INTERFACE);
         AllocationResult allocation = allocate(requirement, facets, context, context.requestedParallelism(),
-                context.reservations());
+                context.reservations(), RequirementHandlerSupport.consumeProfile(requirement.consumeChance(),
+                        context.requestedParallelism(), context));
         if (allocation.failure() != null) return commitFailure(context, allocation.failure());
         return preflight(requirement, context, allocation.allocations());
     }
@@ -179,8 +197,34 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
     }
 
     private static AllocationResult allocate(AirRequirement requirement, List<PneumaticAirFacet> facets,
-                                               PlanningContext context, long parallelism,
-                                               PlanningReservations reservations) {
+                                                PlanningContext context, long parallelism,
+                                                PlanningReservations reservations,
+                                                RequirementHandlerSupport.ConsumeProfile consumption) {
+        if (requirement.io() == RecipeModifier.IOType.OUTPUT) {
+            return allocateFull(requirement, facets, context, parallelism, reservations);
+        }
+        AllocationResult checked = allocateFull(requirement, facets, context, parallelism, reservations.copy());
+        if (checked.failure() != null) return checked;
+        long consumedBatches = requirement.consumeChance() == 1F ? parallelism : consumption.consumedBatches(parallelism);
+        long remaining = RequirementHandlerSupport.scaled(requirement.airPerTick(), consumedBatches);
+        List<Allocation> allocations = new ArrayList<>();
+        for (Allocation allocation : checked.allocations()) {
+            long moved = Math.min(remaining, allocation.amount());
+            AirState state = allocation.facet().state();
+            long capacity = Math.min(Integer.MAX_VALUE,
+                    (long) Math.floor((double) state.dangerPressure() * state.volume()));
+            if (moved > 0L && !reservations.reserveValueTotal(allocation.identity(), capacity, state.air(), moved, false)) {
+                return new AllocationResult(List.of(), AirFailureReasons.INSUFFICIENT_AIR, null);
+            }
+            allocations.add(new Allocation(allocation.facet(), allocation.identity(), moved, allocation.amount()));
+            remaining -= moved;
+        }
+        return new AllocationResult(List.copyOf(allocations), null, null);
+    }
+
+    private static AllocationResult allocateFull(AirRequirement requirement, List<PneumaticAirFacet> facets,
+                                                 PlanningContext context, long parallelism,
+                                                 PlanningReservations reservations) {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
         long requested = RequirementHandlerSupport.scaled(requirement.airPerTick(), parallelism);
         long remaining = requested;
@@ -236,6 +280,7 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
         if (!validation.success()) return validation;
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
         for (Allocation allocation : allocations) {
+            if (allocation.amount() == 0L && allocation.checkedAmount() > 0L) continue;
             CapabilityResult result = allocation.facet().apply(allocation.amount(), insert, requirement.minPressure());
             if (!result.success()) return result;
         }
@@ -252,7 +297,7 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
             if (allocation.facet().queryIdentity() != allocation.identity()) {
                 return commitFailure(context, AirFailureReasons.MISSING_INTERFACE);
             }
-            CapabilityResult result = allocation.facet().validate(allocation.amount(), insert, requirement.minPressure());
+            CapabilityResult result = allocation.facet().validate(allocation.checkedAmount(), insert, requirement.minPressure());
             if (!result.success()) return result;
         }
         return CapabilityResult.successful();
@@ -264,10 +309,13 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
                         null, context.requirementIndex(), Map.of())));
     }
 
-    /** One allocation per physical handler.
+    /** One allocation per physical handler; checkedAmount retains the full input's preflight obligation.
      * @author howxu <dev@howxu.cn>
      */
-    private record Allocation(PneumaticAirFacet facet, Object identity, long amount) {
+    private record Allocation(PneumaticAirFacet facet, Object identity, long amount, long checkedAmount) {
+        private Allocation(PneumaticAirFacet facet, Object identity, long amount) {
+            this(facet, identity, amount, amount);
+        }
     }
 
     /** Shared candidate and materialization result.

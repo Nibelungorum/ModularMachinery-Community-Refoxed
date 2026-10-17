@@ -10,6 +10,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import java.util.List;
 
 /** Validated recipe IO declaration factories. @author howxu <dev@howxu.cn> */
 public final class IoValues {
@@ -29,6 +30,22 @@ public final class IoValues {
     public static FluidOutputSpec fluidOutput(FluidStack stack) { return RecipeIoAdapters.fluidOutput(stack); }
     public static FluidOutputSpec fluidOutput(FluidStack stack, float chance) { return RecipeIoAdapters.fluidOutput(stack, chance); }
     public static EnergyRateSpec energyRate(long fePerTick) { return RecipeIoAdapters.energyRate(fePerTick); }
+    public static CustomIoSpec sourceInput(long amount) { return ArsNouveauIo.sourceInput(amount); }
+    public static CustomIoSpec sourceInput(long amount, float consumeChance) { return ArsNouveauIo.sourceInput(amount, consumeChance); }
+    public static CustomIoSpec sourceOutput(long amount) { return ArsNouveauIo.sourceOutput(amount); }
+    public static CustomIoSpec sourceOutput(long amount, float chance) { return ArsNouveauIo.sourceOutput(amount, chance); }
+    public static CustomIoSpec manaInput(long amount) { return BotaniaIo.manaInput(amount); }
+    public static CustomIoSpec manaInput(long amount, float consumeChance) { return BotaniaIo.manaInput(amount, consumeChance); }
+    public static CustomIoSpec manaOutput(long amount) { return BotaniaIo.manaOutput(amount); }
+    public static CustomIoSpec manaOutput(long amount, float chance) { return BotaniaIo.manaOutput(amount, chance); }
+    public static CustomIoSpec airInput(long airPerTick, float minPressure) { return PneumaticCraftIo.airInput(airPerTick, minPressure); }
+    public static CustomIoSpec airInput(long airPerTick, float minPressure, List<String> tags) { return PneumaticCraftIo.airInput(airPerTick, minPressure, tags); }
+    public static CustomIoSpec airInput(long airPerTick, float minPressure, float consumeChance) { return PneumaticCraftIo.airInput(airPerTick, minPressure, consumeChance); }
+    public static CustomIoSpec airInput(long airPerTick, float minPressure, float consumeChance, List<String> tags) { return PneumaticCraftIo.airInput(airPerTick, minPressure, consumeChance, tags); }
+    public static CustomIoSpec airOutput(long airPerTick) { return PneumaticCraftIo.airOutput(airPerTick); }
+    public static CustomIoSpec airOutput(long airPerTick, List<String> tags) { return PneumaticCraftIo.airOutput(airPerTick, tags); }
+    public static CustomIoSpec airOutput(long airPerTick, float chance) { return PneumaticCraftIo.airOutput(airPerTick, chance); }
+    public static CustomIoSpec airOutput(long airPerTick, float chance, List<String> tags) { return PneumaticCraftIo.airOutput(airPerTick, chance, tags); }
     public static HostConstraint requiredHost(ResourceLocation id) { return RecipeIoAdapters.requiredHost(id); }
     public static CustomIoSpec customIo(ResourceLocation typeId, IoDirection io, JsonElement payload) { return RecipeIoAdapters.customIo(typeId, io, payload); }
 }

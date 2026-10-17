@@ -541,12 +541,14 @@ public final class CraftingContext {
                     requests);
         }
         if (requirement instanceof SourceRequirement source) {
+            if (source.io() == RecipeModifier.IOType.INPUT ? source.consumeChance() != 1F : source.chance() != 1F) return null;
             long amount = scaled(source.amount(), parallelism);
             return new AsyncRequirementPlanner.Requirement(index, amount,
                     IOType.valueOf(source.io().name()), List.of(new AsyncCapabilityRequest.Scalar(
                     ArsSourceIds.SOURCE, parallelism, amount, source.io() == RecipeModifier.IOType.OUTPUT)));
         }
         if (requirement instanceof ManaRequirement mana) {
+            if (mana.io() == RecipeModifier.IOType.INPUT ? mana.consumeChance() != 1F : mana.chance() != 1F) return null;
             if (!mana.tags().isEmpty()) return null;
             long amount = scaled(mana.amount(), parallelism);
             return new AsyncRequirementPlanner.Requirement(index, amount,
@@ -621,6 +623,13 @@ public final class CraftingContext {
             int originalIndex = sourceIndexes.get(index);
             if (direction != null && requirement.io() != direction) continue;
             if (consumedAtStart.contains(originalIndex)) continue;
+            if (retainedInputs.contains(originalIndex) && requirement instanceof SourceRequirement input
+                    && input.io() == RecipeModifier.IOType.INPUT && input.consumeChance() > 0F) {
+                requirement = new SourceRequirement(input.io(), input.amount(), input.chance(), 0F, input.tags());
+            } else if (retainedInputs.contains(originalIndex) && requirement instanceof ManaRequirement input
+                    && input.io() == RecipeModifier.IOType.INPUT && input.consumeChance() > 0F) {
+                requirement = new ManaRequirement(input.io(), input.amount(), input.chance(), 0F, input.tags());
+            }
             if (retainedInputs.contains(originalIndex) && requirement instanceof ItemRequirement(
                     RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
                     net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,

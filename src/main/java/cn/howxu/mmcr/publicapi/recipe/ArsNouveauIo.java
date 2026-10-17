@@ -9,4 +9,6 @@ public final class ArsNouveauIo {
     private ArsNouveauIo() {}
     public static CustomIoSpec sourceInput(long amount) { return ArsNouveauIoAdapters.sourceInput(amount); }
     public static CustomIoSpec sourceOutput(long amount) { return ArsNouveauIoAdapters.sourceOutput(amount); }
+    public static CustomIoSpec sourceInput(long amount, float consumeChance) { return ArsNouveauIoAdapters.sourceInput(amount, consumeChance); }
+    public static CustomIoSpec sourceOutput(long amount, float chance) { return ArsNouveauIoAdapters.sourceOutput(amount, chance); }
 }

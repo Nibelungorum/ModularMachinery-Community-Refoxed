@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
@@ -129,6 +131,40 @@ class CraftingRuntimeSourceConsumptionTest {
         assertThat(readField(runtime, "consumedAtStart")).isEqualTo(Set.of(2));
         assertThat(readField(runtime, "retainedInputs")).isEqualTo(Set.of(3));
         assertThat(active.inputConsumptionPlan().consumedInputBatches()).containsExactly(0, 0, 1, 0);
+    }
+
+    @Test
+    void retainedSourceDoesNotRerollItsStartupConsumeChanceAfterProgressOrRestore() throws Exception {
+        List<MachineRequirement> requirements = List.of(SourceRequirement.input(300L, 0.25F));
+        var active = activeRecipe("source_retained_chance", requirements);
+        var runtime = runtime(active, requirements);
+        var missed = new CraftingPlan(List.of(new RequirementPlan(0, 1L, List.of(), null)), 1L,
+                Map.of(0, RecipeModifier.IOType.INPUT));
+        capture(runtime, requirements, missed);
+
+        var tickInput = (SourceRequirement) requirements(runtime, "perTickRequirements").getFirst();
+        assertThat(tickInput.amount()).isEqualTo(300L);
+        assertThat(tickInput.consumeChance()).isZero();
+        assertThat(active.inputConsumptionPlan().consumedInputBatches()).containsExactly(0);
+
+        var restored = runtime(null, List.of());
+        restored.restore(active, null, 0L, 0L, 0L, 0L);
+        assertThat(restored.active()).isTrue();
+        assertThat(((SourceRequirement) requirements(restored, "perTickRequirements").getFirst()).consumeChance()).isZero();
+    }
+
+    @Test
+    void craftingContextRetainedSourceOnlyChecksTheInputWithoutReconsuming() {
+        var storage = new SourcePortStorage(() -> {});
+        storage.setAmount(600L);
+        var input = new SourcePortCapability(null, storage, IOType.INPUT);
+        var context = new CraftingContext(new CapabilitySnapshot(List.of(input)));
+        var result = context.planInputs(List.of(SourceRequirement.input(300L, 0.25F)), 1L, Set.of(), Set.of(0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().hasOperations(0)).isFalse();
+        assertThat(result.plan().commitInputs()).isTrue();
+        assertThat(storage.amount()).isEqualTo(600L);
     }
 
     @Test

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.ars_nouveau;
 
+import cn.howxu.mmcr.internal.recipe.InputValidationOperation;
+
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
@@ -25,6 +27,7 @@ import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.compat.ars_nouveau.loaded.SourcePortCapability;
@@ -41,6 +44,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,6 +76,154 @@ class SourceRequirementHandlerTest {
         SourceRequirement.installUnavailableHandler();
         outputScope.close();
         requirementScope.close();
+    }
+
+    @Test
+    void zeroConsumptionStillRequiresFullParallelInputAndDoesNotReserveIt() {
+        SourcePortCapability input = capability(800L, IOType.INPUT);
+        var missing = context(List.of(input)).planRequirements(List.of(SourceRequirement.input(801L, 0F)), 1L, Map.of());
+        assertThat(missing.successful()).isFalse();
+        var free = context(List.of(input)).planRequirements(
+                List.of(SourceRequirement.input(400L, 0F), SourceRequirement.input(400L)), 3L, Map.of());
+        assertThat(free.successful()).isTrue();
+        assertThat(free.plan().parallelism()).isEqualTo(2L);
+        assertThat(free.plan().hasOperations(0)).isFalse();
+        assertThat(free.plan().commit()).isTrue();
+        assertThat(input.amount()).isZero();
+        var depleted = context(List.of(capability(800L, IOType.INPUT))).planRequirements(
+                List.of(SourceRequirement.input(500L), SourceRequirement.input(400L, 0F)), 1L, Map.of());
+        assertThat(depleted.successful()).isFalse();
+        assertThat(depleted.failureRequirementIndex()).isEqualTo(1);
+    }
+
+    @Test
+    void commitRechecksFullParallelInputAndDeduplicatesLiveAliasesBeforeAnyDebit() {
+        SourcePortStorage firstStorage = new SourcePortStorage(() -> {});
+        firstStorage.setAmount(600L);
+        SourcePortStorage secondStorage = new SourcePortStorage(() -> {});
+        secondStorage.setAmount(500L);
+        var first = new SourcePortCapability(null, firstStorage, IOType.INPUT);
+        var alias = new SourcePortCapability(null, firstStorage, IOType.INPUT);
+        var second = new SourcePortCapability(null, secondStorage, IOType.INPUT);
+        var result = context(List.of(first, alias, second)).planRequirements(
+                List.of(SourceRequirement.input(400L, 0F)), 2L, Map.of());
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().hasOperations(0)).isFalse();
+        secondStorage.setAmount(100L);
+
+        assertThat(result.plan().commitInputs()).isFalse();
+        assertThat(result.plan().failure().reason()).isEqualTo(SourceFailureReasons.INPUT_MISSING);
+        assertThat(result.plan().failure().details()).containsAllEntriesOf(Map.of(
+                "required", "800", "available", "700", "shortfall", "100"));
+        assertThat(result.plan().failure().failure().trace().frames().getFirst().phase())
+                .isEqualTo(FailurePhase.CAPABILITY_COMMIT);
+        assertThat(first.amount()).isEqualTo(600L);
+        assertThat(second.amount()).isEqualTo(100L);
+    }
+
+    @Test
+    void partiallyConsumedParallelInputStillRechecksItsFullLiveDemand() {
+        SourcePortStorage storage = new SourcePortStorage(() -> {});
+        storage.setAmount(3_000L);
+        var input = new SourcePortCapability(null, storage, IOType.INPUT);
+        List<CapabilityRequests.ValueRequest> prepared = new ArrayList<>();
+        // The existing large-profile path deterministically consumes half the batches without random draws.
+        var result = context(List.of(observed(input, 0, prepared))).planRequirements(
+                List.of(SourceRequirement.input(1L, 0.5F)), 2_048L, Map.of());
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(2_048L);
+        assertThat(prepared).singleElement().satisfies(request -> assertThat(request.amount()).isEqualTo(1_024L));
+        storage.setAmount(1_500L);
+
+        assertThat(result.plan().commitInputs()).isFalse();
+        assertThat(result.plan().failure().details()).containsEntry("required", "2048").containsEntry("available", "1500");
+        assertThat(input.amount()).isEqualTo(1_500L);
+    }
+
+    @Test
+    void readOnlyInputValidationNeverBeginsNativeExecutionOrMarksConsumption() {
+        for (boolean stale : new boolean[]{false, true}) {
+            SourcePortStorage storage = new SourcePortStorage(() -> {});
+            storage.setAmount(800L);
+            var input = new SourcePortCapability(null, storage, IOType.INPUT);
+            var result = context(List.of(input)).planRequirements(List.of(SourceRequirement.input(400L, 0F)), 3L, Map.of());
+            assertThat(result.successful()).isTrue();
+            assertThat(result.plan().parallelism()).isEqualTo(2L);
+            assertThat(result.plan().hasOperations(0)).isFalse();
+            assertThat(result.plan().requirements().getFirst().operations()).singleElement()
+                    .satisfies(operation -> assertThat(operation).isInstanceOf(InputValidationOperation.class));
+            if (stale) storage.setAmount(799L);
+            AtomicInteger beforeNative = new AtomicInteger();
+
+            assertThat(result.plan().commitInputsRuntime(Set.of(), beforeNative::incrementAndGet, () -> true)).isEqualTo(!stale);
+            assertThat(beforeNative).hasValue(0);
+            assertThat(result.plan().wasNativeExecuted(0)).isFalse();
+            assertThat(result.plan().hasOperations(0)).isFalse();
+            assertThat(input.amount()).isEqualTo(stale ? 799L : 800L);
+        }
+    }
+
+    @Test
+    void skippedOutputNeedsNeitherPortsNorCapacity() {
+        var absent = context(List.of()).planRequirements(List.of(SourceRequirement.output(400L, 0F)), 3L, Map.of());
+        assertThat(absent.successful()).isTrue();
+        assertThat(absent.plan().parallelism()).isEqualTo(3L);
+        assertThat(absent.plan().hasOperations(0)).isFalse();
+        assertThat(absent.plan().commit()).isTrue();
+        SourcePortCapability full = capability(10_000L, IOType.OUTPUT);
+        var skipped = context(List.of(full)).planOutputRequirements(List.of(SourceRequirement.output(400L, 0F)),
+                List.of(new SourceOutput(400L, 0F)), 3L, false);
+        assertThat(skipped.successful()).isTrue();
+        assertThat(skipped.plan().commit()).isTrue();
+        assertThat(full.amount()).isEqualTo(10_000L);
+    }
+
+    @Test
+    void sharedSamplingKeepsReservationMaterializationAndAlternativeScopesIdentical() {
+        SourcePortCapability input = capability(800L, IOType.INPUT);
+        List<CapabilityRequests.ValueRequest> prepared = new ArrayList<>();
+        var context = new PlanningContext(4L, 0, false, new PlanningReservations(), Map.of(), null, null,
+                new RequirementHandlerSupport.Sampling());
+        var handler = new SourceRequirementHandler();
+        var requirement = SourceRequirement.input(100L, 0.5F);
+        var plan = handler.plan(requirement, List.of(observed(input, 0, prepared)), context);
+        assertThat(plan.successful()).isTrue();
+        var reserved = new PlanningReservations();
+        assertThat(plan.reserve(3L, reserved)).isNull();
+        long expected = reserved.nativeAmount(input.queryIdentity(), 0, input.amount());
+        var materialized = new PlanningReservations();
+        var operations = plan.materialize(3L, materialized, null);
+        assertThat(materialized.nativeAmount(input.queryIdentity(), 0, input.amount())).isEqualTo(expected);
+        var alternative = handler.plan(requirement, List.of(input), context.forScope(null, context.sampling()));
+        var other = new PlanningReservations();
+        assertThat(alternative.reserve(3L, other)).isNull();
+        assertThat(other.nativeAmount(input.queryIdentity(), 0, input.amount())).isEqualTo(expected);
+        assertThat(prepared.stream().mapToLong(CapabilityRequests.ValueRequest::amount).sum()).isEqualTo(800L - expected);
+        assertThat(operations.operations()).allSatisfy(operation -> assertThat(operation.commit().success()).isTrue());
+        assertThat(input.amount()).isEqualTo(expected);
+    }
+
+    @Test
+    void outputSamplingIsSharedAcrossScopesAndDeferredAllocation() {
+        var output = capability(0L, IOType.OUTPUT);
+        var context = new PlanningContext(4L, 0, false, new PlanningReservations(), Map.of(), null, null,
+                new RequirementHandlerSupport.Sampling());
+        var handler = new SourceRequirementHandler();
+        var requirement = SourceRequirement.output(100L, 0.5F);
+        var plan = handler.plan(requirement, List.of(output), context);
+        assertThat(plan.successful()).isTrue();
+        var reserved = new PlanningReservations();
+        assertThat(plan.reserve(3L, reserved)).isNull();
+        long expected = reserved.nativeAmount(output.queryIdentity(), 0, output.amount());
+        var materialized = new PlanningReservations();
+        var operations = plan.materialize(3L, materialized, null);
+        assertThat(materialized.nativeAmount(output.queryIdentity(), 0, output.amount())).isEqualTo(expected);
+        var alternative = handler.plan(requirement, List.of(output), context.forScope(null, context.sampling()));
+        var other = new PlanningReservations();
+        assertThat(alternative.reserve(3L, other)).isNull();
+        assertThat(other.nativeAmount(output.queryIdentity(), 0, output.amount())).isEqualTo(expected);
+        assertThat(operations.operations()).allSatisfy(operation -> assertThat(operation.commit().success()).isTrue());
+        assertThat(output.amount()).isEqualTo(expected);
     }
 
     @Test

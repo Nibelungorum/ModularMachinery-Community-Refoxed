@@ -86,6 +86,8 @@ public final class RequirementAdapters {
         AirView(AirRequirement value) { super(value); }
         public long airPerTick() { return ((AirRequirement) delegate).airPerTick(); }
         public float minPressure() { return ((AirRequirement) delegate).minPressure(); }
+        public float chance() { return ((AirRequirement) delegate).chance(); }
+        public float consumeChance() { return ((AirRequirement) delegate).consumeChance(); }
     }
     private static final class StressView extends View implements StressRequirementSpec {
         StressView(StressRequirement value) { super(value); }
@@ -99,6 +101,8 @@ public final class RequirementAdapters {
     private static final class SourceView extends View implements SourceRequirementSpec {
         SourceView(SourceRequirement value) { super(value); }
         public long amount() { return ((SourceRequirement) delegate).amount(); }
+        public float chance() { return ((SourceRequirement) delegate).chance(); }
+        public float consumeChance() { return ((SourceRequirement) delegate).consumeChance(); }
     }
     /** Typed mana view retaining the canonical requirement.
      * @author howxu <dev@howxu.cn>
@@ -106,6 +110,8 @@ public final class RequirementAdapters {
     private static final class ManaView extends View implements ManaRequirementSpec {
         ManaView(ManaRequirement value) { super(value); }
         public long amount() { return ((ManaRequirement) delegate).amount(); }
+        public float chance() { return ((ManaRequirement) delegate).chance(); }
+        public float consumeChance() { return ((ManaRequirement) delegate).consumeChance(); }
     }
     private static final class LevelView extends View implements LevelRequirementSpec {
         LevelView(LevelRequirement value) { super(value); }

@@ -30,6 +30,7 @@ import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.recipe.RecipeIoValidation;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
@@ -404,14 +405,94 @@ public final class KubeJSApi {
         return customRecipeIo(ArsSourceIds.SOURCE.toString(), IOType.OUTPUT, SourceRecipeDeclarations.outputPayload(amount));
     }
 
+    public CustomRecipeIo sourceInput(long amount, float consumeChance) {
+        return customRecipeIo(ArsSourceIds.SOURCE.toString(), IOType.INPUT, SourceRecipeDeclarations.inputPayload(amount, consumeChance));
+    }
+
+    public CustomRecipeIo sourceOutput(long amount, float chance) {
+        return customRecipeIo(ArsSourceIds.SOURCE.toString(), IOType.OUTPUT, SourceRecipeDeclarations.outputPayload(amount, chance));
+    }
+
+    public CustomRecipeIo manaInput(long amount, float consumeChance) {
+        return customRecipeIo(BotaniaManaIds.MANA.toString(), IOType.INPUT, ManaRecipeDeclarations.inputPayload(amount, consumeChance));
+    }
+
+    public CustomRecipeIo manaOutput(long amount, float chance) {
+        return customRecipeIo(BotaniaManaIds.MANA.toString(), IOType.OUTPUT, ManaRecipeDeclarations.outputPayload(amount, chance));
+    }
+
     public SourceRequirement sourceInputRequirement(long amount) { return sourceInputRequirement(amount, List.of()); }
+    @HideFromJS
     public SourceRequirement sourceInputRequirement(long amount, List<String> tags) { return new SourceRequirement(IOType.INPUT, amount, tags); }
     public SourceRequirement sourceOutputRequirement(long amount) { return sourceOutputRequirement(amount, List.of()); }
+    @HideFromJS
     public SourceRequirement sourceOutputRequirement(long amount, List<String> tags) { return new SourceRequirement(IOType.OUTPUT, amount, tags); }
     public ManaRequirement manaInputRequirement(long amount) { return manaInputRequirement(amount, List.of()); }
+    @HideFromJS
     public ManaRequirement manaInputRequirement(long amount, List<String> tags) { return new ManaRequirement(IOType.INPUT, amount, tags); }
     public ManaRequirement manaOutputRequirement(long amount) { return manaOutputRequirement(amount, List.of()); }
+    @HideFromJS
     public ManaRequirement manaOutputRequirement(long amount, List<String> tags) { return new ManaRequirement(IOType.OUTPUT, amount, tags); }
+    @HideFromJS
+    public SourceRequirement sourceInputRequirement(long amount, float consumeChance) { return sourceInputRequirement(amount, consumeChance, List.of()); }
+    public SourceRequirement sourceInputRequirement(long amount, float consumeChance, List<String> tags) { return new SourceRequirement(IOType.INPUT, amount, 1F, consumeChance, tags); }
+    @HideFromJS
+    public SourceRequirement sourceOutputRequirement(long amount, float chance) { return sourceOutputRequirement(amount, chance, List.of()); }
+    public SourceRequirement sourceOutputRequirement(long amount, float chance, List<String> tags) { return new SourceRequirement(IOType.OUTPUT, amount, chance, 1F, tags); }
+    @HideFromJS
+    public ManaRequirement manaInputRequirement(long amount, float consumeChance) { return manaInputRequirement(amount, consumeChance, List.of()); }
+    public ManaRequirement manaInputRequirement(long amount, float consumeChance, List<String> tags) { return new ManaRequirement(IOType.INPUT, amount, 1F, consumeChance, tags); }
+    @HideFromJS
+    public ManaRequirement manaOutputRequirement(long amount, float chance) { return manaOutputRequirement(amount, chance, List.of()); }
+    public ManaRequirement manaOutputRequirement(long amount, float chance, List<String> tags) { return new ManaRequirement(IOType.OUTPUT, amount, chance, 1F, tags); }
+    public AirRequirement airInputRequirement(Object airPerTick, Object minPressure) { return airInputRequirement(airPerTick, minPressure, List.of()); }
+    @HideFromJS
+    public AirRequirement airInputRequirement(Object airPerTick, Object minPressure, List<String> tags) { return AirRequirement.input(airRate(airPerTick), airPressure(minPressure), tags); }
+    @HideFromJS
+    public AirRequirement airInputRequirement(Object airPerTick, Object minPressure, float consumeChance) { return airInputRequirement(airPerTick, minPressure, consumeChance, List.of()); }
+    public AirRequirement airInputRequirement(Object airPerTick, Object minPressure, float consumeChance, List<String> tags) { return AirRequirement.input(airRate(airPerTick), airPressure(minPressure), consumeChance, tags); }
+    public AirRequirement airOutputRequirement(Object airPerTick) { return airOutputRequirement(airPerTick, List.of()); }
+    @HideFromJS
+    public AirRequirement airOutputRequirement(Object airPerTick, List<String> tags) { return AirRequirement.output(airRate(airPerTick), tags); }
+    @HideFromJS
+    public AirRequirement airOutputRequirement(Object airPerTick, float chance) { return airOutputRequirement(airPerTick, chance, List.of()); }
+    public AirRequirement airOutputRequirement(Object airPerTick, float chance, List<String> tags) { return AirRequirement.output(airRate(airPerTick), chance, tags); }
+
+    // A single script-visible signature prevents Rhino from coercing a numeric chance into a tag list.
+    public SourceRequirement sourceInputRequirement(long amount, Object chanceOrTags) {
+        return chanceOrTags instanceof Number number ? sourceInputRequirement(amount, number.floatValue())
+                : sourceInputRequirement(amount, ioTags(chanceOrTags));
+    }
+
+    public SourceRequirement sourceOutputRequirement(long amount, Object chanceOrTags) {
+        return chanceOrTags instanceof Number number ? sourceOutputRequirement(amount, number.floatValue())
+                : sourceOutputRequirement(amount, ioTags(chanceOrTags));
+    }
+
+    public ManaRequirement manaInputRequirement(long amount, Object chanceOrTags) {
+        return chanceOrTags instanceof Number number ? manaInputRequirement(amount, number.floatValue())
+                : manaInputRequirement(amount, ioTags(chanceOrTags));
+    }
+
+    public ManaRequirement manaOutputRequirement(long amount, Object chanceOrTags) {
+        return chanceOrTags instanceof Number number ? manaOutputRequirement(amount, number.floatValue())
+                : manaOutputRequirement(amount, ioTags(chanceOrTags));
+    }
+
+    public AirRequirement airInputRequirement(Object airPerTick, Object minPressure, Object chanceOrTags) {
+        return chanceOrTags instanceof Number number ? airInputRequirement(airPerTick, minPressure, number.floatValue())
+                : airInputRequirement(airPerTick, minPressure, ioTags(chanceOrTags));
+    }
+
+    public AirRequirement airOutputRequirement(Object airPerTick, Object chanceOrTags) {
+        return chanceOrTags instanceof Number number ? airOutputRequirement(airPerTick, number.floatValue())
+                : airOutputRequirement(airPerTick, ioTags(chanceOrTags));
+    }
+
+    private static List<String> ioTags(Object value) {
+        if (!(value instanceof List<?> tags)) throw new IllegalArgumentException("IO tags must be a list");
+        return tags.stream().map(String::valueOf).toList();
+    }
 
     public EnergyRequirement energyRequirement(IOType io, long fePerTick) {
         return new EnergyRequirement(io, fePerTick);
@@ -437,18 +518,66 @@ public final class KubeJSApi {
                 MachineRecipeBuilder.airOutputPayload(airPerTick, tags));
     }
 
+    @HideFromJS
+    public CustomRecipeIo airInput(long airPerTick, float minPressure, float consumeChance) {
+        return airInput(airPerTick, minPressure, consumeChance, List.of());
+    }
+
+    @HideFromJS
+    public CustomRecipeIo airInput(long airPerTick, float minPressure, float consumeChance, List<String> tags) {
+        return customRecipeIo(PneumaticIds.AIR.toString(), IOType.INPUT,
+                MachineRecipeBuilder.airInputPayload(airPerTick, minPressure, consumeChance, tags));
+    }
+
+    @HideFromJS
+    public CustomRecipeIo airOutput(long airPerTick, float chance) { return airOutput(airPerTick, chance, List.of()); }
+
+    @HideFromJS
+    public CustomRecipeIo airOutput(long airPerTick, float chance, List<String> tags) {
+        return customRecipeIo(PneumaticIds.AIR.toString(), IOType.OUTPUT,
+                MachineRecipeBuilder.airOutputPayload(airPerTick, chance, tags));
+    }
+
     public CustomRecipeIo airInput(Object airPerTick, Object minPressure) {
         return airInput(airPerTick, minPressure, List.of());
     }
 
+    @HideFromJS
     public CustomRecipeIo airInput(Object airPerTick, Object minPressure, List<String> tags) {
         return airInput(airRate(airPerTick), airPressure(minPressure), tags);
     }
 
     public CustomRecipeIo airOutput(Object airPerTick) { return airOutput(airPerTick, List.of()); }
 
+    @HideFromJS
     public CustomRecipeIo airOutput(Object airPerTick, List<String> tags) {
         return airOutput(airRate(airPerTick), tags);
+    }
+
+    @HideFromJS
+    public CustomRecipeIo airInput(Object airPerTick, Object minPressure, double consumeChance) {
+        return airInput(airPerTick, minPressure, consumeChance, List.of());
+    }
+
+    public CustomRecipeIo airInput(Object airPerTick, Object minPressure, double consumeChance, List<String> tags) {
+        return airInput(airRate(airPerTick), airPressure(minPressure), (float) consumeChance, tags);
+    }
+
+    @HideFromJS
+    public CustomRecipeIo airOutput(Object airPerTick, double chance) { return airOutput(airPerTick, chance, List.of()); }
+
+    public CustomRecipeIo airOutput(Object airPerTick, double chance, List<String> tags) {
+        return airOutput(airRate(airPerTick), (float) chance, tags);
+    }
+
+    public CustomRecipeIo airInput(Object airPerTick, Object minPressure, Object chanceOrTags) {
+        return chanceOrTags instanceof Number number ? airInput(airRate(airPerTick), airPressure(minPressure), number.floatValue())
+                : airInput(airPerTick, minPressure, ioTags(chanceOrTags));
+    }
+
+    public CustomRecipeIo airOutput(Object airPerTick, Object chanceOrTags) {
+        return chanceOrTags instanceof Number number ? airOutput(airRate(airPerTick), number.floatValue())
+                : airOutput(airPerTick, ioTags(chanceOrTags));
     }
 
     private static long airRate(Object value) {

@@ -45,7 +45,7 @@ class ManaPresentationTest {
             for (boolean input : List.of(true, false)) {
                 var requirement = input ? ManaRequirement.input(amount) : ManaRequirement.output(amount);
                 var role = input ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT;
-                var entry = adapter.display(new RecipeIoEntry(role, BotaniaManaIds.MANA, requirement, amount, 1F)).orElseThrow();
+                var entry = adapter.display(new RecipeIoEntry(role, BotaniaManaIds.MANA, requirement, amount, 0.25F)).orElseThrow();
                 var mana = (ManaJeiDisplay) entry.ingredient();
                 assertThat(mana).isEqualTo(new ManaJeiDisplay(amount, input));
                 assertThat(entry.ingredientType()).isNull();
@@ -54,6 +54,7 @@ class ManaPresentationTest {
                 assertThat(entry.role()).isEqualTo(role);
                 assertThat(entry.transferable()).isFalse();
                 assertThat(entry.count()).isEqualTo((int) Math.min(amount, Integer.MAX_VALUE));
+                assertThat(entry.chance()).isEqualTo(0.25F);
                 assertThat(mana.label()).isEqualTo(Component.translatable(input
                         ? "jei.mmcr.machine_recipe.mana_input" : "jei.mmcr.machine_recipe.mana_output",
                         ReadableNumber.format(amount)));

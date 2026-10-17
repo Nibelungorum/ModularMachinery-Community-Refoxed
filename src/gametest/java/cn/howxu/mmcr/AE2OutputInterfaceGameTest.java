@@ -27,6 +27,8 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBaseBlockEntity;
@@ -128,15 +130,16 @@ public class AE2OutputInterfaceGameTest {
                     "Output interface exposes an external fluid handler");
 
             CapabilitySnapshot snapshot = port.capabilitySnapshot();
-            helper.assertTrue(snapshot.capabilities().size() == (AppMekBridge.get().available() ? 3 : 2),
+            helper.assertTrue(snapshot.capabilities().size() == 2 + (AppMekBridge.get().available() ? 1 : 0) + (LightningBridge.get().available() ? 1 : 0),
                     "Output interface exposes its loaded resource families");
             for (MachineCapability capability : snapshot.capabilities()) {
                 helper.assertTrue(capability.type().id().equals(PortFamilyIds.ITEM)
                                 || capability.type().id().equals(PortFamilyIds.FLUID)
-                                || AppMekBridge.get().available() && capability.type().id().equals(MekanismPortFamilies.CHEMICAL),
-                        "Output capability is bound to the item or fluid family");
-                helper.assertTrue(capability.facet(TransferFacet.class).isPresent(),
-                        "Output capability exposes TransferFacet for external extraction");
+                                || AppMekBridge.get().available() && capability.type().id().equals(MekanismPortFamilies.CHEMICAL)
+                                || LightningBridge.get().available() && capability.type().id().equals(LightningRecipeTypes.LIGHTNING),
+                        "Output capability belongs to a supported family");
+                helper.assertTrue(capability.facet(TransferFacet.class).isPresent() != capability.type().id().equals(LightningRecipeTypes.LIGHTNING),
+                        "Existing native outputs retain external extraction; lightning stays internal");
             }
             helper.assertTrue(port.getInterfaceLogic().getConfig().getKey(0) == null
                             && port.getInterfaceLogic().getConfig().getKey(1) == null,

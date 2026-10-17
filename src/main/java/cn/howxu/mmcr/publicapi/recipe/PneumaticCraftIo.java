@@ -12,4 +12,8 @@ public final class PneumaticCraftIo {
     public static CustomIoSpec airInput(long airPerTick, float minPressure, List<String> tags) { return PneumaticCraftIoAdapters.airInput(airPerTick, minPressure, tags); }
     public static CustomIoSpec airOutput(long airPerTick) { return airOutput(airPerTick, List.of()); }
     public static CustomIoSpec airOutput(long airPerTick, List<String> tags) { return PneumaticCraftIoAdapters.airOutput(airPerTick, tags); }
+    public static CustomIoSpec airInput(long airPerTick, float minPressure, float consumeChance) { return airInput(airPerTick, minPressure, consumeChance, List.of()); }
+    public static CustomIoSpec airInput(long airPerTick, float minPressure, float consumeChance, List<String> tags) { return PneumaticCraftIoAdapters.airInput(airPerTick, minPressure, consumeChance, tags); }
+    public static CustomIoSpec airOutput(long airPerTick, float chance) { return airOutput(airPerTick, chance, List.of()); }
+    public static CustomIoSpec airOutput(long airPerTick, float chance, List<String> tags) { return PneumaticCraftIoAdapters.airOutput(airPerTick, chance, tags); }
 }

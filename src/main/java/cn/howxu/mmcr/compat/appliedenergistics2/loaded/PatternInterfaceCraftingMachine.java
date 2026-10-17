@@ -16,6 +16,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
@@ -113,6 +115,7 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                         new ItemBusCapability(AE2NativeAdapters.items(request.itemRequest()), IOType.INPUT),
                         new FluidHatchCapability(AE2NativeAdapters.fluids(request.fluidRequest()), IOType.INPUT)));
                 inputs.addAll(request.chemicalRequest().capabilities());
+                inputs.addAll(LightningBridge.get().patternInputs(view));
                 return List.copyOf(inputs);
             });
             if (reservation.status() != PatternStartBatchReservation.Status.RESERVED
@@ -287,7 +290,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
             for (var entry : holder) {
                 if (entry.getLongValue() > 0L && !(entry.getKey() instanceof AEItemKey)
                         && !(entry.getKey() instanceof AEFluidKey)
-                        && !AppMekBridge.get().supportsPatternInput(entry.getKey())) return false;
+                        && !AppMekBridge.get().supportsPatternInput(entry.getKey())
+                        && !LightningBridge.get().supportsPatternInput(entry.getKey())) return false;
             }
         }
         return true;
@@ -296,11 +300,13 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     private static boolean hasSupportedInputs(AEProcessingPattern pattern) {
         return pattern.getSparseInputs().stream().filter(stack -> stack != null).allMatch(stack ->
                 stack.amount() > 0L && (stack.what() instanceof AEItemKey || stack.what() instanceof AEFluidKey
-                        || AppMekBridge.get().supportsPatternInput(stack.what())));
+                        || AppMekBridge.get().supportsPatternInput(stack.what())
+                        || LightningBridge.get().supportsPatternInput(stack.what())));
     }
 
     private static List<MachineOutput> outputs(AEProcessingPattern pattern) {
         List<MachineOutput> outputs = new ArrayList<>();
+        Map<AEKey, Long> lightningAmounts = new HashMap<>();
         for (GenericStack stack : pattern.getOutputs()) {
             if (stack.amount() <= 0L) return null;
             if (stack.what() instanceof AEItemKey item) {
@@ -311,7 +317,13 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                 outputs.add(new MachineOutput.FluidOutput(fluid.toStack((int) stack.amount()), 1F));
             } else {
                 Optional<MachineOutput> chemical = AppMekBridge.get().patternOutput(stack.what(), stack.amount());
+                if (chemical.isEmpty()) chemical = LightningBridge.get().patternOutput(stack.what(), stack.amount());
                 if (chemical.isEmpty()) return null;
+                if (chemical.get() instanceof LightningOutput) {
+                    long previous = lightningAmounts.getOrDefault(stack.what(), 0L);
+                    if (stack.amount() > Integer.MAX_VALUE - previous) return null;
+                    lightningAmounts.put(stack.what(), previous + stack.amount());
+                }
                 outputs.add(chemical.get());
             }
         }

@@ -16,6 +16,9 @@ import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.botania.ManaRecipeDeclarations;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRecipeDeclarations;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
@@ -181,6 +184,126 @@ public final class MachineRecipeSchema {
                             var custom = RecipeIoValidation.custom(BotaniaManaIds.MANA, IOType.OUTPUT,
                                     ManaRecipeDeclarations.outputPayload(((Number) args.getFirst()).longValue()));
                             appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("inputSource", List.of(NumberComponent.POSITIVE_LONG.instance()),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.POSITIVE_LONG.instance()); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var custom = RecipeIoValidation.custom(ArsSourceIds.SOURCE, IOType.INPUT,
+                                    SourceRecipeDeclarations.inputPayload(((Number) args.getFirst()).longValue()));
+                            appendRequirement(cx.recipe(), RecipeIoValidation.decodeRequirement(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("outputSource", List.of(NumberComponent.POSITIVE_LONG.instance()),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.POSITIVE_LONG.instance()); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var custom = RecipeIoValidation.custom(ArsSourceIds.SOURCE, IOType.OUTPUT,
+                                    SourceRecipeDeclarations.outputPayload(((Number) args.getFirst()).longValue()));
+                            appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("inputSourceChance",
+                    List.of(NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var custom = RecipeIoValidation.custom(ArsSourceIds.SOURCE, IOType.INPUT,
+                                    SourceRecipeDeclarations.inputPayload(((Number) args.get(0)).longValue(), ((Number) args.get(1)).floatValue()));
+                            appendRequirement(cx.recipe(), RecipeIoValidation.decodeRequirement(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("outputSourceChance",
+                    List.of(NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var custom = RecipeIoValidation.custom(ArsSourceIds.SOURCE, IOType.OUTPUT,
+                                    SourceRecipeDeclarations.outputPayload(((Number) args.get(0)).longValue(), ((Number) args.get(1)).floatValue()));
+                            appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("inputManaChance",
+                    List.of(NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var custom = RecipeIoValidation.custom(BotaniaManaIds.MANA, IOType.INPUT,
+                                    ManaRecipeDeclarations.inputPayload(((Number) args.get(0)).longValue(), ((Number) args.get(1)).floatValue()));
+                            appendRequirement(cx.recipe(), RecipeIoValidation.decodeRequirement(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("outputManaChance",
+                    List.of(NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.POSITIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var custom = RecipeIoValidation.custom(BotaniaManaIds.MANA, IOType.OUTPUT,
+                                    ManaRecipeDeclarations.outputPayload(((Number) args.get(0)).longValue(), ((Number) args.get(1)).floatValue()));
+                            appendOutput(cx.recipe(), MachineRecipeConverter.toOutput(custom));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("inputAir",
+                    List.of(NumberComponent.NON_NEGATIVE_LONG.instance(), NumberComponent.NON_NEGATIVE_FLOAT.instance()),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.NON_NEGATIVE_LONG.instance(), NumberComponent.NON_NEGATIVE_FLOAT.instance()); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            appendRequirement(cx.recipe(), AirRequirement.input(((Number) args.get(0)).longValue(), ((Number) args.get(1)).floatValue()));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("outputAir", List.of(NumberComponent.NON_NEGATIVE_LONG.instance()),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.NON_NEGATIVE_LONG.instance()); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            appendRequirement(cx.recipe(), AirRequirement.output(((Number) args.getFirst()).longValue()));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("inputAirChance",
+                    List.of(NumberComponent.NON_NEGATIVE_LONG.instance(), NumberComponent.NON_NEGATIVE_FLOAT.instance(), NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.NON_NEGATIVE_LONG.instance(), NumberComponent.NON_NEGATIVE_FLOAT.instance(), NumberComponent.doubleRange(0D, 1D)); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            appendRequirement(cx.recipe(), AirRequirement.input(((Number) args.get(0)).longValue(),
+                                    ((Number) args.get(1)).floatValue(), ((Number) args.get(2)).floatValue()));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("outputAirChance",
+                    List.of(NumberComponent.NON_NEGATIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() { return List.of(NumberComponent.NON_NEGATIVE_LONG.instance(), NumberComponent.doubleRange(0D, 1D)); }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            appendRequirement(cx.recipe(), AirRequirement.output(((Number) args.get(0)).longValue(), ((Number) args.get(1)).floatValue()));
                         }
                     }))
             .function(new RecipeFunctionInstance("requiredHost", List.of(StringComponent.ID.instance()),

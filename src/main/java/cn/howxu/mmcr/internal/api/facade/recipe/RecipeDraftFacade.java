@@ -37,6 +37,10 @@ final class RecipeDraftFacade implements RecipeDraft {
     public RecipeDraft inputAir(long airPerTick, float minPressure, List<String> tags) { delegate.inputAir(airPerTick, minPressure, tags); return this; }
     public RecipeDraft outputAir(long airPerTick) { delegate.outputAir(airPerTick); return this; }
     public RecipeDraft outputAir(long airPerTick, List<String> tags) { delegate.outputAir(airPerTick, tags); return this; }
+    public RecipeDraft inputAir(long airPerTick, float minPressure, float consumeChance) { delegate.inputAir(airPerTick, minPressure, consumeChance); return this; }
+    public RecipeDraft inputAir(long airPerTick, float minPressure, float consumeChance, List<String> tags) { delegate.inputAir(airPerTick, minPressure, consumeChance, tags); return this; }
+    public RecipeDraft outputAir(long airPerTick, float chance) { delegate.outputAir(airPerTick, chance); return this; }
+    public RecipeDraft outputAir(long airPerTick, float chance, List<String> tags) { delegate.outputAir(airPerTick, chance, tags); return this; }
     public RecipeDraft inputStress(double stress, double minRpm) { delegate.inputStress(stress, minRpm); return this; }
     public RecipeDraft inputStress(double stress, double minRpm, List<String> tags) { delegate.inputStress(stress, minRpm, tags); return this; }
     public RecipeDraft outputStress(double stress, double rpm) { delegate.outputStress(stress, rpm); return this; }
@@ -45,6 +49,10 @@ final class RecipeDraftFacade implements RecipeDraft {
     public RecipeDraft outputSource(long amount) { delegate.outputSource(amount); return this; }
     public RecipeDraft inputMana(long amount) { delegate.inputMana(amount); return this; }
     public RecipeDraft outputMana(long amount) { delegate.outputMana(amount); return this; }
+    public RecipeDraft inputSource(long amount, float consumeChance) { delegate.inputSource(amount, consumeChance); return this; }
+    public RecipeDraft outputSource(long amount, float chance) { delegate.outputSource(amount, chance); return this; }
+    public RecipeDraft inputMana(long amount, float consumeChance) { delegate.inputMana(amount, consumeChance); return this; }
+    public RecipeDraft outputMana(long amount, float chance) { delegate.outputMana(amount, chance); return this; }
     public RecipeDraft inputEnergy(long rate) { delegate.inputEnergy(rate); return this; }
     public RecipeDraft outputEnergy(long rate) { delegate.outputEnergy(rate); return this; }
     public RecipeDraft iFEt(long rate) { delegate.iFEt(rate); return this; }

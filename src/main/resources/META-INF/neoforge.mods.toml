@@ -34,6 +34,10 @@ config="mixins/extras/mmcr.ae2.mixins.json"
 requiredMods=["ae2"]
 
 [[mixins]]
+config="mixins/extras/mmcr.ae2lt.jei.mixins.json"
+requiredMods=["ae2", "ae2lt", "jei", "ae2jeiintegration"]
+
+[[mixins]]
 config="mixins/extras/mmcr.extendedae_plus.mixins.json"
 requiredMods=["ae2", "extendedae", "extendedae_plus"]
 
@@ -63,6 +67,13 @@ side="BOTH"
 modId="ae2"
 type="optional"
 versionRange="[19.2.15,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="ae2lt"
+type="optional"
+versionRange="[2.1.1,)"
 ordering="AFTER"
 side="BOTH"
 

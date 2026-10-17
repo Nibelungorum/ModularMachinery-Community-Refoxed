@@ -31,7 +31,7 @@ public final class SourceJeiAdapter implements JeiIngredientAdapter {
     public Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
         SourceJeiIngredient ingredient = new SourceJeiIngredient(entry.amount(), entry.role() == RecipeIngredientRole.INPUT);
         return Optional.of(new JeiDisplayEntry(entry.role(), ArsSourceIds.SOURCE, ingredientType(), ingredient,
-                (int) Math.min(entry.amount(), Integer.MAX_VALUE), 1F, null, false));
+                (int) Math.min(entry.amount(), Integer.MAX_VALUE), entry.chance(), null, false));
     }
 
     @Override

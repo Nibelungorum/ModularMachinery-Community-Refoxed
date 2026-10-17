@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.capability.plan;
 
+import cn.howxu.mmcr.internal.recipe.InputValidationOperation;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.InputScope;
 
@@ -110,8 +112,10 @@ public final class CraftingPlan {
             if (!selector.test(requirement.requirementIndex())) continue;
             for (CapabilityOperation operation : requirement.operations()) {
                 if (!executionValid.getAsBoolean()) return false;
-                nativeExecutedRequirements.add(requirement.requirementIndex());
-                beforeNativeExecution.run();
+                if (!(operation instanceof InputValidationOperation)) {
+                    nativeExecutedRequirements.add(requirement.requirementIndex());
+                    beforeNativeExecution.run();
+                }
                 CapabilityResult result = operation.commit();
                 if (!executionValid.getAsBoolean()) return false;
                 if (result == null || !result.success()) {
@@ -126,7 +130,7 @@ public final class CraftingPlan {
 
     public boolean hasOperations(int requirementIndex) {
         return requirements.stream().anyMatch(requirement -> requirement.requirementIndex() == requirementIndex
-                && !requirement.operations().isEmpty());
+                && requirement.operations().stream().anyMatch(operation -> !(operation instanceof InputValidationOperation)));
     }
 
     public List<OutputSimulation> outputSimulations() {

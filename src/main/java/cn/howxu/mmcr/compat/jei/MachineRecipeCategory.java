@@ -13,6 +13,8 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.client.LightningJeiDisplay;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import mekanism.api.chemical.ChemicalStack;
@@ -170,6 +172,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         addRegion(builder, recipe, layout.outputs(), false);
         addLevelRequirementSlots(builder, layout, recipe, textWidth);
         addTransferSlots(builder, recipe);
+        LightningJeiDisplay.addInvisibleIngredients(builder, recipe);
         builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY() - 3);
     }
 
@@ -254,8 +257,15 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             y += TEXT_LINE_SPACING;
         }
         for (var row : layout.manaRows()) {
-            drawManaLine(((ManaJeiDisplay) row.entry().ingredient()).label(), guiGraphics,
+            var mana = (ManaJeiDisplay) row.entry().ingredient();
+            drawManaLine(MachineRecipeDisplay.withChanceLabel(mana.label(), row.entry().chance(), mana.input()), guiGraphics,
                     textX, (int) (row.y() / TEXT_SCALE));
+        }
+        y = layout.lightningTextY(recipe);
+        int lightningWidth = (int) ((getWidth() - layout.durationTextX() * 2) / TEXT_SCALE);
+        for (LightningRequirement lightning : LightningJeiDisplay.requirements(recipe)) {
+            LightningJeiDisplay.drawLine(guiGraphics, lightning, textX, (int) (y / TEXT_SCALE), lightningWidth);
+            y += TEXT_LINE_SPACING;
         }
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);
         if (!hostRequirement.getString().isEmpty()) {
@@ -378,6 +388,17 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                          double mouseX, double mouseY) {
         if (appendStressTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
         if (appendAirTooltip(tooltip, recipe, layout, mouseX, mouseY)) return;
+        for (var row : layout.manaRows()) {
+            if (mouseX >= row.x() && mouseX < row.x() + row.width()
+                    && mouseY >= row.y() && mouseY < row.y() + row.height() && row.entry().chance() < 1F) {
+                var mana = (ManaJeiDisplay) row.entry().ingredient();
+                tooltip.add(MachineRecipeDisplay.withChanceLabel(Component.translatable(mana.input()
+                        ? "jei.mmcr.machine_recipe.mana_input" : "jei.mmcr.machine_recipe.mana_output",
+                        ReadableNumber.formatExact(mana.amount())), row.entry().chance(), mana.input()));
+                return;
+            }
+        }
+        lightningTooltip(recipe, layout, mouseX, mouseY).ifPresent(tooltip::add);
         sourceTooltip(layout, mouseX, mouseY)
                 .or(() -> smartInterfaceTooltip(recipe, layout, mouseX, mouseY)).ifPresent(tooltip::add);
     }
@@ -605,7 +626,9 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                     : outputOverlayText(entry.chance());
             setItemOverlay(slot, chance, ReadableNumber.formatForSlot(source.amount(), 0, ""));
             slot.addIngredient(SourceJeiIngredient.TYPE, source);
-            if (!source.input()) {
+            if (source.input()) {
+                slot.addRichTooltipCallback((view, tooltip) -> appendConsumeChanceTooltip(tooltip, entry.chance(), true));
+            } else {
                 slot.addRichTooltipCallback((view, tooltip) -> appendOutputChanceTooltip(tooltip, entry.chance()));
             }
             return;
@@ -960,6 +983,22 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (MachineRecipeDisplay.SmartInterfaceDisplay smartInterface : recipe.smartInterfaceOutputs()) {
             if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return Optional.of(smartInterface.tooltip());
             y += SMART_INTERFACE_LINE_SPACING;
+        }
+        return Optional.empty();
+    }
+
+    static Optional<Component> lightningTooltip(MachineRecipeDisplay recipe, MachineRecipeLayout layout,
+                                               double mouseX, double mouseY) {
+        if (mouseX < layout.durationTextX() || mouseX >= MachineRecipeLayout.CATEGORY_WIDTH - layout.durationTextX()) {
+            return Optional.empty();
+        }
+        int y = layout.lightningTextY(recipe);
+        for (LightningRequirement lightning : LightningJeiDisplay.requirements(recipe)) {
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING && !lightning.io().isInput()) {
+                return Optional.of(Component.translatable("jei.mmcr.machine_recipe.output_chance",
+                        Math.round(lightning.chance() * 100F) + "%"));
+            }
+            y += TEXT_LINE_SPACING;
         }
         return Optional.empty();
     }

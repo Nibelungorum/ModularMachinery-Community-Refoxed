@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import dev.latvian.mods.rhino.util.HideFromJS;
+
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
@@ -178,6 +180,37 @@ public class MachineRecipeBuilderJS {
     public MachineRecipeBuilderJS outputSource(long amount) {
         return custom(ArsSourceIds.SOURCE.toString(), IOType.OUTPUT, SourceRecipeDeclarations.outputPayload(amount));
     }
+
+    public MachineRecipeBuilderJS inputSource(long amount, float consumeChance) {
+        return custom(ArsSourceIds.SOURCE.toString(), IOType.INPUT, SourceRecipeDeclarations.inputPayload(amount, consumeChance));
+    }
+
+    public MachineRecipeBuilderJS outputSource(long amount, float chance) {
+        return custom(ArsSourceIds.SOURCE.toString(), IOType.OUTPUT, SourceRecipeDeclarations.outputPayload(amount, chance));
+    }
+
+    public MachineRecipeBuilderJS inputMana(long amount, float consumeChance) {
+        return custom(BotaniaManaIds.MANA.toString(), IOType.INPUT, ManaRecipeDeclarations.inputPayload(amount, consumeChance));
+    }
+
+    public MachineRecipeBuilderJS outputMana(long amount, float chance) {
+        return custom(BotaniaManaIds.MANA.toString(), IOType.OUTPUT, ManaRecipeDeclarations.outputPayload(amount, chance));
+    }
+
+    public MachineRecipeBuilderJS inputAir(Object airPerTick, Object minPressure) { return addRequirement(new KubeJSApi().airInput(airPerTick, minPressure)); }
+    @HideFromJS
+    public MachineRecipeBuilderJS inputAir(Object airPerTick, Object minPressure, List<String> tags) { return addRequirement(new KubeJSApi().airInput(airPerTick, minPressure, tags)); }
+    @HideFromJS
+    public MachineRecipeBuilderJS inputAir(Object airPerTick, Object minPressure, double consumeChance) { return addRequirement(new KubeJSApi().airInput(airPerTick, minPressure, consumeChance)); }
+    public MachineRecipeBuilderJS inputAir(Object airPerTick, Object minPressure, double consumeChance, List<String> tags) { return addRequirement(new KubeJSApi().airInput(airPerTick, minPressure, consumeChance, tags)); }
+    public MachineRecipeBuilderJS outputAir(Object airPerTick) { return addRequirement(new KubeJSApi().airOutput(airPerTick)); }
+    @HideFromJS
+    public MachineRecipeBuilderJS outputAir(Object airPerTick, List<String> tags) { return addRequirement(new KubeJSApi().airOutput(airPerTick, tags)); }
+    @HideFromJS
+    public MachineRecipeBuilderJS outputAir(Object airPerTick, double chance) { return addRequirement(new KubeJSApi().airOutput(airPerTick, chance)); }
+    public MachineRecipeBuilderJS outputAir(Object airPerTick, double chance, List<String> tags) { return addRequirement(new KubeJSApi().airOutput(airPerTick, chance, tags)); }
+    public MachineRecipeBuilderJS inputAir(Object airPerTick, Object minPressure, Object chanceOrTags) { return addRequirement(new KubeJSApi().airInput(airPerTick, minPressure, chanceOrTags)); }
+    public MachineRecipeBuilderJS outputAir(Object airPerTick, Object chanceOrTags) { return addRequirement(new KubeJSApi().airOutput(airPerTick, chanceOrTags)); }
 
     public MachineRecipeBuilderJS priority(int priority) {
         this.priority = priority;

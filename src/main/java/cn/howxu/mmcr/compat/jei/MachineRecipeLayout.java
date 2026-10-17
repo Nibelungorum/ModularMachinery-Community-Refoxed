@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import net.minecraft.client.Minecraft;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
+import cn.howxu.mmcr.compat.ae2lt.client.LightningJeiDisplay;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.compat.jei.RecipeSlotLayout.Arrow;
@@ -250,6 +251,11 @@ public record MachineRecipeLayout(
         return stressTextY(display) + TEXT_LINE_SPACING * (display.stressInputs().size() + display.stressOutputs().size());
     }
 
+    public int lightningTextY(MachineRecipeDisplay display) {
+        return durationTextY + TEXT_LINE_SPACING * (metadataLineCount(display)
+                - LightningJeiDisplay.requirements(display).size());
+    }
+
     public int stageRequirementTextY(MachineRecipeDisplay display) {
         int levelCount = display.recipe().levelRequirements().size();
         if (levelCount > 0) {
@@ -289,7 +295,8 @@ public record MachineRecipeLayout(
                 + display.stressInputs().size() + display.stressOutputs().size()
                 + display.airInputs().size() + display.airOutputs().size()
                 + (display.minimumTemperature().isPresent() ? 1 : 0)
-                + (display.outputHeat().isPresent() ? 1 : 0);
+                + (display.outputHeat().isPresent() ? 1 : 0)
+                + LightningJeiDisplay.requirements(display).size();
     }
 
     public enum Kind { ITEM, FLUID, CHEMICAL, GENERIC, TEXT }

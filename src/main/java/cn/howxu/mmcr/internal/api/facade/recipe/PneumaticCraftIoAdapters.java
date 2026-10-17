@@ -20,4 +20,12 @@ public final class PneumaticCraftIoAdapters {
         return IoValues.customIo(PneumaticIds.AIR, IoDirection.OUTPUT,
                 MachineRecipeBuilder.airOutputPayload(airPerTick, tags));
     }
+    public static CustomIoSpec airInput(long airPerTick, float minPressure, float consumeChance, List<String> tags) {
+        return IoValues.customIo(PneumaticIds.AIR, IoDirection.INPUT,
+                MachineRecipeBuilder.airInputPayload(airPerTick, minPressure, consumeChance, tags));
+    }
+    public static CustomIoSpec airOutput(long airPerTick, float chance, List<String> tags) {
+        return IoValues.customIo(PneumaticIds.AIR, IoDirection.OUTPUT,
+                MachineRecipeBuilder.airOutputPayload(airPerTick, chance, tags));
+    }
 }

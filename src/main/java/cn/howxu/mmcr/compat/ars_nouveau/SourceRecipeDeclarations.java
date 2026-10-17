@@ -32,12 +32,25 @@ public final class SourceRecipeDeclarations {
     }
 
     public static JsonObject inputPayload(long amount) {
-        return SourceRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE, SourceRequirement.input(amount))
+        return inputPayload(amount, 1F);
+    }
+
+    public static float applyChance(float chance, RecipeModifier.IOType io, List<RecipeModifier> modifiers) {
+        float adjusted = RecipeModifier.applyModifiers(modifiers, "source", io, chance, true);
+        return Float.isNaN(adjusted) ? 0F : Math.clamp(adjusted, 0F, 1F);
+    }
+
+    public static JsonObject inputPayload(long amount, float consumeChance) {
+        return SourceRequirement.CODEC.codec().encodeStart(JsonOps.INSTANCE, SourceRequirement.input(amount, consumeChance))
                 .getOrThrow().getAsJsonObject();
     }
 
     public static JsonObject outputPayload(long amount) {
-        return SourceOutput.CODEC.codec().encodeStart(JsonOps.INSTANCE, new SourceOutput(amount))
+        return outputPayload(amount, 1F);
+    }
+
+    public static JsonObject outputPayload(long amount, float chance) {
+        return SourceOutput.CODEC.codec().encodeStart(JsonOps.INSTANCE, new SourceOutput(amount, chance))
                 .getOrThrow().getAsJsonObject();
     }
 }

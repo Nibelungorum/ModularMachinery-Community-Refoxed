@@ -1,0 +1,10 @@
+MMCREvents.server(event => {
+    const api = event.getAPI()
+    event.createStructure('mmcr_kubejs:ae2lt')
+        .pattern(['XXX', 'XXX', 'XXX'])
+        .pattern(['XXX', 'X X', 'XXX'])
+        .pattern(['XXX', 'XCX', 'XXX'])
+        .set('X', api.anyOf(api.block('mmcr:basic_casing'), api.ports()))
+        .controller('C')
+        .build()
+})

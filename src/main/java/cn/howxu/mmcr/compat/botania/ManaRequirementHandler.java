@@ -2,12 +2,16 @@ package cn.howxu.mmcr.compat.botania;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.internal.recipe.InputValidationOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.compat.botania.ManaViewFacet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
@@ -31,6 +35,11 @@ public final class ManaRequirementHandler implements RequirementHandler<ManaRequ
     public RequirementPlan plan(ManaRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
+        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
+            return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+        }
+        RequirementHandlerSupport.ConsumeProfile consumption = insert ? null
+                : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism(), context);
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         List<MachineCapability> ordered = insert
                 ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
@@ -54,9 +63,9 @@ public final class ManaRequirementHandler implements RequirementHandler<ManaRequ
         }
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (parallelism, reservations) -> allocate(requirement, ordered, context, parallelism,
-                        insert, partial, reservations, true),
+                        insert, partial, reservations, true, consumption),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> allocate(
-                        requirement, ordered, context, parallelism, insert, partial, reservations, false)));
+                        requirement, ordered, context, parallelism, insert, partial, reservations, false, consumption)));
     }
 
     @Override
@@ -85,10 +94,32 @@ public final class ManaRequirementHandler implements RequirementHandler<ManaRequ
     private RequirementPlan.OperationPlan allocate(ManaRequirement requirement, List<MachineCapability> ordered,
                                                     PlanningContext context, long parallelism, boolean insert,
                                                     boolean partial, PlanningReservations reservations,
-                                                    boolean createOperations) {
+                                                    boolean createOperations,
+                                                    RequirementHandlerSupport.ConsumeProfile consumption) {
         long requested = RequirementHandlerSupport.scaled(requirement.amount(), parallelism);
+        if (!insert) {
+            // A retained batch still has to match the full input before reserving only its consumed share.
+            long totalAvailable = 0L;
+            Set<Object> identities = Collections.newSetFromMap(new IdentityHashMap<>());
+            for (MachineCapability capability : ordered) {
+                ManaViewFacet mana = capability.facet(ManaViewFacet.class).orElse(null);
+                if (mana != null && identities.add(mana.queryIdentity())) {
+                    totalAvailable = RequirementHandlerSupport.saturatingAdd(totalAvailable,
+                            available(mana, reservations, false));
+                }
+            }
+            if (totalAvailable < requested) {
+                return new RequirementPlan.OperationPlan(List.of(), blocked(requirement, context, requested, totalAvailable));
+            }
+            long consumedBatches = requirement.consumeChance() == 1F ? parallelism : consumption.consumedBatches(parallelism);
+            requested = RequirementHandlerSupport.scaled(requirement.amount(), consumedBatches);
+        }
         long remaining = requested;
         List<CapabilityOperation> operations = new ArrayList<>();
+        if (!insert && createOperations && requirement.consumeChance() < 1F) {
+            operations.add(inputValidation(requirement, ordered, context,
+                    RequirementHandlerSupport.scaled(requirement.amount(), parallelism)));
+        }
         Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         for (MachineCapability capability : ordered) {
             ManaViewFacet mana = capability.facet(ManaViewFacet.class).orElse(null);
@@ -110,6 +141,25 @@ public final class ManaRequirementHandler implements RequirementHandler<ManaRequ
         }
         return new RequirementPlan.OperationPlan(operations, null,
                 insert ? RequirementHandlerSupport.outputSimulation(requested, requested - remaining) : null);
+    }
+
+    private CapabilityOperation inputValidation(ManaRequirement requirement, List<MachineCapability> capabilities,
+                                                PlanningContext context, long required) {
+        return new InputValidationOperation(() -> {
+                long available = 0L;
+                Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+                for (MachineCapability capability : capabilities) {
+                    ManaViewFacet mana = capability.facet(ManaViewFacet.class).orElse(null);
+                    if (mana != null && seen.add(mana.queryIdentity())) {
+                        available = RequirementHandlerSupport.saturatingAdd(available, mana.amount());
+                    }
+                }
+                return available >= required ? CapabilityResult.successful()
+                        : CapabilityResult.failure(ExecutionStatus.blocked(requirement.type().id(), requirement.type().id(),
+                                FailureOccurrence.at(ManaFailureReasons.INPUT_MISSING, requirement.type().id(),
+                                        FailurePhase.CAPABILITY_COMMIT, null, context.requirementIndex(),
+                                        details(required, available))));
+        });
     }
 
     private ExecutionStatus blocked(ManaRequirement requirement, PlanningContext context,
