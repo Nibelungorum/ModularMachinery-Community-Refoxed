@@ -2,6 +2,9 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
 
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalOutput;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -460,6 +463,49 @@ public final class MachineRecipeSchema {
                             double heat = ((Number) args.get(0)).doubleValue();
                             appendHeatRequirement(cx.recipe(), MekanismPortFamilies.HEAT, IOType.OUTPUT,
                                     HeatRequirement.outputHeat(heat));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("lightningInput",
+                    List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance()),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance());
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var tier = LightningTier.fromId(ResourceLocation.parse((String) args.get(0)));
+                            appendRequirement(cx.recipe(), LightningRequirement.input(tier, ((Number) args.get(1)).longValue()));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("lightningOutput",
+                    List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance()),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance());
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var tier = LightningTier.fromId(ResourceLocation.parse((String) args.get(0)));
+                            appendOutput(cx.recipe(), new LightningOutput(tier, ((Number) args.get(1)).longValue(), 1F));
+                        }
+                    }))
+            .function(new RecipeFunctionInstance("lightningOutputChance",
+                    List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance(), NumberComponent.FLOAT),
+                    new ResolvedRecipeSchemaFunction() {
+                        @Override
+                        public List<RecipeComponent<?>> arguments() {
+                            return List.of(StringComponent.ID.instance(), NumberComponent.POSITIVE_LONG.instance(), NumberComponent.FLOAT);
+                        }
+
+                        @Override
+                        public void execute(RecipeScriptContext cx, List<Object> args) {
+                            var tier = LightningTier.fromId(ResourceLocation.parse((String) args.get(0)));
+                            appendOutput(cx.recipe(), new LightningOutput(tier, ((Number) args.get(1)).longValue(),
+                                    ((Number) args.get(2)).floatValue()));
                         }
                     }));
 

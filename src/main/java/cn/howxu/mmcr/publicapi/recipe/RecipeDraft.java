@@ -34,6 +34,12 @@ public interface RecipeDraft {
     RecipeDraft inputSource(long amount, float consumeChance); RecipeDraft outputSource(long amount, float chance);
     RecipeDraft inputMana(long amount, float consumeChance); RecipeDraft outputMana(long amount, float chance);
     RecipeDraft inputEnergy(long fePerTick); RecipeDraft outputEnergy(long fePerTick); RecipeDraft iFEt(long fePerTick); RecipeDraft oFEt(long fePerTick);
+    /** Consumes lightning once per parallel recipe; positive amounts are capped at Integer.MAX_VALUE. */
+    RecipeDraft lightningInput(LightningTier tier, long amount);
+    /** Produces lightning once per parallel recipe with guaranteed output. */
+    RecipeDraft lightningOutput(LightningTier tier, long amount);
+    /** Produces lightning with the canonical output chance; positive amounts are capped at Integer.MAX_VALUE. */
+    RecipeDraft lightningOutput(LightningTier tier, long amount, float chance);
     RecipeDraft outputItem(Item item, int count); RecipeDraft outputItem(ItemStack stack); RecipeDraft outputItem(ItemStack stack, ComponentConstraints components);
     RecipeDraft outputChance(ItemStack stack, float chance); RecipeDraft outputChance(ItemStack stack, float chance, ComponentConstraints components);
     RecipeDraft levelRequirement(ResourceLocation typeId, ResourceLocation levelId); RecipeDraft stageRequirement(int minStage);

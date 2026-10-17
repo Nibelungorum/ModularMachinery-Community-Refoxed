@@ -57,6 +57,9 @@ final class RecipeDraftFacade implements RecipeDraft {
     public RecipeDraft outputEnergy(long rate) { delegate.outputEnergy(rate); return this; }
     public RecipeDraft iFEt(long rate) { delegate.iFEt(rate); return this; }
     public RecipeDraft oFEt(long rate) { delegate.oFEt(rate); return this; }
+    public RecipeDraft lightningInput(LightningTier tier, long amount) { delegate.lightningInput(cn.howxu.mmcr.api.compat.ae2lt.LightningTier.valueOf(tier.name()), amount); return this; }
+    public RecipeDraft lightningOutput(LightningTier tier, long amount) { return lightningOutput(tier, amount, 1F); }
+    public RecipeDraft lightningOutput(LightningTier tier, long amount, float chance) { delegate.lightningOutput(cn.howxu.mmcr.api.compat.ae2lt.LightningTier.valueOf(tier.name()), amount, chance); return this; }
     public RecipeDraft outputItem(Item item, int count) { delegate.outputItem(item, count); return this; }
     public RecipeDraft outputItem(ItemStack stack) { delegate.outputItem(stack); return this; }
     public RecipeDraft outputItem(ItemStack stack, ComponentConstraints components) { delegate.outputItem(stack, ComponentAdapters.unwrap(components)); return this; }

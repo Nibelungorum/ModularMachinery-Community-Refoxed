@@ -214,6 +214,10 @@ public final class TypedFixture implements MachineDefinitionProvider {
                 .inputItemTag(ItemTags.LOGS, 1).inputFluid(Fluids.WATER, 100, 0.5F)
                 .outputChance(new ItemStack(Items.DIAMOND), 0.25F).outputFluid(Fluids.LAVA, 100)
                 .inputEnergy(energy.fePerTick()).outputEnergy(1);
+        draft.lightningInput(LightningTier.HIGH_VOLTAGE, 100)
+                .lightningInput(LightningTier.EXTREME_HIGH_VOLTAGE, 50)
+                .lightningOutput(LightningTier.HIGH_VOLTAGE, 20)
+                .lightningOutput(LightningTier.EXTREME_HIGH_VOLTAGE, 10, 0.5F);
         RecipeSpec recipe = draft.build();
         List<RequirementSpec> requirements = recipe.requirements();
         ResourceLocation kind = level.kindId();

@@ -16,4 +16,12 @@ public enum LightningTier {
     }
 
     public ResourceLocation requirementId() { return requirementId; }
+
+    /** Resolves a canonical AE2LT resource identifier without loading native classes. */
+    public static LightningTier fromId(ResourceLocation id) {
+        for (LightningTier tier : values()) {
+            if (tier.requirementId.equals(id)) return tier;
+        }
+        throw new IllegalArgumentException("Unknown lightning tier: " + id);
+    }
 }
