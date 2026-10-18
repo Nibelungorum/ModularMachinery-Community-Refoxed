@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.advanced_ae",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AdvancedCpuDiagnosticsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

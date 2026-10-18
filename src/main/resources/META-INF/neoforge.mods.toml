@@ -34,6 +34,18 @@ config="mixins/extras/mmcr.ae2.mixins.json"
 requiredMods=["ae2"]
 
 [[mixins]]
+config="mixins/extras/mmcr.ae2lt.diagnostics.mixins.json"
+requiredMods=["ae2", "ae2lt"]
+
+[[mixins]]
+config="mixins/extras/mmcr.neoecoae.diagnostics.mixins.json"
+requiredMods=["ae2", "neoecoae"]
+
+[[mixins]]
+config="mixins/extras/mmcr.advanced_ae.diagnostics.mixins.json"
+requiredMods=["ae2", "advanced_ae"]
+
+[[mixins]]
 config="mixins/extras/mmcr.ae2lt.jei.mixins.json"
 requiredMods=["ae2", "ae2lt", "jei", "ae2jeiintegration"]
 

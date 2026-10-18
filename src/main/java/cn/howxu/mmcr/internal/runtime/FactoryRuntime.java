@@ -873,17 +873,28 @@ public final class FactoryRuntime {
     public @Nullable PatternLane reserveExactPatternStart(MachineRecipe recipe, long parallelism,
                                                            List<MachineCapability> requestCapabilities,
                                                            @Nullable BlockPos requestSource) {
-        if (recipe == null || controller == null || paused || parallelism <= 0L || !patternQuotaAvailable(recipe)) return null;
+        if (recipe == null || controller == null || paused || parallelism <= 0L) {
+            PatternStartDiagnostics.reject("factory-admission", "paused", paused, "laneLimit", laneLimit);
+            return null;
+        }
+        if (!patternQuotaAvailable(recipe)) return null;
         FactoryRecipeThread selected = null;
         for (int index = 0; index < Math.min(laneLimit, lanes.size()); index++) {
             FactoryRecipeThread lane = lanes.get(index);
-            if (!lane.isIdle() || patternPreparations.containsKey(lane) || !lane.canStartPatternRecipe(recipe)) continue;
+            if (!lane.isIdle() || patternPreparations.containsKey(lane) || !lane.canStartPatternRecipe(recipe)) {
+                PatternStartDiagnostics.reject("factory-lane-skipped", "lane", lane.laneId(), "idle", lane.isIdle(),
+                        "preparing", patternPreparations.containsKey(lane));
+                continue;
+            }
             if (selected == null) selected = lane;
             if (lane.cachedPatternRecipe(recipe.id()) != null) { selected = lane; break; }
         }
         if (selected != null) return reservePatternStart(selected, recipe, parallelism,
                 requestCapabilities, requestSource, null, true);
-        if (lanes.size() >= laneLimit) return null;
+        if (lanes.size() >= laneLimit) {
+            PatternStartDiagnostics.reject("factory-no-free-lane", "lanes", lanes.size(), "limit", laneLimit);
+            return null;
+        }
         FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
         addLane(lane);
         PatternLane reservation = reservePatternStart(lane, recipe, parallelism, requestCapabilities, requestSource, null, true);
@@ -894,7 +905,9 @@ public final class FactoryRuntime {
     private boolean patternQuotaAvailable(MachineRecipe recipe) {
         int used = activeRecipeCountFor(recipe.id()) + patternRecipeCounts.getOrDefault(recipe.id(), 0);
         used += (int) patternPreparations.values().stream().filter(recipe.id()::equals).count();
-        return used < effectiveRecipe(recipe).recipeThreadLimit();
+        int limit = effectiveRecipe(recipe).recipeThreadLimit();
+        if (used >= limit) PatternStartDiagnostics.reject("factory-recipe-thread-limit", "used", used, "limit", limit);
+        return used < limit;
     }
 
     /** Reserves an idle lane after its runtime has successfully planned the requested pattern inputs. */
@@ -1544,10 +1557,17 @@ public final class FactoryRuntime {
                                                         @Nullable LongFunction<List<MachineCapability>> capabilitiesForParallelism,
                                                         boolean exact) {
         if (patternStartReservations.contains(lane) || patternPreparations.containsKey(lane) || !lane.isIdle()
-                || !lane.canStartPatternRecipe(recipe)) return null;
+                || !lane.canStartPatternRecipe(recipe)) {
+            PatternStartDiagnostics.reject("factory-lane-not-ready", "lane", lane.laneId(), "idle", lane.isIdle(),
+                    "reserved", patternStartReservations.contains(lane), "preparing", patternPreparations.containsKey(lane));
+            return null;
+        }
         SharedIoCoordinator coordinator = controller.getLevel() instanceof ServerLevel level
                 ? SharedIoCoordinator.get(level) : null;
-        if (coordinator != null && !coordinator.reserveExecution(lane.runtime(), lane.laneId())) return null;
+        if (coordinator != null && !coordinator.reserveExecution(lane.runtime(), lane.laneId())) {
+            PatternStartDiagnostics.reject("factory-shared-io-slot", "lane", lane.laneId());
+            return null;
+        }
         CraftingRuntime.PreparedStart prepared = null;
         boolean reserved = false;
         boolean installed = lanes.contains(lane);
@@ -1557,8 +1577,18 @@ public final class FactoryRuntime {
                     : capabilitiesForParallelism == null
                     ? lane.runtime().preparePatternStart(recipe, requestedParallelism, requestCapabilities, requestSource)
                     : lane.runtime().preparePendingPatternStart(recipe, requestedParallelism, capabilitiesForParallelism, requestSource);
-            if (prepared == null || installed && (!lanes.contains(lane) || !lane.canStartPatternRecipe(recipe))
-                    || !lane.runtime().reservePatternStart()) return null;
+            if (prepared == null) {
+                PatternStartDiagnostics.reject("factory-runtime-preparation", "lane", lane.laneId());
+                return null;
+            }
+            if (installed && (!lanes.contains(lane) || !lane.canStartPatternRecipe(recipe))) {
+                PatternStartDiagnostics.reject("factory-lane-invalidated", "lane", lane.laneId());
+                return null;
+            }
+            if (!lane.runtime().reservePatternStart()) {
+                PatternStartDiagnostics.reject("factory-runtime-slot", "lane", lane.laneId());
+                return null;
+            }
             reserved = true;
             patternStartReservations.add(lane);
             refreshLaneAccounting(lane);

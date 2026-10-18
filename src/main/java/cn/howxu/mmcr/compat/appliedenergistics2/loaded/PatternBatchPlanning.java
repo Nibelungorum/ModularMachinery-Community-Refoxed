@@ -6,6 +6,7 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.crafting.pattern.AEProcessingPattern;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.item.PatternBatchData;
@@ -54,11 +55,15 @@ public final class PatternBatchPlanning {
             if (original instanceof PatternBatchDetails) continue;
             // Only native processing definitions have a proven, lossless standard decoding protocol.
             if (original.getClass() != AEProcessingPattern.class) {
+                MMCR.LOG.info("[PatternBatchDiag] publish skipped: host={} patternType={} outputs={} reason=non-native-processing-pattern",
+                        host.getBlockPos(), original.getClass().getName(), original.getOutputs());
                 patterns.add(original);
                 continue;
             }
             var profiles = PatternBatchSupport.inspect(host, original);
             if (profiles.isEmpty()) {
+                MMCR.LOG.info("[PatternBatchDiag] publish fallback: host={} outputs={} reason=no-matching-profile",
+                        host.getBlockPos(), original.getOutputs());
                 patterns.add(original);
                 continue;
             }
@@ -77,6 +82,9 @@ public final class PatternBatchPlanning {
             if (previous != null && previous.grid() != publication.grid()) rebuild(previous.grid());
             rebuild(publication.grid());
         }
+        MMCR.LOG.info("[PatternBatchDiag] publish: host={} kind={} grid={} links={} originals={} published={} limits={}",
+                host.getBlockPos(), host.kind().id(), System.identityHashCode(publication.grid()),
+                host.linkedControllerPositions(), originals.size(), patterns.size(), limits.size());
         return publication.patterns();
     }
 
@@ -139,14 +147,22 @@ public final class PatternBatchPlanning {
     /** Does not mutate simulation state, its counters, or any original pattern. */
     public static LinkedHashMap<IPatternDetails, Long> rewrite(Map<IPatternDetails, Long> crafts, Snapshot snapshot) {
         var unchanged = new LinkedHashMap<>(crafts);
-        if (snapshot.limits().isEmpty() || crafts.isEmpty()) return unchanged;
+        if (snapshot.limits().isEmpty() || crafts.isEmpty()) {
+            MMCR.LOG.info("[PatternBatchDiag] rewrite skipped: tasks={} limits={} reason=empty-tasks-or-snapshot",
+                    crafts.size(), snapshot.limits().size());
+            return unchanged;
+        }
         var patterns = new ArrayList<>(crafts.keySet());
         var graph = new DependencyGraph(patterns.size());
         for (int index = 0; index < patterns.size(); index++) {
             var pattern = patterns.get(index);
             var original = pattern instanceof PatternBatchDetails batch ? batch.original() : pattern;
             // Unknown input and remaining-item semantics prevent proving a complete dependency graph.
-            if (original.getClass() != AEProcessingPattern.class) return unchanged;
+            if (original.getClass() != AEProcessingPattern.class) {
+                MMCR.LOG.info("[PatternBatchDiag] rewrite skipped: patternType={} reason=non-native-processing-pattern",
+                        original.getClass().getName());
+                return unchanged;
+            }
             boolean proven = crafts.get(pattern) > 0;
             if (pattern instanceof PatternBatchDetails batch) {
                 var limit = snapshot.limits().get(batch.unitPattern().getDefinition());
@@ -155,7 +171,10 @@ public final class PatternBatchPlanning {
             }
             for (var input : original.getInputs()) {
                 var candidates = input.getPossibleInputs();
-                if (candidates.length == 0) return unchanged;
+                if (candidates.length == 0) {
+                    MMCR.LOG.info("[PatternBatchDiag] rewrite skipped: outputs={} reason=no-input-candidates", original.getOutputs());
+                    return unchanged;
+                }
                 proven &= candidates.length == 1 && input.getMultiplier() > 0;
                 for (var candidate : candidates) {
                     graph.input(index, candidate.what());
@@ -179,10 +198,15 @@ public final class PatternBatchPlanning {
             for (int index = 0; index < patterns.size(); index++) {
                 var pattern = patterns.get(index);
                 long count = crafts.get(pattern);
+                MMCR.LOG.info("[PatternBatchDiag] rewrite task: patternType={} outputs={} count={} proven={} safeComponent={} batch={}",
+                        pattern.getClass().getName(), pattern.getOutputs(), count, graph.proven[index], safe[index],
+                        pattern instanceof PatternBatchDetails batch ? batch.data() : null);
                 if (safe[index] && pattern instanceof PatternBatchDetails batch && batch.data().multiplier() == 1) {
                     long maximum = snapshot.limits().get(batch.getDefinition()).maxMultiplier();
                     long full = count / maximum;
                     long remainder = count % maximum;
+                    MMCR.LOG.info("[PatternBatchDiag] rewrite split: recipe={} maximum={} full={} remainder={}",
+                            batch.data().recipeId(), maximum, full, remainder);
                     if (full > 0) rewritten.merge(batch.scaled(maximum), full, Math::addExact);
                     if (remainder > 0) rewritten.merge(batch.scaled(remainder), 1L, Math::addExact);
                 } else {
@@ -190,6 +214,7 @@ public final class PatternBatchPlanning {
                 }
             }
         } catch (ArithmeticException exception) {
+            MMCR.LOG.info("[PatternBatchDiag] rewrite skipped: reason=arithmetic-overflow", exception);
             return unchanged;
         }
         return rewritten;

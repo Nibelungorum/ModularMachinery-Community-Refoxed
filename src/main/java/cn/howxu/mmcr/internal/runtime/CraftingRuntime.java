@@ -734,11 +734,16 @@ public final class CraftingRuntime {
                                                             @Nullable BlockPos requestSource) {
         PreparedStart prepared = preparePatternStart(recipe, recipeParallelism, requestCapabilities, requestSource);
         if (prepared == null) return null;
-        if (prepared.plan().parallelism() != recipeParallelism
-                || !strictPatternAmounts(prepared.effective(), recipeParallelism)
-                || !samePromisedOutputs(prepared.recipe().outputs(), prepared.effective().outputs(), recipeParallelism)
-                || !exactPatternOutputsFit(prepared, recipeParallelism)
-                || pendingPatternStart != prepared || !preparedStartCurrent(prepared)) {
+        String rejection = prepared.plan().parallelism() != recipeParallelism ? "exact-parallelism-shortfall"
+                : !strictPatternAmounts(prepared.effective(), recipeParallelism) ? "exact-amounts-unrepresentable"
+                : !samePromisedOutputs(prepared.recipe().outputs(), prepared.effective().outputs(), recipeParallelism)
+                ? "exact-promised-outputs-changed"
+                : !exactPatternOutputsFit(prepared, recipeParallelism) ? "exact-output-space"
+                : pendingPatternStart != prepared ? "exact-pending-start-changed"
+                : !preparedStartCurrent(prepared) ? "exact-preparation-stale" : null;
+        if (rejection != null) {
+            PatternStartDiagnostics.reject(rejection, "lane", laneId,
+                    "actualParallelism", prepared.plan().parallelism());
             releasePatternStart(prepared);
             return null;
         }
@@ -752,9 +757,14 @@ public final class CraftingRuntime {
                     .withReservationOwner(stressSession)
                     .planOutputs(prepared.recipe().source(), prepared.effective().outputs().stream()
                             .map(value -> value.withChance(1F)).toList(), parallelism);
-            return output.successful() && output.plan() != null && output.plan().parallelism() == parallelism
+            boolean fits = output.successful() && output.plan() != null && output.plan().parallelism() == parallelism
                     && output.plan().outputSimulations().stream().allMatch(result -> result.accepted() == result.requested());
+            if (!fits) PatternStartDiagnostics.reject("output-plan", "lane", laneId, "failure", output.failure(),
+                    "actualParallelism", output.plan() == null ? null : output.plan().parallelism(),
+                    "simulations", output.plan() == null ? null : output.plan().outputSimulations());
+            return fits;
         } catch (RuntimeException exception) {
+            PatternStartDiagnostics.reject("output-plan-exception", "lane", laneId, "exception", exception);
             return false;
         }
     }
@@ -858,7 +868,12 @@ public final class CraftingRuntime {
                                                         @Nullable BlockPos requestSource,
                                                         @Nullable LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
         if (recipe == null || requestedParallelism <= 0 || active() || errorPaused() || patternStartReserved
-                || pendingPatternStart != null || !patternOwnerCurrent()) return null;
+                || pendingPatternStart != null || !patternOwnerCurrent()) {
+            PatternStartDiagnostics.reject("runtime-not-idle", "lane", laneId, "active", active(),
+                    "errorPaused", errorPaused(), "reserved", patternStartReserved,
+                    "pendingStart", pendingPatternStart != null);
+            return null;
+        }
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         long lifecycle = controller.lifecycleEpoch();
         RecipeCommitLedger originalLedger = ledger;
@@ -869,9 +884,16 @@ public final class CraftingRuntime {
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (!recipeBelongsToMachine(recipe)
                 || requestSource != null && !runtime.linkedPortPositions().contains(requestSource)
-                || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return null;
+                || !runtime.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
+            PatternStartDiagnostics.reject("runtime-recipe-eligibility", "lane", laneId,
+                    "linkedPorts", runtime.linkedPortPositions(), "modules", runtime.moduleConnectionStatus());
+            return null;
+        }
         RecipeBehavior behavior = recipeBehavior(runtime);
-        if (behavior == null) return null;
+        if (behavior == null) {
+            PatternStartDiagnostics.reject("runtime-no-recipe-behavior", "lane", laneId);
+            return null;
+        }
         EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
                 effectiveRecipe.parallelismLimit()));
@@ -886,12 +908,14 @@ public final class CraftingRuntime {
             try {
                 behavior.beforeStart().accept(startContext);
             } catch (RuntimeException exception) {
+                PatternStartDiagnostics.reject("before-start-exception", "lane", laneId, "exception", exception);
                 logCallbackFailure("beforeStart", runtime, recipe, exception);
                 return null;
             } finally {
                 flushScreenTextReplacements(machineContext.screenText());
             }
             if (startContext.cancelled()) {
+                PatternStartDiagnostics.reject("before-start-cancelled", "lane", laneId);
                 stopEnergyPrefetch();
                 for (RecipeEnergyPrefetchFacet facet : prefetchFacets(requestCapabilities)) facet.onPatternPrefetchCancelled();
                 return null;
@@ -902,7 +926,11 @@ public final class CraftingRuntime {
                     MachineRequirement.copyList(recipeRequirements), outputs);
         }
         if (!startAttemptCurrent(lifecycle, originalLedger) || !patternOwnerCurrent() || !patternSourceCurrent(sourceOwner)
-                || pendingPatternStart != null || pendingPaymentStart != null) return null;
+                || pendingPatternStart != null || pendingPaymentStart != null) {
+            PatternStartDiagnostics.reject("preparation-owner-changed", "lane", laneId,
+                    "pendingStart", pendingPatternStart != null, "pendingPayment", pendingPaymentStart != null);
+            return null;
+        }
         ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
         if (current.structure().version() != runtime.structure().version()
                 || current.capabilityVersion() != runtime.capabilityVersion()
@@ -914,7 +942,13 @@ public final class CraftingRuntime {
                 || !Objects.equals(domain, controller.resourceDomain())
                 || !recipeBelongsToMachine(recipe)
                 || !current.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())
-                || requestSource != null && !current.linkedPortPositions().contains(requestSource)) return null;
+                || requestSource != null && !current.linkedPortPositions().contains(requestSource)) {
+            PatternStartDiagnostics.reject("preparation-snapshot-changed", "lane", laneId,
+                    "structureBefore", runtime.structure().version(), "structureNow", current.structure().version(),
+                    "capabilitiesBefore", runtime.capabilityVersion(), "capabilitiesNow", current.capabilityVersion(),
+                    "stateBefore", runtime.stateVersion(), "stateNow", current.stateVersion());
+            return null;
+        }
         runtime = current;
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRequirement::copyOf).toList();
@@ -929,16 +963,26 @@ public final class CraftingRuntime {
                     .withReservationOwner(stressSession);
             if (requestSource == null) {
                 if (requestCapabilities != null && !requestCapabilities.isEmpty()) {
-                    if (patternContext.inputRouting() != null) return null;
+                    if (patternContext.inputRouting() != null) {
+                        PatternStartDiagnostics.reject("missing-pattern-source", "lane", laneId);
+                        return null;
+                    }
                     patternContext = legacyPatternContext(runtime, requestCapabilities);
                 }
             } else {
                 if (patternContext.inputRouting() != null && patternContext.inputRouting().inputPorts().stream()
-                        .noneMatch(port -> port.position().equals(requestSource))) return null;
+                        .noneMatch(port -> port.position().equals(requestSource))) {
+                    PatternStartDiagnostics.reject("source-not-input-port", "lane", laneId,
+                            "inputPorts", patternContext.inputRouting().inputPorts());
+                    return null;
+                }
                 patternContext = patternContext.forPatternStart(requestCapabilities, requestSource);
             }
             PlanningResult result = planStartInputs(patternContext, requirements, facets, viewParallelism);
-            if (ledger != originalLedger || lifecycle != controller.lifecycleEpoch() || active() || patternStartReserved) return null;
+            if (ledger != originalLedger || lifecycle != controller.lifecycleEpoch() || active() || patternStartReserved) {
+                PatternStartDiagnostics.reject("input-plan-owner-changed", "lane", laneId);
+                return null;
+            }
             CraftingPlan plan = result.plan();
             if (capabilitiesForParallelism != null
                     && (!result.successful() || plan == null || plan.parallelism() != viewParallelism)) {
@@ -951,6 +995,9 @@ public final class CraftingRuntime {
                 continue;
             }
             if (!result.successful() || plan == null) {
+                PatternStartDiagnostics.reject("start-inputs", "lane", laneId, "failure", result.failure(),
+                        "requestedParallelism", viewParallelism,
+                        "actualParallelism", plan == null ? null : plan.parallelism());
                 restoreFailure(result.failure() == null ? missingInputStatus() : result.failure());
                 return null;
             }
@@ -969,6 +1016,8 @@ public final class CraftingRuntime {
                     }
                 }
                 if (prefetches == null) {
+                    PatternStartDiagnostics.reject("energy-prefetch", "lane", laneId,
+                            "duration", effective.duration(), "actualParallelism", plan.parallelism());
                     if (capabilitiesForParallelism == null || viewParallelism == 1L || attempt >= 2) return null;
                     viewParallelism = 1L;
                     continue;
@@ -979,6 +1028,7 @@ public final class CraftingRuntime {
                         || patternStartReserved || !Objects.equals(domain, controller.resourceDomain())
                         || !preparedStartCurrent(prepared)
                         || requestSource != null && !controller.currentRuntimeSnapshot().linkedPortPositions().contains(requestSource)) {
+                    PatternStartDiagnostics.reject("prepared-start-invalidated", "lane", laneId);
                     return null;
                 }
                 pendingExactPatternStart = false;
@@ -2798,7 +2848,10 @@ public final class CraftingRuntime {
         Set<String> reservationKeys = new HashSet<>();
         for (RecipeEnergyPrefetchFacet facet : facets) {
             String reservationKey = facet.reservationKey();
-            if (reservationKey == null || reservationKey.isBlank() || !reservationKeys.add(reservationKey)) return null;
+            if (reservationKey == null || reservationKey.isBlank() || !reservationKeys.add(reservationKey)) {
+                PatternStartDiagnostics.reject("prefetch-invalid-reservation-key", "lane", laneId, "key", reservationKey);
+                return null;
+            }
         }
         List<PreparedPrefetch> prefetches = new ArrayList<>();
         long total = 0L;
@@ -2811,6 +2864,7 @@ public final class CraftingRuntime {
                 try {
                     total = Math.addExact(total, remaining);
                 } catch (ArithmeticException exception) {
+                    PatternStartDiagnostics.reject("prefetch-total-overflow", "lane", laneId);
                     return null;
                 }
                 for (RecipeEnergyPrefetchFacet facet : facets) {
@@ -2819,10 +2873,19 @@ public final class CraftingRuntime {
                     if (planned.isEmpty()) continue;
                     RecipeEnergyPrefetchFacet.PrefetchPlan plan = planned.get();
                     prefetches.add(new PreparedPrefetch(facet.reservationKey(), facet, plan));
-                    if (plan.amount() > remaining) return null;
+                    if (plan.amount() > remaining) {
+                        PatternStartDiagnostics.reject("prefetch-over-offered", "lane", laneId,
+                                "remaining", remaining, "offered", plan.amount());
+                        return null;
+                    }
                     remaining -= plan.amount();
                 }
-                if (remaining > 0L) return null;
+                if (remaining > 0L) {
+                    PatternStartDiagnostics.reject("prefetch-energy-shortfall", "lane", laneId,
+                            "fePerTick", energy.fePerTick(), "duration", duration, "actualParallelism", parallelism,
+                            "missing", remaining);
+                    return null;
+                }
             }
             List<PreparedPrefetch> result = List.copyOf(prefetches);
             complete = true;

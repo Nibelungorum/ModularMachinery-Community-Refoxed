@@ -28,6 +28,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBloc
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
+import cn.howxu.mmcr.internal.runtime.PatternStartDiagnostics;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
@@ -55,6 +56,7 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     private @Nullable PendingRequest pendingRequest;
     private boolean pushing;
     private boolean settling;
+    private long nextDiagnosticTick = Long.MIN_VALUE;
 
     public PatternInterfaceCraftingMachine(PatternInterfaceBlockEntity host) {
         this.host = host;
@@ -68,6 +70,13 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     @Override
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, Direction ejectionDirection) {
         if (pushing || settling || !hostCurrent()) return false;
+        // Native CPU retries can arrive every tick; sample each host at most once per second.
+        boolean diagnose = host.getLevel().getGameTime() >= nextDiagnosticTick;
+        if (diagnose) {
+            nextDiagnosticTick = host.getLevel().getGameTime() + 20L;
+            MMCR.LOG.debug("[PatternBatchDiag] push entry: host={} legacyPending={} ownedPending={}",
+                    host.getBlockPos(), !host.pendingPatterns().isEmpty(), pendingRequest != null);
+        }
         if (!host.pendingPatterns().isEmpty()) return false;
         flushPendingReturns();
         if (pendingRequest != null || !hostCurrent()) return false;
@@ -75,17 +84,29 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         PendingRequest owned = null;
         PatternStartReservation reservation = null;
         KeyCounter[] originals = null;
+        String rejection = "no-matching-controller-or-recipe";
         try {
             Level level = host.getLevel();
-            if (!validInputs(patternDetails, inputHolders, level)) return false;
+            if (!validInputs(patternDetails, inputHolders, level)) {
+                rejection = "invalid-inputs";
+                return false;
+            }
             PatternBatchDetails batch = patternDetails instanceof PatternBatchDetails details ? details : null;
             IPatternDetails original = batch == null ? patternDetails : batch.original();
             PatternBatchBinding binding = batch == null ? null : new PatternBatchBinding(batch.data().recipePoolId(),
                     batch.data().recipeId(), batch.data().recipeCraftsPerPattern());
             long parallelism = batch == null ? 1L
                     : Math.multiplyExact(batch.data().multiplier(), batch.data().recipeCraftsPerPattern());
+            if (diagnose) MMCR.LOG.debug("[PatternBatchDiag] push request: host={} patternType={} batch={} parallelism={} links={}",
+                    host.getBlockPos(), patternDetails.getClass().getName(), batch == null ? null : batch.data(),
+                    parallelism, host.linkedControllerPositions());
+            if (diagnose) MMCR.LOG.info("[PatternBatchDiag] cpu-dispatch: host={} {} route={}",
+                    host.getBlockPos(), PatternBatchDiagnostics.pattern(patternDetails), PatternBatchDiagnostics.callers());
             var boundRecipe = batch == null ? null : RecipeRegistry.getRecipe(binding.recipeId());
-            if (batch != null && boundRecipe == null) return false;
+            if (batch != null && boundRecipe == null) {
+                rejection = "missing-bound-recipe";
+                return false;
+            }
             GenericStackInv inventory = AE2NativeAdapters.requestInventory(inputHolders);
             List<MachineCapability> capabilities = requestCapabilities(inventory, inputHolders);
             List<MachineOutput> promised = outputs(original.getOutputs());
@@ -96,35 +117,60 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                 var candidates = batch == null ? controller.recipesForMachine() : List.of(boundRecipe);
                 for (var recipe : candidates) {
                     var effective = controller.effectivePatternRecipe(recipe);
-                    if (effective == null) continue;
+                    if (effective == null) {
+                        rejection = "no-effective-recipe";
+                        continue;
+                    }
                     if (batch != null) {
-                        if (!PatternBatchSupport.matches(binding, recipe, effective, original)) continue;
+                        if (!PatternBatchSupport.matches(binding, recipe, effective, original)) {
+                            rejection = "binding-mismatch";
+                            continue;
+                        }
                         if (batch.data().multiplier() > 1L) {
                             var profile = PatternBatchSupport.inspectRecipe(recipe, effective, original);
                             if (profile == null || profile.safety() != PatternBatchSupport.Safety.PROVEN_LINEAR
-                                    || batch.data().multiplier() > profile.maxMultiplier()) continue;
+                                    || batch.data().multiplier() > profile.maxMultiplier()) {
+                                rejection = "unsafe-or-over-capacity-batch";
+                                continue;
+                            }
                             var snapshot = controller.currentRuntimeSnapshot();
                             var machine = snapshot.structure().machine() == null
                                     ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
                             if (machine != null && machine.behavior() instanceof RecipeBehavior behavior
-                                    && behavior.hasBeforeStart()) continue;
+                                    && behavior.hasBeforeStart()) {
+                                rejection = "before-start-hook";
+                                continue;
+                            }
                         }
-                    } else if (!controller.patternOutputsMatch(recipe, controller.runtimeSnapshot(), promised)) continue;
-                    reservation = controller.reserveExactPatternStart(host.getBlockPos(), recipe.id(),
-                            effective.outputs(), parallelism, capabilities);
+                    } else if (!controller.patternOutputsMatch(recipe, controller.runtimeSnapshot(), promised)) {
+                        rejection = "output-mismatch";
+                        continue;
+                    }
+                    reservation = PatternStartDiagnostics.trace(diagnose, host.getBlockPos(), position, recipe.id(),
+                            parallelism, () -> controller.reserveExactPatternStart(host.getBlockPos(), recipe.id(),
+                                    effective.outputs(), parallelism, capabilities));
+                    if (diagnose) MMCR.LOG.debug("[PatternBatchDiag] push reservation: host={} controller={} recipe={} parallelism={} status={}",
+                            host.getBlockPos(), position, recipe.id(), parallelism, reservation.status());
                     if (reservation.status() != PatternStartReservation.Status.RESERVED) {
+                        rejection = "reservation-" + reservation.status();
                         reservation.close();
                         reservation = null;
                         continue;
                     }
                      if (!hostCurrent() || !host.linkedControllerPositions().contains(position)
-                             || level.getBlockEntity(position) != controller || !host.pendingPatterns().isEmpty()) return false;
+                              || level.getBlockEntity(position) != controller || !host.pendingPatterns().isEmpty()) {
+                         rejection = "host-or-controller-changed";
+                         return false;
+                     }
                     // Preparation hooks have completed. Preflight every family cumulatively before payment.
                     GenericStackInv simulatedReturns = AE2NativeAdapters.copyForSimulation(host.getLogic().getReturnInv());
                     for (int slot = 0; slot < inventory.size(); slot++) {
                         GenericStack stack = inventory.getStack(slot);
                         if (stack != null && simulatedReturns.insert(stack.what(), stack.amount(), Actionable.MODULATE,
-                                IActionSource.ofMachine(host)) != stack.amount()) return false;
+                                IActionSource.ofMachine(host)) != stack.amount()) {
+                            rejection = "insufficient-return-space";
+                            return false;
+                        }
                     }
                     originals = copyHolders(inputHolders);
                     owned = new PendingRequest(inventory, reservation);
@@ -132,12 +178,14 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                     for (KeyCounter holder : inputHolders) holder.clear();
                     pendingRequest = owned;
                     host.setChanged();
+                    rejection = "commit-not-accepted";
                     if (hostCurrent() && !owned.accepted && reservation.commit(owned::accept)) owned.accept();
                     // A failed attempt is not replayed in another lane; finally restores only zero-payment failures.
                     break findReservation;
                 }
             }
         } catch (RuntimeException exception) {
+            rejection = "exception";
             MMCR.LOG.warn("Native synchronous pattern start interrupted at {}", host.getBlockPos(), exception);
         } finally {
             if (owned != null) {
@@ -171,6 +219,9 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
             }
             pushing = false;
             flushPendingReturns();
+            if (diagnose) MMCR.LOG.debug("[PatternBatchDiag] push result: host={} accepted={} reason={}",
+                    host.getBlockPos(), owned != null && owned.accepted,
+                    owned != null && owned.accepted ? "accepted" : rejection);
         }
         return owned != null && owned.accepted;
     }

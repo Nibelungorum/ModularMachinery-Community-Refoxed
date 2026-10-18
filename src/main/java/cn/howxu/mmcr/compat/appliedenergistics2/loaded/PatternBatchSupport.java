@@ -6,6 +6,7 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.crafting.pattern.AEProcessingPattern;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
@@ -28,6 +29,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,28 +58,64 @@ public final class PatternBatchSupport {
                 || host.getLevel().isClientSide() || !(original instanceof AEProcessingPattern)) return List.of();
         Map<PatternBatchBinding, Profile> profiles = new LinkedHashMap<>();
         for (var position : host.linkedControllerPositions()) {
-            if (!host.getLevel().hasChunkAt(position)) continue;
+            if (!host.getLevel().hasChunkAt(position)) {
+                MMCR.LOG.info("[PatternBatchDiag] inspect skipped: host={} controller={} reason=unloaded-chunk",
+                        host.getBlockPos(), position);
+                continue;
+            }
             if (!(host.getLevel().getBlockEntity(position) instanceof MachineControllerBlockEntity controller)
                     || controller.isRemoved()
-                    || !controller.currentRuntimeSnapshot().linkedPortPositions().contains(host.getBlockPos())) continue;
-            for (MachineRecipe recipe : controller.recipesForMachine()) {
-                if (!controller.supportsPatternRecipe(recipe)) continue;
+                    || !controller.currentRuntimeSnapshot().linkedPortPositions().contains(host.getBlockPos())) {
+                MMCR.LOG.info("[PatternBatchDiag] inspect skipped: host={} controller={} reason=missing-removed-or-unlinked-controller",
+                        host.getBlockPos(), position);
+                continue;
+            }
+            var recipes = controller.recipesForMachine();
+            int unsupported = 0;
+            int noEffectiveRecipe = 0;
+            int mismatched = 0;
+            MMCR.LOG.info("[PatternBatchDiag] inspect controller: host={} controller={} recipes={} maxParallelism={}",
+                    host.getBlockPos(), position, recipes.size(),
+                    controller.currentRuntimeSnapshot().maxParallelism());
+            for (MachineRecipe recipe : recipes) {
+                if (!controller.supportsPatternRecipe(recipe)) {
+                    unsupported++;
+                    continue;
+                }
                 EffectiveRecipe effective = controller.effectivePatternRecipe(recipe);
-                if (effective == null) continue;
+                if (effective == null) {
+                    noEffectiveRecipe++;
+                    continue;
+                }
                 Profile profile = inspectRecipe(recipe, effective, original);
-                if (profile == null) continue;
+                if (profile == null) {
+                    // Bound diagnostic detail even for large recipe pools; retain totals below.
+                    if (mismatched++ < 3) {
+                        MMCR.LOG.info("[PatternBatchDiag] inspect mismatch sample: controller={} recipe={} parallelLimit={} recipeOutputs={} patternOutputs={} patternInputs={} requirements={}",
+                                position, recipe.id(), effective.parallelismLimit(), effective.outputs(), original.getOutputs(),
+                                Arrays.stream(original.getInputs()).map(input -> Arrays.toString(input.getPossibleInputs())
+                                        + " x" + input.getMultiplier()).toList(), effective.requirements());
+                    }
+                    continue;
+                }
                 var snapshot = controller.currentRuntimeSnapshot();
                 Machine machine = snapshot.structure().machine() == null
                         ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
                 if (machine != null && machine.behavior() instanceof RecipeBehavior behavior && behavior.hasBeforeStart()) {
+                    MMCR.LOG.info("[PatternBatchDiag] inspect safety: controller={} recipe={} reason=before-start-hook",
+                            position, recipe.id());
                     profile = new Profile(profile.binding(), profile.maxMultiplier(), Safety.UNPROVEN);
                 }
+                MMCR.LOG.info("[PatternBatchDiag] inspect matched: host={} controller={} binding={} maximum={} safety={}",
+                        host.getBlockPos(), position, profile.binding(), profile.maxMultiplier(), profile.safety());
                 Profile next = profile;
                 profiles.merge(next.binding(), next, (first, second) -> new Profile(first.binding(),
                         Math.max(first.maxMultiplier(), second.maxMultiplier()),
                         first.safety() == Safety.UNPROVEN || second.safety() == Safety.UNPROVEN
                                 ? Safety.UNPROVEN : Safety.PROVEN_LINEAR));
             }
+            MMCR.LOG.info("[PatternBatchDiag] inspect summary: host={} controller={} unsupported={} noEffectiveRecipe={} mismatched={}",
+                    host.getBlockPos(), position, unsupported, noEffectiveRecipe, mismatched);
         }
         return List.copyOf(profiles.values());
     }

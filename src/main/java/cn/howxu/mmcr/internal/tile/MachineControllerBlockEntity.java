@@ -113,6 +113,7 @@ import cn.howxu.mmcr.internal.runtime.FactoryTickResult;
 import cn.howxu.mmcr.internal.runtime.JadeTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
+import cn.howxu.mmcr.internal.runtime.PatternStartDiagnostics;
 import cn.howxu.mmcr.internal.runtime.PatternStartBatchReservation;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
@@ -468,10 +469,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
         if (recipe == null || !Objects.equals(currentRecipePoolId(), recipe.recipePoolId())
                 || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
-                || !snapshot.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return false;
-        if (AsyncRequirementPlanner.capturedRequirementFailure(snapshot, recipe) != null) return false;
-        return !hasFactoryController() || runtime.factoryRuntime().supportsPatternRecipe(this, recipe,
+                || !snapshot.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) {
+            PatternStartDiagnostics.reject("recipe-eligibility", "formed", snapshot.structure().formed(),
+                    "areaLoaded", snapshot.structure().structureAreaLoaded(),
+                    "recipePool", recipe == null ? null : recipe.recipePoolId(),
+                    "modules", snapshot.moduleConnectionStatus());
+            return false;
+        }
+        var requirementFailure = AsyncRequirementPlanner.capturedRequirementFailure(snapshot, recipe);
+        if (requirementFailure != null) {
+            PatternStartDiagnostics.reject("captured-requirement", "failure", requirementFailure);
+            return false;
+        }
+        boolean supported = !hasFactoryController() || runtime.factoryRuntime().supportsPatternRecipe(this, recipe,
                 effectiveFactoryThreadLimit());
+        if (!supported) PatternStartDiagnostics.reject("factory-recipe-ineligible");
+        return supported;
     }
 
     /** A complete external request occupies exactly one actual runtime/lane. */
@@ -483,6 +496,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (sourcePort == null || recipeId == null || unitRecipeOutputs == null || requestCapabilities == null
                 || recipeParallelism <= 0L || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
                 || redstonePaused || isRemoved() || !snapshot.linkedPortPositions().contains(sourcePort)) {
+            PatternStartDiagnostics.reject("controller-admission", "formed", snapshot.structure().formed(),
+                    "areaLoaded", snapshot.structure().structureAreaLoaded(), "redstonePaused", redstonePaused,
+                    "removed", isRemoved(), "linkedPorts", snapshot.linkedPortPositions());
             return PatternStartReservation.unavailable();
         }
         FactoryRuntime factory = runtime.factoryRuntime();
@@ -498,29 +514,47 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 : PatternStartReservation.RecipeSelection.LAST_RECIPE;
         if (recipe == null) recipe = RecipeRegistry.catalogForPool(currentRecipePoolId()).recipes().stream()
                 .filter(candidate -> recipeId.equals(candidate.id())).findFirst().orElse(null);
-        if (recipe == null || !supportsPatternRecipe(recipe)) return PatternStartReservation.unavailable();
+        if (recipe == null || !supportsPatternRecipe(recipe)) {
+            PatternStartDiagnostics.reject("recipe-unavailable", "found", recipe != null, "selection", selection);
+            return PatternStartReservation.unavailable();
+        }
         EffectiveRecipe effective = effectivePatternRecipe(recipe);
-        if (effective == null || recipeParallelism > effective.parallelismLimit()
-                || !CraftingRuntime.samePromisedOutputs(unitRecipeOutputs, effective.outputs(), recipeParallelism)) {
+        if (effective == null || recipeParallelism > effective.parallelismLimit()) {
+            PatternStartDiagnostics.reject("effective-parallelism-limit", "effective", effective != null,
+                    "limit", effective == null ? null : effective.parallelismLimit());
+            return PatternStartReservation.unavailable();
+        }
+        if (!CraftingRuntime.samePromisedOutputs(unitRecipeOutputs, effective.outputs(), recipeParallelism)) {
+            PatternStartDiagnostics.reject("promised-outputs-changed", "promised", unitRecipeOutputs,
+                    "effective", effective.outputs());
             return PatternStartReservation.unavailable();
         }
         if (hasFactoryController()) {
             FactoryRuntime.PatternLane lane = factory.reserveExactPatternStart(recipe, recipeParallelism,
                     requestCapabilities, sourcePort);
-            if (lane == null) return PatternStartReservation.unavailable();
+            if (lane == null) {
+                PatternStartDiagnostics.reject("factory-lane-unavailable");
+                return PatternStartReservation.unavailable();
+            }
             return PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(), lane.preparedStart(),
                     () -> factory.releasePatternStart(lane)).withRecipeSelection(selection)
                     .guard(() -> factory.patternStartCurrent(lane))
                     .afterCommit(() -> factory.rememberPatternStartedRecipe(lane));
         }
         if (normalRecipeThread.isStartPending() || normalRecipeThread.hasPendingAsyncSearch()) {
+            PatternStartDiagnostics.reject("normal-thread-pending", "startPending", normalRecipeThread.isStartPending(),
+                    "asyncSearch", normalRecipeThread.hasPendingAsyncSearch());
             return PatternStartReservation.unavailable();
         }
         CraftingRuntime crafting = runtime.craftingRuntime();
         CraftingRuntime.PreparedStart prepared = crafting.prepareExactPatternStart(recipe, recipeParallelism,
                 requestCapabilities, sourcePort);
-        if (prepared == null) return PatternStartReservation.unavailable();
+        if (prepared == null) {
+            PatternStartDiagnostics.reject("runtime-preparation-failed");
+            return PatternStartReservation.unavailable();
+        }
         if (!crafting.reservePatternStart()) {
+            PatternStartDiagnostics.reject("runtime-slot-unavailable");
             crafting.releasePatternStart(prepared);
             return PatternStartReservation.unavailable();
         }
