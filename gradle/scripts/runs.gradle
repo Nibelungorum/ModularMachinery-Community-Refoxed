@@ -35,6 +35,12 @@ dependencies {
     // clientMods(files('/home/howxu/Downloads/data_energistics-1.21.1-3.3.5.jar'))
     // ctm
     // clientMods(files('/home/howxu/Downloads/ctm.jar'))
+    // aae
+    clientMods("curse.maven:${aae_id}:${aae_version}")
+    clientMods("curse.maven:${geckolib_id}:${geckolib_version}")
+    // eco
+    clientMods("curse.maven:${ldlib_id}:${ldlib_version}")
+    clientMods("curse.maven:${eco_id}:${eco_version}")
 }
 
 runs {
