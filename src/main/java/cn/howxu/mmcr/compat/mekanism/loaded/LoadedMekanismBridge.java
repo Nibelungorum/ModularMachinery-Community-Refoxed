@@ -732,6 +732,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                                                               boolean allowPartialOutput, boolean materialize) {
             boolean input = requirement.io() == RecipeModifier.IOType.INPUT;
             long parallelism = input ? consumed.consumedBatches(rawParallelism) : rawParallelism;
+            // Feasibility was checked before sampling. A retained input is a valid zero-debit plan.
+            if (input && parallelism == 0L) return new RequirementPlan.OperationPlan(List.of(), null);
             long amount = RequirementHandlerSupport.scaled(requirement.ingredient().amount(), parallelism);
             long requested = !input ? amount : 0L;
             ChemicalStack requestedResource = matcher.exactHolder() == null ? null

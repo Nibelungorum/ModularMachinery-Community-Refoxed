@@ -24,6 +24,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import java.util.stream.Collectors;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -54,6 +55,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long lastIdleGameTime = Long.MIN_VALUE;
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeCatalogVersion = Long.MIN_VALUE;
+    private boolean lastRecipeRequiresPatternRequest;
     private boolean restartPending;
     private Predicate<MachineRecipe> startEligibility = recipe -> true;
     private Runnable finishContinuation = () -> { };
@@ -201,10 +203,28 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     @Override
     protected boolean isStartCandidateEligible(MachineRecipe recipe) {
+        return acceptsPatternRecipe(recipe) && startEligibility.test(recipe);
+    }
+
+    public boolean acceptsPatternRecipe(MachineRecipe recipe) {
         return super.isStartCandidateEligible(recipe)
                 && candidatesFor(List.of(recipe)).contains(recipe)
-                && AsyncRequirementPlanner.capturedRequirementFailure(controller.currentRuntimeSnapshot(), recipe) == null
-                && startEligibility.test(recipe);
+                && AsyncRequirementPlanner.capturedRequirementFailure(controller.currentRuntimeSnapshot(), recipe) == null;
+    }
+
+    public boolean canStartPatternRecipe(MachineRecipe recipe) {
+        return isStartCandidateEligible(recipe);
+    }
+
+    public @Nullable MachineRecipe cachedPatternRecipe(ResourceLocation recipeId) {
+        if (lastRecipe == null || !lastRecipe.id().equals(recipeId)) return null;
+        MachineRecipe current = resolveCurrentLastRecipe(candidatesFor(List.of(lastRecipe)));
+        return current != null && isStartCandidateEligible(current) ? current : null;
+    }
+
+    public void rememberPatternStartedRecipe() {
+        onStarted();
+        installStartedProgram();
     }
 
     public boolean canSearch(long gameTime, RecipeSearchContextKey current) {
@@ -329,6 +349,7 @@ public final class FactoryRecipeThread extends RecipeThread {
             if (catalog.version() != suppliedCandidateCatalogVersion) suppliedCandidateCatalogCurrent = false;
             lastRecipe = recipe;
             lastRecipeCatalogVersion = catalog.version();
+            lastRecipeRequiresPatternRequest = runtime.requiresPatternRequest();
         }
     }
     @Override
@@ -577,6 +598,7 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     private @Nullable MachineRecipe restartCandidate(List<MachineRecipe> candidates, long availableParallelism,
                                                      long catalogVersion) {
+        if (lastRecipeRequiresPatternRequest || runtime.requiresPatternRequest()) return null;
         MachineRecipe candidate = resolveCurrentLastRecipe(candidatesFor(candidates, catalogVersion));
         ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
         return candidate != null && availableParallelism > 0L
@@ -621,6 +643,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private void clearLastRecipe() {
         lastRecipe = null;
         lastRecipeCatalogVersion = Long.MIN_VALUE;
+        lastRecipeRequiresPatternRequest = false;
     }
 
     @Override
@@ -772,8 +795,11 @@ public final class FactoryRecipeThread extends RecipeThread {
         long gameTime = controller.getLevel() == null ? 0L : controller.getLevel().getGameTime();
         output.putInt("idle_ticks", effectiveIdleTicks(gameTime));
         output.putBoolean("has_last", lastRecipe != null);
+        output.putBoolean("requires_pattern_request", lastRecipeRequiresPatternRequest);
         if (lastRecipe != null) {
             output.putString("last_recipe", lastRecipe.id().toString());
+            MachineRecipe.CODEC.codec().encodeStart(registries.createSerializationContext(NbtOps.INSTANCE), lastRecipe)
+                    .result().ifPresent(tag -> output.put("last_recipe_definition", tag));
         }
         output.putInt("search_failure_streak", failureStreak);
         long remaining = lastSearchFailureKey == null || nextSearchTick == Long.MIN_VALUE
@@ -830,19 +856,32 @@ public final class FactoryRecipeThread extends RecipeThread {
             thread.lastRecipe = recipeId == null ? null : availableCandidates.stream()
                     .filter(candidate -> candidate != null && recipeId.equals(candidate.id()))
                     .findFirst().orElse(null);
+            MachineRecipe savedDefinition = input.contains("last_recipe_definition") ? MachineRecipe.CODEC.codec()
+                    .parse(registries.createSerializationContext(NbtOps.INSTANCE), input.get("last_recipe_definition"))
+                    .result().orElse(null) : null;
+            if (input.contains("last_recipe_definition") && (savedDefinition == null || thread.lastRecipe != null
+                    && !ActiveMachineRecipe.sameDefinition(savedDefinition, thread.lastRecipe, thread.registryAccess()))) {
+                thread.lastRecipe = null;
+            }
             if (thread.lastRecipe != null) {
                 thread.lastRecipeCatalogVersion = thread.currentRecipeCatalog().version();
             } else thread.requestFullSearch();
         }
         thread.runtime.load(input.getCompound("runtime"), controller.resourceDomain(), registries);
+        thread.lastRecipeRequiresPatternRequest = input.contains("requires_pattern_request")
+                ? input.getBoolean("requires_pattern_request") : thread.runtime.requiresPatternRequest();
         MachineRecipe activeRecipe = thread.runtime.recipe();
         if (activeRecipe != null) {
             MachineRecipe current = availableCandidates.stream()
                     .filter(candidate -> candidate != null && activeRecipe.id().equals(candidate.id()))
                     .findFirst().orElse(null);
             if (current == null || !ActiveMachineRecipe.sameDefinition(activeRecipe, current,
-                    registries)) {
+                    thread.registryAccess())) {
                 thread.clearLastRecipe();
+            } else {
+                thread.lastRecipe = current;
+                thread.lastRecipeCatalogVersion = thread.currentRecipeCatalog().version();
+                thread.lastRecipeRequiresPatternRequest = thread.runtime.requiresPatternRequest();
             }
         }
         int restoredStreak = Math.max(0, input.getInt("search_failure_streak"));

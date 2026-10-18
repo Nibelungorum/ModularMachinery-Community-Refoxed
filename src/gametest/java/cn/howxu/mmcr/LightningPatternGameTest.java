@@ -110,31 +110,21 @@ public final class LightningPatternGameTest {
                         holders[3].add(extreme, 7L);
                         helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, Direction.NORTH),
                                 "Standard mixed pattern accepts one complete request with both lightning tiers");
-                        for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(),
-                                "Successful admission claims each original holder exactly once");
-                    }
-                    helper.assertTrue(host.pendingPatterns().totalCopies() == batches
-                                    && controller.runtimeSnapshot().crafting().recipeId() == null
-                                    && controller.runtimeSnapshot().factory().activeLaneCount() == 0
-                                    && host.getLogic().getReturnInv().isEmpty(),
-                            "Admission privately owns every family without starting or returning materials: "
-                                    + mixedState(host, controller));
-                    long now = helper.getLevel().getGameTime();
-                    // Each dispatch starts at most one lane for this nonparallel recipe's compressed group.
-                    for (long started = 1L; started <= batches; started++) {
-                        host.pendingScheduler().tick(now + started);
-                        helper.assertTrue(host.pendingPatterns().totalCopies() == batches - started
-                                        && (factory ? controller.runtimeSnapshot().factory().activeLaneCount() == started
-                                        : recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()))
-                                        && amount(host, iron) == 2L * started && amount(host, water) == 750L * started
-                                        && amount(host, high) == 3L * started && amount(host, extreme) == 4L * started,
-                                "Each explicit dispatch starts one request and preserves the unstarted copies; started="
-                                        + started + ", " + mixedState(host, controller));
-                    }
+                         for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(),
+                                 "Successful admission claims each original holder exactly once");
+                         long started = copy + 1L;
+                         helper.assertTrue(host.pendingPatterns().isEmpty()
+                                         && (factory ? controller.runtimeSnapshot().factory().activeLaneCount() == started
+                                         : recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()))
+                                         && amount(host, iron) == 2L * started && amount(host, water) == 750L * started
+                                         && amount(host, high) == 3L * started && amount(host, extreme) == 4L * started,
+                                 "Each push synchronously pays one actual lane with exact mixed leftovers: "
+                                         + mixedState(host, controller));
+                     }
                     helper.assertTrue(host.pendingPatterns().isEmpty()
                                     && amount(host, iron) == 2L * batches && amount(host, water) == 750L * batches
                                     && amount(host, high) == 3L * batches && amount(host, extreme) == 4L * batches,
-                            "Explicit scheduling consumes each request and returns only its exact excess once: "
+                             "Synchronous starts consume each request and return only its exact excess once: "
                                     + mixedState(host, controller));
                     if (!factory) {
                         CompoundTag paid = controller.saveWithoutMetadata(helper.getLevel().registryAccess());

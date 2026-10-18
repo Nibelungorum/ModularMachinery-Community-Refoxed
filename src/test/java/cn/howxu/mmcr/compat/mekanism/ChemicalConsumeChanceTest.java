@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.compat.mekanism;
 
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -11,14 +13,28 @@ import net.minecraft.core.BlockPos;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
+import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import com.mojang.serialization.JsonOps;
 import mekanism.api.MekanismAPI;
@@ -30,6 +46,7 @@ import mekanism.api.chemical.attribute.ChemicalAttributeValidator;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import org.junit.jupiter.api.AfterAll;
@@ -38,6 +55,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -143,6 +163,127 @@ class ChemicalConsumeChanceTest {
 
         assertThat(plan.successful()).isTrue();
         assertThat(plan.maxParallelism()).isEqualTo(5L);
+    }
+
+    @Test
+    void partial_consumption_reserves_and_commits_both_real_sampled_outcomes() throws Exception {
+        Holder.Reference<Chemical> chemical = registerChemical("sampled_consumption");
+        var tank = new FakeChemicalTank(2_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        var port = new FakeChemicalPort(tank, IOType.INPUT);
+        var requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.chemical(chemical.key().location(), 500L), 1F, List.of(), 0.5F);
+        var handler = LoadedMekanismBridge.chemicalHandler();
+        for (boolean consume : List.of(false, true)) {
+            tank.setStack(new ChemicalStack(chemical, 1_000L));
+            var context = new PlanningContext(1L, 0, false, new PlanningReservations(), Map.of(),
+                    null, null, sampled(consume));
+            var plan = handler.plan(requirement, List.of(port), context);
+            assertThat(plan.successful()).isTrue();
+            assertThat(plan.reserve(1L, new PlanningReservations())).isNull();
+            var materialized = plan.materialize(1L, new PlanningReservations(), null);
+            assertThat(materialized.successful()).isTrue();
+            assertThat(materialized.operations().isEmpty()).isEqualTo(!consume);
+            assertThat(new CraftingPlan(List.of(materialized), 1L,
+                    Map.of(0, RecipeModifier.IOType.INPUT)).commitInputs()).isTrue();
+            assertThat(tank.amount()).isEqualTo(consume ? 500L : 1_000L);
+            tank.setEmpty();
+            assertThat(handler.plan(requirement, List.of(port), context).successful()).isFalse();
+        }
+    }
+
+    @Test
+    void retained_probabilistic_chemical_is_rechecked_without_a_second_consumption_roll() throws Exception {
+        TestBootstrap.bootstrap();
+        try (var requirements = RequirementHandlerRegistry.openTestScope();
+             var ignored = ServerThreadTestScope.open()) {
+            RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
+            var chemical = registerChemical("retained_runtime_condition");
+            var tank = new FakeChemicalTank(2_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
+            tank.setStack(new ChemicalStack(chemical, 1_000L));
+            var port = new FakeChemicalPort(tank, IOType.INPUT);
+            var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+            var host = new ChemicalConditionHost(new BlockPos(1, 0, 0), port);
+            host.setLevel(controller.getLevel());
+            controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(null, host,
+                    host.getBlockPos(), host.getBlockPos(), List.of())));
+            controller.setFormed(true);
+            var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            var requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                    ChemicalIngredient.chemical(chemical.key().location(), 500L), 1F, List.of(), 0.5F);
+            var recipe = MachineRecipe.fromCanonical(MMCR.id("retained_chemical_runtime"), MMCR.id("test_cube"), 2,
+                    List.of(requirement), List.of(), List.of(), 0, 1, false, false, false, Set.of());
+            var previous = RecipeRegistry.dynamicSnapshot();
+            var handler = LoadedMekanismBridge.chemicalHandler();
+            var startup = new AtomicBoolean(true);
+            var checks = new AtomicInteger();
+            var sample = sampled(false);
+            var delegateField = LoadedChemicalRequirement.class.getDeclaredField("delegate");
+            delegateField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            var previousHandler = (RequirementHandler<LoadedChemicalRequirement>) delegateField.get(null);
+            LoadedChemicalRequirement.installHandler((value, capabilities, context) -> {
+                if (!startup.get()) {
+                    assertThat(value.consumeChance()).isZero();
+                    checks.incrementAndGet();
+                }
+                return handler.plan(value, capabilities, new PlanningContext(context.requestedParallelism(),
+                        context.requirementIndex(), context.allowPartialOutputs(), context.reservations(),
+                        context.outputPolicies(), context.inputRouting(), context.inputScope(),
+                        startup.get() ? sample : context.sampling(), context.reservationOwner()));
+            });
+            try {
+                RecipeRegistry.replaceDynamic(Map.of(recipe.id(), recipe));
+                assertThat(runtime.start(recipe, 1L).isCrafting()).isTrue();
+                startup.set(false);
+                tank.setEmpty();
+                LevelStub.setGameTime(controller.getLevel(), 1L);
+                runtime.tick();
+                assertThat(runtime.tickCount()).isZero();
+                assertThat(runtime.failure()).isNotNull();
+                tank.setStack(new ChemicalStack(chemical, 1_000L));
+                for (int tick = 2; tick <= 3; tick++) {
+                    LevelStub.setGameTime(controller.getLevel(), tick);
+                    runtime.tick();
+                }
+                assertThat(runtime.finishPending()).isTrue();
+                assertThat(runtime.ledger().state().finalTickPaid()).isTrue();
+                runtime.finish();
+                assertThat(runtime.active()).isFalse();
+                assertThat(checks.get()).isGreaterThanOrEqualTo(2);
+                assertThat(tank.amount()).isEqualTo(1_000L);
+            } finally {
+                try { runtime.invalidate(); }
+                finally {
+                    LoadedChemicalRequirement.installHandler(previousHandler);
+                    RecipeRegistry.replaceDynamic(previous);
+                }
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Sampling sampled(boolean consume) throws ReflectiveOperationException {
+        var sample = new Sampling();
+        var inputs = Sampling.class.getDeclaredField("inputs");
+        inputs.setAccessible(true);
+        ((Map<Integer, RequirementHandlerSupport.ConsumeProfile>) inputs.get(sample)).put(0,
+                new RequirementHandlerSupport.ConsumeProfile(new boolean[]{consume}, 0.5F));
+        return sample;
+    }
+
+    /** Native capability owner for the real runtime condition regression.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ChemicalConditionHost extends BlockEntity implements CapabilityHost {
+        private final CapabilitySnapshot snapshot;
+
+        ChemicalConditionHost(BlockPos pos, MachineCapability capability) {
+            super(ModBlockEntities.BES.get("item_input_bus").get(), pos,
+                    ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+            snapshot = new CapabilitySnapshot(List.of(capability));
+        }
+
+        @Override public CapabilitySnapshot capabilitySnapshot() { return snapshot; }
     }
 
     @Test

@@ -2,13 +2,11 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
-import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
 import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.mixin.compat.appliedenergistics2.GenericStackInvAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
@@ -29,7 +27,6 @@ import java.util.Objects;
  */
 public final class PatternReturnInventory extends PatternProviderReturnInventory {
     private static final int OVERFLOW_SLOTS = 256;
-    private static final int MAX_DROPPED_STACKS_PER_SLOT = 1024;
     private final int nativeSlots;
 
     public PatternReturnInventory(Runnable listener) {
@@ -134,27 +131,6 @@ public final class PatternReturnInventory extends PatternProviderReturnInventory
 
     @Override
     public void addDrops(List<ItemStack> drops, Level level, BlockPos pos) {
-        for (GenericStack stack : stacks) {
-            if (stack != null) addDrops(stack, drops, level, pos);
-        }
-    }
-
-    /** Applies the same bounded destruction policy to owned leftovers not yet settled into the return inventory. */
-    public static void addDrops(GenericStack stack, List<ItemStack> drops, Level level, BlockPos pos) {
-        if (stack.what() instanceof AEItemKey item) {
-            int stackLimit = item.getMaxStackSize();
-            long dropped = Math.min(stack.amount(), (long) stackLimit * MAX_DROPPED_STACKS_PER_SLOT);
-            for (long remaining = dropped; remaining > 0L;) {
-                int count = (int) Math.min(remaining, stackLimit);
-                drops.add(item.toStack(count));
-                remaining -= count;
-            }
-            if (stack.amount() > dropped) {
-                MMCR.LOG.warn("Discarding {} item(s) from {} after bounded pattern return drop",
-                        stack.amount() - dropped, item);
-            }
-        } else {
-            stack.what().addDrops(stack.amount(), drops, level, pos);
-        }
+        // All three MMCR pattern hosts carry exact long balances in BLOCK_ENTITY_DATA instead.
     }
 }

@@ -19,6 +19,10 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
@@ -44,9 +48,11 @@ import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
+import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.util.IOType;
@@ -58,6 +64,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import org.junit.jupiter.api.AfterEach;
@@ -72,6 +79,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -252,12 +260,19 @@ class FluxNetworksRuntimeLifecycleTest {
 
     @Test
     void coldControllerLoadWaitsForProductionDiscoveryAndPreservesNbtWhileAChunkIsMissing() throws Exception {
+        coldControllerLoad(true);
+    }
+
+    @Test
+    void coldControllerLoadDoesNotResurrectLanesAfterSchedulerHardwareWasRemoved() throws Exception {
+        coldControllerLoad(false);
+    }
+
+    private void coldControllerLoad(boolean retainHardware) throws Exception {
         for (boolean normalPrefetch : List.of(true, false)) {
             for (boolean deleted : List.of(false, true)) {
                 for (boolean pointFirst : List.of(false, true)) {
-                    var machine = new DynamicMachine(MMCR.id("test_cube"), "machine.mmcr.test_cube",
-                            new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(MMCR.id("test_cube")).get()),
-                                    new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))));
+                    var machine = coldMachine(true);
                     MachineRegistry.clearForTesting();
                     MachineRegistry.register(machine);
                     MachineControllerBlockEntity original = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"),
@@ -267,7 +282,11 @@ class FluxNetworksRuntimeLifecycleTest {
                         Point point = point("cold", 300L);
                         RuntimeCapabilityHost host = new RuntimeCapabilityHost(original.getBlockPos().east(),
                                 new CapabilitySnapshot(List.of(point.capability())));
-                        RuntimeTestFixtures.formStructureWithComponents(original, machine, host);
+                        var scheduler = new FactorySchedulerBlockEntity(original.getBlockPos().south(),
+                                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+                        scheduler.itemHandler().setContents(0, new ItemStack(ModItems.THREAD_DISPERSER.get()), 1L);
+                        RuntimeTestFixtures.formStructureWithComponents(original, machine, host, scheduler);
+                        assertThat(original.hasFactoryController()).isTrue();
                         CraftingRuntime originalRuntime = controllerRuntime(original).craftingRuntime();
                         MachineRecipe recipe = recipe("cold", 5, 20L);
                         RecipeRegistry.registerStatic(recipe);
@@ -290,6 +309,13 @@ class FluxNetworksRuntimeLifecycleTest {
                         CompoundTag saved = original.saveWithFullMetadata(registries());
                         Point restored = restorePoint("cold", point);
                         original.invalidateFormedStructure();
+                        if (!retainHardware) {
+                            // A valid updated topology without scheduler hardware must not revive saved lanes.
+                            MachineRegistry.clearForTesting();
+                            MachineRegistry.register(coldMachine(false));
+                            ((Map<?, ?>) field(original.getLevel().getClass(), "blocks").get(original.getLevel())).remove(scheduler.getBlockPos());
+                            ((Map<?, ?>) field(original.getLevel().getClass(), "blockEntities").get(original.getLevel())).remove(scheduler.getBlockPos());
+                        }
                         if (deleted) RecipeRegistry.clearForTesting();
 
                         MachineControllerBlockEntity cold = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"),
@@ -337,8 +363,9 @@ class FluxNetworksRuntimeLifecycleTest {
                         CraftingRuntime recovered = controllerRuntime(cold).craftingRuntime();
                         assertThat(recovered.active()).isEqualTo(!deleted && normalPrefetch);
                         var lanes = controllerRuntime(cold).factoryRuntime().activeRuntimes();
-                        assertThat(lanes).hasSize(deleted ? 0 : 2);
-                        assertBalances(restored, 240L, deleted ? 0L : savedReserved);
+                        assertThat(lanes).hasSize(deleted || !retainHardware ? 0 : 2);
+                        long recoveredReserved = deleted ? 0L : (normalPrefetch ? 80L : 0L) + (retainHardware ? 160L : 0L);
+                        assertBalances(restored, 240L, recoveredReserved);
                         if (deleted) {
                             if (normalPrefetch) assertThat(recovered.failure().reason()).isEqualTo(BuiltinFailureReasons.RECIPE_LOAD);
                         } else {
@@ -350,8 +377,8 @@ class FluxNetworksRuntimeLifecycleTest {
                                 assertThat(lane.tickCount()).isEqualTo(1);
                                 lane.tick();
                             }
-                            long spent = normalPrefetch ? 60L : 40L;
-                            assertBalances(restored, 240L - spent, savedReserved - spent);
+                            long spent = (normalPrefetch ? 20L : 0L) + (retainHardware ? 40L : 0L);
+                            assertBalances(restored, 240L - spent, recoveredReserved - spent);
                         }
                         cold.invalidateFormedStructure();
                     } finally {
@@ -363,6 +390,17 @@ class FluxNetworksRuntimeLifecycleTest {
                 }
             }
         }
+    }
+
+    private static DynamicMachine coldMachine(boolean hardware) {
+        var id = MMCR.id("test_cube");
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(id).get()));
+        pattern.put(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()));
+        if (hardware) pattern.put(new BlockPos(0, 0, 1), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()));
+        return new DynamicMachine(id, "machine.mmcr.test_cube", new BlockArray(pattern),
+                MachineControllerSpec.defaultsFor(id), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), Map.of(), 1L, false, true, 2);
     }
 
     @Test

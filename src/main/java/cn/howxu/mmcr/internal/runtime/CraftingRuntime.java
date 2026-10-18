@@ -69,7 +69,9 @@ import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.VersionStamp;
 import cn.howxu.mmcr.internal.recipe.RecipeProgramCompiler;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -87,6 +89,10 @@ import net.minecraft.nbt.LongTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import com.mojang.serialization.JsonOps;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -100,6 +106,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.LongFunction;
+import java.util.function.BooleanSupplier;
 import java.util.stream.IntStream;
 
 /**
@@ -188,6 +195,9 @@ public final class CraftingRuntime {
     private CraftingStatus status = CraftingStatus.IDLE;
     private boolean patternStartReserved;
     private @Nullable PreparedStart pendingPatternStart;
+    private boolean pendingExactPatternStart;
+    private @Nullable BlockEntity pendingPatternSourceOwner;
+    private boolean requiresPatternRequest;
     private @Nullable BlockPos pendingPatternSource;
     private @Nullable StructureClaimRegistry.ResourceDomain pendingPatternDomain;
     private long pendingPatternLifecycle;
@@ -718,6 +728,117 @@ public final class CraftingRuntime {
         return preparePatternStart(recipe, requestedParallelism, requestCapabilities, null);
     }
 
+    /** Plans the whole external request on this runtime, never a prefix or another lane. */
+    public @Nullable PreparedStart prepareExactPatternStart(MachineRecipe recipe, long recipeParallelism,
+                                                            List<MachineCapability> requestCapabilities,
+                                                            @Nullable BlockPos requestSource) {
+        PreparedStart prepared = preparePatternStart(recipe, recipeParallelism, requestCapabilities, requestSource);
+        if (prepared == null) return null;
+        if (prepared.plan().parallelism() != recipeParallelism
+                || !strictPatternAmounts(prepared.effective(), recipeParallelism)
+                || !samePromisedOutputs(prepared.recipe().outputs(), prepared.effective().outputs(), recipeParallelism)
+                || !exactPatternOutputsFit(prepared, recipeParallelism)
+                || pendingPatternStart != prepared || !preparedStartCurrent(prepared)) {
+            releasePatternStart(prepared);
+            return null;
+        }
+        pendingExactPatternStart = true;
+        return prepared;
+    }
+
+    private boolean exactPatternOutputsFit(PreparedStart prepared, long parallelism) {
+        try {
+            PlanningResult output = new CraftingContext(components.capabilitySnapshot(), contextModifiers(prepared.runtime()))
+                    .withReservationOwner(stressSession)
+                    .planOutputs(prepared.recipe().source(), prepared.effective().outputs().stream()
+                            .map(value -> value.withChance(1F)).toList(), parallelism);
+            return output.successful() && output.plan() != null && output.plan().parallelism() == parallelism
+                    && output.plan().outputSimulations().stream().allMatch(result -> result.accepted() == result.requested());
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    public boolean requiresPatternRequest() { return requiresPatternRequest; }
+
+    /** Checked resource totals; unchanged probabilistic outputs remain legal only for an ordinary single copy. */
+    public static boolean samePromisedOutputs(List<MachineOutput> expected, List<MachineOutput> actual, long parallelism) {
+        if (parallelism <= 0L) return false;
+        try {
+            return promisedOutputTotals(expected, parallelism).equals(promisedOutputTotals(actual, parallelism));
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private static Map<Object, Long> promisedOutputTotals(List<MachineOutput> outputs, long parallelism) {
+        Map<Object, Long> totals = new LinkedHashMap<>();
+        for (MachineOutput output : outputs) {
+            if (output.chance() != 1F && parallelism != 1L) throw new IllegalArgumentException("Non-deterministic batch output");
+            if (output instanceof MachineOutput.ItemOutput item && item.components().hasNonExactValues()) {
+                throw new IllegalArgumentException("Non-exact output components");
+            }
+            long amount = MachineOutput.scaledAmount(output);
+            if (amount <= 0L) throw new IllegalArgumentException("Invalid output amount");
+            Object key;
+            if (output instanceof LoadedChemicalOutput chemical) {
+                key = List.of(chemical.outputType().id(), chemical.id());
+            } else if (output instanceof LightningOutput lightning) {
+                key = List.of(lightning.outputType().id(), lightning.tier());
+            } else {
+                key = MachineOutput.aggregationKey(output);
+                if (key.equals(MachineOutput.AggregationKey.EMPTY)) {
+                    throw new IllegalArgumentException("Unknown output identity");
+                }
+            }
+            // Two independent chance rolls are not interchangeable with one larger chance stack.
+            if (output.chance() != 1F) key = List.of(key, amount);
+            totals.merge(List.of(key, output.chance()), Math.multiplyExact(amount, parallelism), Math::addExact);
+        }
+        return totals;
+    }
+
+    private boolean strictPatternAmounts(RecipeStartContext.ExecutionSnapshot effective, long parallelism) {
+        try {
+            Map<Object, Long> totals = new LinkedHashMap<>();
+            var registries = registryAccess();
+            var ops = registries == null ? JsonOps.INSTANCE : registries.createSerializationContext(JsonOps.INSTANCE);
+            for (MachineRequirement requirement : effective.requirements()) {
+                long amount;
+                Object key;
+                if (requirement instanceof ItemRequirement item) {
+                    amount = item.io() == IOType.INPUT ? item.count() : item.stack().getCount();
+                    if (item.io() == IOType.INPUT) {
+                        if (item.item() == null) return false;
+                        key = List.of(item.type().id(), item.io(), Ingredient.CODEC.encodeStart(ops, item.item()).getOrThrow(),
+                                item.components(), item.tags());
+                    } else key = MachineOutput.aggregationKey(new MachineOutput.ItemOutput(item.stack(), 1F, item.components()));
+                } else if (requirement instanceof FluidRequirement fluid) {
+                    amount = fluid.io() == IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
+                    if (fluid.io() == IOType.INPUT) {
+                        if (fluid.fluid() == null) return false;
+                        key = List.of(fluid.type().id(), fluid.io(), FluidIngredient.CODEC.encodeStart(ops, fluid.fluid()).getOrThrow(),
+                                fluid.tags());
+                    } else key = MachineOutput.aggregationKey(new MachineOutput.FluidOutput(fluid.stack(), 1F));
+                } else if (requirement instanceof EnergyRequirement energy) {
+                    amount = Math.multiplyExact(energy.fePerTick(), (long) effective.duration());
+                    key = List.of(energy.type().id(), energy.io());
+                } else if (requirement instanceof LightningRequirement lightning) {
+                    amount = lightning.amount();
+                    key = List.of(lightning.type().id(), lightning.io(), lightning.tier());
+                } else if (requirement instanceof LoadedChemicalRequirement chemical) {
+                    amount = chemical.ingredient().amount();
+                    key = List.of(chemical.type().id(), chemical.io(), chemical.ingredient().kind(), chemical.ingredient().id(), chemical.tags());
+                } else continue;
+                if (amount < 0L) return false;
+                totals.merge(key, Math.multiplyExact(amount, parallelism), Math::addExact);
+            }
+            return true;
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
     public @Nullable PreparedStart preparePatternStart(MachineRecipe recipe, long requestedParallelism,
                                                        List<MachineCapability> requestCapabilities,
                                                        @Nullable BlockPos requestSource) {
@@ -741,6 +862,8 @@ public final class CraftingRuntime {
         ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
         long lifecycle = controller.lifecycleEpoch();
         RecipeCommitLedger originalLedger = ledger;
+        BlockEntity sourceOwner = requestSource == null || controller.getLevel() == null ? null
+                : controller.getLevel().getBlockEntity(requestSource);
         long isolationChangeVersion = components.inputIsolationChangeVersion();
         long catalogVersion = catalogVersion(recipe.recipePoolId());
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
@@ -778,7 +901,7 @@ public final class CraftingRuntime {
             effective = new RecipeStartContext.ExecutionSnapshot(effectiveRecipe.duration(),
                     MachineRequirement.copyList(recipeRequirements), outputs);
         }
-        if (!startAttemptCurrent(lifecycle, originalLedger) || !patternOwnerCurrent()
+        if (!startAttemptCurrent(lifecycle, originalLedger) || !patternOwnerCurrent() || !patternSourceCurrent(sourceOwner)
                 || pendingPatternStart != null || pendingPaymentStart != null) return null;
         ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
         if (current.structure().version() != runtime.structure().version()
@@ -851,13 +974,15 @@ public final class CraftingRuntime {
                     continue;
                 }
                 PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches);
-                if (capabilitiesForParallelism != null && (!startAttemptCurrent(lifecycle, originalLedger)
-                        || !patternOwnerCurrent() || pendingPatternStart != null || pendingPaymentStart != null
+                if (!startAttemptCurrent(lifecycle, originalLedger)
+                        || !patternOwnerCurrent() || !patternSourceCurrent(sourceOwner) || pendingPatternStart != null || pendingPaymentStart != null
                         || patternStartReserved || !Objects.equals(domain, controller.resourceDomain())
                         || !preparedStartCurrent(prepared)
-                        || requestSource != null && !controller.currentRuntimeSnapshot().linkedPortPositions().contains(requestSource))) {
+                        || requestSource != null && !controller.currentRuntimeSnapshot().linkedPortPositions().contains(requestSource)) {
                     return null;
                 }
+                pendingExactPatternStart = false;
+                pendingPatternSourceOwner = sourceOwner;
                 pendingPatternSource = requestSource == null ? null : requestSource.immutable();
                 pendingPatternDomain = domain;
                 pendingPatternLifecycle = lifecycle;
@@ -881,6 +1006,8 @@ public final class CraftingRuntime {
     public void releasePatternStart() {
         PreparedStart prepared = pendingPatternStart;
         pendingPatternStart = null;
+        pendingExactPatternStart = false;
+        pendingPatternSourceOwner = null;
         if (pendingPaymentStart == prepared) pendingPaymentStart = null;
         pendingPatternSource = null;
         pendingPatternDomain = null;
@@ -938,8 +1065,19 @@ public final class CraftingRuntime {
     }
 
     boolean commitPatternPlan(PreparedStart prepared) {
+        return commitPatternPlan(prepared, () -> true);
+    }
+
+    boolean commitPatternPlan(PreparedStart prepared, BooleanSupplier admissionCurrent) {
         if (!patternStartReserved || active() || prepared == null || prepared != pendingPatternStart) return false;
-        if (!preparedStartCurrent(prepared)) {
+        if (!preparedStartCurrent(prepared) || pendingExactPatternStart
+                && !exactPatternOutputsFit(prepared, prepared.plan().parallelism())) {
+            discardPatternStart(prepared);
+            return false;
+        }
+        // Simulation can invoke native handlers: recheck identity and lane/core admission afterwards.
+        if (!patternStartReserved || active() || pendingPatternStart != prepared || !preparedStartCurrent(prepared)
+                || !admissionCurrent.getAsBoolean()) {
             discardPatternStart(prepared);
             return false;
         }
@@ -1013,6 +1151,7 @@ public final class CraftingRuntime {
         return prepared.runtime().structure().version() == current.structure().version()
                 && (prepared != pendingPatternStart || patternOwnerCurrent()
                 && pendingPatternLifecycle == controller.lifecycleEpoch()
+                && patternSourceCurrent(pendingPatternSourceOwner)
                 && Objects.equals(pendingPatternDomain, controller.resourceDomain())
                 && (pendingPatternSource == null || current.linkedPortPositions().contains(pendingPatternSource)))
                 && prepared.runtime().capabilityVersion() == current.capabilityVersion()
@@ -1030,6 +1169,11 @@ public final class CraftingRuntime {
                 || level.getBlockEntity(controller.getBlockPos()) == controller);
     }
 
+    private boolean patternSourceCurrent(@Nullable BlockEntity owner) {
+        return owner == null || !owner.isRemoved() && controller.getLevel() != null
+                && controller.getLevel().getBlockEntity(owner.getBlockPos()) == owner;
+    }
+
     private static long catalogVersion(ResourceLocation recipePoolId) {
         return RecipeRegistry.catalogForPool(recipePoolId).version();
     }
@@ -1045,6 +1189,7 @@ public final class CraftingRuntime {
         cancelInstalledProgram();
         pendingPaymentStart = null;
         activeRecipe = acceptedRecipe;
+        requiresPatternRequest = pendingExactPatternStart;
         activeRecipe.setParallelism(prepared.plan().parallelism());
         startPlan = prepared.plan();
         activeInputScope = prepared.plan().inputScope();
@@ -1060,6 +1205,8 @@ public final class CraftingRuntime {
         captureInputState(effectiveRequirements, prepared.plan());
         captureVersions(prepared.runtime());
         pendingPatternStart = null;
+        pendingExactPatternStart = false;
+        pendingPatternSourceOwner = null;
         pendingPatternSource = null;
         pendingPatternDomain = null;
         patternStartReserved = false;
@@ -1352,6 +1499,7 @@ public final class CraftingRuntime {
         activeRecipe.setParallelism(plan.parallelism());
         startPlan = plan;
         activeInputScope = plan.inputScope();
+        requiresPatternRequest = false;
         finishPlan = null;
         effectiveRequirements = executionRequirements;
         effectiveOutputs = executionOutputs;
@@ -2203,6 +2351,10 @@ public final class CraftingRuntime {
         // Detach the cancelled identity before any native release/owner callback can start its successor.
         pendingPaymentStart = null;
         pendingPatternStart = null;
+        pendingExactPatternStart = false;
+        pendingPatternSourceOwner = null;
+        pendingPatternSource = null;
+        pendingPatternDomain = null;
         stressSession = new StressSession();
         cancelInstalledProgram();
         ledger = new RecipeCommitLedger();
@@ -2356,6 +2508,8 @@ public final class CraftingRuntime {
     }
 
     public void save(CompoundTag output, HolderLookup.Provider registries) {
+        output.putBoolean("requires_pattern_request", pendingPaymentStart != null
+                && ledger.state().phase() != RecipeCommitLedger.Phase.READY ? pendingExactPatternStart : requiresPatternRequest);
         if (pendingPaymentStart != null && ledger.state().phase() != RecipeCommitLedger.Phase.READY) {
             savePaidStart(output, pendingPaymentStart, registries);
             return;
@@ -2389,9 +2543,11 @@ public final class CraftingRuntime {
 
     public void load(CompoundTag input, @Nullable StructureClaimRegistry.ResourceDomain domain,
                      HolderLookup.Provider registries) {
+        boolean restoredPatternRequest = input.getBoolean("requires_pattern_request");
         boolean active = input.getBoolean("active");
         if (!active) {
             invalidate();
+            requiresPatternRequest = restoredPatternRequest;
             restoreFailure(readFailure(input, null));
             return;
         }
@@ -2421,6 +2577,7 @@ public final class CraftingRuntime {
             return;
         }
         ledger = restoredLedger;
+        requiresPatternRequest = restoredPatternRequest;
         long restoredUpgradeContentRevision = (input.contains("upgrade_content_revision") ? input.getLong("upgrade_content_revision") : Long.MIN_VALUE);
         restore(loaded.recipe(), domain,
                 input.contains("structure_version") ? input.getLong("structure_version") : Long.MIN_VALUE,
@@ -2429,6 +2586,7 @@ public final class CraftingRuntime {
                 input.contains("component_state_version") ? input.getLong("component_state_version") : Long.MIN_VALUE,
                 restoredLedger);
         if (activeRecipe == loaded.recipe() && ledger == restoredLedger) {
+            requiresPatternRequest = restoredPatternRequest;
             activeInputScope = restoredScope;
             if (restoredUpgradeContentRevision != Long.MIN_VALUE) {
                 upgradeContentRevision = restoredUpgradeContentRevision;
@@ -2798,6 +2956,7 @@ public final class CraftingRuntime {
         if (payment != ledger || payment.state().phase() == RecipeCommitLedger.Phase.READY || active()) return;
         payment.pauseAfterCommitFailure();
         activeRecipe = new ActiveMachineRecipe(prepared.recipe().source(), prepared.plan().parallelism(), prepared.effective());
+        requiresPatternRequest = pendingExactPatternStart;
         activeRecipe.setParallelism(prepared.plan().parallelism());
         activeInputScope = prepared.plan().inputScope();
         effectiveRequirements = MachineRequirement.copyList(prepared.effective().requirements());
@@ -3421,6 +3580,10 @@ public final class CraftingRuntime {
                         && manaInput.consumeChance() > 0F && manaInput.consumeChance() < 1F) {
                     requirement = new ManaRequirement(manaInput.io(), manaInput.amount(), manaInput.chance(),
                             0F, manaInput.tags());
+                } else if (retainedInputs.contains(index) && requirement instanceof LoadedChemicalRequirement chemicalInput
+                        && chemicalInput.consumeChance() > 0F && chemicalInput.consumeChance() < 1F) {
+                    requirement = new LoadedChemicalRequirement(chemicalInput.io(), chemicalInput.ingredient(),
+                            chemicalInput.chance(), chemicalInput.tags(), 0F);
                 }
                 if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
                         RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,

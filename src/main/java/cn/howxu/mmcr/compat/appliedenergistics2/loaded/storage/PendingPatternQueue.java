@@ -1,10 +1,14 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage;
 
+import appeng.api.config.Actionable;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.core.definitions.AEItems;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.HolderLookup;
@@ -21,9 +25,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Private, compressed ownership of complete standard pattern requests.
- * Native synchronous mutations never invoke host callbacks; the caller transfers
- * material ownership before marking the host changed.
+ * Read-only legacy ownership. Requests are refunded, never admitted or executed.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -31,60 +33,34 @@ public final class PendingPatternQueue {
     private static final String SAVE_KEY = "pending_patterns";
     private static final int MAX_GROUPS = 64;
     private static final int MAX_INPUT_KEYS = 256;
-    private static final int MAX_ATTEMPTS = 1024;
 
     private final List<GroupSnapshot> groups = new ArrayList<>();
-    private long nextId = 1L;
     private boolean clockNeedsRebase;
     private Tag blockedData;
-    private boolean hasAttemptTick;
-    private long attemptTick;
-    private int attempts;
 
-    /** Call once before admission validation; rejected requests also consume the budget. */
-    public boolean canAttempt(long gameTime) {
-        if (!hasAttemptTick || attemptTick != gameTime) {
-            hasAttemptTick = true;
-            attemptTick = gameTime;
-            attempts = 0;
-        }
-        if (attempts >= MAX_ATTEMPTS) return false;
-        attempts++;
-        return true;
-    }
-
-    /** Validates before mutation; neither consumes caller counters nor invokes callbacks. */
-    public boolean offer(AEItemKey definition, List<GenericStack> outputs, KeyCounter[] oneCopyInputs,
-                         OfferLimits limits, long gameTime) {
-        if (blockedData != null || clockNeedsRebase || definition == null || outputs == null
-                || oneCopyInputs == null || limits == null) return false;
-        try {
-            List<Map<AEKey, Long>> template = copyTemplate(oneCopyInputs);
-            List<GenericStack> promised = copyOutputs(outputs);
-            GroupSnapshot matching = null;
-            for (GroupSnapshot group : groups) {
-                if (group.definition.equals(definition) && group.outputs.equals(promised)
-                        && group.template.equals(template)) {
-                    matching = group;
-                    break;
-                }
+    /** Native batching delays callbacks until both owners have changed; no handler rollback is claimed. */
+    public boolean refundNext(PatternInterfaceBlockEntity host) {
+        if (blockedData != null || groups.isEmpty()) return false;
+        GroupSnapshot group = groups.getFirst();
+        var inventory = host.getLogic().getReturnInv();
+        var projection = AE2NativeAdapters.copyForSimulation(inventory);
+        for (KeyCounter slot : group.inputs(group.copies)) {
+            for (var entry : slot) {
+                if (projection.insert(entry.getKey(), entry.getLongValue(), Actionable.MODULATE,
+                        IActionSource.ofMachine(host)) != entry.getLongValue()) return false;
             }
-            long copies = matching == null ? 1L : Math.addExact(matching.copies, 1L);
-            if (Math.addExact(totalCopies(), 1L) > limits.totalCopies || copies > limits.groupCopies) return false;
-            if (matching == null && (groups.size() >= MAX_GROUPS || nextId == Long.MAX_VALUE)) return false;
-            GroupSnapshot next = new GroupSnapshot(matching == null ? nextId : matching.id, definition,
-                    promised, template, copies, matching == null ? gameTime : matching.firstTick, gameTime);
-            List<GroupSnapshot> candidate = new ArrayList<>(groups);
-            if (matching == null) candidate.add(next);
-            else candidate.set(groups.indexOf(matching), next);
-            validateTotals(candidate);
-            groups.clear();
-            groups.addAll(candidate);
-            if (matching == null) nextId++;
-            return true;
-        } catch (ArithmeticException | IllegalArgumentException exception) {
-            return false;
         }
+        inventory.beginBatch();
+        try {
+            for (int slot = 0; slot < inventory.size(); slot++) inventory.setStack(slot, projection.getStack(slot));
+            groups.removeFirst();
+        } finally {
+            // Even save/reentry from the native listener sees only the new owner.
+            inventory.endBatchSuppressed();
+        }
+        inventory.onChange();
+        host.saveChanges();
+        return true;
     }
 
     public List<GroupSnapshot> groups() {
@@ -100,48 +76,6 @@ public final class PendingPatternQueue {
         long total = 0L;
         for (GroupSnapshot group : groups) total = Math.addExact(total, group.copies);
         return total;
-    }
-
-    public void removeCopies(long groupId, long copies) {
-        if (blockedData != null || clockNeedsRebase) throw new IllegalStateException("Pending queue is blocked");
-        for (int index = 0; index < groups.size(); index++) {
-            GroupSnapshot group = groups.get(index);
-            if (group.id != groupId) continue;
-            if (copies <= 0L || copies > group.copies) throw new IllegalArgumentException("Invalid copy count");
-            if (copies == group.copies) groups.remove(index);
-            else groups.set(index, new GroupSnapshot(group.id, group.definition, group.outputs, group.template,
-                    group.copies - copies, group.firstTick, group.lastTick));
-            return;
-        }
-        throw new IllegalArgumentException("Unknown pending group");
-    }
-
-    /** Restores unpaid copies after a native execution failure, irrespective of shrunken offer limits. */
-    public void restoreCopies(GroupSnapshot original, long copies) {
-        if (blockedData != null || clockNeedsRebase) throw new IllegalStateException("Pending queue is blocked");
-        if (original == null || copies <= 0L || copies > original.copies || original.id >= nextId) {
-            throw new IllegalArgumentException("Invalid restoration");
-        }
-        List<GroupSnapshot> candidate = new ArrayList<>(groups);
-        int index = 0;
-        while (index < candidate.size() && candidate.get(index).id < original.id) index++;
-        long restored = copies;
-        if (index < candidate.size() && candidate.get(index).id == original.id) {
-            GroupSnapshot current = candidate.get(index);
-            if (!current.definition.equals(original.definition) || !current.outputs.equals(original.outputs)
-                    || !current.template.equals(original.template) || current.firstTick != original.firstTick
-                    || current.lastTick != original.lastTick) {
-                throw new IllegalArgumentException("Pending group changed during execution");
-            }
-            restored = Math.addExact(current.copies, copies);
-            if (restored > original.copies) throw new IllegalArgumentException("Restoration exceeds original copies");
-            candidate.remove(index);
-        }
-        candidate.add(index, new GroupSnapshot(original.id, original.definition, original.outputs, original.template,
-                restored, original.firstTick, original.lastTick));
-        validateTotals(candidate);
-        groups.clear();
-        groups.addAll(candidate);
     }
 
     public void write(CompoundTag output, HolderLookup.Provider registries, long gameTime) {
@@ -166,11 +100,8 @@ public final class PendingPatternQueue {
     /** Decode atomically. Any invalid entry blocks the entire original payload, never a partial load. */
     public void read(CompoundTag input, HolderLookup.Provider registries) {
         groups.clear();
-        nextId = 1L;
         clockNeedsRebase = false;
         blockedData = null;
-        hasAttemptTick = false;
-        attempts = 0;
         Tag raw = input.get(SAVE_KEY);
         if (raw == null) return;
         blockedData = raw.copy();
@@ -180,7 +111,6 @@ public final class PendingPatternQueue {
             if (saved.version != 1 || saved.groups.size() > MAX_GROUPS) return;
             List<GroupSnapshot> loaded = new ArrayList<>(saved.groups.size());
             Set<Long> ids = new HashSet<>();
-            long loadedNextId = 1L;
             for (SavedGroup group : saved.groups) {
                 if (group.id <= 0L || group.id == Long.MAX_VALUE || !ids.add(group.id)
                         || group.copies <= 0L || group.firstAge < 0L || group.lastAge < 0L
@@ -197,11 +127,9 @@ public final class PendingPatternQueue {
                 }
                 loaded.add(new GroupSnapshot(group.id, group.definition, copyOutputs(group.outputs),
                         List.copyOf(template), group.copies, -group.firstAge, -group.lastAge));
-                loadedNextId = Math.max(loadedNextId, group.id + 1L);
             }
             validateTotals(loaded);
             groups.addAll(loaded);
-            nextId = loadedNextId;
             clockNeedsRebase = !groups.isEmpty();
             blockedData = null;
         } catch (RuntimeException exception) {
@@ -219,21 +147,6 @@ public final class PendingPatternQueue {
                     group.copies, subtractAge(gameTime, -group.firstTick), subtractAge(gameTime, -group.lastTick)));
         }
         clockNeedsRebase = false;
-    }
-
-    private static List<Map<AEKey, Long>> copyTemplate(KeyCounter[] inputs) {
-        List<Map<AEKey, Long>> template = new ArrayList<>(inputs.length);
-        for (KeyCounter input : inputs) {
-            if (input == null) throw new IllegalArgumentException("Null pending slot");
-            Map<AEKey, Long> slot = new HashMap<>();
-            for (var entry : input) {
-                long amount = entry.getLongValue();
-                if (amount < 0L) throw new IllegalArgumentException("Negative pending input");
-                if (amount > 0L) slot.put(entry.getKey(), amount);
-            }
-            template.add(Map.copyOf(slot));
-        }
-        return List.copyOf(template);
     }
 
     private static List<GenericStack> copyOutputs(List<GenericStack> outputs) {
@@ -292,10 +205,6 @@ public final class PendingPatternQueue {
         } catch (ArithmeticException exception) {
             return Long.MIN_VALUE;
         }
-    }
-
-    /** @author howxu <dev@howxu.cn> */
-    public record OfferLimits(long totalCopies, long groupCopies) {
     }
 
     /** Immutable identity/template; each input view is freshly allocated.

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.runtime;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 
 /**
  * Owns one admitted pattern start until it is committed or released.
@@ -10,6 +11,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public final class PatternStartReservation implements AutoCloseable {
+    public enum RecipeSelection { CATALOG, LAST_RECIPE }
     public enum Status {
         UNAVAILABLE,
         RESERVED,
@@ -27,6 +29,8 @@ public final class PatternStartReservation implements AutoCloseable {
     private boolean rolledBack;
     private boolean committing;
     private Status status;
+    private RecipeSelection recipeSelection = RecipeSelection.CATALOG;
+    private BooleanSupplier admissionCurrent = () -> true;
 
     private PatternStartReservation(Status status, MachineRecipe recipe, String laneId, CraftingRuntime runtime,
                                     CraftingRuntime.PreparedStart preparedStart, Runnable release) {
@@ -51,6 +55,21 @@ public final class PatternStartReservation implements AutoCloseable {
 
     public Status status() {
         return status;
+    }
+
+    public RecipeSelection recipeSelection() { return recipeSelection; }
+
+    public PatternStartReservation withRecipeSelection(RecipeSelection selection) {
+        if (status != Status.RESERVED || rolledBack) throw new IllegalStateException("Reservation is no longer pending");
+        recipeSelection = Objects.requireNonNull(selection, "selection");
+        return this;
+    }
+
+    /** Revalidates lane/core admission before the first native payment. */
+    public PatternStartReservation guard(BooleanSupplier current) {
+        if (status != Status.RESERVED || rolledBack) throw new IllegalStateException("Reservation is no longer pending");
+        admissionCurrent = Objects.requireNonNull(current, "current");
+        return this;
     }
 
     public MachineRecipe recipe() {
@@ -106,10 +125,10 @@ public final class PatternStartReservation implements AutoCloseable {
     }
 
     boolean commitPlan() {
-        if (status != Status.RESERVED || rolledBack) return false;
+        if (status != Status.RESERVED || rolledBack || !admissionCurrent.getAsBoolean()) return false;
         payment = runtime.ledger();
         try {
-            return runtime.commitPatternPlan(preparedStart);
+            return runtime.commitPatternPlan(preparedStart, admissionCurrent);
         } catch (RuntimeException exception) {
             if (!paid()) return false;
             pauseAfterNotificationFailure();
@@ -118,7 +137,8 @@ public final class PatternStartReservation implements AutoCloseable {
     }
 
     boolean preflight() {
-        return status == Status.RESERVED && !rolledBack && runtime.preparedStartCurrent(preparedStart);
+        return status == Status.RESERVED && !rolledBack && admissionCurrent.getAsBoolean()
+                && runtime.preparedStartCurrent(preparedStart);
     }
 
     boolean paid() {

@@ -14,25 +14,27 @@ import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.crafting.pattern.AEProcessingPattern;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
 import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PendingPatternQueue.GroupSnapshot;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity.PendingPatternCursor;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
@@ -41,7 +43,6 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.BooleanSupplier;
 
 /**
  * Virtual AE2 crafting machine that forwards processing patterns to linked MMCR controllers.
@@ -67,75 +68,77 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     @Override
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolders, Direction ejectionDirection) {
         if (pushing || settling || !hostCurrent()) return false;
-        var queue = host.pendingPatterns();
-        long now = host.getLevel().getGameTime();
-        if (!queue.canAttempt(now)) return false;
-        pushing = true;
-        boolean accepted = false;
-        try {
-            var limits = host.pendingScheduler().admissionLimits(patternDetails, inputHolders, now);
-            if (limits == null || !validInputs(patternDetails, inputHolders, host.getLevel()) || !hostCurrent()) return false;
-            // Queue writes are synchronous and callback-free. Only notify after both owners agree.
-            if (!queue.offer(patternDetails.getDefinition(), patternDetails.getOutputs(), inputHolders, limits, now)) {
-                return false;
-            }
-            for (KeyCounter holder : inputHolders) holder.clear();
-            accepted = true;
-            host.setChanged();
-            return true;
-        } catch (RuntimeException exception) {
-            if (accepted) MMCR.LOG.warn("Pattern admission accepted before notification failure at {}",
-                    host.getBlockPos(), exception);
-            return accepted;
-        } finally {
-            pushing = false;
-        }
-    }
-
-    /** Starts one prepared prefix; native payments are never replayed or transactionally rolled back. */
-    public boolean startPending(GroupSnapshot group, MachineControllerBlockEntity controller,
-                                PendingPatternCursor cursor, BooleanSupplier budget) {
-        if (pushing || settling || !hostCurrent()) return false;
+        if (!host.pendingPatterns().isEmpty()) return false;
         flushPendingReturns();
         if (pendingRequest != null || !hostCurrent()) return false;
         pushing = true;
         PendingRequest owned = null;
         PatternStartReservation reservation = null;
-        long copies = 0L;
+        KeyCounter[] originals = null;
         try {
-            List<MachineOutput> outputs = outputs(group.outputs());
-            if (outputs == null) return false;
-            // Each proposal has exactly p copies. Every resource family shares that proposal's sole scratch owner.
-            Map<Long, GenericStackInv> proposals = new HashMap<>();
-            reservation = controller.reservePendingPatternStart(host.getBlockPos(), outputs, group.copies(), parallelism -> {
-                GenericStackInv inventory = proposals.computeIfAbsent(parallelism,
-                        count -> AE2NativeAdapters.requestInventory(group.inputs(count)));
-                return requestCapabilities(inventory, group.inputs(parallelism));
-            }, budget, cursor);
-            if (reservation.status() != PatternStartReservation.Status.RESERVED) return false;
-            copies = reservation.parallelism();
-            GenericStackInv inventory = proposals.get(copies);
-            if (copies <= 0L || copies > group.copies() || inventory == null) return false;
-
-            // Preparation is side-effect-free; conservatively reserve room for every possible leftover.
-            GenericStackInv simulatedReturns = AE2NativeAdapters.copyForSimulation(host.getLogic().getReturnInv());
-            for (int slot = 0; slot < inventory.size(); slot++) {
-                GenericStack stack = inventory.getStack(slot);
-                if (stack != null && simulatedReturns.insert(stack.what(), stack.amount(), Actionable.MODULATE,
-                        IActionSource.ofMachine(host)) != stack.amount()) return false;
+            Level level = host.getLevel();
+            if (!validInputs(patternDetails, inputHolders, level)) return false;
+            PatternBatchDetails batch = patternDetails instanceof PatternBatchDetails details ? details : null;
+            IPatternDetails original = batch == null ? patternDetails : batch.original();
+            PatternBatchBinding binding = batch == null ? null : new PatternBatchBinding(batch.data().recipePoolId(),
+                    batch.data().recipeId(), batch.data().recipeCraftsPerPattern());
+            long parallelism = batch == null ? 1L
+                    : Math.multiplyExact(batch.data().multiplier(), batch.data().recipeCraftsPerPattern());
+            var boundRecipe = batch == null ? null : RecipeRegistry.getRecipe(binding.recipeId());
+            if (batch != null && boundRecipe == null) return false;
+            GenericStackInv inventory = AE2NativeAdapters.requestInventory(inputHolders);
+            List<MachineCapability> capabilities = requestCapabilities(inventory, inputHolders);
+            List<MachineOutput> promised = outputs(original.getOutputs());
+            findReservation:
+            for (BlockPos position : host.linkedControllerPositions().stream().sorted(BlockPos::compareTo).toList()) {
+                if (!level.hasChunkAt(position)
+                        || !(level.getBlockEntity(position) instanceof MachineControllerBlockEntity controller)) continue;
+                var candidates = batch == null ? controller.recipesForMachine() : List.of(boundRecipe);
+                for (var recipe : candidates) {
+                    var effective = controller.effectivePatternRecipe(recipe);
+                    if (effective == null) continue;
+                    if (batch != null) {
+                        if (!PatternBatchSupport.matches(binding, recipe, effective, original)) continue;
+                        if (batch.data().multiplier() > 1L) {
+                            var profile = PatternBatchSupport.inspectRecipe(recipe, effective, original);
+                            if (profile == null || profile.safety() != PatternBatchSupport.Safety.PROVEN_LINEAR
+                                    || batch.data().multiplier() > profile.maxMultiplier()) continue;
+                            var snapshot = controller.currentRuntimeSnapshot();
+                            var machine = snapshot.structure().machine() == null
+                                    ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+                            if (machine != null && machine.behavior() instanceof RecipeBehavior behavior
+                                    && behavior.hasBeforeStart()) continue;
+                        }
+                    } else if (!controller.patternOutputsMatch(recipe, controller.runtimeSnapshot(), promised)) continue;
+                    reservation = controller.reserveExactPatternStart(host.getBlockPos(), recipe.id(),
+                            effective.outputs(), parallelism, capabilities);
+                    if (reservation.status() != PatternStartReservation.Status.RESERVED) {
+                        reservation.close();
+                        reservation = null;
+                        continue;
+                    }
+                     if (!hostCurrent() || !host.linkedControllerPositions().contains(position)
+                             || level.getBlockEntity(position) != controller || !host.pendingPatterns().isEmpty()) return false;
+                    // Preparation hooks have completed. Preflight every family cumulatively before payment.
+                    GenericStackInv simulatedReturns = AE2NativeAdapters.copyForSimulation(host.getLogic().getReturnInv());
+                    for (int slot = 0; slot < inventory.size(); slot++) {
+                        GenericStack stack = inventory.getStack(slot);
+                        if (stack != null && simulatedReturns.insert(stack.what(), stack.amount(), Actionable.MODULATE,
+                                IActionSource.ofMachine(host)) != stack.amount()) return false;
+                    }
+                    originals = copyHolders(inputHolders);
+                    owned = new PendingRequest(inventory, reservation);
+                    // Callback-free ownership handoff: never expose both CPU holders and scratch to a save.
+                    for (KeyCounter holder : inputHolders) holder.clear();
+                    pendingRequest = owned;
+                    host.setChanged();
+                    if (hostCurrent() && !owned.accepted && reservation.commit(owned::accept)) owned.accept();
+                    // A failed attempt is not replayed in another lane; finally restores only zero-payment failures.
+                    break findReservation;
+                }
             }
-            if (!hostCurrent()) return false;
-            PendingRequest proposal = new PendingRequest(inventory, reservation);
-            // No callback/save window may observe both the queued prefix and its scratch copy.
-            host.pendingPatterns().removeCopies(group.id(), copies);
-            owned = proposal;
-            pendingRequest = owned;
-            host.setChanged();
-            if (!hostCurrent()) return false;
-            boolean committed = reservation.commit(owned::accept);
-            if (committed) owned.accept();
         } catch (RuntimeException exception) {
-            MMCR.LOG.warn("Native pending pattern start interrupted at {}", host.getBlockPos(), exception);
+            MMCR.LOG.warn("Native synchronous pattern start interrupted at {}", host.getBlockPos(), exception);
         } finally {
             if (owned != null) {
                 try {
@@ -143,9 +146,11 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                         // Payment (including an uncertain prefix) owns only the live scratch balance.
                         owned.accept();
                     } else {
-                        // Restore first and unpublish scratch without any callback between these writes.
-                        host.pendingPatterns().restoreCopies(group, copies);
+                        // No native payment: restore CPU ownership without callbacks between the two owners.
                         if (pendingRequest == owned) pendingRequest = null;
+                        for (int index = 0; index < inputHolders.length; index++) {
+                            inputHolders[index].addAll(originals[index]);
+                        }
                         owned.restored = true;
                         host.setChanged();
                     }
@@ -170,6 +175,15 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         return owned != null && owned.accepted;
     }
 
+    private static KeyCounter[] copyHolders(KeyCounter[] holders) {
+        KeyCounter[] copies = new KeyCounter[holders.length];
+        for (int index = 0; index < holders.length; index++) {
+            copies[index] = new KeyCounter();
+            copies[index].addAll(holders[index]);
+        }
+        return copies;
+    }
+
     private boolean hostCurrent() {
         Level level = host.getLevel();
         return !host.isRemoved() && level != null && !level.isClientSide()
@@ -191,7 +205,7 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     /** Settles only owned leftovers; never retries a recipe start or holds a live controller after admission. */
     public void flushPendingReturns() {
         if (host.getLevel() != null && host.getLevel().isClientSide()) return;
-        if (pushing || settling || pendingRequest == null || !pendingRequest.accepted) return;
+        if (pushing || settling || pendingRequest == null || !pendingRequest.accepted || pendingRequest.carried) return;
         PendingRequest owned = pendingRequest;
         GenericStackInv returns = host.getLogic().getReturnInv();
         settling = true;
@@ -253,19 +267,18 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                         input.getList(PENDING_RETURNS_KEY, Tag.TAG_COMPOUND), registries), null) : null;
     }
 
-    /** Uses the same AE key drop policy as the native return inventory, including fluid/chemical wrappers. */
-    public void addPendingDrops(List<ItemStack> drops) {
-        if (pendingRequest == null) return;
-        // Breaking the host can reenter during the pre-payment notification. Dropped ownership cannot be restored.
-        pendingRequest.accepted = true;
-        for (int slot = 0; slot < pendingRequest.inventory.size(); slot++) {
-            GenericStack stack = pendingRequest.inventory.getStack(slot);
-            if (stack == null) continue;
-            PatternReturnInventory.addDrops(stack, drops, host.getLevel(), host.getBlockPos());
-            pendingRequest.inventory.setStack(slot, null);
+    public boolean hasPendingReturns() {
+        return pendingRequest != null && !pendingRequest.inventory.isEmpty();
+    }
+
+    /** A carrier cannot give ownership back to CPU holders if destruction reenters before payment. */
+    public void saveCarrierReturns(CompoundTag output, HolderLookup.Provider registries) {
+        if (pendingRequest != null) {
+            pendingRequest.accepted = true;
+            pendingRequest.carried = true;
+            AE2NativeAdapters.sealRequestInventory(pendingRequest.inventory);
         }
-        pendingRequest = null;
-        host.setChanged();
+        savePendingReturns(output, registries);
     }
 
     /** Material ownership only; runtime/lane references are released when the native start returns.
@@ -276,6 +289,7 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         private @Nullable PatternStartReservation reservation;
         private boolean accepted;
         private boolean restored;
+        private boolean carried;
 
         private PendingRequest(GenericStackInv inventory, @Nullable PatternStartReservation reservation) {
             this.inventory = inventory;
@@ -311,9 +325,10 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     }
 
     static boolean validInputs(IPatternDetails details, KeyCounter[] inputs, Level level) {
-        if (!(details instanceof AEProcessingPattern pattern) || inputs == null || level == null
-                || outputs(pattern.getOutputs()) == null) return false;
-        var expected = pattern.getInputs();
+        IPatternDetails original = details instanceof PatternBatchDetails batch ? batch.original() : details;
+        if (!(original instanceof AEProcessingPattern) || inputs == null || level == null
+                || outputs(original.getOutputs()) == null) return false;
+        var expected = details.getInputs();
         if (inputs.length != expected.length || inputs.length == 0) return false;
         try {
             for (int index = 0; index < inputs.length; index++) {

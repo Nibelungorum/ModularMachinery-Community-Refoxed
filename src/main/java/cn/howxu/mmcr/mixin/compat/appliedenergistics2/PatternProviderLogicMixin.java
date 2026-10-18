@@ -4,13 +4,17 @@ import appeng.helpers.patternprovider.PatternProviderLogic;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import appeng.api.implementations.blockentities.ICraftingMachine;
+import appeng.api.crafting.IPatternDetails;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceHost;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -19,6 +23,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.List;
 
 /**
  * Propagates native pattern return-inventory drains to the MMCR pattern host.
@@ -31,6 +38,36 @@ public abstract class PatternProviderLogicMixin {
     @Final
     private PatternProviderLogicHost host;
 
+    @Shadow
+    @Final
+    private List<IPatternDetails> patterns;
+
+    @Inject(method = "updatePatterns", at = @At(value = "INVOKE",
+            target = "Lappeng/api/networking/crafting/ICraftingProvider;requestUpdate(Lappeng/api/networking/IManagedGridNode;)V"))
+    private void mmcr$publishBatchPatterns(CallbackInfo callback) {
+        if (PatternBatchPlanning.isBatchHost(host) && host.getBlockEntity().getLevel() instanceof ServerLevel) {
+            PatternBatchPlanning.publish((PatternInterfaceBlockEntity) host, patterns);
+        }
+    }
+
+    @Inject(method = "getAvailablePatterns", at = @At("RETURN"), cancellable = true)
+    private void mmcr$availableBatchPatterns(CallbackInfoReturnable<List<IPatternDetails>> callback) {
+        if (PatternBatchPlanning.isBatchHost(host)) {
+            callback.setReturnValue(PatternBatchPlanning.publishedPatterns(
+                    (PatternInterfaceBlockEntity) host, callback.getReturnValue()));
+        }
+    }
+
+    @WrapOperation(method = "pushPattern", at = @At(value = "INVOKE",
+            target = "Ljava/util/List;contains(Ljava/lang/Object;)Z"))
+    private boolean mmcr$containsBatchPattern(List<IPatternDetails> originals, Object requested,
+                                             Operation<Boolean> original) {
+        if (PatternBatchPlanning.isBatchHost(host) && requested instanceof IPatternDetails pattern) {
+            return PatternBatchPlanning.contains((PatternInterfaceBlockEntity) host, originals, pattern);
+        }
+        return original.call(originals, requested);
+    }
+
     @Unique
     private long[] mmcr$returnInventoryAmounts = new long[0];
 
@@ -39,6 +76,13 @@ public abstract class PatternProviderLogicMixin {
     private PatternProviderReturnInventory mmcr$createReturnInventory(Runnable listener,
                                                                       Operation<PatternProviderReturnInventory> original) {
         return host instanceof PatternInterfaceHost ? new PatternReturnInventory(listener) : original.call(listener);
+    }
+
+    @WrapOperation(method = "clearContent", at = @At(value = "INVOKE",
+            target = "Lappeng/helpers/patternprovider/PatternProviderReturnInventory;clear()V"))
+    private void mmcr$preserveCarrierReturns(PatternProviderReturnInventory inventory, Operation<Void> original) {
+        // Clearing transient native patterns/sendList must not erase the block carrier's material owner.
+        if (!(host instanceof PatternInterfaceHost)) original.call(inventory);
     }
 
     @Inject(method = "doWork", at = @At("HEAD"))

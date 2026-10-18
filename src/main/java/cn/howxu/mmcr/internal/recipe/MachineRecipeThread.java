@@ -12,6 +12,8 @@ import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
@@ -27,6 +29,7 @@ public final class MachineRecipeThread extends RecipeThread {
     private final boolean controlsControllerRuntime;
     private @Nullable MachineRecipe lastRecipe;
     private long lastRecipeCatalogVersion = Long.MIN_VALUE;
+    private boolean lastRecipeRequiresPatternRequest;
     private boolean restartPending;
     private @Nullable PendingAsyncSearch pendingAsyncSearch;
     private long nextAsyncSearchId;
@@ -102,13 +105,42 @@ public final class MachineRecipeThread extends RecipeThread {
         if (recipe == null) return;
         lastRecipe = recipe;
         lastRecipeCatalogVersion = currentRecipeCatalog().version();
+        lastRecipeRequiresPatternRequest = runtime.requiresPatternRequest();
         restartPending = false;
         clearFullSearchRequest();
         installStartedProgram();
     }
 
     public void markRecipeFinished() {
-        restartPending = lastRecipe != null;
+        restartPending = lastRecipe != null && !lastRecipeRequiresPatternRequest && !runtime.requiresPatternRequest();
+    }
+
+    /** Validated remembered candidate for a new request, never an automatic restart. */
+    public @Nullable MachineRecipe cachedPatternRecipe(ResourceLocation recipeId) {
+        if (lastRecipe == null || !lastRecipe.id().equals(recipeId)) return null;
+        resolveCurrentLastRecipe(List.of(lastRecipe));
+        return lastRecipe;
+    }
+
+    public void savePatternMemory(CompoundTag output, HolderLookup.Provider registries) {
+        output.putBoolean("requires_pattern_request", lastRecipeRequiresPatternRequest);
+        if (lastRecipe != null) MachineRecipe.CODEC.codec()
+                .encodeStart(registries.createSerializationContext(NbtOps.INSTANCE), lastRecipe)
+                .result().ifPresent(tag -> output.put("recipe", tag));
+    }
+
+    public void loadPatternMemory(CompoundTag input, HolderLookup.Provider registries) {
+        clearLastRecipe();
+        if (!input.contains("recipe")) return;
+        MachineRecipe saved = MachineRecipe.CODEC.codec()
+                .parse(registries.createSerializationContext(NbtOps.INSTANCE), input.get("recipe")).result().orElse(null);
+        if (saved == null || !recipeBelongsToCurrentMachine(saved)) return;
+        MachineRecipe current = currentRecipeCatalog().recipes().stream()
+                .filter(recipe -> recipe.id().equals(saved.id())).findFirst().orElse(null);
+        if (current == null || !ActiveMachineRecipe.sameDefinition(saved, current, registryAccess())) return;
+        lastRecipe = current;
+        lastRecipeCatalogVersion = currentRecipeCatalog().version();
+        lastRecipeRequiresPatternRequest = input.getBoolean("requires_pattern_request");
     }
 
     public StartResult tryRestartLastRecipe(List<MachineRecipe> candidates, long availableParallelism,
@@ -173,7 +205,7 @@ public final class MachineRecipeThread extends RecipeThread {
 
     public @Nullable MachineRecipe peekRestartRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                                          long structureVersion) {
-        if (!restartPending || hasFullSearchPending()) return null;
+        if (lastRecipeRequiresPatternRequest || runtime.requiresPatternRequest() || !restartPending || hasFullSearchPending()) return null;
         MachineRecipe retryRecipe = resolveCurrentLastRecipe(candidatesForMachine(candidates));
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
         boolean canRestart = retryRecipe != null && availableParallelism > 0
@@ -293,6 +325,7 @@ public final class MachineRecipeThread extends RecipeThread {
     private void clearLastRecipe() {
         lastRecipe = null;
         lastRecipeCatalogVersion = Long.MIN_VALUE;
+        lastRecipeRequiresPatternRequest = false;
         restartPending = false;
     }
 }

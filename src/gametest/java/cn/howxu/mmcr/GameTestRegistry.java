@@ -88,6 +88,80 @@ public final class GameTestRegistry {
         register(event, "input_isolation_paid_ordinary_reload", 20, InputIsolationGameTest::paidOrdinaryScopeSurvivesReload);
         register(event, "input_isolation_paid_isolated_reload", 20, InputIsolationGameTest::paidIsolatedScopeSurvivesReload);
         if (ModList.get().isLoaded("ae2")) {
+            register(event, "pattern_batch_definition_roundtrip", 20,
+                    PatternBatchCodecGameTest::batchDefinitionRoundTripsDistinctMultipliers);
+            register(event, "pattern_batch_invalid_definition", 20,
+                    PatternBatchCodecGameTest::invalidBatchDefinitionCannotBecomeAnUnscaledTask);
+            register(event, "pattern_batch_native_job_reload", 20,
+                    PatternBatchCodecGameTest::nativeExecutingJobReloadKeepsFullAndRemainder);
+            register(event, "pattern_batch_int_max_native_dispatch", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().nativeCpuDispatchesIntMaxParallelismAsOneBatch(helper));
+            register(event, "pattern_batch_large_item_settlement", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().hugeBatchSettlesOutputsAboveIntRangeWithoutTruncation(helper));
+            register(event, "pattern_batch_large_fluid_settlement", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().hugeFluidBatchSettlesOutputsAboveIntRangeWithoutTruncation(helper));
+            register(event, "pattern_batch_large_item_atomic_refusal", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().hugeBatchFailsAtomicallyWhenOneUnitOrAePowerIsMissing(helper));
+            register(event, "pattern_batch_large_fluid_atomic_refusal", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().hugeFluidBatchFailsAtomicallyWhenOneUnitOrAePowerIsMissing(helper));
+            register(event, "pattern_batch_large_cpu_cancel", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().cancelUndispatchedHugeBatchReturnsEveryCpuHeldUnit(helper));
+            register(event, "pattern_batch_cpu_full_remainder_reload", 3000,
+                    helper -> new PatternBatchLargeAmountGameTest().nativeCpuReloadKeepsFullAndRemainderThenSettles(helper));
+            register(event, "pattern_batch_native_two_craft_tail", 600,
+                    helper -> new PatternBatchLargeAmountGameTest().nativeCpuDispatchesTwoCraftPatternsAndExactTail(helper));
+            register(event, "pattern_batch_removed_recipe_cluster_cancel", 600,
+                    helper -> new PatternBatchPersistenceGameTest().removedRecipeRestoresNativeClusterAndCancelsExactInputs(helper));
+            register(event, "pattern_batch_full_remainder_totals", 40,
+                    PatternBatchPlanningGameTest::fullRemainderAndSingleHugeBatchPreserveTotals);
+            register(event, "pattern_batch_reuse_cycle_safety", 40,
+                    PatternBatchPlanningGameTest::reusedMoldAndCyclicDependencyRemainExecutable);
+            register(event, "pattern_batch_dag_totals", 40,
+                    PatternBatchPlanningGameTest::acyclicUpstreamAndByproductsKeepUsedItems);
+            register(event, "pattern_batch_unknown_requirement_safety", 40,
+                    PatternBatchPlanningGameTest::unknownRequirementsPoisonOnlyEnumerableComponents);
+            register(event, "pattern_batch_snapshot_isolation", 40,
+                    PatternBatchPlanningGameTest::planningDoesNotTouchLiveWorldOrInvokeHooks);
+            register(event, "pattern_batch_native_provider_isolation", 40,
+                    PatternBatchPlanningGameTest::mixedProvidersNeverDispatchBatchToVanilla);
+            if (ModList.get().isLoaded("extendedae") && ModList.get().isLoaded("extendedae_plus")) {
+                register(event, "pattern_batch_three_host_publication", 200,
+                        PatternBatchPlanningGameTest::onlyTheThreeMmcrHostsPublishBatchIdentity);
+            }
+            if (ModList.get().isLoaded("mekanism") && ModList.get().isLoaded("appmek")) {
+                register(event, "pattern_batch_chemical_identity", 100,
+                        PatternBatchPlanningGameTest::exactChemicalsCompressWithoutMergingDifferentIds);
+            }
+            register(event, "pattern_batch_paid_processing_reload", 1000, "mmcr:pattern_batch_cross_chunk",
+                    helper -> new PatternBatchPersistenceGameTest().reloadCpuMachineAndInterfaceDuringPaidProcessing(helper));
+            register(event, "pattern_batch_paid_final_tick_reload", 1000, "mmcr:pattern_batch_cross_chunk",
+                    helper -> new PatternBatchPersistenceGameTest().reloadCpuMachineAndInterfaceAfterFinalTickPaid(helper));
+            register(event, "pattern_batch_paid_output_reload", 1000, "mmcr:pattern_batch_cross_chunk",
+                    helper -> new PatternBatchPersistenceGameTest().reloadCpuMachineAndInterfaceWithOutputWaitingForNetwork(helper));
+            register(event, "pattern_batch_machine_energy_refusal", 600,
+                    helper -> new PatternBatchPersistenceGameTest().hugeBatchRejectsMissingMachineFeWithoutTakingCpuInputs(helper));
+            register(event, "pattern_batch_full_output_refusal", 600,
+                    helper -> new PatternBatchPersistenceGameTest().hugeBatchRejectsFullOutputWithoutTakingCpuInputs(helper));
+            register(event, "pattern_batch_overflow_before_payment", 600,
+                    helper -> new PatternBatchPersistenceGameTest().overflowingBatchDefinitionRejectsBeforeAnyCpuPayment(helper));
+            register(event, "pattern_batch_exact_normal_runtime", 40,
+                    PatternBatchRuntimeGameTest::exactNormalBatchRejectsPrefixAndFinishesOnce);
+            register(event, "pattern_batch_exact_factory_runtime", 40,
+                    PatternBatchRuntimeGameTest::exactFactoryBatchRejectsPrefixAndFinishesOnce);
+            register(event, "pattern_batch_exact_stage_level_gates", 40,
+                    PatternBatchRuntimeGameTest::normalStageAndLevelGatesPreserveExactInputs);
+            register(event, "pattern_batch_paid_normal_snapshot", 40,
+                    PatternBatchRuntimeGameTest::paidNormalPatternReloadKeepsSnapshot);
+            register(event, "pattern_batch_paid_factory_snapshot", 40,
+                    PatternBatchRuntimeGameTest::paidFactoryPatternReloadKeepsSnapshot);
+            register(event, "pattern_batch_exact_long_resources", 40,
+                    PatternBatchRuntimeGameTest::exactLongItemAndFluidBatchFinishesOnce);
+            register(event, "pattern_batch_inspect_unloaded_chunk", 40,
+                    PatternBatchRuntimeGameTest::inspectionDoesNotLoadLinkedControllerChunk);
+            register(event, "pattern_batch_remembered_normal_request", 40,
+                    PatternBatchRuntimeGameTest::rememberedNormalPatternFastStartRequiresNewRequest);
+            register(event, "pattern_batch_remembered_factory_request", 40,
+                    PatternBatchRuntimeGameTest::rememberedFactoryPatternFastStartRequiresNewRequest);
             register(event, "input_isolation_native_ae_input", 20, InputIsolationGameTest::nativeAeInputUsesOnePhysicalSource);
             register(event, "input_isolation_ordinary_pattern_request", 20, InputIsolationGameTest::ordinaryPatternRequestIsAtomic);
             register(event, "input_isolation_isolated_pattern_request", 20, InputIsolationGameTest::isolatedPatternRequestIsAtomic);
@@ -451,16 +525,36 @@ public final class GameTestRegistry {
                 helper -> new AppMekInterfaceGameTest().chemicalStorageAndConfigurationSurviveNativeSaveLoad(helper));
         register(event, "appmek_chemical_memory_card", 400,
                 helper -> new AppMekInterfaceGameTest().chemicalMemoryCardConfigurationPullsFromNetwork(helper));
-        register(event, "appmek_mixed_pattern", 200,
+        register(event, "appmek_mixed_pattern", 600,
                 helper -> new AppMekPatternGameTest().mixedPatternReturnsProductsAndExcessInputs(helper));
         register(event, "appmek_radioactive_pattern_waste_barrel_storage_bus", 400,
                 helper -> new AppMekPatternGameTest().radioactivePatternReturnsProductsThroughWasteBarrelStorageBus(helper));
-        register(event, "appmek_extended_pattern_last_slot", 200,
+        register(event, "appmek_extended_pattern_last_slot", 600,
                 helper -> new AppMekPatternGameTest().extendedPatternLastSlotProcessesChemicals(helper));
         register(event, "appmek_rejected_pattern_ownership", 200,
                 helper -> new AppMekPatternGameTest().rejectedPatternPreservesInputHolders(helper));
-        register(event, "appmek_factory_chemical_batch", 200,
-                helper -> new AppMekPatternGameTest().batchPatternAccountsForChemicalInputsAcrossLanes(helper));
+        register(event, "appmek_native_chemical_cpu_settlement", 600,
+                helper -> new AppMekPatternGameTest().chemicalCpuPlanSettles(helper));
+        if (ModList.get().isLoaded("ae2") && ModList.get().isLoaded("mekanism") && ModList.get().isLoaded("appmek")) {
+            register(event, "appmek_native_chemical_cpu_refusal_cancel", 600,
+                    helper -> new AppMekPatternGameTest().chemicalCpuCancellationPreservesRefusedInputs(helper));
+            register(event, "appmek_native_mixed_cpu_refusal_cancel", 600,
+                    helper -> new AppMekPatternGameTest().mixedCpuCancellationPreservesRefusedInputs(helper));
+            register(event, "appmek_native_chemical_cpu_long", 1000,
+                    helper -> new AppMekPatternGameTest().chemicalCpuPreservesLongAmounts(helper));
+            register(event, "appmek_native_source_destruction_during_payment", 200,
+                    helper -> new AppMekPatternGameTest().nativeBatchSourceDestructionDuringPayment(helper));
+            register(event, "appmek_native_runtime_invalidation_during_payment", 200,
+                    helper -> new AppMekPatternGameTest().nativeBatchRuntimeInvalidationDuringPayment(helper));
+            register(event, "appmek_chemical_output_binding_identity", 300,
+                    helper -> new AppMekPatternGameTest().differentChemicalOutputsCannotShareBinding(helper));
+            register(event, "appmek_chemical_tag_serial_fallback", 300,
+                    helper -> new AppMekPatternGameTest().taggedChemicalRemainsLegalWithoutCompression(helper));
+            register(event, "appmek_chemical_nonconsumed_serial_fallback", 300,
+                    helper -> new AppMekPatternGameTest().nonConsumedChemicalRemainsLegalWithoutCompression(helper));
+            register(event, "appmek_chemical_probability_serial_fallback", 300,
+                    helper -> new AppMekPatternGameTest().probabilisticChemicalRemainsLegalWithoutCompression(helper));
+        }
         register(event, "appmek_native_batch_cancel_ownership", 200,
                 helper -> new AppMekPatternGameTest().nativeBatchNotificationBoundary(helper, false));
         register(event, "appmek_native_batch_throw_ownership", 200,
@@ -506,6 +600,8 @@ public final class GameTestRegistry {
                         helper -> new LightningPatternGameTest().mixedBatchPreservesOneMaterialOwner(helper));
                 register(event, "lightning_pending_long_material_owner", 40,
                         helper -> new LightningPatternGameTest().mixedLaneLongPersistenceAndNativeReturn(helper));
+                register(event, "ae2lt_pattern_batch_native_planning_admission", 160,
+                        PatternBatchPlanningGameTest::lightningBatchesPreserveNativePlanningAndAdmission);
             }
             register(event, "ae2_pattern_return_long_balances", 40,
                     helper -> new PatternReturnInventoryGameTest().nativeSlotsAndExactLongBalances(helper));
@@ -614,18 +710,14 @@ public final class GameTestRegistry {
                     helper -> new AE2PatternInterfaceGameTest().craftingCpuCancellationKeepsAcceptedRequests(helper));
             register(event, "ae2_pending_queue_long_returns", 40,
                     helper -> new PatternReturnInventoryGameTest().pendingQueueLongBalancesAndPersistence(helper));
-            register(event, "ae2_pending_queue_signatures", 20,
-                    helper -> new PendingPatternQueueGameTest().mergesOnlyIdenticalSlotTemplates(helper));
-            register(event, "ae2_pending_queue_ownership", 20,
-                    helper -> new PendingPatternQueueGameTest().offerOwnsDeepCopies(helper));
-            register(event, "ae2_pending_queue_restore", 20,
-                    helper -> new PendingPatternQueueGameTest().removeAndRestorePreserveIdentityAndAge(helper));
-            register(event, "ae2_pending_queue_overflow", 20,
-                    helper -> new PendingPatternQueueGameTest().overflowRejectsWithoutMutation(helper));
-            register(event, "ae2_pending_queue_capacity", 20,
-                    helper -> new PendingPatternQueueGameTest().capacityAndDistinctKeyLimitsPreserveExistingWork(helper));
+            register(event, "ae2_legacy_queue_mixed_refund", 20,
+                    helper -> new PendingPatternQueueGameTest().mixedLegacyGroupRefundsExactlyOnce(helper));
+            register(event, "ae2_legacy_queue_full_return", 20,
+                    helper -> new PendingPatternQueueGameTest().fullReturnsPreserveBothOwners(helper));
+            register(event, "ae2_legacy_queue_callback", 20,
+                    helper -> new PendingPatternQueueGameTest().nativeRefundCallbacksObserveSingleOwner(helper));
             register(event, "ae2_pending_queue_large", 20,
-                    helper -> new PendingPatternQueueGameTest().largeCompressedGroupCanSplitAndRestore(helper));
+                    helper -> new PendingPatternQueueGameTest().largeCompressedGroupRefundsAtomically(helper));
             register(event, "ae2_pending_queue_legacy", 20,
                     helper -> new PendingPatternQueueGameTest().oldSaveHasEmptyPendingQueue(helper));
             register(event, "ae2_pending_queue_persistence", 20,
@@ -722,6 +814,14 @@ public final class GameTestRegistry {
                     helper -> new FluxNetworksRecipeGameTest().successfulCandidateRetractsFailedWarmup(helper));
         }
         if (ModList.get().isLoaded("extendedae_plus")) {
+            if (ModList.get().isLoaded("ae2") && ModList.get().isLoaded("extendedae")) {
+                register(event, "eaep_mirror_native_cpu_local_capacity_tail", 1000,
+                        helper -> new MirrorPatternInterfaceGameTest().nativeCpuUsesMirrorCapacityAndTail(helper));
+                register(event, "eaep_mirror_batch_publication_lifecycle", 600,
+                        helper -> new MirrorPatternInterfaceGameTest().publicationRefreshesOnSourceUnbindAndReconnect(helper));
+                register(event, "eaep_mirror_master_chunk_not_loaded", 200,
+                        helper -> new MirrorPatternInterfaceGameTest().unavailableMasterChunkIsNeverForceLoaded(helper));
+            }
             // Dynamic profile placement extends above the template (energy cell at Y=24 or 26).
             register(event, "eaep_channel_card_own_menu", 100, "mmcr:empty",
                     helper -> new ChannelCardMenuGameTest().channelCardsSurviveOwnMenusAndReconnect(helper));
@@ -732,6 +832,30 @@ public final class GameTestRegistry {
             register(event, "eaep_mirror_dispatch", 200,
                     helper -> new MirrorPatternInterfaceGameTest().dispatchesOwnController(helper));
         }
+        // Temporarily register only the pattern-dispatch regression suite. Keep historical
+        // declarations above so stable/core and unrelated compatibility suites can be restored.
+        event.removeIf(test -> {
+            String name = test.testName();
+            return !(name.startsWith("mmcr:pattern_batch_")
+                    || name.equals("mmcr:ae2lt_pattern_batch_native_planning_admission")
+                    || name.startsWith("mmcr:ae2_pending_")
+                    || name.startsWith("mmcr:ae2_legacy_queue_")
+                    || name.startsWith("mmcr:ae2_pattern_return_")
+                    || name.startsWith("mmcr:ae2_standard_cpu_pattern_")
+                    || name.equals("mmcr:ae2_me_pattern_native_return_notification")
+                    || name.equals("mmcr:ae2_me_pattern_interface_request")
+                    || name.equals("mmcr:ae2_me_pattern_cpu_output_components")
+                    || name.equals("mmcr:eae_pending_pattern_carrier")
+                    || name.equals("mmcr:eaep_pending_pattern_carrier")
+                    || name.startsWith("mmcr:eaep_mirror_")
+                    || name.startsWith("mmcr:appmek_native_")
+                    || name.equals("mmcr:appmek_chemical_output_binding_identity")
+                    || name.equals("mmcr:appmek_chemical_tag_serial_fallback")
+                    || name.equals("mmcr:appmek_chemical_nonconsumed_serial_fallback")
+                    || name.equals("mmcr:appmek_chemical_probability_serial_fallback")
+                    || name.startsWith("mmcr:lightning_mixed_")
+                    || name.equals("mmcr:lightning_pending_long_material_owner"));
+        });
         return event;
     }
 

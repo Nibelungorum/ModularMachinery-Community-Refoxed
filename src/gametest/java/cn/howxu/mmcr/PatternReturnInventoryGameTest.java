@@ -15,7 +15,6 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.PatternInterfaceMenu;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PendingPatternQueue.OfferLimits;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.extendedae.loaded.kind.ExtendedPatternInterfaceKind;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -38,6 +37,7 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
@@ -63,13 +63,8 @@ public class PatternReturnInventoryGameTest {
         KeyCounter[] inputs = {items};
         var definition = AEItemKey.of(Items.PAPER);
         var outputs = List.of(new GenericStack(AEItemKey.of(Items.DIAMOND), 1L));
-        var limits = new OfferLimits(3L, 3L);
-        long now = helper.getLevel().getGameTime();
-        for (int copy = 0; copy < 2; copy++) helper.assertTrue(
-                queue.offer(definition, outputs, inputs, limits, now),
-                "Each complete key independently fits its long budget");
-        helper.assertTrue(!queue.offer(definition, outputs, inputs, limits, now),
-                "Per-key multiplication overflow rejects a third copy before changing ownership");
+        PendingPatternQueueGameTest.read(helper, queue,
+                PendingPatternQueueGameTest.legacyData(helper, inputs, outputs, 2L, definition));
         items.add(iron, 1L);
         helper.assertTrue(queue.totalCopies() == 2L && queue.groups().size() == 1
                         && queue.groups().getFirst().inputs(2L)[0].get(iron) == Long.MAX_VALUE - 1L
@@ -87,6 +82,11 @@ public class PatternReturnInventoryGameTest {
                         && restoredInputs.get(gold) == Long.MAX_VALUE - 1L,
                 "Host NBT retains complete component keys and exact compressed long balances");
         restored.onChunkUnloaded();
+        helper.assertTrue(restored.pendingPatterns().refundNext(restored)
+                        && restored.pendingPatterns().isEmpty()
+                        && restored.getLogic().getReturnInv().getAvailableStacks().get(iron) == Long.MAX_VALUE - 1L
+                        && restored.getLogic().getReturnInv().getAvailableStacks().get(gold) == Long.MAX_VALUE - 1L,
+                "Legacy long balances refund once instead of executing another batch");
         helper.succeed();
     }
 
@@ -199,13 +199,19 @@ public class PatternReturnInventoryGameTest {
                 "Menu synchronizes only the original nine ordinary slots");
         List<ItemStack> drops = new ArrayList<>();
         inventory.addDrops(drops, helper.getLevel(), helper.absolutePos(BlockPos.ZERO));
-        helper.assertTrue(drops.stream().filter(stack -> stack.is(Items.DIAMOND)).count() == 1024L,
-                "Even the last hidden slot produces bounded ordinary drops");
-        helper.assertTrue(drops.stream().filter(stack -> stack.is(Items.IRON_INGOT)).mapToLong(ItemStack::getCount).sum() == 80L
-                        && drops.stream().filter(stack -> stack.is(Items.IRON_INGOT)).allMatch(stack -> key.equals(AEItemKey.of(stack))),
-                "Old visible contents drop with their exact components");
-        helper.assertTrue(drops.stream().allMatch(stack -> stack.getCount() <= stack.getMaxStackSize()),
-                "All physical drops are legal item stacks");
+        helper.assertTrue(drops.isEmpty(), "Carrier-owned contents never scatter or truncate into physical stacks");
+        List<ItemStack> carriers = Block.getDrops(host.getBlockState(),
+                helper.getLevel(), host.getBlockPos(), host);
+        helper.assertTrue(carriers.size() == 1 && carriers.getFirst().has(DataComponents.BLOCK_ENTITY_DATA),
+                "Native loot creates one carrier for all visible and hidden balances");
+        var restored = PatternInterfaceKind.INSTANCE.entityFactory().create(helper.absolutePos(new BlockPos(2, 0, 0)),
+                host.getBlockState());
+        restored.setLevel(helper.getLevel());
+        restored.loadWithComponents(carriers.getFirst().get(DataComponents.BLOCK_ENTITY_DATA).copyTag(),
+                helper.getLevel().registryAccess());
+        helper.assertTrue(restored.getLogic().getReturnInv().getAvailableStacks().get(key) == 80L
+                        && restored.getLogic().getReturnInv().getAvailableStacks().get(AEItemKey.of(Items.DIAMOND)) == Long.MAX_VALUE,
+                "The carrier restores every component and long unit without a bounded-drop loss");
         helper.succeed();
     }
 

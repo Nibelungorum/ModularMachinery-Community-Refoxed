@@ -6,8 +6,10 @@ import appeng.api.config.Actionable;
 import appeng.api.config.LockCraftingMode;
 import appeng.api.config.Settings;
 import appeng.api.crafting.PatternDetailsHelper;
+import appeng.api.crafting.IPatternDetails;
 import appeng.api.ids.AEComponents;
 import appeng.api.networking.GridHelper;
+import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
@@ -22,6 +24,8 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.definition.InterfacePredicates;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.machine.definition.PatternBuilder;
@@ -29,9 +33,13 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appmek.CompatPatternCpuFixture;
 import cn.howxu.mmcr.compat.extendedae_plus.loaded.MirrorPatternInterfaceLogic;
 import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
 import cn.howxu.mmcr.internal.api.facade.structure.StructureAdapters;
@@ -56,6 +64,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.CustomData;
@@ -70,6 +79,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Integrated mirror lifecycle, native binding tool and independent MMCR dispatch coverage.
@@ -226,9 +236,19 @@ public class MirrorPatternInterfaceGameTest {
                     new AABB(helper.absolutePos(otherMirrorPos)).inflate(0.5));
             helper.assertTrue(drops.stream().noneMatch(entity -> entity.getItem().is(AEItems.PROCESSING_PATTERN.asItem())),
                     "Real block destruction never drops a copied processing pattern");
-            helper.assertTrue(drops.stream().filter(entity -> entity.getItem().is(Items.COPPER_INGOT))
-                            .mapToInt(entity -> entity.getItem().getCount()).sum() == returnedMaterial.amount(),
-                    "Real block destruction returns exactly its own copper material");
+            var carriers = drops.stream().filter(entity -> entity.getItem().is(ModBlocks.BLOCKS.get(MIRROR).get().asItem())).toList();
+            helper.assertTrue(carriers.size() == 1 && drops.stream().noneMatch(entity -> entity.getItem().is(Items.COPPER_INGOT)),
+                    "Mirror returns are carried exactly once, never also scattered as loose copper");
+            placePort(helper, otherMirrorPos, MIRROR);
+            var carrier = carriers.getFirst().getItem().copy();
+            helper.assertTrue(BlockItem.updateCustomBlockEntityTag(helper.getLevel(), null, helper.absolutePos(otherMirrorPos), carrier),
+                    "Actual mirror loot restores through native block item placement");
+            port(helper, otherMirrorPos).applyComponentsFromItemStack(carrier);
+            helper.assertTrue(port(helper, otherMirrorPos).getLogic().getReturnInv().getAvailableStacks()
+                            .get(AEItemKey.of(Items.COPPER_INGOT)) == returnedMaterial.amount()
+                            && port(helper, otherMirrorPos).getLogic().getPatternInv().isEmpty(),
+                    "Placed mirror carrier contains only its own exact material, not copied patterns");
+            carriers.forEach(ItemEntity::discard);
             helper.assertTrue(ItemStack.matches(port(helper, ordinaryPos).getLogic().getPatternInv().getStackInSlot(0),
                             extendedPattern), "Breaking the mirror preserves the real source pattern");
             assertPatterns(helper, restored, extendedPattern);
@@ -373,15 +393,10 @@ public class MirrorPatternInterfaceGameTest {
                             new KeyCounter[]{request}), "Native mirror logic dispatches the real MMCR recipe");
             helper.assertTrue(mirror.getLogic().getCraftingLockedReason() == LockCraftingMode.LOCK_UNTIL_RESULT,
                     "Accepted mirror dispatch takes its own native result lock");
-            long now = helper.getLevel().getGameTime();
-            mirror.pendingScheduler().tick(now);
-            helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
-                            && sourceController.runtimeSnapshot().crafting().recipeId() == null,
-                    "Native mirror acceptance only queues work and never starts it in the admission tick");
-            mirror.pendingScheduler().tick(now + 5L);
             helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId())
-                            && sourceController.runtimeSnapshot().crafting().recipeId() == null,
-                    "Only the mirror's linked controller starts the pattern recipe");
+                            && sourceController.runtimeSnapshot().crafting().recipeId() == null
+                            && mirror.pendingPatterns().isEmpty(),
+                    "Successful native mirror push synchronously starts only its local controller without a queue");
             helper.assertTrue(request.get(AEItemKey.of(Items.IRON_INGOT)) == 0L,
                     "Accepted dispatch consumes the requested iron");
         }).thenWaitUntil(() -> {
@@ -396,6 +411,142 @@ public class MirrorPatternInterfaceGameTest {
             ItemBusBlockEntity sourceInput = helper.getBlockEntity(sourceInputPos);
             helper.assertTrue(sourceInput.nativeItemHandler().getStackInSlot(0).is(Items.COAL),
                     "Source machine never consumes its ordinary recipe ingredient");
+        }).thenSucceed();
+    }
+
+    public void nativeCpuUsesMirrorCapacityAndTail(GameTestHelper helper) {
+        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
+        AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
+        List<MachineRequirement> requirements = List.of(
+                MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT)));
+        var fixture = new CompatPatternCpuFixture(helper, "mirror_cpu_local_capacity", MIRROR, ParallelTier.PRO,
+                requirements, List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)));
+        BlockPos sourceControllerPos = new BlockPos(8, 0, 0);
+        BlockPos sourcePos = sourceControllerPos.above();
+        BlockPos sourceParallelPos = sourceControllerPos.south();
+        placePort(helper, sourcePos, ORDINARY);
+        placePort(helper, sourceParallelPos, ParallelTier.PLUS.idSuffix());
+        helper.setBlock(sourceControllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        ResourceLocation sourceId = MMCR.id("mirror_cpu_master_capacity");
+        DynamicMachine sourceMachine = new DynamicMachine(sourceId, "block.mmcr.test_cube", new BlockArray(Map.of(
+                new BlockPos(0, 1, 0), KubeJSInterfaceHelpers.port(ORDINARY),
+                new BlockPos(0, 0, 1), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(ParallelTier.PLUS.idSuffix()).get()))),
+                MachineControllerSpec.defaultsFor(sourceId), PortRequirementSpec.none(), List.of(), Map.of(),
+                16, true, false, 1);
+        if (!MachineRegistry.containsStatic(sourceId)) MachineRegistry.register(sourceMachine);
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id("mirror_cpu_master_recipe"), sourceId, 4,
+                requirements, List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
+                List.of(), 0, 1, false, true, false, Set.of()));
+        MachineControllerBlockEntity sourceController = helper.getBlockEntity(sourceControllerPos);
+        sourceController.setMachine(sourceMachine);
+        sourceController.setStructureCheckIntervalForTesting(1);
+        fixture.storage.setStack(0, new GenericStack(iron, 10_000L));
+        fixture.ready().thenExecute(sourceController::requestImmediateStructureCheck).thenWaitUntil(() -> {
+            assertNodesReady(helper, sourcePos);
+            helper.assertTrue(sourceController.structureSnapshot().formed(), "Real master machine and 16-parallel hardware form");
+        }).thenExecute(() -> {
+            PatternInterfaceBlockEntity source = port(helper, sourcePos);
+            source.getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
+            helper.assertTrue(mirror(helper, CompatPatternCpuFixture.PORT).bindToMaster(master(helper, sourcePos)),
+                    "Mirror copies the real encoded master pattern");
+            helper.assertTrue(sourceController.runtimeSnapshot().maxParallelism() == 16L
+                            && fixture.controller.runtimeSnapshot().maxParallelism() == 256L,
+                    "Different physical parallel controllers bound the two actual machines independently");
+        }).thenWaitUntil(() -> helper.assertTrue(fixture.grid().getCraftingService().isCraftable(gold),
+                "Native grid discovers the mirror's own publication"))
+                .thenExecute(() -> fixture.begin(gold, 10_000L)).thenWaitUntil(fixture::awaitPlan).thenExecute(() -> {
+                    helper.assertTrue(fixture.plan.patternTimes().size() == 2
+                                    && fixture.plan.patternTimes().entrySet().stream().allMatch(entry ->
+                                    entry.getKey() instanceof PatternBatchDetails batch
+                                            && (batch.data().multiplier() == 256L && entry.getValue() == 39L
+                                            || batch.data().multiplier() == 16L && entry.getValue() == 1L)),
+                            "Actual native plan uses mirror-local 39x256 plus 16, not master 16 or pooled lanes");
+                    fixture.submit();
+                    helper.assertTrue(fixture.dispatch() == 1, "Native CPU starts one real mirror batch");
+                    long started = fixture.cpu().getWaitingFor(gold);
+                    helper.assertTrue(started == 256L || started == 16L, "First CPU dispatch is one exact planned batch");
+                    fixture.assertActive(started);
+                    helper.assertTrue(sourceController.runtimeSnapshot().crafting().recipeId() == null,
+                            "Copying the pattern cannot dispatch the master's controller");
+                }).thenWaitUntil(() -> {
+                    if (fixture.cpu().hasJob()) fixture.dispatch();
+                    helper.assertTrue(!fixture.cpu().hasJob() && fixture.stored(gold) == 10_000L
+                                    && fixture.stored(iron) == 0L && fixture.cpu().getWaitingFor(gold) == 0L,
+                            "Real mirror recipe outputs settle the native CPU exactly");
+                    helper.assertTrue(fixture.provider.accepted == 40L
+                                    && fixture.provider.multipliers.equals(Map.of(256L, 39L, 16L, 1L)),
+                            "Only forty standard accepted pushes execute the whole job and exact tail");
+                }).thenSucceed();
+    }
+
+    public void publicationRefreshesOnSourceUnbindAndReconnect(GameTestHelper helper) {
+        AtomicReference<IPatternDetails> oldOrder = new AtomicReference<>();
+        AtomicReference<IGrid> previousGrid = new AtomicReference<>();
+        var fixture = new CompatPatternCpuFixture(helper, "mirror_publication_refresh", MIRROR, ParallelTier.PLUS,
+                List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                        MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT))),
+                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)));
+        BlockPos sourcePos = new BlockPos(8, 1, 0);
+        placePort(helper, sourcePos, ORDINARY);
+        fixture.ready().thenWaitUntil(() -> assertNodesReady(helper, sourcePos)).thenExecute(() -> {
+            port(helper, sourcePos).getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
+            helper.assertTrue(mirror(helper, CompatPatternCpuFixture.PORT).bindToMaster(master(helper, sourcePos)), "Master binds");
+        }).thenWaitUntil(() -> helper.assertTrue(!PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty(),
+                "Mirror publishes future-plan capacity on its own grid"))
+                .thenExecute(() -> {
+                    oldOrder.set(((PatternBatchDetails) fixture.host.getLogic().getAvailablePatterns().getFirst()).scaled(16L));
+                    port(helper, sourcePos).getLogic().getPatternInv().setItemDirect(0, pattern(Items.DIAMOND));
+                })
+                .thenWaitUntil(() -> {
+                    mirror(helper, CompatPatternCpuFixture.PORT).serverTick(helper.getLevel());
+                    helper.assertTrue(PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty(),
+                            "Changing the master to an unsupported output removes the stale bound publication");
+                    assertPatterns(helper, fixture.host.getLogic(), pattern(Items.DIAMOND));
+                    KeyCounter staleInput = new KeyCounter();
+                    staleInput.add(AEItemKey.of(Items.IRON_INGOT), 16L);
+                    helper.assertFalse(fixture.host.getLogic().pushPattern(oldOrder.get(), new KeyCounter[]{staleInput}),
+                            "An old bound CPU definition cannot run against the master's replaced physical pattern");
+                    helper.assertTrue(staleInput.get(AEItemKey.of(Items.IRON_INGOT)) == 16L,
+                            "Refusing the stale binding preserves all caller-owned material");
+                }).thenExecute(() -> {
+                    port(helper, sourcePos).getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
+                }).thenWaitUntil(() -> {
+                    mirror(helper, CompatPatternCpuFixture.PORT).serverTick(helper.getLevel());
+                    helper.assertTrue(!PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty(), "Updated source republishes its own binding");
+                }).thenExecute(() -> {
+                    previousGrid.set(fixture.grid());
+                    fixture.disconnect();
+                }).thenWaitUntil(() -> helper.assertTrue(!fixture.host.getMainNode().isActive()
+                                && PatternBatchPlanning.capture(previousGrid.get()).limits().isEmpty(),
+                        "Mirror really leaves the powered grid and removes its old future-plan index"))
+                .thenExecute(fixture::reconnect).thenWaitUntil(() -> helper.assertTrue(fixture.host.getMainNode().isActive()
+                                && !PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty(),
+                        "Network reconnect refreshes future-plan publication on the new current grid"))
+                .thenExecute(() -> helper.assertTrue(mirror(helper, CompatPatternCpuFixture.PORT).unbindFromMaster(), "Mirror unbinds"))
+                .thenWaitUntil(() -> helper.assertTrue(PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty()
+                                && fixture.host.getLogic().getAvailablePatterns().isEmpty(),
+                        "Unbinding removes both actual patterns and future-plan publication")).thenSucceed();
+    }
+
+    public void unavailableMasterChunkIsNeverForceLoaded(GameTestHelper helper) {
+        BlockPos sourcePos = new BlockPos(0, 1, 0);
+        BlockPos mirrorPos = new BlockPos(2, 1, 0);
+        placePort(helper, sourcePos, ORDINARY);
+        placePort(helper, mirrorPos, MIRROR);
+        BlockPos unavailable = new BlockPos(20_000_000, 64, 20_000_000);
+        helper.startSequence().thenWaitUntil(() -> assertNodesReady(helper, sourcePos, mirrorPos)).thenExecute(() -> {
+            port(helper, sourcePos).getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
+            MirrorPatternInterfaceLogic logic = mirror(helper, mirrorPos);
+            helper.assertTrue(logic.bindToMaster(master(helper, sourcePos)), "Mirror first caches a real master pattern");
+            helper.assertFalse(helper.getLevel().hasChunkAt(unavailable), "Remote fixture chunk is genuinely not loaded");
+            helper.assertTrue(logic.bindToMaster(new MasterLocation(helper.getLevel().dimension(), unavailable, null)),
+                    "Unavailable master coordinates remain a legal deferred binding");
+            logic.serverTick(helper.getLevel());
+            helper.assertFalse(helper.getLevel().hasChunkAt(unavailable), "Binding and sync do not force-load the remote chunk");
+            helper.assertTrue(logic.hasMasterBinding(), "Unavailable chunk preserves the deferred master binding");
+            assertPatterns(helper, logic, pattern(Items.GOLD_INGOT));
         }).thenSucceed();
     }
 

@@ -1,12 +1,16 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile;
 
 import appeng.api.networking.GridHelper;
+import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.runtime.CraftingStateSnapshot;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import net.minecraft.resources.ResourceLocation;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.util.AECableType;
@@ -22,7 +26,7 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PendingPatternScheduler;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PendingPatternQueue;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
@@ -44,6 +48,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
@@ -57,6 +62,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongFunction;
 
@@ -85,14 +91,12 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final IFluidHandler fluidHandler;
     private final CapabilitySnapshot capabilitySnapshot;
     private final PendingPatternQueue pendingPatterns = new PendingPatternQueue();
-    private final PendingPatternScheduler pendingScheduler = new PendingPatternScheduler(this, pendingPatterns);
+    private long lastLegacyRefundTick = Long.MIN_VALUE;
+    private @Nullable BatchPublicationKey batchPublicationKey;
+    private boolean batchPublicationSuspended;
 
     public PendingPatternQueue pendingPatterns() {
         return pendingPatterns;
-    }
-
-    public PendingPatternScheduler pendingScheduler() {
-        return pendingScheduler;
     }
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
@@ -332,7 +336,68 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     protected void tick() {
         super.tick();
         craftingMachine.flushPendingReturns();
-        if (!pendingPatterns.isEmpty()) PendingPatternScheduler.schedule(this);
+        refreshBatchPatterns();
+        refundLegacyInputs();
+    }
+
+    /** Refreshes future planning profiles only; already captured calculations and orders are immutable. */
+    public void refreshBatchPatterns() {
+        if (!(level instanceof ServerLevel serverLevel) || !serverLevel.getServer().isSameThread()
+                || isRemoved() || batchPublicationSuspended || !PatternBatchPlanning.isBatchHost(this)) return;
+        IGrid grid = mainNode.getGrid();
+        if (grid == null) {
+            batchPublicationKey = null;
+            PatternBatchPlanning.remove(this);
+            return;
+        }
+        Set<BlockPos> links = Set.copyOf(linkedControllerPositions());
+        List<ControllerBatchVersion> controllers = new ArrayList<>();
+        for (BlockPos position : links.stream().sorted(BlockPos::compareTo).toList()) {
+            if (!level.hasChunkAt(position)
+                    || !(level.getBlockEntity(position) instanceof MachineControllerBlockEntity controller)
+                    || controller.isRemoved()) continue;
+            var snapshot = controller.currentRuntimeSnapshot();
+            ResourceLocation pool = controller.currentRecipePoolId();
+            List<ResourceLocation> eligible = snapshot.factoryControllerPresent()
+                    ? controller.recipesForMachine().stream().filter(controller::supportsPatternRecipe)
+                    .map(MachineRecipe::id).toList() : List.of();
+            controllers.add(new ControllerBatchVersion(controller, controller.lifecycleEpoch(), snapshot.structure(),
+                    snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion(),
+                    snapshot.upgradeContentRevision(), pool, RecipeRegistry.catalogForPool(pool).version(),
+                    snapshot.maxParallelism(), controller.effectiveFactoryThreadLimit(),
+                    snapshot.linkedPortPositions().contains(worldPosition), snapshot.moduleConnectionStatus(), eligible));
+        }
+        var key = new BatchPublicationKey(grid, links, List.copyOf(controllers));
+        if (key.equals(batchPublicationKey)) return;
+        batchPublicationKey = key;
+        logic.updatePatterns();
+    }
+
+    /** Static eligibility only, excluding occupancy, progress, energy and return fullness.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record ControllerBatchVersion(MachineControllerBlockEntity controller, long lifecycle,
+                                          StructureSnapshot structure, long capability, long modifier, long state,
+                                          long upgrade, @Nullable ResourceLocation pool, long catalog, long maxParallelism,
+                                          int threadLimit, boolean linked, ModuleConnectionStatus modules,
+                                          List<ResourceLocation> eligibleFactoryRecipes) {
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record BatchPublicationKey(IGrid grid, Set<BlockPos> links, List<ControllerBatchVersion> controllers) {
+    }
+
+    /** Old escrow is refunded without requiring an active grid, never used to start a recipe. */
+    public void refundLegacyInputs() {
+        if (level == null || level.isClientSide() || isRemoved() || pendingPatterns.isEmpty()) return;
+        if (lastLegacyRefundTick == level.getGameTime()) return;
+        lastLegacyRefundTick = level.getGameTime();
+        pendingPatterns.rebaseClock(level.getGameTime());
+        try {
+            pendingPatterns.refundNext(this);
+        } catch (RuntimeException exception) {
+            MMCR.LOG.warn("Native legacy pattern refund notification interrupted at {}", getBlockPos(), exception);
+        }
     }
 
     @Override
@@ -371,9 +436,12 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     protected void collectImplicitComponents(DataComponentMap.Builder components) {
         super.collectImplicitComponents(components);
-        if (!pendingPatterns.isEmpty() && level != null) {
+        if (level != null && (!pendingPatterns.isEmpty() || !logic.getReturnInv().isEmpty()
+                || craftingMachine.hasPendingReturns())) {
             CompoundTag data = new CompoundTag();
             pendingPatterns.write(data, level.registryAccess(), level.getGameTime());
+            data.put(PatternProviderLogic.NBT_RETURN_INV, logic.getReturnInv().writeToTag(level.registryAccess()));
+            craftingMachine.saveCarrierReturns(data, level.registryAccess());
             data.putString("id", BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(getType()).toString());
             components.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(data));
         }
@@ -390,8 +458,10 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void clearRemoved() {
         super.clearRemoved();
+        batchPublicationSuspended = false;
+        batchPublicationKey = null;
         GridHelper.onFirstTick(this, blockEntity -> {
-            if (blockEntity.getLevel() != null) {
+            if (blockEntity.getLevel() != null && !blockEntity.isRemoved() && !blockEntity.batchPublicationSuspended) {
                 blockEntity.mainNode.create(blockEntity.getLevel(), blockEntity.getBlockPos());
                 blockEntity.logic.updatePatterns();
             }
@@ -400,12 +470,14 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void onChunkUnloaded() {
+        stopBatchPublication();
         super.onChunkUnloaded();
         mainNode.destroy();
     }
 
     @Override
     public void setRemoved() {
+        stopBatchPublication();
         super.setRemoved();
         mainNode.destroy();
     }
@@ -414,16 +486,24 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     public void dropContents() {
         if (level == null || level.isClientSide()) return;
         List<ItemStack> drops = new ArrayList<>();
-        craftingMachine.addPendingDrops(drops);
         logic.addDrops(drops);
         for (ItemStack stack : drops) {
             Block.popResource(level, worldPosition, stack);
         }
+        // The native clear mixin retains carrier-owned returns, including when destruction reenters a batch.
         logic.clearContent();
     }
 
     private void onNetworkChanged() {
+        batchPublicationKey = null;
+        refreshBatchPatterns();
         if (!logic.getReturnInv().isEmpty() || logic.isBusy()) logic.onMainNodeStateChanged();
+    }
+
+    private void stopBatchPublication() {
+        batchPublicationSuspended = true;
+        batchPublicationKey = null;
+        if (level instanceof ServerLevel) PatternBatchPlanning.remove(this);
     }
 
 }

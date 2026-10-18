@@ -4,6 +4,10 @@
   "package": "cn.howxu.mmcr.mixin.compat.appliedenergistics2",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "AEPatternDecoderMixin",
+    "CraftingCalculationMixin",
+    "CraftingServiceMixin",
+    "CraftingSimulationStateMixin",
     "ConfigInventoryAccessor",
     "GenericStackInvAccessor",
     "InterfaceLogicMixin",

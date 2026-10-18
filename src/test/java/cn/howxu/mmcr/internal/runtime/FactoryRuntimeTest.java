@@ -92,6 +92,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.flag.FeatureFlags;
@@ -127,6 +128,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -165,6 +168,43 @@ class FactoryRuntimeTest {
         } finally {
             if (serverThreadScope != null) serverThreadScope.close();
         }
+    }
+
+    @Test
+    void exact_preparations_and_reservations_share_recipe_quota_without_reducing_static_support() {
+        AtomicReference<FactoryRuntime> owner = new AtomicReference<>();
+        AtomicInteger hooks = new AtomicInteger();
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        var original = controller.currentStructureSnapshot().configuredMachine();
+        var recipe = MachineRecipe.fromCanonical(MMCR.id("exact_preparing_quota"), MMCR.id("test_cube"), 1,
+                List.of(), List.of(), List.of(), 0, 1, false, false, false, Set.of());
+        RecipeRegistry.registerStatic(recipe);
+        controller.setMachine(new Machine() {
+            @Override public ResourceLocation registryName() { return original.registryName(); }
+            @Override public BlockArray pattern() { return original.pattern(); }
+            @Override public MachineControllerSpec controller() { return original.controller(); }
+            @Override public RecipeBehavior behavior() {
+                return RecipeBehavior.builder().beforeStart(context -> {
+                    hooks.incrementAndGet();
+                    assertThat(owner.get().reserveExactPatternStart(recipe, 1L, List.of(), null)).isNull();
+                }).build();
+            }
+        });
+        var factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        factory.setLaneLimit(4);
+        owner.set(factory);
+        assertThat(factory.supportsPatternRecipe(recipe)).isTrue();
+        var first = factory.reserveExactPatternStart(recipe, 1L, List.of(), null);
+        assertThat(first).isNotNull();
+        assertThat(hooks).hasValue(1);
+        assertThat(factory.supportsPatternRecipe(recipe)).isTrue();
+        assertThat(factory.reserveExactPatternStart(recipe, 1L, List.of(), null)).isNull();
+        factory.releasePatternStart(first);
+        var retried = factory.reserveExactPatternStart(recipe, 1L, List.of(), null);
+        assertThat(retried).isNotNull();
+        assertThat(hooks).hasValue(2);
+        factory.releasePatternStart(retried);
     }
 
     @Test
@@ -2742,8 +2782,9 @@ class FactoryRuntimeTest {
         assertThat(thread.runtime().active()).isFalse();
 
         CompoundTag output = new CompoundTag();
-        thread.save(output, EMPTY_LOOKUP);
-        FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, EMPTY_LOOKUP,
+        HolderLookup.Provider lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        thread.save(output, lookup);
+        FactoryRecipeThread restored = FactoryRecipeThread.load(output, controller, lookup,
                 List.of(candidate));
         setItem(input.itemHandler(), 0, new ItemStack(Items.IRON_INGOT, 1));
         var snapshot = controller.runtimeSnapshot();

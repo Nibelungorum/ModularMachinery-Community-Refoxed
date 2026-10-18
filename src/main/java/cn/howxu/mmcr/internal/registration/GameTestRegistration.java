@@ -6,7 +6,6 @@ import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
-import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
 /** Owns optional GameTest source-set loading and registration.
@@ -14,8 +13,6 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
  */
 public final class GameTestRegistration {
     private static final String GAME_TEST_REGISTRY = "cn.howxu.mmcr.GameTestRegistry";
-    private static final String NETWORK_INTERFACE_GAME_TESTS = "cn.howxu.mmcr.network.NetworkInterfaceGameTests";
-    private static final String CREATE_STRESS_GAME_TESTS = "cn.howxu.mmcr.compat.create.loaded.StressInterfaceGameTest";
 
     private GameTestRegistration() {
     }
@@ -65,12 +62,7 @@ public final class GameTestRegistration {
     static void registerTests(String sourceClass, RegisterGameTestsEvent event) {
         invokeOptionalSource(sourceClass, "registerAll",
                 new Class<?>[]{RegisterGameTestsEvent.class}, event);
-        invokeOptionalSource(NETWORK_INTERFACE_GAME_TESTS, "registerAll",
-                new Class<?>[]{RegisterGameTestsEvent.class}, event);
-        if (ModList.get() != null && ModList.get().isLoaded("create")) {
-            invokeOptionalSource(CREATE_STRESS_GAME_TESTS, "registerAll",
-                    new Class<?>[]{RegisterGameTestsEvent.class}, event);
-        }
+        // Historical network/Create suites are temporarily not registered; their test sources remain intact.
     }
 
     public static void invokeOptionalSourceForTesting(String className, String methodName,

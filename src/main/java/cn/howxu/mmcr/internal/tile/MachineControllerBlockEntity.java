@@ -265,6 +265,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private long lastResourceAvailabilityTick = Long.MIN_VALUE;
     private @Nullable CompoundTag pendingFactoryRuntimeInput;
     private @Nullable CompoundTag pendingCraftingRuntimeInput;
+    private @Nullable CompoundTag pendingNormalPatternMemory;
     private @Nullable HolderLookup.Provider pendingRuntimeRegistries;
     private boolean pendingRuntimeRequiresTopology;
     private boolean runtimeTopologyReady;
@@ -460,6 +461,72 @@ public class MachineControllerBlockEntity extends BlockEntity {
     /** Current candidate limits and duration; never invokes beforeStart or reserves capacity. */
     public @Nullable EffectiveRecipe effectivePatternRecipe(MachineRecipe recipe) {
         return runtime.craftingRuntime().effectivePatternRecipe(recipe);
+    }
+
+    /** Read-only eligibility for one lane, independent of temporary occupancy. */
+    public boolean supportsPatternRecipe(MachineRecipe recipe) {
+        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        if (recipe == null || !Objects.equals(currentRecipePoolId(), recipe.recipePoolId())
+                || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
+                || !snapshot.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())) return false;
+        if (AsyncRequirementPlanner.capturedRequirementFailure(snapshot, recipe) != null) return false;
+        return !hasFactoryController() || runtime.factoryRuntime().supportsPatternRecipe(this, recipe,
+                effectiveFactoryThreadLimit());
+    }
+
+    /** A complete external request occupies exactly one actual runtime/lane. */
+    public PatternStartReservation reserveExactPatternStart(BlockPos sourcePort, ResourceLocation recipeId,
+                                                             List<MachineOutput> unitRecipeOutputs,
+                                                             long recipeParallelism,
+                                                             List<MachineCapability> requestCapabilities) {
+        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        if (sourcePort == null || recipeId == null || unitRecipeOutputs == null || requestCapabilities == null
+                || recipeParallelism <= 0L || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
+                || redstonePaused || isRemoved() || !snapshot.linkedPortPositions().contains(sourcePort)) {
+            return PatternStartReservation.unavailable();
+        }
+        FactoryRuntime factory = runtime.factoryRuntime();
+        if (hasFactoryController()) {
+            factoryScheduler().setThreadLimit(effectiveFactoryThreadLimit());
+            Machine machine = snapshot.structure().machine() == null
+                    ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
+            factory.syncCoreLanesIfNeeded(this, machine, recipesForMachine());
+        }
+        MachineRecipe recipe = hasFactoryController() ? factory.cachedPatternRecipe(recipeId)
+                : normalRecipeThread.cachedPatternRecipe(recipeId);
+        PatternStartReservation.RecipeSelection selection = recipe == null ? PatternStartReservation.RecipeSelection.CATALOG
+                : PatternStartReservation.RecipeSelection.LAST_RECIPE;
+        if (recipe == null) recipe = RecipeRegistry.catalogForPool(currentRecipePoolId()).recipes().stream()
+                .filter(candidate -> recipeId.equals(candidate.id())).findFirst().orElse(null);
+        if (recipe == null || !supportsPatternRecipe(recipe)) return PatternStartReservation.unavailable();
+        EffectiveRecipe effective = effectivePatternRecipe(recipe);
+        if (effective == null || recipeParallelism > effective.parallelismLimit()
+                || !CraftingRuntime.samePromisedOutputs(unitRecipeOutputs, effective.outputs(), recipeParallelism)) {
+            return PatternStartReservation.unavailable();
+        }
+        if (hasFactoryController()) {
+            FactoryRuntime.PatternLane lane = factory.reserveExactPatternStart(recipe, recipeParallelism,
+                    requestCapabilities, sourcePort);
+            if (lane == null) return PatternStartReservation.unavailable();
+            return PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(), lane.preparedStart(),
+                    () -> factory.releasePatternStart(lane)).withRecipeSelection(selection)
+                    .guard(() -> factory.patternStartCurrent(lane))
+                    .afterCommit(() -> factory.rememberPatternStartedRecipe(lane));
+        }
+        if (normalRecipeThread.isStartPending() || normalRecipeThread.hasPendingAsyncSearch()) {
+            return PatternStartReservation.unavailable();
+        }
+        CraftingRuntime crafting = runtime.craftingRuntime();
+        CraftingRuntime.PreparedStart prepared = crafting.prepareExactPatternStart(recipe, recipeParallelism,
+                requestCapabilities, sourcePort);
+        if (prepared == null) return PatternStartReservation.unavailable();
+        if (!crafting.reservePatternStart()) {
+            crafting.releasePatternStart(prepared);
+            return PatternStartReservation.unavailable();
+        }
+        return PatternStartReservation.reserved(recipe, "", crafting, prepared,
+                () -> crafting.releasePatternStart(prepared)).withRecipeSelection(selection)
+                .guard(() -> supportsPatternRecipe(prepared.recipe().source()));
     }
 
     /** Admits as many pattern starts as this controller can reserve for a single external batch. */
@@ -689,17 +756,29 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     void ensureFactoryRuntimeLoaded() {
         if (loadingRuntime) return;
-        if (pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null) return;
+        if (pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null && pendingNormalPatternMemory == null) return;
         StructureSnapshot structure = runtime.currentStructureSnapshot();
         if (structure.machine() == null && structure.configuredMachine() == null) return;
-        if (pendingRuntimeRequiresTopology && (!runtimeTopologyReady || !structure.formed()
-                || !structure.structureAreaLoaded() || !isStructureAreaLoaded(structure))) return;
+        boolean topologyReady = runtimeTopologyReady && structure.formed()
+                && structure.structureAreaLoaded() && isStructureAreaLoaded(structure);
+        if (pendingRuntimeRequiresTopology && !topologyReady) return;
+        // Remembered recipe NBT alone is not loadable work before discovery completes.
+        if (!topologyReady && pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null) return;
         HolderLookup.Provider registries = Objects.requireNonNull(pendingRuntimeRegistries,
                 "pending runtime registries");
         loadingRuntime = true;
         try {
+            if (pendingNormalPatternMemory != null && topologyReady) {
+                normalRecipeThread.loadPatternMemory(pendingNormalPatternMemory, registries);
+                pendingNormalPatternMemory = null;
+            }
             if (pendingFactoryRuntimeInput != null) {
-                runtime.factoryRuntime().load(pendingFactoryRuntimeInput, this, registries);
+                if (!runtimeTopologyReady || hasFactoryControllerCurrent()) {
+                    runtime.factoryRuntime().load(pendingFactoryRuntimeInput, this, registries);
+                } else {
+                    // Deferred native-prefetch restoration first sees the final hardware here.
+                    runtime.factoryRuntime().clear();
+                }
                 pendingFactoryRuntimeInput = null;
                 restoringFactoryRuntime = true;
             }
@@ -711,12 +790,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 runtime.craftingRuntime().rebindCurrentVersions();
                 runtime.factoryRuntime().rebindCurrentVersions();
             }
-            pendingRuntimeRegistries = null;
+            if (pendingNormalPatternMemory == null) pendingRuntimeRegistries = null;
             pendingRuntimeRequiresTopology = false;
         } finally {
             loadingRuntime = false;
         }
-        runtime.publishSnapshot();
     }
 
     /** True only after discovery and both normal/factory restoration decisions have completed. */
@@ -724,7 +802,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ensureFactoryRuntimeLoaded();
         StructureSnapshot structure = runtime.currentStructureSnapshot();
         return runtimeTopologyReady && !loadingRuntime
-                && pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null
+                && pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null && pendingNormalPatternMemory == null
                 && structure.formed() && structure.structureAreaLoaded() && isStructureAreaLoaded(structure);
     }
 
@@ -3171,8 +3249,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             boolean componentsChanged = componentsNeedRefresh(rotatedPattern, compiledPattern, facing);
             boolean modifiersChanged = !previousSnapshot.foundModifiers().equals(foundModifiers);
             boolean capabilityTopologyChanged = previousCapabilityVersion != currentRuntimeSnapshot().capabilityVersion();
+            // Initial component discovery must rebind, not discard, restored paid lanes.
             if (((previousMachine != null && previousMachine != matchedMachine) || structureChanged || componentsChanged)
-                    && (!preserveRestoredFactory || componentsChanged)) {
+                    && !preserveRestoredFactory) {
                 stopFactoryController();
             }
             publishStructureWork(state -> state.withDirty(false).withComponentRefreshRequired(false)
@@ -3192,7 +3271,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
             if (preserveRestoredFactory) {
                 runtime.craftingRuntime().rebindCurrentVersions();
-                runtime.factoryRuntime().rebindCurrentVersions();
+                if (componentsChanged && !hasFactoryControllerCurrent()) stopFactoryController();
+                else runtime.factoryRuntime().rebindCurrentVersions();
             }
             // All ports, modifiers and factory capacity are now discovered. Publications above
             // must not consume pending NBT against an intermediate topology.
@@ -5001,6 +5081,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (pendingCraftingRuntimeInput != null) craftingRuntimeOutput = pendingCraftingRuntimeInput.copy();
         else runtime.craftingRuntime().save(craftingRuntimeOutput, registries);
         output.put("crafting_runtime", craftingRuntimeOutput);
+        CompoundTag patternMemory = new CompoundTag();
+        if (pendingNormalPatternMemory != null) patternMemory = pendingNormalPatternMemory.copy();
+        else normalRecipeThread.savePatternMemory(patternMemory, registries);
+        output.put("normal_pattern_memory", patternMemory);
         if (selectedRecipePoolId != null) output.putString("selected_recipe_pool", selectedRecipePoolId.toString());
         if (pendingFactoryRuntimeInput != null || hasFactoryController() || runtime.factoryRuntime().laneCount() > 0) {
             CompoundTag factoryRuntimeOutput = new CompoundTag();
@@ -5026,6 +5110,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.requestStructureCheck();
             redstonePaused = false;
             selectedRecipePoolId = ResourceLocation.tryParse(input.getString("selected_recipe_pool"));
+            normalRecipeThread.loadPatternMemory(new CompoundTag(), registries);
+            pendingNormalPatternMemory = input.getCompound("normal_pattern_memory").copy();
             runtime.craftingRuntime().invalidate();
             Map<ResourceLocation, MachineLevel> restoredLevels = new LinkedHashMap<>();
             ListTag foundLevelInputs = input.getList("found_levels", Tag.TAG_STRING);

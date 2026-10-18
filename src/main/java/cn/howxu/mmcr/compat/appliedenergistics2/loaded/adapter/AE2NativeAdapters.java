@@ -75,6 +75,11 @@ public final class AE2NativeAdapters {
         return createRequestInventory(holders, null);
     }
 
+    /** Once a block carrier snapshots ownership, an interrupted native plan must not debit that snapshot again. */
+    public static void sealRequestInventory(GenericStackInv inventory) {
+        ((UnboundedRequestInventory) inventory).sealed = true;
+    }
+
     /** A proposal's input quota backed by the batch inventory, not another copy of its materials. */
     public static GenericStackInv requestInventoryView(GenericStackInv inventory, long parallelism, long batchSize) {
         return new RequestInventoryView(inventory, parallelism, batchSize);
@@ -232,6 +237,8 @@ public final class AE2NativeAdapters {
     }
 
     private static final class UnboundedRequestInventory extends GenericStackInv {
+        private boolean sealed;
+
         private UnboundedRequestInventory(int size) {
             super(null, Mode.STORAGE, size);
         }
@@ -239,6 +246,11 @@ public final class AE2NativeAdapters {
         @Override
         public long getMaxAmount(AEKey key) {
             return Long.MAX_VALUE;
+        }
+
+        @Override
+        public long extract(int slot, AEKey key, long amount, Actionable mode) {
+            return sealed ? 0L : super.extract(slot, key, amount, mode);
         }
     }
 

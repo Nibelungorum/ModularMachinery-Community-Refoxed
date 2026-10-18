@@ -177,11 +177,6 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     }
 
     @Override
-    public void tickPendingPatterns(ServerLevel level) {
-        PendingPatternScheduler.completeLevelTick(level);
-    }
-
-    @Override
     public void registerCapabilities(RegisterCapabilitiesEvent event) {
         BlockEntityType<?> inputInterfaceType = ModBlockEntities.BES.get(INPUT_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, inputInterfaceType,

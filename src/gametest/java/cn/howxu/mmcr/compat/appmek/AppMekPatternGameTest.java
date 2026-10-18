@@ -9,504 +9,554 @@ import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.BlockArray;
-import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.DynamicMachine;
-import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.PortRequirementSpec;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
-import cn.howxu.mmcr.compat.appmek.AppMekBridge;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternInterfaceCraftingMachine;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
-import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
-import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.storage.LongSlotStorage;
-import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import me.ramidzkh.mekae2.ae2.MekanismKey;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.GlobalPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestAssertException;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
-import mekanism.api.chemical.attribute.ChemicalAttributes;
-import mekanism.api.radiation.IRadiationManager;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.lang.reflect.Field;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-/**
- * Processing-pattern chemical routing, exact output matching and material ownership.
- *
+/** Native chemical CPU planning, synchronous execution and exact material ownership.
  * @author howxu <dev@howxu.cn>
  */
 public final class AppMekPatternGameTest {
+    /** Optional keys for the common three-host real loot/placement lifecycle matrix. */
+    public static List<GenericStack> carrierChemicals() {
+        return List.of(new GenericStack(chemical("oxygen"), 7_000_000_000L),
+                new GenericStack(chemical("hydrogen"), 8_000_000_000L),
+                new GenericStack(chemical("chlorine"), 9_000_000_000L));
+    }
     public void mixedPatternReturnsProductsAndExcessInputs(GameTestHelper helper) {
-        mixedPattern(helper, "ae2_me_pattern_interface", 0);
+        nativeCpu(helper, "appmek_mixed_cpu", "ae2_me_pattern_interface", 0, true, false, false);
     }
 
     public void extendedPatternLastSlotProcessesChemicals(GameTestHelper helper) {
-        mixedPattern(helper, "eae_me_extended_pattern_interface", 35);
+        nativeCpu(helper, "appmek_extended_cpu", "eae_me_extended_pattern_interface", 35, true, false, false);
+    }
+
+    public void chemicalCpuPlanSettles(GameTestHelper helper) {
+        nativeCpu(helper, "appmek_pure_cpu", "ae2_me_pattern_interface", 0, false, false, false);
+    }
+
+    public void chemicalCpuCancellationPreservesRefusedInputs(GameTestHelper helper) {
+        nativeCpu(helper, "appmek_cancel_cpu", "ae2_me_pattern_interface", 0, false, true, false);
+    }
+
+    public void mixedCpuCancellationPreservesRefusedInputs(GameTestHelper helper) {
+        nativeCpu(helper, "appmek_mixed_cancel_cpu", "ae2_me_pattern_interface", 0, true, true, false);
+    }
+
+    public void chemicalCpuPreservesLongAmounts(GameTestHelper helper) {
+        nativeCpu(helper, "appmek_long_cpu", "ae2_me_pattern_interface", 0, false, false, true);
+    }
+
+    private void nativeCpu(GameTestHelper helper, String name, String port, int slot,
+                           boolean mixed, boolean cancel, boolean large) {
+        MekanismKey oxygen = chemical("oxygen");
+        MekanismKey hydrogen = chemical("hydrogen");
+        long crafts = large ? Integer.MAX_VALUE : 19L;
+        long unit = large ? 2L : 500L;
+        List<GenericStack> inputs = new ArrayList<>(List.of(new GenericStack(oxygen, unit)));
+        List<GenericStack> products = new ArrayList<>(List.of(new GenericStack(hydrogen, unit)));
+        List<MachineRequirement> requirements = new ArrayList<>(List.of(
+                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(oxygen.getId(), unit)),
+                LoadedChemicalRequirement.output(hydrogen.getId(), unit, 1F)));
+        List<MachineOutput> outputs = new ArrayList<>(List.of(new LoadedChemicalOutput(hydrogen.getId(), unit, 1F)));
+        if (mixed) {
+            inputs.add(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L));
+            inputs.add(new GenericStack(AEFluidKey.of(Fluids.WATER), 250L));
+            products.add(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L));
+            products.add(new GenericStack(AEFluidKey.of(Fluids.LAVA), 250L));
+            requirements.add(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)));
+            requirements.add(MachineRequirement.fromInput(new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 250)));
+            requirements.add(MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT)));
+            requirements.add(MachineRequirement.fluidOutput(new FluidStack(Fluids.LAVA, 250)));
+            outputs.add(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F));
+            outputs.add(new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 250), 1F));
+        }
+        var fixture = new CompatPatternCpuFixture(helper, name, port, large ? ParallelTier.ULTIMATE : ParallelTier.PLUS,
+                requirements, outputs);
+        for (int index = 0; index < inputs.size(); index++) {
+            GenericStack input = inputs.get(index);
+            fixture.storage.setStack(index, new GenericStack(input.what(), Math.multiplyExact(input.amount(), crafts)));
+        }
+        fixture.host.getLogic().getPatternInv().setItemDirect(slot, PatternDetailsHelper.encodeProcessingPattern(inputs, products));
+        fixture.ready().thenWaitUntil(() -> helper.assertTrue(fixture.grid().getCraftingService().isCraftable(hydrogen),
+                        "Grid discovers the real chemical processing pattern"))
+                .thenExecute(() -> fixture.begin(hydrogen, Math.multiplyExact(unit, crafts)))
+                .thenWaitUntil(fixture::awaitPlan).thenExecute(() -> {
+                    for (GenericStack input : inputs) helper.assertTrue(fixture.plan.usedItems().get(input.what()) == input.amount() * crafts,
+                            "Calculated native plan retains exact item/fluid/chemical input identity and long totals");
+                    long full = large ? crafts : 16L;
+                    helper.assertTrue(fixture.plan.patternTimes().entrySet().stream().anyMatch(entry ->
+                                    entry.getKey() instanceof PatternBatchDetails batch && batch.data().multiplier() == full),
+                            "Actual native plan contains a locally bounded chemical batch, not a bare queue task");
+                    fixture.submit();
+                    // All return slots and network insertion of this blocker are genuinely unavailable.
+                    AEItemKey blocker = AEItemKey.of(Items.IRON_BLOCK);
+                    fixture.storage.blocked.add(blocker);
+                    fillReturns(fixture.host.getLogic().getReturnInv());
+                    helper.assertTrue(fixture.dispatch() == 0 && fixture.provider.accepted == 0,
+                            "Complete return-capacity refusal accepts no standard CPU push");
+                    for (GenericStack input : inputs) helper.assertTrue(fixture.cpu().getStored(input.what()) == input.amount() * crafts,
+                            "Native CPU retains every resource after synchronous refusal");
+                    for (GenericStack product : products) helper.assertTrue(fixture.cpu().getWaitingFor(product.what()) == 0L
+                                    && fixture.cpu().getPendingOutputs(product.what()) == product.amount() * crafts,
+                            "Refusal preserves pending native work and adds no waiting outputs");
+                    helper.assertTrue(fixture.host.pendingPatterns().isEmpty()
+                                    && fixture.controller.runtimeSnapshot().crafting().recipeId() == null,
+                            "Refusal leaves no private queue and starts no machine lane");
+                    fixture.host.getLogic().getReturnInv().clear();
+                    if (cancel) {
+                        fixture.cpu().cancel();
+                    } else {
+                        helper.assertTrue(fixture.dispatch() == 1, "One native standard push starts the exact chemical batch");
+                        long started = fixture.cpu().getWaitingFor(hydrogen) / unit;
+                        helper.assertTrue(started == full || !large && started == 3L, "Native task iteration may select either full batch or tail first");
+                        fixture.assertActive(started);
+                        for (GenericStack product : products) helper.assertTrue(fixture.cpu().getWaitingFor(product.what()) == product.amount() * started,
+                                "Native CPU records the real scaled item/fluid/chemical promise");
+                    }
+                }).thenWaitUntil(() -> {
+                    if (!cancel && fixture.cpu().hasJob()) fixture.dispatch();
+                    helper.assertTrue(!fixture.cpu().hasJob(), "Native CPU settles or cancels the actual job");
+                    for (GenericStack input : inputs) helper.assertTrue(fixture.stored(input.what()) == (cancel ? input.amount() * crafts : 0L)
+                                    && fixture.cpu().getStored(input.what()) == 0L,
+                            "Only native cancellation returns refused material; settled work consumes it exactly once");
+                    for (GenericStack product : products) helper.assertTrue(fixture.stored(product.what()) == (cancel ? 0L : product.amount() * crafts)
+                                    && fixture.cpu().getWaitingFor(product.what()) == 0L,
+                            "Actual machine production settles every exact resource promise through native CPU injection");
+                    helper.assertTrue(fixture.provider.accepted == (cancel ? 0L : large ? 1L : 2L),
+                            "No duplicate accepted pushes and no hidden queue dispatches");
+                    if (!cancel && !large) helper.assertTrue(fixture.provider.multipliers.equals(Map.of(16L, 1L, 3L, 1L)),
+                            "Chemical CPU executes the bounded batch and exact tail separately");
+                    if (!cancel && large) helper.assertTrue(fixture.provider.multipliers.equals(Map.of((long) Integer.MAX_VALUE, 1L)),
+                            "One native CPU push pays and settles a chemical quantity above int without narrowing");
+                }).thenSucceed();
     }
 
     public void radioactivePatternReturnsProductsThroughWasteBarrelStorageBus(GameTestHelper helper) {
-        PatternInterfaceBlockEntity host = chemicalMachine(helper, "appmek_radioactive_pattern", false, true);
-        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
-        MekanismKey waste = MekanismKey.of(AppMekGameTestFixtures.chemical("nuclear_waste", 1L));
-        MekanismKey polonium = MekanismKey.of(AppMekGameTestFixtures.chemical("polonium", 1L));
-        var network = AppMekGameTestFixtures.createWasteBarrelNetwork(helper, new BlockPos(0, 1, 0));
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(),
-                        "Radioactive chemical pattern controller forms"))
-                .thenExecute(() -> {
-                    IPatternDetails pattern = installChemicalPattern(host, waste, polonium);
-                    KeyCounter[] holders = holders(pattern);
-                    helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, Direction.NORTH),
-                            "Pattern accepts radioactive input holders and radioactive output");
-                    for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(), "Accepted radioactive holders transfer ownership once");
-                    host.pendingScheduler().tick(helper.getLevel().getGameTime() + 5L);
-                }).thenWaitUntil(() -> helper.assertTrue(amount(host.getLogic().getReturnInv(), polonium) == 600L
-                                && amount(host.getLogic().getReturnInv(), waste) == 500L,
-                        "Pattern preserves radioactive output and returns excess radioactive input"))
+        var fixture = chemicalFixture(helper, "appmek_radioactive_pattern", "nuclear_waste", "polonium");
+        MekanismKey waste = chemical("nuclear_waste");
+        MekanismKey polonium = chemical("polonium");
+        fixture.storage.blocked.add(waste);
+        fixture.storage.blocked.add(polonium);
+        var network = AppMekGameTestFixtures.createWasteBarrelNetwork(helper, CompatPatternCpuFixture.PORT);
+        fixture.ready().thenExecute(() -> {
+            IPatternDetails pattern = installChemicalPattern(fixture.host, waste, polonium);
+            KeyCounter[] request = holders(pattern);
+            helper.assertTrue(fixture.host.craftingMachine().pushPattern(pattern, request, Direction.NORTH),
+                    "Radioactive input synchronously starts real MMCR work");
+            fixture.assertActive(1L);
+            for (KeyCounter holder : request) helper.assertTrue(holder.isEmpty(), "Accepted radioactive request hands off once");
+        }).thenWaitUntil(() -> helper.assertTrue(amount(fixture.host.getLogic().getReturnInv(), polonium) == 600L
+                        && amount(fixture.host.getLogic().getReturnInv(), waste) == 500L,
+                "Real recipe produces radioactive output and preserves excess input"))
                 .thenWaitUntil(() -> network.connectWhenReady(helper))
                 .thenWaitUntil(() -> helper.assertTrue(network.barrel().getChemicalTank().getStored() == 601L
-                                && amount(host.getLogic().getReturnInv(), polonium) == 0L,
-                        "Native ME storage bus transfers radioactive pattern output into the waste barrel"))
-                .thenExecute(() -> helper.assertTrue(amount(host.getLogic().getReturnInv(), waste) == 500L,
-                        "The polonium barrel does not consume unmatched nuclear waste"))
-                .thenSucceed();
-    }
-
-    private void mixedPattern(GameTestHelper helper, String portId, int patternSlot) {
-        BlockPos controllerPos = new BlockPos(1, 1, 1);
-        BlockPos portPos = controllerPos.above();
-        BlockPos ordinaryPos = controllerPos.below();
-        ResourceLocation machineId = MMCR.id("appmek_mixed_" + patternSlot);
-        helper.setBlock(portPos, ModBlocks.BLOCKS.get(portId).get().defaultBlockState());
-        helper.setBlock(ordinaryPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
-                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
-        DynamicMachine machine = new DynamicMachine(machineId, "AppMek pattern test", new BlockArray(Map.of(
-                new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(portId).get()),
-                new BlockPos(0, -1, 0), new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()))));
-        if (!MachineRegistry.containsStatic(machineId)) MachineRegistry.register(machine);
-        MekanismKey oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical("oxygen", 1L));
-        MekanismKey hydrogen = MekanismKey.of(AppMekGameTestFixtures.chemical("hydrogen", 1L));
-        List<MachineRequirement> requirements = new ArrayList<>(List.of(
-                MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
-                MachineRequirement.fromInput(new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 1_000)),
-                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(oxygen.getId(), 500L))));
-        List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F),
-                new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 250), 1F),
-                new LoadedChemicalOutput(hydrogen.getId(), 600L, 1F));
-        requirements.add(MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT)));
-        requirements.add(MachineRequirement.fluidOutput(new FluidStack(Fluids.LAVA, 250)));
-        requirements.add(LoadedChemicalRequirement.output(hydrogen.getId(), 600L, 1F));
-        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id("appmek_mixed_recipe_" + patternSlot),
-                machineId, 2, requirements, outputs, List.of(), 0, 1, false, false, false, Set.of()));
-        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos);
-        controller.setMachine(machine);
-        controller.setStructureCheckIntervalForTesting(1);
-        controller.requestImmediateStructureCheck();
-        ItemBusBlockEntity ordinary = helper.getBlockEntity(ordinaryPos);
-        ordinary.nativeItemHandler().insertItem(0, new ItemStack(Items.COAL), false);
-        PatternInterfaceBlockEntity host = helper.getBlockEntity(portPos);
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(),
-                        "Pattern controller forms before a request is submitted"))
-                .thenExecute(() -> {
-                    ItemStack encoded = PatternDetailsHelper.encodeProcessingPattern(List.of(
-                            new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L),
-                            new GenericStack(AEFluidKey.of(Fluids.WATER), 1_000L), new GenericStack(oxygen, 1_000L)),
-                            List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L),
-                                    new GenericStack(AEFluidKey.of(Fluids.LAVA), 250L), new GenericStack(hydrogen, 600L)));
-                    host.getLogic().getPatternInv().setItemDirect(patternSlot, encoded);
-                    IPatternDetails pattern = host.getLogic().getAvailablePatterns().getFirst();
-                    KeyCounter[] holders = holders(pattern);
-                    helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, Direction.NORTH),
-                            "MMCR accepts a mixed item, fluid and chemical processing pattern");
-                    for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(), "Accepted pattern transfers holder ownership once");
-                    host.pendingScheduler().tick(helper.getLevel().getGameTime() + 5L);
-                }).thenWaitUntil(() -> {
-                    GenericStackInv returns = host.getLogic().getReturnInv();
-                    helper.assertTrue(amount(returns, AEItemKey.of(Items.GOLD_INGOT)) == 1L,
-                            "Item product is delivered to pattern return inventory");
-                    helper.assertTrue(amount(returns, AEFluidKey.of(Fluids.LAVA)) == 250L,
-                            "Fluid product is delivered to pattern return inventory");
-                    helper.assertTrue(amount(returns, hydrogen) == 600L && amount(returns, oxygen) == 500L,
-                            "Chemical product and excess chemical input return without loss or duplication");
-                    helper.assertTrue(ordinary.nativeItemHandler().getStackInSlot(0).isEmpty(), "Ordinary remaining recipe input was consumed");
-                }).thenSucceed();
+                                && amount(fixture.host.getLogic().getReturnInv(), polonium) == 0L,
+                        "Real storage bus injects radioactive output into its waste barrel"))
+                .thenExecute(() -> helper.assertTrue(amount(fixture.host.getLogic().getReturnInv(), waste) == 500L,
+                        "The output barrel never accepts the different input chemical")).thenSucceed();
     }
 
     public void rejectedPatternPreservesInputHolders(GameTestHelper helper) {
-        PatternInterfaceBlockEntity host = chemicalMachine(helper, "appmek_rejected_pattern", false);
-        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
-        MekanismKey oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical("oxygen", 1L));
-        MekanismKey hydrogen = MekanismKey.of(AppMekGameTestFixtures.chemical("hydrogen", 1L));
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(), "Chemical pattern controller forms"))
-                .thenExecute(() -> {
-                    GenericStackInv returns = host.getLogic().getReturnInv();
-                    for (int slot = 0; slot < returns.size(); slot++) {
-                        returns.setStack(slot, new GenericStack(AEItemKey.of(Items.IRON_BLOCK), 64L));
-                    }
-                    IPatternDetails pattern = installChemicalPattern(host, oxygen, hydrogen);
-                    KeyCounter[] malformed = holders(pattern);
-                    malformed[0].add(oxygen, 1L);
-                    helper.assertFalse(host.craftingMachine().pushPattern(pattern, malformed, Direction.NORTH),
-                            "A nonstandard per-copy amount is rejected");
-                    helper.assertTrue(malformed[0].get(oxygen) == 1_001L, "Rejected request retains its input holders");
-                    KeyCounter[] holders = holders(pattern);
-                    helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, Direction.NORTH),
-                            "Full returns can still admit one standard request into the queue");
-                    for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(), "Queued request takes holder ownership");
-                    long now = helper.getLevel().getGameTime();
-                    host.pendingScheduler().tick(now + 5L);
-                    helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null,
-                            "Full returns block execution rather than losing the accepted request");
-                    helper.assertTrue(queuedAmount(host, oxygen) == 1_000L, "Blocked queue retains all accepted chemicals");
-                    returns.clear();
-                    host.pendingScheduler().tick(now + 6L);
-                    helper.assertTrue(host.pendingPatterns().isEmpty()
-                                    && controller.runtimeSnapshot().crafting().recipeId() != null,
-                            "Freeing return capacity starts the retained request without another provider payment");
-                }).thenSucceed();
+        var fixture = chemicalFixture(helper, "appmek_rejected_pattern", "oxygen", "hydrogen");
+        MekanismKey oxygen = chemical("oxygen");
+        fixture.ready().thenExecute(() -> {
+            IPatternDetails pattern = installChemicalPattern(fixture.host, oxygen, chemical("hydrogen"));
+            KeyCounter[] malformed = holders(pattern);
+            malformed[0].add(oxygen, 1L);
+            helper.assertFalse(fixture.host.craftingMachine().pushPattern(pattern, malformed, Direction.NORTH),
+                    "Nonstandard per-copy quantity is refused before ownership transfer");
+            helper.assertTrue(malformed[0].get(oxygen) == 1_001L, "Malformed caller retains every chemical unit");
+            fillReturns(fixture.host.getLogic().getReturnInv());
+            KeyCounter[] request = holders(pattern);
+            helper.assertFalse(fixture.host.craftingMachine().pushPattern(pattern, request, Direction.NORTH),
+                    "Full return capacity synchronously refuses rather than privately queueing");
+            helper.assertTrue(request[0].get(oxygen) == 1_000L && fixture.host.pendingPatterns().isEmpty(),
+                    "Refused request remains wholly caller-owned");
+            fixture.host.getLogic().getReturnInv().clear();
+            helper.assertTrue(fixture.host.craftingMachine().pushPattern(pattern, request, Direction.NORTH),
+                    "Only an explicit new standard push starts work once capacity returns");
+            fixture.assertActive(1L);
+        }).thenSucceed();
     }
 
     public void batchPatternAccountsForChemicalInputsAcrossLanes(GameTestHelper helper) {
-        PatternInterfaceBlockEntity host = chemicalMachine(helper, "appmek_batch_pattern", true);
-        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
-        MekanismKey oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical("oxygen", 1L));
-        MekanismKey hydrogen = MekanismKey.of(AppMekGameTestFixtures.chemical("hydrogen", 1L));
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(), "Factory pattern controller forms"))
-                .thenExecute(() -> {
-                    IPatternDetails pattern = installChemicalPattern(host, oxygen, hydrogen);
-                    long submitted = 0L;
-                    long now = helper.getLevel().getGameTime();
-                    for (int copy = 0; copy < 2; copy++) {
-                        KeyCounter[] holders = holders(pattern);
-                        submitted += holders[0].get(oxygen);
-                        helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, Direction.NORTH),
-                                "Each chemical request admits exactly one standard copy");
-                        for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(), "Each request releases holder ownership once");
-                    }
-                    helper.assertTrue(queuedAmount(host, oxygen) == submitted && submitted == 2_000L,
-                            "The queue owns the accumulated material of both independent callers");
-                    host.pendingScheduler().tick(now);
-                    helper.assertTrue(controller.runtimeSnapshot().factory().activeLaneCount() == 0,
-                            "Same-tick admission never starts a factory lane");
-                    host.pendingScheduler().tick(now + 5L);
-                    host.pendingScheduler().tick(now + 6L);
-                }).thenWaitUntil(() -> helper.assertTrue(amount(host.getLogic().getReturnInv(), hydrogen) == 1_200L
-                                && amount(host.getLogic().getReturnInv(), oxygen) == 1_000L,
-                        "Two lanes produce two batches and return only excess chemical inputs"))
-                .thenSucceed();
+        // Retains the existing registry entry, now testing one exact native batch and tail, never cross-lane pooling.
+        chemicalCpuPlanSettles(helper);
     }
 
     public void nativeBatchNotificationBoundary(GameTestHelper helper, boolean throwing) {
-        nativeMixedBatchBoundary(helper, throwing ? NativeBoundary.THROW : NativeBoundary.CANCEL, false);
+        nativePaymentCheckpoint(helper, throwing, false, false, false);
     }
 
     public void nativeBatchPendingCheckpoint(GameTestHelper helper, boolean drop) {
-        nativeMixedBatchBoundary(helper, NativeBoundary.CAPACITY, drop);
+        nativePaymentCheckpoint(helper, false, drop, false, true);
     }
 
     public void nativeBatchReturnNotificationCheckpoint(GameTestHelper helper) {
-        nativeMixedBatchBoundary(helper, NativeBoundary.RETURN_NOTIFICATION, false);
+        nativePaymentCheckpoint(helper, true, false, true, false);
     }
 
-    /** Faults enter through real native bus/return-inventory listeners, not a replacement crafting machine.
-     * @author howxu <dev@howxu.cn> */
-    private enum NativeBoundary { CANCEL, THROW, CAPACITY, RETURN_NOTIFICATION }
+    public void nativeBatchSourceDestructionDuringPayment(GameTestHelper helper) {
+        nativePaymentCheckpoint(helper, false, true, false, false, true, false);
+    }
 
-    private void nativeMixedBatchBoundary(GameTestHelper helper, NativeBoundary boundary, boolean drop) {
-        String name = "appmek_native_boundary_" + boundary.name().toLowerCase(Locale.ROOT) + "_" + drop;
-        ResourceLocation machineId = MMCR.id(name);
-        BlockPos portPos = new BlockPos(0, 1, 0);
-        BlockPos ordinaryPos = new BlockPos(0, 0, 1);
-        helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
-                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
-        helper.setBlock(portPos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
-        helper.setBlock(ordinaryPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
-        Map<BlockPos, BlockPredicate> blocks = new LinkedHashMap<>();
-        blocks.put(portPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get()));
-        blocks.put(ordinaryPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get()));
-        for (int index = 1; index <= 2; index++) {
-            BlockPos pos = new BlockPos(index, 0, 0);
-            helper.setBlock(pos, ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-            blocks.put(pos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()));
-        }
-        DynamicMachine machine = new DynamicMachine(machineId, "Native pattern ownership test", new BlockArray(blocks),
-                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
-                1, false, true, 2);
-        if (!MachineRegistry.containsStatic(machineId)) MachineRegistry.register(machine);
-        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
-        AEFluidKey water = AEFluidKey.of(Fluids.WATER);
-        MekanismKey oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical(drop ? "nuclear_waste" : "oxygen", 1L));
-        MekanismKey hydrogen = MekanismKey.of(AppMekGameTestFixtures.chemical("hydrogen", 1L));
-        List<MachineRequirement> requirements = List.of(
-                MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                MachineRequirement.fromInput(new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 250)),
-                LoadedChemicalRequirement.input(ChemicalIngredient.chemical(oxygen.getId(), 500L)),
-                MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
-                MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT)),
-                MachineRequirement.fluidOutput(new FluidStack(Fluids.LAVA, 250)),
-                LoadedChemicalRequirement.output(hydrogen.getId(), 600L, 1F));
-        List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F),
-                new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 250), 1F),
-                new LoadedChemicalOutput(hydrogen.getId(), 600L, 1F));
-        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id(name + "_recipe"), machineId, 200,
-                requirements, outputs, List.of(), 0, 2, false, false, false, Set.of()));
-        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
-        controller.setMachine(machine);
-        controller.setStructureCheckIntervalForTesting(1);
-        controller.requestImmediateStructureCheck();
+    public void nativeBatchRuntimeInvalidationDuringPayment(GameTestHelper helper) {
+        nativePaymentCheckpoint(helper, false, false, false, false, false, true);
+    }
+
+    private void nativePaymentCheckpoint(GameTestHelper helper, boolean throwing, boolean drop,
+                                         boolean returnNotification, boolean blockReturns) {
+        nativePaymentCheckpoint(helper, throwing, drop, returnNotification, blockReturns, false, false);
+    }
+
+    private void nativePaymentCheckpoint(GameTestHelper helper, boolean throwing, boolean drop,
+                                         boolean returnNotification, boolean blockReturns, boolean destroy, boolean invalidate) {
+        String name = "appmek_sync_checkpoint_" + throwing + "_" + drop + "_" + returnNotification + "_" + blockReturns + "_" + destroy + "_" + invalidate;
+        MekanismKey oxygen = chemical("oxygen");
+        MekanismKey hydrogen = chemical("hydrogen");
+        BlockPos ordinaryPos = new BlockPos(2, 0, 0);
+        var fixture = new CompatPatternCpuFixture(helper, name, "ae2_me_pattern_interface", ParallelTier.PLUS,
+                List.of(LoadedChemicalRequirement.input(ChemicalIngredient.chemical(oxygen.getId(), 500L)),
+                        MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.COAL), 1)),
+                        MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
+                        MachineRequirement.fromInput(new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 250)),
+                        LoadedChemicalRequirement.output(hydrogen.getId(), 600L, 1F),
+                        MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT)),
+                        MachineRequirement.fluidOutput(new FluidStack(Fluids.LAVA, 250))),
+                List.of(new LoadedChemicalOutput(hydrogen.getId(), 600L, 1F),
+                        new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F),
+                        new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 250), 1F)), true);
         ItemBusBlockEntity ordinary = helper.getBlockEntity(ordinaryPos);
-        ordinary.nativeItemHandler().setContents(0, new ItemStack(Items.COAL, 2), 2L);
-        PatternInterfaceBlockEntity host = helper.getBlockEntity(portPos);
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(),
-                        "Real mixed-resource factory forms before standard pattern admission"))
-                .thenExecute(() -> {
-                    host.getLogic().getPatternInv().addItems(PatternDetailsHelper.encodeProcessingPattern(List.of(
-                                    new GenericStack(iron, 2L), new GenericStack(water, 1_000L), new GenericStack(oxygen, 1_000L)),
-                            List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L),
-                                    new GenericStack(AEFluidKey.of(Fluids.LAVA), 250L), new GenericStack(hydrogen, 600L))));
-                    IPatternDetails pattern = host.getLogic().getAvailablePatterns().getFirst();
-                    // Separate callers each pay one unchanged pattern; proposals own only the dispatched prefix.
-                    KeyCounter[][] requests = {holders(pattern), holders(pattern)};
-                    KeyCounter[] holders = Arrays.stream(requests).flatMap(Arrays::stream).toArray(KeyCounter[]::new);
-                    long submittedIron = 0L, submittedWater = 0L, submittedOxygen = 0L;
-                    for (KeyCounter holder : holders) {
-                        submittedIron += holder.get(iron);
-                        submittedWater += holder.get(water);
-                        submittedOxygen += holder.get(oxygen);
+        ordinary.nativeItemHandler().setContents(0, new ItemStack(Items.COAL), 1L);
+        AtomicInteger notifications = new AtomicInteger();
+        AtomicReference<CompoundTag> checkpoint = new AtomicReference<>();
+        fixture.ready().thenExecute(() -> {
+            fixture.host.getLogic().getPatternInv().addItems(PatternDetailsHelper.encodeProcessingPattern(
+                    List.of(new GenericStack(oxygen, 1_000L), new GenericStack(AEItemKey.of(Items.IRON_INGOT), 2L),
+                            new GenericStack(AEFluidKey.of(Fluids.WATER), 1_000L)),
+                    List.of(new GenericStack(hydrogen, 600L), new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L),
+                            new GenericStack(AEFluidKey.of(Fluids.LAVA), 250L))));
+            IPatternDetails pattern = fixture.host.getLogic().getAvailablePatterns().getFirst();
+            KeyCounter[] request = holders(pattern);
+            List<ItemEntity> carriers = new ArrayList<>();
+            AtomicReference<GameTestAssertException> callbackFailure = new AtomicReference<>();
+            Consumer<EntityJoinLevelEvent> capture = event -> {
+                if (event.getLevel() == helper.getLevel() && event.getEntity() instanceof ItemEntity item
+                        && item.getItem().is(fixture.host.getBlockState().getBlock().asItem())) carriers.add(item);
+            };
+            Object owner = returnNotification ? fixture.host.getLogic().getReturnInv()
+                    : fieldValue(ordinary.nativeItemHandler(), LongItemStorage.class, "storage");
+            Runnable restore = observeOnce(owner, returnNotification ? GenericStackInv.class : LongSlotStorage.class,
+                    returnNotification ? "listener" : "onChange", () -> {
+                try {
+                    notifications.incrementAndGet();
+                    checkpoint.set(fixture.host.saveWithoutMetadata(helper.getLevel().registryAccess()));
+                    if (destroy || invalidate) {
+                        var atPayment = pendingInventory(helper, checkpoint.get());
+                        helper.assertTrue(ordinary.nativeItemHandler().amount(0) == 0L
+                                        && amount(atPayment, oxygen) == 500L
+                                        && amount(atPayment, AEItemKey.of(Items.IRON_INGOT)) == 2L
+                                        && amount(atPayment, AEFluidKey.of(Fluids.WATER)) == 1_000L,
+                                "Teardown runs after real chemical and ordinary payment, before remaining item/fluid debits");
                     }
-                    for (KeyCounter[] request : requests) {
-                        helper.assertTrue(host.craftingMachine().pushPattern(pattern, request, Direction.NORTH),
-                                "A standard mixed-resource caller transfers exactly one copy into the queue");
+                    KeyCounter[] reentrant = holders(pattern);
+                    helper.assertFalse(fixture.host.craftingMachine().pushPattern(pattern, reentrant, Direction.NORTH),
+                            "Native payment notification cannot reenter the active ownership handoff");
+                    helper.assertTrue(holderAmount(reentrant, oxygen) == 1_000L
+                                    && holderAmount(reentrant, AEItemKey.of(Items.IRON_INGOT)) == 2L
+                                    && holderAmount(reentrant, AEFluidKey.of(Fluids.WATER)) == 1_000L,
+                            "Rejected reentrant caller retains all item/fluid/chemical material");
+                    if (blockReturns) fillReturns(fixture.host.getLogic().getReturnInv());
+                    if (destroy) helper.getLevel().destroyBlock(fixture.host.getBlockPos(), true);
+                    if (invalidate) {
+                        ((MachineRecipeThread) fieldValue(fixture.controller, fixture.controller.getClass(), "normalRecipeThread"))
+                                .invalidate();
                     }
-                    helper.assertTrue(queuedAmount(host, iron) == submittedIron && submittedIron == 4L
-                                    && queuedAmount(host, water) == submittedWater && submittedWater == 2_000L
-                                    && queuedAmount(host, oxygen) == submittedOxygen && submittedOxygen == 2_000L,
-                            "Queued totals equal the material independently supplied by both callers");
-                    long now = helper.getLevel().getGameTime();
-                    host.pendingScheduler().tick(now);
-                    helper.assertTrue(ordinary.nativeItemHandler().amount(0) == 2L,
-                            "First-tick admission does not pay ordinary inputs");
-                    AtomicInteger notifications = new AtomicInteger();
-                    AtomicReference<CompoundTag> insideCheckpoint = new AtomicReference<>();
-                    Runnable fault = () -> {
-                        notifications.incrementAndGet();
-                        insideCheckpoint.set(host.saveWithoutMetadata(helper.getLevel().registryAccess()));
-                        for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(),
-                                "Native checkpoint observes that admission already transferred the original holders");
-                        KeyCounter[] reentrant = holders(pattern);
-                        KeyCounter[] expected = holders(pattern);
-                        helper.assertFalse(host.craftingMachine().pushPattern(pattern, reentrant, Direction.NORTH),
-                                "Native payment and return notifications cannot reenter standard admission");
-                        for (int index = 0; index < reentrant.length; index++) {
-                            for (var entry : expected[index]) {
-                                helper.assertTrue(reentrant[index].get(entry.getKey()) == entry.getLongValue(),
-                                        "Rejected reentrant callers retain their independent material");
-                            }
-                        }
-                        // A later provider deposit proves outer acceptance never clears these holders a second time.
-                        holders[0].add(iron, 1L);
-                        switch (boundary) {
-                            case CANCEL -> factoryRuntime(controller).cancelAsyncState();
-                            case THROW -> throw new IllegalStateException("real ordinary input notification");
-                            case CAPACITY -> fillReturns(host.getLogic().getReturnInv());
-                            case RETURN_NOTIFICATION -> throw new IllegalStateException("real return endBatch notification");
-                        }
-                    };
-                    Object listenerOwner = boundary == NativeBoundary.RETURN_NOTIFICATION ? host.getLogic().getReturnInv()
-                            : fieldValue(ordinary.nativeItemHandler(), LongItemStorage.class, "storage");
-                    Runnable restoreListener = observeOnce(listenerOwner,
-                            boundary == NativeBoundary.RETURN_NOTIFICATION ? GenericStackInv.class : LongSlotStorage.class,
-                            boundary == NativeBoundary.RETURN_NOTIFICATION ? "listener" : "onChange", fault);
-                    try {
-                        host.pendingScheduler().tick(now + 5L);
-                    } finally {
-                        restoreListener.run();
-                    }
-                    helper.assertTrue(notifications.get() == 1 && insideCheckpoint.get() != null,
-                            "The injected fault ran inside one actual native notification");
-                    long consumedBatches = 2L - ordinary.nativeItemHandler().amount(0);
-                    helper.assertTrue(consumedBatches == 1L && queuedAmount(host, iron) == 2L,
-                            "One scheduler pass pays only its dispatched prefix and retains the second caller's copy");
-                    helper.assertTrue(holders[0].get(iron) == 1L
-                                    && Arrays.stream(holders).skip(1L).allMatch(KeyCounter::isEmpty),
-                            "Original holders hand off once and the later provider deposit remains owned by its holder");
-                    CompoundTag settled = host.saveWithoutMetadata(helper.getLevel().registryAccess());
-                    assertNativeConservation(helper, host, settled, iron, water, oxygen, consumedBatches, holders);
-                    if (boundary == NativeBoundary.CAPACITY) {
-                        GenericStackInv pending = pendingInventory(helper, settled);
-                        helper.assertTrue(amount(host.getLogic().getReturnInv(), iron) == 0L
-                                        && amount(pending, iron) + queuedAmount(host, iron) == 4L - consumedBatches
-                                        && amount(pending, water) + queuedAmount(host, water) == 2_000L - 250L * consumedBatches
-                                        && amount(pending, oxygen) + queuedAmount(host, oxygen) == 2_000L - 500L * consumedBatches,
-                                "Changed return capacity preserves scratch leftovers separately from the unstarted queued copy");
-                    }
-                    if (boundary != NativeBoundary.RETURN_NOTIFICATION) {
-                        GenericStackInv pendingAtPayment = pendingInventory(helper, insideCheckpoint.get());
-                        helper.assertTrue(amount(pendingAtPayment, iron) == 1L && amount(pendingAtPayment, water) == 750L
-                                        && amount(pendingAtPayment, oxygen) == 500L,
-                                "Native payment-window NBT contains only actual shared inventory leftovers");
-                    }
-                    long coalBeforeRetry = ordinary.nativeItemHandler().amount(0);
-                    helper.assertFalse(host.craftingMachine().pushPattern(pattern, requests[0], Direction.NORTH),
-                            "A repeated provider call cannot admit another copy from the retained sentinel alone");
-                    helper.assertTrue(ordinary.nativeItemHandler().amount(0) == coalBeforeRetry && holders[0].get(iron) == 1L,
-                            "Rejected replay leaves all remaining holder and ordinary materials untouched");
-                    factoryRuntime(controller).cancelAsyncState();
-                    // Load the real BE, not just PendingRequest or a manually returned request inventory.
-                    host.onChunkUnloaded();
-                    var fresh = new PatternInterfaceBlockEntity(host.getBlockPos(), host.getBlockState(), host.kind());
-                    helper.getLevel().setBlockEntity(fresh);
-                    fresh.loadWithComponents(settled, helper.getLevel().registryAccess());
-                    assertNativeConservation(helper, fresh, fresh.saveWithoutMetadata(helper.getLevel().registryAccess()),
-                            iron, water, oxygen, consumedBatches, holders);
-                    if (drop) {
-                        AABB area = new AABB(fresh.getBlockPos()).inflate(2D);
-                        GenericStackInv ownedBeforeDrop = pendingInventory(helper,
-                                fresh.saveWithoutMetadata(helper.getLevel().registryAccess()));
-                        long pendingIron = amount(ownedBeforeDrop, iron);
-                        long voidedWater = amount(ownedBeforeDrop, water);
-                        long dumpedChemical = amount(ownedBeforeDrop, oxygen);
-                        helper.assertTrue(pendingIron == 1L && voidedWater == 750L && dumpedChemical == 500L
-                                        && queuedAmount(fresh, iron) == 2L && queuedAmount(fresh, water) == 1_000L
-                                        && queuedAmount(fresh, oxygen) == 1_000L,
-                                "Before disposal: paid scratch=" + pendingIron + "/" + voidedWater + "/" + dumpedChemical
-                                        + ", queued=" + queuedAmount(fresh, iron) + "/" + queuedAmount(fresh, water)
-                                        + "/" + queuedAmount(fresh, oxygen));
-                        Object owned = fieldValue(fresh.craftingMachine(), PatternInterfaceCraftingMachine.class, "pendingRequest");
-                        GenericStackInv liveScratch = (GenericStackInv) fieldValue(owned, owned.getClass(), "inventory");
-                        AtomicInteger chemicalDisposals = new AtomicInteger();
-                        AtomicReference<Double> radiationAtChemicalClear = new AtomicReference<>();
-                        long[] chemicalBalance = {dumpedChemical};
-                        Runnable restoreScratchListener = observeChanges(liveScratch, GenericStackInv.class, "listener", () -> {
-                            long remaining = amount(liveScratch, oxygen);
-                            if (remaining < chemicalBalance[0]) {
-                                chemicalDisposals.incrementAndGet();
-                                radiationAtChemicalClear.set(radiationAt(helper, fresh.getBlockPos()));
-                            }
-                            chemicalBalance[0] = remaining;
-                        });
-                        // Observe actual spawn attempts, before entity-section visibility can affect a world query.
-                        List<ItemEntity> drops = new ArrayList<>();
-                        AtomicInteger canceledDrops = new AtomicInteger();
-                        Consumer<EntityJoinLevelEvent> capture = event -> {
-                            if (event.getLevel() == helper.getLevel() && event.getEntity() instanceof ItemEntity item
-                                    && area.contains(item.position())) {
-                                if (event.isCanceled()) canceledDrops.incrementAndGet();
-                                else drops.add(item);
-                            }
-                        };
-                        double beforeRadiation = radiationAt(helper, fresh.getBlockPos());
-                        double afterRadiation;
-                        long queriedIron;
-                        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, true, EntityJoinLevelEvent.class, capture);
-                        try {
-                            fresh.dropContents();
-                            afterRadiation = radiationAt(helper, fresh.getBlockPos());
-                            queriedIron = dropAmount(helper.getLevel().getEntitiesOfClass(ItemEntity.class, area), iron);
-                            int firstDropCount = drops.size();
-                            fresh.dropContents();
-                            helper.assertTrue(drops.size() == firstDropCount
-                                            && radiationAt(helper, fresh.getBlockPos()) == afterRadiation,
-                                    "A second native disposal emits no more items or radiation: first=" + afterRadiation
-                                            + ", second=" + radiationAt(helper, fresh.getBlockPos()));
-                        } finally {
-                            NeoForge.EVENT_BUS.unregister(capture);
-                            restoreScratchListener.run();
-                        }
-                        double expectedRadiation = IRadiationManager.INSTANCE.isRadiationEnabled()
-                                ? dumpedChemical * oxygen.getStack().getChemical().get(ChemicalAttributes.Radiation.class).getRadioactivity() : 0D;
-                        String observed = "pending=" + pendingIron + "/" + voidedWater + "/" + dumpedChemical
-                                + ", spawnedIron=" + dropAmount(drops, iron) + ", queriedIron=" + queriedIron
-                                + ", waterDrops=" + dropAmount(drops, water) + ", chemicalDrops=" + dropAmount(drops, oxygen)
-                                + ", canceledSpawns=" + canceledDrops.get() + ", chemicalDisposals=" + chemicalDisposals.get()
-                                + ", radiation=" + beforeRadiation + "/" + radiationAtChemicalClear.get() + "/" + afterRadiation
-                                + ", expectedDelta=" + expectedRadiation;
-                        helper.assertTrue(chemicalDisposals.get() == 1 && radiationAtChemicalClear.get() != null
-                                        && radiationAtChemicalClear.get() == afterRadiation,
-                                "One actual scratch chemical clearance follows its synchronous native radiation dump: " + observed);
-                        helper.assertTrue(Math.abs(afterRadiation - beforeRadiation - expectedRadiation)
-                                        <= Math.max(1E-12D, expectedRadiation * 1E-9D),
-                                "Native chemical disposal radiates exactly the paid scratch balance, never the queued copy: " + observed);
-                        helper.assertTrue(dropAmount(drops, iron) == pendingIron && canceledDrops.get() == 0
-                                        && dropAmount(drops, water) == 0L && dropAmount(drops, oxygen) == 0L,
-                                "Actual native drop policy emits item leftovers, voids fluids and dumps chemical radiation: " + observed);
-                        helper.assertTrue(voidedWater + 250L * consumedBatches + queuedAmount(fresh, water) == 2_000L
-                                        && dumpedChemical + 500L * consumedBatches + queuedAmount(fresh, oxygen) == 2_000L
-                                        && holders[0].get(iron) + consumedBatches + dropAmount(drops, iron) + queuedAmount(fresh, iron) == 5L,
-                                "Consumed + holder + unstarted queue + native drops/disposal conserves all original material");
-                        helper.assertTrue(pendingInventory(helper, fresh.saveWithoutMetadata(helper.getLevel().registryAccess())).isEmpty(),
-                                "Dropped paid leftovers cannot be restored or settled again");
-                        helper.assertTrue(queuedAmount(fresh, iron) == 2L && queuedAmount(fresh, water) == 1_000L
-                                        && queuedAmount(fresh, oxygen) == 1_000L,
-                                "Native scratch disposal leaves the unstarted copy owned by the host's persistent queue");
-                    } else {
-                        if (boundary == NativeBoundary.CAPACITY) fresh.getLogic().getReturnInv().clear();
-                        fresh.serverTick();
-                        fresh.serverTick();
-                        CompoundTag afterTick = fresh.saveWithoutMetadata(helper.getLevel().registryAccess());
-                        helper.assertTrue(pendingInventory(helper, afterTick).isEmpty(),
-                                "Fresh native BE ticks settle the saved debt without another recipe start");
-                        helper.assertTrue(queuedAmount(fresh, iron) == 2L,
-                                "Settling paid leftovers does not execute or discard the saved unstarted copy");
-                        assertNativeConservation(helper, fresh, afterTick, iron, water, oxygen, consumedBatches, holders);
-                    }
-                    helper.assertTrue(ordinary.nativeItemHandler().amount(0) == coalBeforeRetry,
-                            "Reload, return settlement and drops never repay ordinary inputs");
-                }).thenSucceed();
+                    if (throwing) throw new IllegalStateException("intentional native payment listener fault");
+                } catch (GameTestAssertException failure) {
+                    callbackFailure.set(failure);
+                    throw failure;
+                }
+            });
+            NeoForge.EVENT_BUS.addListener(capture);
+            try {
+                helper.assertTrue(fixture.host.craftingMachine().pushPattern(pattern, request, Direction.NORTH),
+                        "Once native payment happened, ownership is accepted even if its notification throws");
+            } finally {
+                restore.run();
+                NeoForge.EVENT_BUS.unregister(capture);
+            }
+            if (callbackFailure.get() != null) throw callbackFailure.get();
+            helper.assertTrue(notifications.get() == 1 && checkpoint.get() != null,
+                    "Evidence comes from an actual native payment/return notification");
+            for (KeyCounter holder : request) helper.assertTrue(holder.isEmpty(), "Outer caller relinquishes material exactly once");
+            CompoundTag saved = fixture.host.saveWithoutMetadata(helper.getLevel().registryAccess());
+            GenericStackInv pending = pendingInventory(helper, saved);
+            GenericStackInv atNotification = pendingInventory(helper, checkpoint.get());
+            boolean interrupted = throwing && !returnNotification || destroy || invalidate;
+            for (GenericStack balance : List.of(new GenericStack(oxygen, 500L),
+                    new GenericStack(AEItemKey.of(Items.IRON_INGOT), interrupted ? 2L : 1L),
+                    new GenericStack(AEFluidKey.of(Fluids.WATER), interrupted ? 1_000L : 750L))) {
+                long expected = balance.amount();
+                if (interrupted) helper.assertTrue(amount(atNotification, balance.what()) == expected,
+                        "The native payment checkpoint records the known exact consumed prefix, not an arbitrary balance");
+                helper.assertTrue(amount(pending, balance.what()) + amount(fixture.host.getLogic().getReturnInv(), balance.what()) == expected,
+                        "One shared scratch owner conserves the actual unconsumed item/fluid/chemical balance at native notification");
+            }
+            helper.assertTrue(fixture.host.pendingPatterns().isEmpty(), "New paid work never becomes a legacy execution queue");
+            KeyCounter retained = pending.getAvailableStacks();
+            retained.addAll(fixture.host.getLogic().getReturnInv().getAvailableStacks());
+            if (destroy || invalidate) {
+                helper.assertTrue(ordinary.nativeItemHandler().amount(0) == 0L,
+                        "The native ordinary handler was really paid before teardown, never rolled back");
+                var state = fixture.controller.saveCustomOnly(helper.getLevel().registryAccess()).getCompound("crafting_runtime");
+                helper.assertTrue(invalidate ? !state.getBoolean("active")
+                                : state.getCompound("execution_commit").getString("phase").equals("ERROR_PAUSED")
+                                || state.getCompound("recipe").getCompound("data").getBoolean("native_start_uncertain"),
+                        "A lost runtime stays invalid, while a partially paid surviving runtime is quarantined");
+            }
+            if (drop) {
+                if (!destroy) {
+                    NeoForge.EVENT_BUS.addListener(capture);
+                    try { helper.getLevel().destroyBlock(fixture.host.getBlockPos(), true); }
+                    finally { NeoForge.EVENT_BUS.unregister(capture); }
+                }
+                helper.assertTrue(carriers.size() == 1 && fixture.host.isRemoved(),
+                        "Real source destruction produces one carrier after native payment has begun");
+                var position = new BlockPos(3, 1, 0);
+                helper.setBlock(position, fixture.host.getBlockState());
+                PatternInterfaceBlockEntity fresh = helper.getBlockEntity(position);
+                var carrier = carriers.getFirst().getItem().copy();
+                carriers.forEach(ItemEntity::discard);
+                helper.assertTrue(BlockItem.updateCustomBlockEntityTag(helper.getLevel(), null, fresh.getBlockPos(), carrier),
+                        "The actual dropped carrier is placed on a genuinely new host");
+                fresh.applyComponentsFromItemStack(carrier);
+                if (blockReturns) fresh.getLogic().getReturnInv().clear();
+                var carrierSave = fresh.saveWithoutMetadata(helper.getLevel().registryAccess());
+                fresh.loadWithComponents(carrierSave.copy(), helper.getLevel().registryAccess());
+                fresh.loadWithComponents(carrierSave.copy(), helper.getLevel().registryAccess());
+                fresh.craftingMachine().flushPendingReturns();
+                fresh.craftingMachine().flushPendingReturns();
+                var after = pendingInventory(helper, fresh.saveWithoutMetadata(helper.getLevel().registryAccess()));
+                for (AEKey key : List.of(oxygen, AEItemKey.of(Items.IRON_INGOT), AEFluidKey.of(Fluids.WATER))) {
+                    helper.assertTrue(amount(after, key) + amount(fresh.getLogic().getReturnInv(), key) == retained.get(key),
+                            "Placed carrier and repeated restore/refund preserve every leftover identity exactly once");
+                }
+                var ghost = holders(pattern);
+                helper.assertFalse(fixture.host.craftingMachine().pushPattern(pattern, ghost, Direction.NORTH),
+                        "Destroyed source cannot ghost-spend a new CPU request");
+                fixture.host.craftingMachine().flushPendingReturns();
+                helper.assertTrue(holderAmount(ghost, oxygen) == 1_000L
+                                && holderAmount(ghost, AEItemKey.of(Items.IRON_INGOT)) == 2L
+                                && holderAmount(ghost, AEFluidKey.of(Fluids.WATER)) == 1_000L
+                                && ordinary.nativeItemHandler().amount(0) == 0L,
+                        "Old-source retries neither consume new holders nor replay ordinary payment");
+            } else {
+                fixture.host.onChunkUnloaded();
+                helper.getLevel().removeBlockEntity(fixture.host.getBlockPos());
+                var fresh = new PatternInterfaceBlockEntity(fixture.host.getBlockPos(), fixture.host.getBlockState(), fixture.host.kind());
+                helper.getLevel().setBlockEntity(fresh);
+                fresh.loadWithComponents(saved, helper.getLevel().registryAccess());
+                fresh.loadWithComponents(saved, helper.getLevel().registryAccess());
+                helper.assertTrue(ordinary.nativeItemHandler().amount(0) == 0L,
+                        "Repeated balance restoration never repays physical ordinary input");
+                if (blockReturns) fresh.getLogic().getReturnInv().clear();
+                fresh.serverTick();
+                fresh.serverTick();
+                GenericStackInv after = pendingInventory(helper, fresh.saveWithoutMetadata(helper.getLevel().registryAccess()));
+                for (AEKey key : List.of(oxygen, AEItemKey.of(Items.IRON_INGOT), AEFluidKey.of(Fluids.WATER))) {
+                    helper.assertTrue(amount(after, key) + amount(fresh.getLogic().getReturnInv(), key) == retained.get(key),
+                            "A genuinely fresh host and repeated restore/ticks settle each mixed balance once");
+                }
+            }
+        }).thenSucceed();
     }
 
-    private void assertNativeConservation(GameTestHelper helper, PatternInterfaceBlockEntity host, CompoundTag saved,
-                                          AEKey iron, AEKey water, AEKey oxygen, long consumed, KeyCounter[] holders) {
-        GenericStackInv pending = pendingInventory(helper, saved);
-        GenericStackInv returns = host.getLogic().getReturnInv();
-        long holderIron = 0L;
-        for (KeyCounter holder : holders) holderIron += holder.get(iron);
-        helper.assertTrue(holderIron + consumed + amount(returns, iron) + amount(pending, iron) + queuedAmount(host, iron) == 5L,
-                "Holder + consumed + returns + scratch + queue conserves original iron and one later provider deposit");
-        helper.assertTrue(250L * consumed + amount(returns, water) + amount(pending, water) + queuedAmount(host, water) == 2_000L,
-                "Consumed water + actual returns + pending water conserves the original mixed request");
-        helper.assertTrue(500L * consumed + amount(returns, oxygen) + amount(pending, oxygen) + queuedAmount(host, oxygen) == 2_000L,
-                "Consumed chemical + actual returns + pending chemical conserves the original mixed request");
+    public void chemicalPatternOutputMatchingPreservesLongAmounts(GameTestHelper helper) {
+        var fixture = chemicalFixture(helper, "appmek_long_pattern", "oxygen", "hydrogen");
+        long amount = (long) Integer.MAX_VALUE + 5_000L;
+        MekanismKey hydrogen = chemical("hydrogen");
+        MachineOutput output = AppMekBridge.get().patternOutput(hydrogen, amount).orElseThrow();
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("appmek_long_match_recipe"), MMCR.id("appmek_long_pattern"), 1,
+                List.of(LoadedChemicalRequirement.output(hydrogen.getId(), amount, 1F)), List.of(output), List.of(),
+                0, 1, false, false, false, Set.of());
+        helper.assertTrue(fixture.controller.patternOutputsMatch(recipe, fixture.controller.runtimeSnapshot(), List.of(output)),
+                "Exact chemical conversion/matching retains long quantities");
+        helper.assertFalse(fixture.controller.patternOutputsMatch(recipe, fixture.controller.runtimeSnapshot(),
+                List.of(new LoadedChemicalOutput(hydrogen.getId(), amount - 1L, 1F))), "A different exact quantity cannot bind");
+        helper.assertFalse(fixture.controller.patternOutputsMatch(recipe, fixture.controller.runtimeSnapshot(),
+                List.of(new LoadedChemicalOutput(chemical("oxygen").getId(), amount, 1F))), "A different exact chemical ID cannot bind");
+        helper.succeed();
+    }
+
+    public void differentChemicalOutputsCannotShareBinding(GameTestHelper helper) {
+        var fixture = chemicalFixture(helper, "appmek_output_identity", "oxygen", "hydrogen");
+        MekanismKey oxygen = chemical("oxygen");
+        MekanismKey hydrogen = chemical("hydrogen");
+        MekanismKey chlorine = chemical("chlorine");
+        fixture.ready().thenExecute(() -> {
+            installChemicalPattern(fixture.host, oxygen, hydrogen);
+            fixture.host.getLogic().getPatternInv().setItemDirect(1, PatternDetailsHelper.encodeProcessingPattern(
+                    List.of(new GenericStack(oxygen, 1_000L)), List.of(new GenericStack(chlorine, 600L))));
+            var patterns = fixture.host.getLogic().getAvailablePatterns();
+            IPatternDetails valid = patterns.stream().filter(pattern -> pattern.getOutputs().getFirst().what().equals(hydrogen)).findFirst().orElseThrow();
+            IPatternDetails different = patterns.stream().filter(pattern -> pattern.getOutputs().getFirst().what().equals(chlorine)).findFirst().orElseThrow();
+            helper.assertTrue(valid instanceof PatternBatchDetails && !(different instanceof PatternBatchDetails),
+                    "Only the exact hydrogen identity binds to the actual hydrogen recipe");
+            KeyCounter[] request = holders(different);
+            helper.assertFalse(fixture.host.craftingMachine().pushPattern(different, request, Direction.NORTH),
+                    "A chlorine promise cannot execute a hydrogen-producing recipe");
+            helper.assertTrue(request[0].get(oxygen) == 1_000L && fixture.host.pendingPatterns().isEmpty(),
+                    "Wrong-output refusal preserves all caller-owned chemical input");
+        }).thenSucceed();
+    }
+
+    public void taggedChemicalRemainsLegalWithoutCompression(GameTestHelper helper) {
+        conservativeChemical(helper, 0);
+    }
+
+    public void nonConsumedChemicalRemainsLegalWithoutCompression(GameTestHelper helper) {
+        conservativeChemical(helper, 1);
+    }
+
+    public void probabilisticChemicalRemainsLegalWithoutCompression(GameTestHelper helper) {
+        conservativeChemical(helper, 2);
+    }
+
+    private void conservativeChemical(GameTestHelper helper, int mode) {
+        MekanismKey oxygen = chemical("oxygen");
+        MekanismKey hydrogen = chemical("hydrogen");
+        ChemicalIngredient ingredient = mode == 0
+                ? ChemicalIngredient.tag(ResourceLocation.fromNamespaceAndPath("mekanism", "gaseous"), 500L)
+                : ChemicalIngredient.chemical(oxygen.getId(), 500L);
+        var requirement = new LoadedChemicalRequirement(IOType.INPUT, ingredient, 1F, List.of(), mode == 0 ? 1F : mode == 1 ? 0F : 0.5F);
+        var fixture = new CompatPatternCpuFixture(helper, "appmek_conservative_" + mode, "ae2_me_pattern_interface", ParallelTier.PLUS,
+                List.of(requirement, LoadedChemicalRequirement.output(hydrogen.getId(), 600L, 1F)),
+                List.of(new LoadedChemicalOutput(hydrogen.getId(), 600L, 1F)),
+                mode > 0 ? "chemical_input_hatch_basic" : null);
+        ChemicalPortBlockEntity catalyst = mode > 0 ? helper.getBlockEntity(new BlockPos(2, 0, 0)) : null;
+        fixture.storage.blocked.add(oxygen);
+        fixture.storage.blocked.add(hydrogen);
+        var sequence = fixture.ready().thenExecute(() -> {
+            IPatternDetails pattern = installChemicalPattern(fixture.host, oxygen, hydrogen);
+            var unchanged = PatternBatchPlanning.rewrite(Map.of(pattern, 19L), PatternBatchPlanning.capture(fixture.grid()));
+            helper.assertTrue(unchanged.size() == 1 && unchanged.get(pattern) == 19L,
+                    "Runtime-resolved chemical tags and non-consumed chemistry are not falsely compressed");
+            KeyCounter[] request = holders(pattern);
+            // Non-consumed requirements remain live conditions during processing, unlike paid inputs.
+            // The request itself is returned immediately and must not masquerade as a retained catalyst.
+            if (mode == 1) catalyst.chemicalTank().setStack(AppMekGameTestFixtures.chemical("oxygen", 500L));
+            helper.assertTrue(fixture.host.craftingMachine().pushPattern(pattern, request, Direction.NORTH),
+                    "Conservative planning still permits a legal normal single request; mode=" + mode
+                            + ", consumeChance=" + requirement.consumeChance() + ", chemical=" + requirement.ingredient().id()
+                            + ", pattern=" + pattern.getClass().getSimpleName()
+                            + ", oxygenHeld=" + holderAmount(request, oxygen)
+                            + ", oxygenReturned=" + amount(fixture.host.getLogic().getReturnInv(), oxygen)
+                            + ", tick=" + fixture.controller.runtimeSnapshot().crafting().tick()
+                            + ", failure=" + fixture.controller.runtimeSnapshot().crafting().failure());
+            fixture.assertActive(1L);
+            if (mode == 1) catalyst.chemicalTank().setEmpty();
+            // Supply the continuing condition only after startup chose its real random outcome.
+            if (mode == 2) catalyst.chemicalTank().setStack(AppMekGameTestFixtures.chemical("oxygen", 500L));
+        });
+        if (mode == 1) {
+            sequence.thenWaitUntil(() -> helper.assertTrue(fixture.controller.runtimeSnapshot().crafting().failure() != null
+                            && fixture.controller.runtimeSnapshot().crafting().tick() == 0
+                            && amount(fixture.host.getLogic().getReturnInv(), oxygen) == 1_000L
+                            && amount(fixture.host.getLogic().getReturnInv(), hydrogen) == 0L,
+                    "Removing the genuine catalyst blocks processing without consuming or duplicating the returned request; state="
+                            + fixture.controller.runtimeSnapshot().crafting()))
+                    .thenExecute(() -> catalyst.chemicalTank().setStack(AppMekGameTestFixtures.chemical("oxygen", 500L)));
+        }
+        sequence.thenWaitUntil(() -> {
+            long remaining = amount(fixture.host.getLogic().getReturnInv(), oxygen);
+            helper.assertTrue(amount(fixture.host.getLogic().getReturnInv(), hydrogen) == 600L
+                            && (mode == 0 ? remaining == 500L : mode == 1 ? remaining == 1_000L
+                            : remaining == 500L || remaining == 1_000L),
+                    "Real normal execution respects tag consumption and both legitimate probability outcomes; oxygen="
+                            + remaining + ", hydrogen=" + amount(fixture.host.getLogic().getReturnInv(), hydrogen)
+                            + ", state=" + fixture.controller.runtimeSnapshot().crafting());
+            if (catalyst != null) helper.assertTrue(catalyst.chemicalTank().getStored() == 500L,
+                    "The independent physical catalyst is still present after completion; none of its units were consumed");
+        })
+                .thenSucceed();
+    }
+
+    private CompatPatternCpuFixture chemicalFixture(GameTestHelper helper, String name, String input, String output) {
+        return new CompatPatternCpuFixture(helper, name, "ae2_me_pattern_interface", ParallelTier.PLUS,
+                List.of(LoadedChemicalRequirement.input(ChemicalIngredient.chemical(chemical(input).getId(), 500L)),
+                        LoadedChemicalRequirement.output(chemical(output).getId(), 600L, 1F)),
+                List.of(new LoadedChemicalOutput(chemical(output).getId(), 600L, 1F)));
+    }
+
+    private static MekanismKey chemical(String name) { return MekanismKey.of(AppMekGameTestFixtures.chemical(name, 1L)); }
+
+    private static IPatternDetails installChemicalPattern(PatternInterfaceBlockEntity host, MekanismKey input, MekanismKey output) {
+        host.getLogic().getPatternInv().addItems(PatternDetailsHelper.encodeProcessingPattern(
+                List.of(new GenericStack(input, 1_000L)), List.of(new GenericStack(output, 600L))));
+        return host.getLogic().getAvailablePatterns().getFirst();
+    }
+
+    private static KeyCounter[] holders(IPatternDetails pattern) {
+        KeyCounter[] result = new KeyCounter[pattern.getInputs().length];
+        for (int index = 0; index < result.length; index++) {
+            var input = pattern.getInputs()[index];
+            GenericStack stack = input.getPossibleInputs()[0];
+            result[index] = new KeyCounter();
+            result[index].add(stack.what(), Math.multiplyExact(stack.amount(), input.getMultiplier()));
+        }
+        return result;
+    }
+
+    private static long amount(GenericStackInv inventory, AEKey key) { return inventory.getAvailableStacks().get(key); }
+
+    private static long holderAmount(KeyCounter[] holders, AEKey key) {
+        long result = 0L;
+        for (KeyCounter holder : holders) result += holder.get(key);
+        return result;
     }
 
     private static GenericStackInv pendingInventory(GameTestHelper helper, CompoundTag saved) {
@@ -514,17 +564,8 @@ public final class AppMekPatternGameTest {
                 helper.getLevel().registryAccess());
     }
 
-    private static void fillReturns(GenericStackInv returns) {
-        returns.beginBatch();
-        try {
-            for (int slot = 0; slot < returns.size(); slot++) returns.setStack(slot, new GenericStack(AEItemKey.of(Items.IRON_BLOCK), 64L));
-        } finally {
-            returns.endBatch();
-        }
-    }
-
-    private static FactoryRuntime factoryRuntime(MachineControllerBlockEntity controller) {
-        return ((MachineControllerRuntime) fieldValue(controller, MachineControllerBlockEntity.class, "runtime")).factoryRuntime();
+    private static void fillReturns(GenericStackInv inventory) {
+        for (int slot = 0; slot < inventory.size(); slot++) inventory.setStack(slot, new GenericStack(AEItemKey.of(Items.IRON_BLOCK), 64L));
     }
 
     private static Object fieldValue(Object owner, Class<?> type, String name) {
@@ -532,142 +573,24 @@ public final class AppMekPatternGameTest {
             Field field = type.getDeclaredField(name);
             field.setAccessible(true);
             return field.get(owner);
-        } catch (ReflectiveOperationException exception) {
-            throw new AssertionError("Cannot observe native ownership fixture", exception);
-        }
+        } catch (ReflectiveOperationException exception) { throw new GameTestAssertException("Cannot access native checkpoint field: " + exception); }
     }
 
     private static Runnable observeOnce(Object owner, Class<?> type, String name, Runnable action) {
-        AtomicReference<Runnable> pending = new AtomicReference<>(action);
-        return observeChanges(owner, type, name, () -> {
-            Runnable callback = pending.getAndSet(null);
-            if (callback != null) callback.run();
-        });
-    }
-
-    private static Runnable observeChanges(Object owner, Class<?> type, String name, Runnable action) {
         try {
             Field field = type.getDeclaredField(name);
             field.setAccessible(true);
             Runnable original = (Runnable) field.get(owner);
+            AtomicReference<Runnable> pending = new AtomicReference<>(action);
             field.set(owner, (Runnable) () -> {
                 if (original != null) original.run();
-                action.run();
+                Runnable callback = pending.getAndSet(null);
+                if (callback != null) callback.run();
             });
             return () -> {
                 try { field.set(owner, original); }
-                catch (IllegalAccessException exception) { throw new AssertionError(exception); }
+                catch (IllegalAccessException exception) { throw new GameTestAssertException("Cannot restore native checkpoint listener: " + exception); }
             };
-        } catch (ReflectiveOperationException exception) {
-            throw new AssertionError("Cannot observe real native listener", exception);
-        }
-    }
-
-    private static long dropAmount(List<ItemEntity> drops, AEKey key) {
-        long amount = 0L;
-        for (ItemEntity entity : drops) {
-            ItemStack item = entity.getItem();
-            GenericStack wrapped = GenericStack.unwrapItemStack(item);
-            if (wrapped != null) {
-                if (wrapped.what().equals(key)) amount += wrapped.amount() * item.getCount();
-            } else if (key.equals(AEItemKey.of(item))) amount += item.getCount();
-        }
-        return amount;
-    }
-
-    private static double radiationAt(GameTestHelper helper, BlockPos position) {
-        GlobalPos target = GlobalPos.of(helper.getLevel().dimension(), position);
-        return IRadiationManager.INSTANCE.getRadiationSources().values().stream()
-                .filter(source -> source.getPos().equals(target)).mapToDouble(source -> source.getMagnitude()).sum();
-    }
-
-    public void chemicalPatternOutputMatchingPreservesLongAmounts(GameTestHelper helper) {
-        PatternInterfaceBlockEntity host = chemicalMachine(helper, "appmek_long_pattern", false);
-        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
-        long amount = (long) Integer.MAX_VALUE + 5_000L;
-        MekanismKey hydrogen = MekanismKey.of(AppMekGameTestFixtures.chemical("hydrogen", 1L));
-        MachineOutput output = AppMekBridge.get().patternOutput(hydrogen, amount).orElseThrow();
-        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("appmek_long_match_recipe"),
-                MMCR.id("appmek_long_pattern"), 1, List.of(LoadedChemicalRequirement.output(hydrogen.getId(), amount, 1F)), List.of(output), List.of(), 0, 1,
-                false, false, false, Set.of());
-        helper.assertTrue(controller.patternOutputsMatch(recipe, controller.runtimeSnapshot(), List.of(output)),
-                "Chemical pattern output conversion and matching preserve long quantities");
-        helper.assertTrue(!controller.patternOutputsMatch(recipe, controller.runtimeSnapshot(),
-                        List.of(new LoadedChemicalOutput(hydrogen.getId(), amount - 1L, 1F))),
-                "Different chemical output quantity does not match");
-        helper.assertTrue(!controller.patternOutputsMatch(recipe, controller.runtimeSnapshot(),
-                        List.of(new LoadedChemicalOutput(ResourceLocation.fromNamespaceAndPath("mekanism", "oxygen"), amount, 1F))),
-                "Different chemical output identity does not match");
-        helper.succeed();
-    }
-
-    private PatternInterfaceBlockEntity chemicalMachine(GameTestHelper helper, String name, boolean factory) {
-        return chemicalMachine(helper, name, factory, false);
-    }
-
-    private PatternInterfaceBlockEntity chemicalMachine(GameTestHelper helper, String name, boolean factory, boolean radioactive) {
-        ResourceLocation machineId = MMCR.id(name);
-        BlockPos portPos = new BlockPos(0, 1, 0);
-        helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
-                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
-        helper.setBlock(portPos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
-        Map<BlockPos, BlockPredicate> blocks = new LinkedHashMap<>();
-        blocks.put(portPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get()));
-        if (factory) {
-            for (int index = 1; index <= 2; index++) {
-                BlockPos pos = new BlockPos(index, 0, 0);
-                helper.setBlock(pos, ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
-                blocks.put(pos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("factory_controller").get()));
-            }
-        }
-        DynamicMachine machine = factory ? new DynamicMachine(machineId, "AppMek factory pattern test", new BlockArray(blocks),
-                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(), 1, false, true, 2)
-                : new DynamicMachine(machineId, "AppMek chemical pattern test", new BlockArray(blocks));
-        if (!MachineRegistry.containsStatic(machineId)) MachineRegistry.register(machine);
-        ResourceLocation oxygen = ResourceLocation.fromNamespaceAndPath("mekanism", radioactive ? "nuclear_waste" : "oxygen");
-        ResourceLocation hydrogen = ResourceLocation.fromNamespaceAndPath("mekanism", radioactive ? "polonium" : "hydrogen");
-        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id(name + "_recipe"), machineId, 2,
-                List.of(LoadedChemicalRequirement.input(ChemicalIngredient.chemical(oxygen, 500L)),
-                        LoadedChemicalRequirement.output(hydrogen, 600L, 1F)),
-                List.of(new LoadedChemicalOutput(hydrogen, 600L, 1F)), List.of(), 0, 2,
-                false, false, false, Set.of()));
-        MachineControllerBlockEntity controller = helper.getBlockEntity(BlockPos.ZERO);
-        controller.setMachine(machine);
-        controller.setStructureCheckIntervalForTesting(1);
-        controller.requestImmediateStructureCheck();
-        return helper.getBlockEntity(portPos);
-    }
-
-    private IPatternDetails installChemicalPattern(PatternInterfaceBlockEntity host, MekanismKey oxygen, MekanismKey hydrogen) {
-        host.getLogic().getPatternInv().addItems(PatternDetailsHelper.encodeProcessingPattern(
-                List.of(new GenericStack(oxygen, 1_000L)), List.of(new GenericStack(hydrogen, 600L))));
-        return host.getLogic().getAvailablePatterns().getFirst();
-    }
-
-    private long queuedAmount(PatternInterfaceBlockEntity host, AEKey key) {
-        long amount = 0L;
-        for (var group : host.pendingPatterns().groups()) {
-            for (KeyCounter holder : group.inputs(group.copies())) amount += holder.get(key);
-        }
-        return amount;
-    }
-
-    private KeyCounter[] holders(IPatternDetails pattern) {
-        KeyCounter[] holders = new KeyCounter[pattern.getInputs().length];
-        for (int index = 0; index < holders.length; index++) {
-            var input = pattern.getInputs()[index];
-            GenericStack stack = input.getPossibleInputs()[0];
-            holders[index] = new KeyCounter();
-            holders[index].add(stack.what(), Math.multiplyExact(stack.amount(), input.getMultiplier()));
-        }
-        return holders;
-    }
-
-    private long amount(GenericStackInv inventory, AEKey key) {
-        long amount = 0L;
-        for (int slot = 0; slot < inventory.size(); slot++) {
-            if (key.equals(inventory.getKey(slot))) amount += inventory.getAmount(slot);
-        }
-        return amount;
+        } catch (ReflectiveOperationException exception) { throw new GameTestAssertException("Cannot observe native checkpoint listener: " + exception); }
     }
 }
