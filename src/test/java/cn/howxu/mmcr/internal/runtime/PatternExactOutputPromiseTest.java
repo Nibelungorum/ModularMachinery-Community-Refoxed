@@ -48,10 +48,10 @@ class PatternExactOutputPromiseTest {
     }
 
     @Test
-    void unchanged_probabilistic_outputs_keep_single_copy_fallback_but_cannot_be_compressed() {
+    void unchanged_probabilistic_outputs_allow_batches_but_preserve_independent_rolls() {
         var output = new MachineOutput.ItemOutput(new ItemStack(Items.IRON_INGOT), 0.5F);
         assertThat(CraftingRuntime.samePromisedOutputs(List.of(output), List.of(output), 1L)).isTrue();
-        assertThat(CraftingRuntime.samePromisedOutputs(List.of(output), List.of(output), 2L)).isFalse();
+        assertThat(CraftingRuntime.samePromisedOutputs(List.of(output), List.of(output), 2L)).isTrue();
         assertThat(CraftingRuntime.samePromisedOutputs(List.of(output), List.of(output.withChance(1F)), 1L)).isFalse();
         assertThat(CraftingRuntime.samePromisedOutputs(List.of(output, output),
                 List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_INGOT, 2), 0.5F)), 1L)).isFalse();

@@ -29,6 +29,9 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
@@ -42,6 +45,11 @@ import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LoadedLightningBridge;
@@ -63,6 +71,7 @@ import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
+import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.registry.ModBlocks;
 import com.extendedae_plus.content.ae2.MirrorPatternProviderBlockEntity.MasterLocation;
 import me.ramidzkh.mekae2.ae2.MekanismKey;
@@ -87,6 +96,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Native AE planning/extraction plus real host publication; no runtime CPU bookkeeping changes.
  * @author howxu <dev@howxu.cn>
@@ -183,7 +193,70 @@ public final class PatternBatchPlanningGameTest {
         helper.succeed();
     }
 
+    public static void runtimeConditionsAndHooksPublishAndCompressBulkInputs(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        PatternInterfaceBlockEntity host = helper.getBlockEntity(BlockPos.ZERO);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode() != null,
+                        "Provider initializes through its native first tick"))
+                .thenExecute(() -> {
+                    var callbacks = new AtomicInteger();
+                    var controller = bindController(helper, host, new BlockPos(0, 0, 2), 4);
+                    var base = parallelMachine(4L);
+                    controller.setMachine(new Machine() {
+                        @Override public ResourceLocation registryName() { return base.registryName(); }
+                        @Override public BlockArray pattern() { return base.pattern(); }
+                        @Override public MachineControllerSpec controller() { return base.controller(); }
+                        @Override public boolean parallelizable() { return true; }
+                        @Override public long maxParallelism() { return 4L; }
+                        @Override public RecipeBehavior behavior() {
+                            return RecipeBehavior.builder().beforeStart(context -> callbacks.incrementAndGet())
+                                    .recipeTick(context -> callbacks.incrementAndGet())
+                                    .beforeFinish(context -> callbacks.incrementAndGet()).build();
+                        }
+                    });
+                    controller.setFormed(true);
+                    var level = MachineLevelRegistry.levelsForType(MachineLevelRegistry.types().getFirst().id()).getFirst();
+                    controller.componentRuntime().replaceLevels(Map.of(level.typeId(), level));
+                    var recipeId = MMCR.id("batch_conditions_and_hooks");
+                    RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("test_cube"), 20,
+                            List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
+                                    new LevelRequirement(level.typeId(), level.id()), new StageRequirement(1),
+                                    SmartInterfaceRequirement.input("temperature", 10F, 20F),
+                                    SmartInterfaceRequirement.output("temperature", 42F),
+                                    MachineRequirement.itemOutput(new ItemStack(Items.DIAMOND, 9))),
+                            List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 9), 1F)),
+                            List.of(), 0, 1, false, true, false, Set.of()));
+                    host.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
+                            List.of(stack(Items.IRON_INGOT, 2)), List.of(stack(Items.DIAMOND, 9))));
+                    host.getLogic().updatePatterns();
+                    var published = host.getLogic().getAvailablePatterns().stream()
+                            .filter(pattern -> pattern instanceof PatternBatchDetails batch && batch.data().recipeId().equals(recipeId))
+                            .map(pattern -> (PatternBatchDetails) pattern).toList();
+                    helper.assertFalse(published.isEmpty(), "The eligible level/stage recipe publishes its batch binding");
+                    var unit = published.getFirst();
+                    var snapshot = PatternBatchPlanning.capture(host.getMainNode().getGrid());
+                    helper.assertTrue(snapshot.limits().get(unit.getDefinition()).maxMultiplier() == 4L,
+                            "Runtime conditions and registered callbacks retain the actual single-lane parallel limit");
+                    var materials = new KeyCounter();
+                    materials.add(AEItemKey.of(Items.IRON_INGOT), 24L);
+                    var plan = simulate(helper, List.of(unit), materials, stack(Items.DIAMOND, 100L), snapshot);
+                    helper.assertFalse(plan.simulation(), "All 12 recipe operations have their inputs");
+                    helper.assertTrue(plan.patternTimes().equals(Map.of(unit.scaled(4L), 3L)),
+                            "100 diamonds are planned as three batches of four, not twelve unit tasks");
+                    helper.assertTrue(callbacks.get() == 0, "Read-only publication and AE planning never execute runtime callbacks");
+                    settle(helper, plan);
+                }).thenSucceed();
+    }
+
     public static void lightningBatchesPreserveNativePlanningAndAdmission(GameTestHelper helper) {
+        lightningBatchesPreserveNativePlanningAndAdmission(helper, 1F);
+    }
+
+    public static void probabilisticLightningOutputsPreserveNativePlanningAndAdmission(GameTestHelper helper) {
+        lightningBatchesPreserveNativePlanningAndAdmission(helper, 0.5F);
+    }
+
+    private static void lightningBatchesPreserveNativePlanningAndAdmission(GameTestHelper helper, float outputChance) {
         helper.assertTrue(LightningBridge.get().available(), "The optional native lightning bridge is loaded");
         helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
         helper.setBlock(new BlockPos(2, 0, 0), ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
@@ -194,15 +267,52 @@ public final class PatternBatchPlanningGameTest {
                         "Lightning providers initialize through their native first-tick lifecycle"))
                 .thenExecute(() -> {
                     verifyLightningBatch(helper, highHost, new BlockPos(0, 0, 2), LightningTier.HIGH_VOLTAGE,
-                            LightningTier.EXTREME_HIGH_VOLTAGE);
+                            LightningTier.EXTREME_HIGH_VOLTAGE, outputChance);
                     verifyLightningBatch(helper, extremeHost, new BlockPos(2, 0, 2), LightningTier.EXTREME_HIGH_VOLTAGE,
-                            LightningTier.HIGH_VOLTAGE);
+                            LightningTier.HIGH_VOLTAGE, outputChance);
+                }).thenSucceed();
+    }
+
+    public static void onlyIntermediateInputProbabilityKeepsNativeUnitTasks(GameTestHelper helper) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
+        PatternInterfaceBlockEntity host = helper.getBlockEntity(BlockPos.ZERO);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode() != null,
+                        "Provider initializes through its native first tick"))
+                .thenExecute(() -> {
+                    bindController(helper, host, new BlockPos(0, 0, 2), 4);
+                    for (float consumeChance : new float[]{0F, 0.5F, 1F}) {
+                        for (float outputChance : new float[]{0F, 0.5F, 1F}) {
+                            var recipeId = MMCR.id("batch_probability_" + (int) (consumeChance * 100) + "_" + (int) (outputChance * 100));
+                            var output = new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), outputChance);
+                            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, MMCR.id("test_cube"), 20,
+                                    List.of(new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY,
+                                                    1F, List.of(), DataComponentPredicateSet.EMPTY, consumeChance),
+                                            OutputRegistry.toRequirement(output, List.of())), List.of(output),
+                                    List.of(), 0, 1, false, true, false, Set.of()));
+                            host.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
+                                    List.of(stack(Items.IRON_INGOT, 1)), List.of(stack(Items.GOLD_INGOT, 1))));
+                            host.getLogic().updatePatterns();
+                            var unit = host.getLogic().getAvailablePatterns().stream()
+                                    .filter(pattern -> pattern instanceof PatternBatchDetails batch && batch.data().recipeId().equals(recipeId))
+                                    .map(pattern -> (PatternBatchDetails) pattern).findFirst().orElseThrow();
+                            var limits = PatternBatchPlanning.capture(host.getMainNode().getGrid());
+                            var materials = new KeyCounter();
+                            materials.add(AEItemKey.of(Items.IRON_INGOT), 8L);
+                            var plan = simulate(helper, List.of(unit), materials, stack(Items.GOLD_INGOT, 8L), limits);
+                            helper.assertFalse(plan.simulation(), "Native AE has all nominal materials");
+                            var expected = consumeChance == 0.5F ? Map.of(unit, 8L) : Map.of(unit.scaled(4L), 2L);
+                            helper.assertTrue(plan.patternTimes().equals(expected),
+                                    "Only intermediate input consumption rolls back to unit tasks: input="
+                                            + consumeChance + ", output=" + outputChance);
+                            settle(helper, plan);
+                        }
+                    }
                 }).thenSucceed();
     }
 
     private static void verifyLightningBatch(GameTestHelper helper, PatternInterfaceBlockEntity host,
-                                             BlockPos controllerPos, LightningTier inputTier, LightningTier outputTier) {
-        var recipeId = MMCR.id("batch_planning_lightning_" + inputTier.requirementId().getPath());
+                                             BlockPos controllerPos, LightningTier inputTier, LightningTier outputTier, float outputChance) {
+        var recipeId = MMCR.id("batch_planning_lightning_" + inputTier.requirementId().getPath() + "_" + (int) (outputChance * 100));
         var inputKey = LoadedLightningBridge.key(inputTier);
         var outputKey = LoadedLightningBridge.key(outputTier);
         helper.assertTrue(!inputKey.equals(outputKey)
@@ -212,7 +322,7 @@ public final class PatternBatchPlanningGameTest {
                         && output.tier() == outputTier,
                 "The native key adapter preserves distinct HV/EHV identities through the optional bridge");
         List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), 1F),
-                new LightningOutput(outputTier, 1_000_000_000L, 1F));
+                new LightningOutput(outputTier, 1_000_000_000L, outputChance));
         var requirements = new ArrayList<MachineRequirement>(List.of(
                 MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
                 LightningRequirement.input(inputTier, Integer.MAX_VALUE)));
@@ -288,15 +398,6 @@ public final class PatternBatchPlanningGameTest {
                         && recipeId.equals(controller.runtimeSnapshot().crafting().recipeId())
                         && host.pendingPatterns().isEmpty() && host.getLogic().getReturnInv().isEmpty(),
                 "Two crafts per pattern execute on one exact 256-parallel lane without a private queue or spurious leftovers");
-        List<MachineOutput> probabilisticOutputs = List.of(outputs.get(0), new LightningOutput(outputTier, 1_000_000_000L, 0.5F));
-        var probabilisticRequirements = new ArrayList<MachineRequirement>(requirements.subList(0, 2));
-        probabilisticOutputs.forEach(output -> probabilisticRequirements.add(OutputRegistry.toRequirement(output, List.of())));
-        var probabilisticRecipe = MachineRecipe.fromCanonical(MMCR.id(recipeId.getPath() + "_probabilistic"), recipe.recipePoolId(),
-                20, probabilisticRequirements, probabilisticOutputs, List.of(), 0, 1, false, true, false, Set.of());
-        var unproven = PatternBatchSupport.inspectRecipe(probabilisticRecipe,
-                controller.effectivePatternRecipe(probabilisticRecipe), unit.original());
-        helper.assertTrue(unproven == null || unproven.safety() == Safety.UNPROVEN,
-                "Lightning chance != 1 remains unproven and cannot authorize compressed dispatch");
     }
 
     public static void reusedMoldAndCyclicDependencyRemainExecutable(GameTestHelper helper) {
@@ -417,13 +518,32 @@ public final class PatternBatchPlanningGameTest {
                 List.of(new GenericStack(hydrogen, 2), new GenericStack(chlorine, 3)));
         helper.assertTrue(PatternBatchSupport.inspectRecipe(recipe, effective, mismatched.original()) == null,
                 "Different chemical quantities cannot be merged to disguise conflicting output ratios");
-        var probabilistic = new LoadedChemicalRequirement(IOType.INPUT, input.ingredient(), 1F, List.of(), 0.5F);
         var tag = LoadedChemicalRequirement.input(ChemicalIngredient.tag(MMCR.id("unresolved_chemical_tag"), 5));
-        for (var unproven : List.of(probabilistic, tag)) {
-            var view = new EffectiveRecipe(recipe, List.of(unproven), outputs, 20, 256, 1, 1, true, 0, 0, 0, 0);
-            var fallback = PatternBatchSupport.inspectRecipe(recipe, view, unit.original());
-            helper.assertTrue(fallback != null && fallback.safety() == Safety.UNPROVEN,
-                    "Chemical tags/probability stay available for single execution but never prove compression");
+        var tagged = PatternBatchSupport.inspectRecipe(recipe,
+                new EffectiveRecipe(recipe, List.of(tag), outputs, 20, 256, 1, 1, true, 0, 0, 0, 0), unit.original());
+        helper.assertTrue(tagged != null && tagged.safety() == Safety.PROVEN_LINEAR,
+                "Chemical tag matching stays with the actual runtime handler rather than disabling bulk delivery");
+        for (float consumeChance : new float[]{0F, 0.5F, 1F}) {
+            for (float outputChance : new float[]{0F, 0.5F, 1F}) {
+                var probabilistic = new LoadedChemicalRequirement(IOType.INPUT, input.ingredient(), 1F, List.of(), consumeChance);
+                var chanceOutputs = outputs.stream().map(output -> output.withChance(outputChance)).toList();
+                var view = new EffectiveRecipe(recipe, List.of(probabilistic), chanceOutputs, 20, 256, 1, 1, true, 0, 0, 0, 0);
+                var fallback = PatternBatchSupport.inspectRecipe(recipe, view, unit.original());
+                var safety = consumeChance == 0.5F ? Safety.UNPROVEN : Safety.PROVEN_LINEAR;
+                helper.assertTrue(fallback != null && fallback.safety() == safety,
+                        "Only intermediate chemical consumption disables compression; output probability does not");
+                var limits = new Snapshot(Map.of(unit.getDefinition(), new BatchLimit(fallback.maxMultiplier(), safety)));
+                helper.assertTrue(PatternBatchPlanning.rewrite(tasks, limits).equals(consumeChance == 0.5F ? tasks : rewritten),
+                        "Native chemical task totals use the probability-aware batch profile");
+                helper.assertTrue(CraftingRuntime.samePromisedOutputs(chanceOutputs, chanceOutputs, 256L)
+                                && !CraftingRuntime.samePromisedOutputs(chanceOutputs,
+                                List.of(new LoadedChemicalOutput(hydrogenId, 3, outputChance == 1F ? 0.5F : 1F),
+                                        new LoadedChemicalOutput(chlorineId, 2, outputChance)), 256L)
+                                && !CraftingRuntime.samePromisedOutputs(chanceOutputs,
+                                List.of(new LoadedChemicalOutput(oxygenId, 3, outputChance),
+                                        new LoadedChemicalOutput(chlorineId, 2, outputChance)), 256L),
+                        "Batch promises retain chemical identity and probability after callbacks");
+            }
         }
         helper.succeed();
     }

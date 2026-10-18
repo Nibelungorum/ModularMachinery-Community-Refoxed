@@ -156,6 +156,14 @@ public final class GameTestRegistry {
                     PatternBatchRuntimeGameTest::paidFactoryPatternReloadKeepsSnapshot);
             register(event, "pattern_batch_exact_long_resources", 40,
                     PatternBatchRuntimeGameTest::exactLongItemAndFluidBatchFinishesOnce);
+            register(event, "pattern_batch_conditions_callbacks_runtime", 40,
+                    PatternBatchRuntimeGameTest::conditionalBatchRunsAllNativeCallbacksAtRequestedParallelism);
+            register(event, "pattern_batch_conditions_callbacks_publication", 100,
+                    PatternBatchPlanningGameTest::runtimeConditionsAndHooksPublishAndCompressBulkInputs);
+            register(event, "pattern_batch_probability_publication", 100,
+                    PatternBatchPlanningGameTest::onlyIntermediateInputProbabilityKeepsNativeUnitTasks);
+            register(event, "pattern_batch_probability_admission", 40,
+                    PatternBatchRuntimeGameTest::probabilisticOutputsAdmitBatchesAndRetainedInputsReturnUnconsumed);
             register(event, "pattern_batch_inspect_unloaded_chunk", 40,
                     PatternBatchRuntimeGameTest::inspectionDoesNotLoadLinkedControllerChunk);
             register(event, "pattern_batch_remembered_normal_request", 40,
@@ -548,10 +556,12 @@ public final class GameTestRegistry {
                     helper -> new AppMekPatternGameTest().nativeBatchRuntimeInvalidationDuringPayment(helper));
             register(event, "appmek_chemical_output_binding_identity", 300,
                     helper -> new AppMekPatternGameTest().differentChemicalOutputsCannotShareBinding(helper));
-            register(event, "appmek_chemical_tag_serial_fallback", 300,
-                    helper -> new AppMekPatternGameTest().taggedChemicalRemainsLegalWithoutCompression(helper));
-            register(event, "appmek_chemical_nonconsumed_serial_fallback", 300,
-                    helper -> new AppMekPatternGameTest().nonConsumedChemicalRemainsLegalWithoutCompression(helper));
+            register(event, "appmek_chemical_tag_batch_delivery", 300,
+                    helper -> new AppMekPatternGameTest().taggedChemicalSupportsBatchDelivery(helper));
+            register(event, "appmek_chemical_nonconsumed_request_admission", 300,
+                    helper -> new AppMekPatternGameTest().requestSuppliedNonConsumedChemicalReturnsAfterAdmission(helper));
+            register(event, "appmek_chemical_retained_physical_condition", 300,
+                    helper -> new AppMekPatternGameTest().requestInsufficientChemicalKeepsPhysicalCatalystCheck(helper));
             register(event, "appmek_chemical_probability_serial_fallback", 300,
                     helper -> new AppMekPatternGameTest().probabilisticChemicalRemainsLegalWithoutCompression(helper));
         }
@@ -602,6 +612,8 @@ public final class GameTestRegistry {
                         helper -> new LightningPatternGameTest().mixedLaneLongPersistenceAndNativeReturn(helper));
                 register(event, "ae2lt_pattern_batch_native_planning_admission", 160,
                         PatternBatchPlanningGameTest::lightningBatchesPreserveNativePlanningAndAdmission);
+                register(event, "pattern_batch_probability_lightning", 160,
+                        PatternBatchPlanningGameTest::probabilisticLightningOutputsPreserveNativePlanningAndAdmission);
             }
             register(event, "ae2_pattern_return_long_balances", 40,
                     helper -> new PatternReturnInventoryGameTest().nativeSlotsAndExactLongBalances(helper));
@@ -850,8 +862,9 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:eaep_mirror_")
                     || name.startsWith("mmcr:appmek_native_")
                     || name.equals("mmcr:appmek_chemical_output_binding_identity")
-                    || name.equals("mmcr:appmek_chemical_tag_serial_fallback")
-                    || name.equals("mmcr:appmek_chemical_nonconsumed_serial_fallback")
+                    || name.equals("mmcr:appmek_chemical_tag_batch_delivery")
+                    || name.equals("mmcr:appmek_chemical_nonconsumed_request_admission")
+                    || name.equals("mmcr:appmek_chemical_retained_physical_condition")
                     || name.equals("mmcr:appmek_chemical_probability_serial_fallback")
                     || name.startsWith("mmcr:lightning_mixed_")
                     || name.equals("mmcr:lightning_pending_long_material_owner"));

@@ -14,7 +14,6 @@ import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.crafting.pattern.AEProcessingPattern;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
-import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
@@ -103,16 +102,17 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
                             var profile = PatternBatchSupport.inspectRecipe(recipe, effective, original);
                             if (profile == null || profile.safety() != PatternBatchSupport.Safety.PROVEN_LINEAR
                                     || batch.data().multiplier() > profile.maxMultiplier()) continue;
-                            var snapshot = controller.currentRuntimeSnapshot();
-                            var machine = snapshot.structure().machine() == null
-                                    ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-                            if (machine != null && machine.behavior() instanceof RecipeBehavior behavior
-                                    && behavior.hasBeforeStart()) continue;
                         }
                     } else if (!controller.patternOutputsMatch(recipe, controller.runtimeSnapshot(), promised)) continue;
                     reservation = controller.reserveExactPatternStart(host.getBlockPos(), recipe.id(),
                             effective.outputs(), parallelism, capabilities);
                     if (reservation.status() != PatternStartReservation.Status.RESERVED) {
+                        reservation.close();
+                        reservation = null;
+                        continue;
+                    }
+                    if (batch != null && batch.data().multiplier() > 1L
+                            && !PatternBatchSupport.supportsBatchInputs(reservation.effectiveRequirements())) {
                         reservation.close();
                         reservation = null;
                         continue;

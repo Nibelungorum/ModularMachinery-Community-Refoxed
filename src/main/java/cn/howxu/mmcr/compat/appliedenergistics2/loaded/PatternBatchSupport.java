@@ -7,8 +7,6 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.crafting.pattern.AEProcessingPattern;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
-import cn.howxu.mmcr.api.machine.Machine;
-import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -21,6 +19,9 @@ import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
 import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.botania.ManaRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
@@ -66,12 +67,6 @@ public final class PatternBatchSupport {
                 if (effective == null) continue;
                 Profile profile = inspectRecipe(recipe, effective, original);
                 if (profile == null) continue;
-                var snapshot = controller.currentRuntimeSnapshot();
-                Machine machine = snapshot.structure().machine() == null
-                        ? snapshot.structure().configuredMachine() : snapshot.structure().machine();
-                if (machine != null && machine.behavior() instanceof RecipeBehavior behavior && behavior.hasBeforeStart()) {
-                    profile = new Profile(profile.binding(), profile.maxMultiplier(), Safety.UNPROVEN);
-                }
                 Profile next = profile;
                 profiles.merge(next.binding(), next, (first, second) -> new Profile(first.binding(),
                         Math.max(first.maxMultiplier(), second.maxMultiplier()),
@@ -110,27 +105,22 @@ public final class PatternBatchSupport {
                 if (amount <= 0L) return null;
                 maximum = Math.min(maximum, Long.MAX_VALUE / amount);
             }
-            boolean linear = true;
+            // This is bulk input delivery, not permission to bypass the recipe runtime.
+            // Conditions, custom requirements and callbacks are checked by actual start planning.
+            boolean linear = supportsBatchInputs(effective.requirements());
             for (MachineRequirement requirement : effective.requirements()) {
                 long amount;
                 if (requirement instanceof ItemRequirement item) {
-                    linear &= item.chance() == 1F && item.consumeChance() == 1F
-                            && (item.item() == null || !item.item().isCustom());
                     amount = item.io() == IOType.INPUT ? item.count() : item.stack().getCount();
                 } else if (requirement instanceof FluidRequirement fluid) {
-                    linear &= fluid.chance() == 1F && fluid.consumeChance() == 1F;
                     amount = fluid.io() == IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
                 } else if (requirement instanceof EnergyRequirement energy) {
                     amount = Math.multiplyExact(energy.fePerTick(), (long) effective.duration());
                 } else if (requirement instanceof LightningRequirement lightning) {
-                    linear &= lightning.chance() == 1F;
                     amount = lightning.amount();
                 } else if (requirement instanceof LoadedChemicalRequirement chemical) {
-                    linear &= chemical.ingredient().kind() == ChemicalIngredient.Kind.CHEMICAL
-                            && chemical.chance() == 1F && chemical.consumeChance() == 1F;
                     amount = chemical.ingredient().amount();
                 } else {
-                    linear = false;
                     continue;
                 }
                 if (amount <= 0L) return null;
@@ -152,13 +142,32 @@ public final class PatternBatchSupport {
         return profile != null && profile.binding().equals(binding);
     }
 
+    /** Applied both during publication and after beforeStart has supplied the actual requirements. */
+    public static boolean supportsBatchInputs(List<MachineRequirement> requirements) {
+        for (MachineRequirement requirement : requirements) {
+            if (requirement.io() != IOType.INPUT) continue;
+            float consumeChance = switch (requirement) {
+                case ItemRequirement item -> item.consumeChance();
+                case FluidRequirement fluid -> fluid.consumeChance();
+                case LoadedChemicalRequirement chemical -> chemical.consumeChance();
+                case LightningRequirement lightning -> lightning.chance(); // Lightning inputs currently require 1.
+                case SourceRequirement source -> source.consumeChance();
+                case ManaRequirement mana -> mana.consumeChance();
+                case AirRequirement air -> air.consumeChance();
+                default -> 1F;
+            };
+            if (consumeChance != 0F && consumeChance != 1F) return false;
+        }
+        return true;
+    }
+
     private static boolean inputsMatch(List<MachineRequirement> requirements, IPatternDetails original) {
         for (MachineRequirement requirement : requirements) {
             if (requirement.io() != IOType.INPUT) continue;
             if (!(requirement instanceof ItemRequirement) && !(requirement instanceof FluidRequirement)
                     && !(requirement instanceof LightningRequirement)
                     && !(requirement instanceof LoadedChemicalRequirement)) continue;
-            // Tags are runtime-resolved, never compressed; do not reject an otherwise valid single job here.
+            // Chemical tags are resolved by the actual start planner, not by this publication lookup.
             if (requirement instanceof LoadedChemicalRequirement chemical
                     && chemical.ingredient().kind() != ChemicalIngredient.Kind.CHEMICAL) continue;
             boolean matched = false;
@@ -204,7 +213,6 @@ public final class PatternBatchSupport {
     private static Map<Object, Long> outputTotals(List<MachineOutput> outputs) {
         Map<Object, Long> totals = new LinkedHashMap<>();
         for (MachineOutput output : outputs) {
-            if (output.chance() != 1F) throw new IllegalArgumentException("Non-deterministic output");
             Object identity = outputIdentity(output);
             long amount = MachineOutput.scaledAmount(output);
             if (identity == null || amount <= 0L) throw new IllegalArgumentException("Invalid output");

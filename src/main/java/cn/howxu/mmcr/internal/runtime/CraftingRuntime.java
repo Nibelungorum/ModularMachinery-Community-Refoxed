@@ -761,8 +761,9 @@ public final class CraftingRuntime {
 
     public boolean requiresPatternRequest() { return requiresPatternRequest; }
 
-    /** Checked resource totals; unchanged probabilistic outputs remain legal only for an ordinary single copy. */
-    public static boolean samePromisedOutputs(List<MachineOutput> expected, List<MachineOutput> actual, long parallelism) {
+    /** Compares nominal output totals and probabilities without constructing scaled stacks or sampling. */
+    public static boolean samePromisedOutputs(List<MachineOutput> expected, List<MachineOutput> actual,
+                                              long parallelism) {
         if (parallelism <= 0L) return false;
         try {
             return promisedOutputTotals(expected, parallelism).equals(promisedOutputTotals(actual, parallelism));
@@ -774,7 +775,6 @@ public final class CraftingRuntime {
     private static Map<Object, Long> promisedOutputTotals(List<MachineOutput> outputs, long parallelism) {
         Map<Object, Long> totals = new LinkedHashMap<>();
         for (MachineOutput output : outputs) {
-            if (output.chance() != 1F && parallelism != 1L) throw new IllegalArgumentException("Non-deterministic batch output");
             if (output instanceof MachineOutput.ItemOutput item && item.components().hasNonExactValues()) {
                 throw new IllegalArgumentException("Non-exact output components");
             }
@@ -873,6 +873,7 @@ public final class CraftingRuntime {
         RecipeBehavior behavior = recipeBehavior(runtime);
         if (behavior == null) return null;
         EffectiveRecipe effectiveRecipe = resolve(recipe, runtime);
+        if (AsyncRequirementPlanner.capturedRequirementFailure(runtime, effectiveRecipe.requirements()) != null) return null;
         long effectiveParallelism = Math.max(1L, Math.min(requestedParallelism,
                 effectiveRecipe.parallelismLimit()));
         List<MachineRequirement> recipeRequirements = effectiveRecipe.requirements();
@@ -918,6 +919,7 @@ public final class CraftingRuntime {
         runtime = current;
         List<MachineRequirement> requirements = effective.requirements().stream()
                 .map(MachineRequirement::copyOf).toList();
+        if (AsyncRequirementPlanner.capturedRequirementFailure(runtime, requirements) != null) return null;
         long viewParallelism = effectiveParallelism;
         for (int attempt = 0; attempt < (capabilitiesForParallelism == null ? 1 : 3); attempt++) {
             if (capabilitiesForParallelism != null) {
@@ -973,7 +975,8 @@ public final class CraftingRuntime {
                     viewParallelism = 1L;
                     continue;
                 }
-                PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches);
+                PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches,
+                        requestCapabilities == null ? List.of() : requestCapabilities);
                 if (!startAttemptCurrent(lifecycle, originalLedger)
                         || !patternOwnerCurrent() || !patternSourceCurrent(sourceOwner) || pendingPatternStart != null || pendingPaymentStart != null
                         || patternStartReserved || !Objects.equals(domain, controller.resourceDomain())
@@ -995,6 +998,24 @@ public final class CraftingRuntime {
             }
         }
         return null;
+    }
+
+    /** Request-only retained materials are checked before their transient views are returned to AE. */
+    private static Set<Integer> requestValidatedInputs(List<MachineRequirement> requirements, long parallelism,
+                                                       List<MachineCapability> requestCapabilities) {
+        if (requestCapabilities == null || requestCapabilities.isEmpty()) return Set.of();
+        var context = new CraftingContext(new CapabilitySnapshot(requestCapabilities));
+        Set<Integer> validated = new HashSet<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            MachineRequirement requirement = requirements.get(index);
+            if (requirement.io() != IOType.INPUT
+                     || !(requirement instanceof ItemRequirement item && item.consumeChance() == 0F
+                    || requirement instanceof FluidRequirement fluid && fluid.consumeChance() == 0F
+                    || requirement instanceof LoadedChemicalRequirement chemical && chemical.consumeChance() == 0F)) continue;
+            PlanningResult result = context.planInputs(List.of(requirement), parallelism, Set.of(), Set.of());
+            if (result.successful() && result.plan() != null && result.plan().parallelism() == parallelism) validated.add(index);
+        }
+        return Set.copyOf(validated);
     }
 
     public boolean reservePatternStart() {
@@ -1202,7 +1223,11 @@ public final class CraftingRuntime {
         activatePrefetches(prepared.prefetches(), effectiveRequirements, activeRecipe.getParallelism());
         if (ledger != payment.payment() || activeRecipe != activatingRecipe
                 || controller.lifecycleEpoch() != payment.lifecycle()) return false;
-        captureInputState(effectiveRequirements, prepared.plan());
+        Set<Integer> admittedInputs = new HashSet<>();
+        for (int index = 0; index < effectiveRequirements.size(); index++) {
+            if (activeRecipe.inputConsumptionPlan().consumedBatches(index) > 0) admittedInputs.add(index);
+        }
+        captureInputState(effectiveRequirements, prepared.plan(), admittedInputs);
         captureVersions(prepared.runtime());
         pendingPatternStart = null;
         pendingExactPatternStart = false;
@@ -1220,9 +1245,16 @@ public final class CraftingRuntime {
 
     public record PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
                                 RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
-                                List<PreparedPrefetch> prefetches) {
+                                List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities) {
         public PreparedStart {
             prefetches = List.copyOf(prefetches);
+            requestCapabilities = List.copyOf(requestCapabilities);
+        }
+
+        public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
+                             RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
+                             List<PreparedPrefetch> prefetches) {
+            this(recipe, runtime, catalogVersion, effective, plan, prefetches, List.of());
         }
 
         public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime,
@@ -2910,6 +2942,18 @@ public final class CraftingRuntime {
                 return prepared.plan().failure() == null ? missingInputStatus() : prepared.plan().failure();
             }
             payment.markResourcePaid(0, false);
+            Set<Integer> validatedInputs = pendingExactPatternStart
+                    ? requestValidatedInputs(requirements, prepared.plan().parallelism(), prepared.requestCapabilities()) : Set.of();
+            List<Integer> consumed = new ArrayList<>();
+            for (int index = 0; index < requirements.size(); index++) {
+                MachineRequirement requirement = requirements.get(index);
+                boolean input = requirement.io() == IOType.INPUT && (ItemRequirement.TYPE.equals(requirement.type())
+                        || FluidRequirement.TYPE.equals(requirement.type()) || LoadedChemicalRequirement.TYPE.equals(requirement.type())
+                        || SourceRequirement.TYPE.equals(requirement.type()) || ManaRequirement.TYPE.equals(requirement.type())
+                        || requirement instanceof LightningRequirement);
+                consumed.add(input && (prepared.plan().hasOperations(index) || validatedInputs.contains(index)) ? 1 : 0);
+            }
+            startingRecipe.setInputConsumptionPlan(new ActiveMachineRecipe.InputConsumptionPlan(consumed));
             acceptedRecipe = startingRecipe;
             if (coordinator != null && !coordinator.acceptExecution(this, laneId, identity, payment, startingRecipe)) {
                 payment.pauseAfterCommitFailure();
@@ -3002,7 +3046,8 @@ public final class CraftingRuntime {
             consumed.add(input && executed ? 1 : 0);
             planIndex++;
         }
-        saved.setInputConsumptionPlan(new ActiveMachineRecipe.InputConsumptionPlan(consumed));
+        saved.setInputConsumptionPlan(ledger.state().phase() == RecipeCommitLedger.Phase.RESOURCE_PAID && acceptedRecipe != null
+                ? acceptedRecipe.inputConsumptionPlan() : new ActiveMachineRecipe.InputConsumptionPlan(consumed));
         if (ledger.state().phase() != RecipeCommitLedger.Phase.RESOURCE_PAID) saved.getDataCompound().putBoolean("native_start_uncertain", true);
         if (!prepared.prefetches().isEmpty()) {
             Map<String, StoredPrefetch> allocations = new LinkedHashMap<>();
@@ -3720,6 +3765,11 @@ public final class CraftingRuntime {
     }
 
     private void captureInputState(List<MachineRequirement> requirements, CraftingPlan plan) {
+        captureInputState(requirements, plan, Set.of());
+    }
+
+    private void captureInputState(List<MachineRequirement> requirements, CraftingPlan plan,
+                                   Set<Integer> requestValidatedInputs) {
         Set<Integer> consumed = new HashSet<>();
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
@@ -3734,7 +3784,9 @@ public final class CraftingRuntime {
             }
             boolean executed = ledger.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED
                     ? plan.wasNativeExecuted(index) : plan.hasOperations(index);
-            if (executed) consumed.add(index);
+            // "Consumed" also marks request materials already checked and returned at admission.
+            // Persisting this through the existing plan keeps reloads from rechecking expired AE views.
+            if (executed || requestValidatedInputs.contains(index)) consumed.add(index);
             else retained.add(index);
         }
         consumedAtStart = Set.copyOf(consumed);

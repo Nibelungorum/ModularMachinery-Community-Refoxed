@@ -6,6 +6,9 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.helpers.externalstorage.GenericStackInv;
+import appeng.api.config.Actionable;
+import appeng.crafting.execution.CraftingCpuHelper;
+import appeng.crafting.inv.ListCraftingInventory;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -23,6 +26,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.definition.MachineStructureBuilder;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
@@ -35,6 +39,11 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchSupport;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
+import cn.howxu.mmcr.internal.item.PatternBatchData;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -72,6 +81,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static cn.howxu.mmcr.util.IOType.INPUT;
 import static cn.howxu.mmcr.api.machine.definition.BlockPredicate.any;
@@ -152,6 +164,89 @@ public final class PatternBatchRuntimeGameTest {
         helper.succeed();
     }
 
+    public static void conditionalBatchRunsAllNativeCallbacksAtRequestedParallelism(GameTestHelper helper) {
+        complete(helper, false, 4L, false, true);
+    }
+
+    public static void probabilisticOutputsAdmitBatchesAndRetainedInputsReturnUnconsumed(GameTestHelper helper) {
+        for (float consumeChance : new float[]{0F, 1F}) {
+            for (float outputChance : new float[]{0F, 0.5F, 1F}) {
+                // Reload coverage changes modifiers; same-state placement would reuse that controller in the next case.
+                helper.setBlock(new BlockPos(0, 1, 0), Blocks.AIR.defaultBlockState());
+                helper.setBlock(new BlockPos(1, 1, 0), Blocks.AIR.defaultBlockState());
+                try (var fixture = new Fixture(helper, false, 4L, false,
+                        "probability_" + (int) (consumeChance * 100) + "_" + (int) (outputChance * 100),
+                        false, false, consumeChance, outputChance)) {
+                    var definition = PatternDetailsHelper.encodeProcessingPattern(
+                            List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 2L), new GenericStack(AEFluidKey.of(Fluids.WATER), 250L)),
+                            List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 3L), new GenericStack(AEFluidKey.of(Fluids.LAVA), 100L)));
+                    var original = PatternDetailsHelper.decodePattern(definition, helper.getLevel());
+                    var profiles = PatternBatchSupport.inspect(fixture.host, original).stream()
+                            .filter(value -> value.binding().recipeId().equals(fixture.recipe.id())).toList();
+                    helper.assertFalse(profiles.isEmpty(), "The probability recipe remains bound: input=" + consumeChance
+                            + ", output=" + outputChance + ", effective=" + fixture.controller.effectivePatternRecipe(fixture.recipe));
+                    var profile = profiles.getFirst();
+                    helper.assertTrue(profile.safety() == PatternBatchSupport.Safety.PROVEN_LINEAR && profile.maxMultiplier() == 4L,
+                            "Output probability and deterministic input consumption retain batch eligibility");
+                    var batch = new PatternBatchDetails(original, new PatternBatchData(1, fixture.machineId, fixture.recipe.id(), 1L, 4L));
+                    var inventory = new ListCraftingInventory(key -> {});
+                    inventory.insert(AEItemKey.of(Items.IRON_INGOT), 8L, Actionable.MODULATE);
+                    inventory.insert(AEFluidKey.of(Fluids.WATER), 1000L, Actionable.MODULATE);
+                    var holders = CraftingCpuHelper.extractPatternInputs(batch, inventory, helper.getLevel(), new KeyCounter(), new KeyCounter());
+                    helper.assertTrue(holders != null, "Native CPU extracts the complete batch");
+                    if (consumeChance == 1F && outputChance == 1F) {
+                        var probabilisticInputs = fixture.recipe.requirements().stream().map(requirement -> {
+                            if (requirement instanceof ItemRequirement item && item.io() == IOType.INPUT) {
+                                return (MachineRequirement) new ItemRequirement(item.io(), item.item(), item.count(), item.stack(),
+                                        item.chance(), item.tags(), item.components(), 0.5F);
+                            }
+                            return requirement;
+                        }).toList();
+                        fixture.beforeStart = context -> context.setRequirements(probabilisticInputs);
+                        helper.assertFalse(fixture.host.craftingMachine().pushPattern(batch, holders, null),
+                                "A callback cannot turn an already-scaled job into probabilistic input consumption");
+                        fixture.beforeStart = context -> { };
+                        var changedRecipe = MachineRecipe.fromCanonical(fixture.recipe.id(), fixture.machineId, 2,
+                                probabilisticInputs, fixture.recipe.runtimeMachineOutputs(), List.of(), 0, 1, false, true, false, Set.of());
+                        var changedRecipes = new LinkedHashMap<>(RecipeRegistry.dynamicSnapshot());
+                        changedRecipes.put(changedRecipe.id(), changedRecipe);
+                        RecipeRegistry.replaceDynamic(changedRecipes);
+                        helper.assertFalse(PatternBatchSupport.supportsBatchInputs(fixture.controller.effectivePatternRecipe(changedRecipe).requirements()),
+                                "A live recipe reload changes input consumption to an intermediate probability");
+                        helper.assertFalse(fixture.host.craftingMachine().pushPattern(batch, holders, null),
+                                "A recipe reload cannot bypass the probability rule through an old scaled task");
+                        helper.assertTrue(fixture.active() == null && fixture.returnedItems() == 0L
+                                        && Arrays.stream(holders).mapToLong(counter -> counter.get(AEItemKey.of(Items.IRON_INGOT))).sum() == 8L
+                                        && Arrays.stream(holders).mapToLong(counter -> counter.get(AEFluidKey.of(Fluids.WATER))).sum() == 1000L,
+                                "Rejected scaled jobs neither activate nor produce output; the extracted holders remain retryable");
+                        changedRecipes.put(fixture.recipe.id(), fixture.recipe);
+                        RecipeRegistry.replaceDynamic(changedRecipes);
+                    }
+                    helper.assertTrue(fixture.host.craftingMachine().pushPattern(batch, holders, null),
+                            "Native push admits the entire batch with unchanged probabilistic output promises");
+                    helper.assertTrue(fixture.active() != null && fixture.active().parallelism() == 4L,
+                            "A probability output does not silently reduce execution parallelism");
+                    var returns = fixture.host.getLogic().getReturnInv().getAvailableStacks();
+                    helper.assertTrue(returns.get(AEItemKey.of(Items.IRON_INGOT)) == (consumeChance == 0F ? 8L : 0L)
+                                    && returns.get(AEFluidKey.of(Fluids.WATER)) == (consumeChance == 0F ? 1000L : 0L),
+                            "Zero-consumption inputs are returned in full; guaranteed-consumption inputs are paid exactly");
+                    if (consumeChance == 0F) fixture.reloadPaid();
+                    for (int round = 0; round < 8; round++) fixture.round();
+                    helper.assertTrue(fixture.active() == null && fixture.finishParallelisms.equals(List.of(4L)),
+                            "The batch completes exactly once without asserting a random output result: input=" + consumeChance
+                                    + ", output=" + outputChance + ", state=" + fixture.runtime.craftingRuntime().snapshot()
+                                    + ", failure=" + fixture.runtime.craftingRuntime().failure() + ", finishes=" + fixture.finishParallelisms);
+                    if (outputChance == 0F || outputChance == 1F) {
+                        helper.assertTrue(fixture.returnedItems() == (outputChance == 0F ? 0L : 12L)
+                                        && fixture.returnedFluids() == (outputChance == 0F ? 0L : 400L),
+                                "Output probability endpoints retain their native never/always production semantics");
+                    }
+                }
+            }
+        }
+        helper.succeed();
+    }
+
     public static void inspectionDoesNotLoadLinkedControllerChunk(GameTestHelper helper) {
         try (var fixture = new Fixture(helper, false, 256, false, "inspection")) {
             BlockPos unloaded = fixture.controller.getBlockPos().offset(1_000_000, 0, 0);
@@ -171,7 +266,11 @@ public final class PatternBatchRuntimeGameTest {
     }
 
     private static void complete(GameTestHelper helper, boolean factory, long copies, boolean reload) {
-        try (var fixture = new Fixture(helper, factory, copies, reload, "execution")) {
+        complete(helper, factory, copies, reload, false);
+    }
+
+    private static void complete(GameTestHelper helper, boolean factory, long copies, boolean reload, boolean guarded) {
+        try (var fixture = new Fixture(helper, factory, copies, reload, "execution", false, guarded)) {
             var incomplete = fixture.request(copies, true);
             try (var denied = fixture.reserve(copies, incomplete)) {
                 helper.assertTrue(denied.status() == PatternStartReservation.Status.UNAVAILABLE,
@@ -186,6 +285,9 @@ public final class PatternBatchRuntimeGameTest {
             for (int round = 0; round < 8; round++) fixture.round();
             fixture.assertOutputs(copies);
             helper.assertTrue(fixture.active() == null, "Completed source execution has no active runtime");
+            helper.assertTrue(!fixture.tickParallelisms.isEmpty() && fixture.tickParallelisms.stream().allMatch(value -> value == copies)
+                            && fixture.finishParallelisms.equals(List.of(copies)),
+                    "Native tick and finish callbacks observe the whole batch parallelism and finish exactly once");
             for (int round = 0; round < 3; round++) fixture.round();
             fixture.assertOutputs(copies);
         }
@@ -226,6 +328,10 @@ public final class PatternBatchRuntimeGameTest {
         private final MachineControllerRuntime runtime;
         private final PatternInterfaceBlockEntity host;
         private final MachineRecipe recipe;
+        private final AtomicInteger hooks = new AtomicInteger();
+        private final List<Long> tickParallelisms = new ArrayList<>();
+        private final List<Long> finishParallelisms = new ArrayList<>();
+        private Consumer<RecipeStartContext> beforeStart = context -> { };
         private boolean registered;
         private boolean declarationRegistered;
         private boolean structuresInstalled;
@@ -235,6 +341,15 @@ public final class PatternBatchRuntimeGameTest {
         }
 
         Fixture(GameTestHelper helper, boolean factory, long copies, boolean reload, String purpose, boolean gated) {
+            this(helper, factory, copies, reload, purpose, gated, false);
+        }
+
+        Fixture(GameTestHelper helper, boolean factory, long copies, boolean reload, String purpose, boolean gated, boolean guarded) {
+            this(helper, factory, copies, reload, purpose, gated, guarded, 1F, 1F);
+        }
+
+        private Fixture(GameTestHelper helper, boolean factory, long copies, boolean reload, String purpose,
+                        boolean gated, boolean guarded, float consumeChance, float outputChance) {
             this.helper = helper;
             this.factory = factory;
             originalTime = helper.getLevel().getGameTime();
@@ -273,7 +388,14 @@ public final class PatternBatchRuntimeGameTest {
                 @Override public long maxParallelism() { return copies; }
                 @Override public boolean hasFactory() { return factory; }
                 @Override public int factoryThreadLimit() { return 4; }
-                @Override public RecipeBehavior behavior() { return RecipeBehavior.defaults(); }
+                @Override public RecipeBehavior behavior() {
+                    return RecipeBehavior.builder().beforeStart(context -> {
+                                hooks.incrementAndGet();
+                                beforeStart.accept(context);
+                            })
+                            .recipeTick(context -> tickParallelisms.add(context.parallelism()))
+                            .beforeFinish(context -> finishParallelisms.add(context.effectiveParallelism())).build();
+                }
             };
             controller = helper.getBlockEntity(controllerPos);
             host = helper.getBlockEntity(hostPos);
@@ -282,12 +404,17 @@ public final class PatternBatchRuntimeGameTest {
                 field.setAccessible(true);
                 runtime = (MachineControllerRuntime) field.get(controller);
             } catch (ReflectiveOperationException exception) { throw new GameTestAssertException("Cannot access attached runtime: " + exception); }
-            var requirements = new ArrayList<MachineRequirement>(List.of(new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY),
-                            new FluidRequirement(IOType.INPUT, FluidIngredient.of(Fluids.WATER), 250, FluidStack.EMPTY),
-                            new ItemRequirement(IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT, 3)),
-                             new FluidRequirement(IOType.OUTPUT, null, 0, new FluidStack(Fluids.LAVA, 100))));
+            List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), outputChance),
+                    new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 100), outputChance));
+            var requirements = new ArrayList<MachineRequirement>(List.of(
+                    new ItemRequirement(IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 2, ItemStack.EMPTY,
+                            1F, List.of(), DataComponentPredicateSet.EMPTY, consumeChance),
+                    new FluidRequirement(IOType.INPUT, FluidIngredient.of(Fluids.WATER), 250, FluidStack.EMPTY,
+                            1F, List.of(), consumeChance)));
+            outputs.forEach(output -> requirements.add(OutputRegistry.toRequirement(output, List.of())));
             if (gated) requirements.addAll(List.of(new StageRequirement(2),
                     new LevelRequirement(MMCR.id("batch_runtime_gate_coil"), MMCR.id("batch_runtime_gate_coil_high"))));
+            if (guarded) requirements.add(new StageRequirement(1));
             recipe = MachineRecipe.fromCanonical(machineId.withSuffix("_recipe"), machineId, 2, requirements,
                     List.of(), List.of(), 0, 1, false, true, false, Set.of());
             try {
@@ -419,6 +546,14 @@ public final class PatternBatchRuntimeGameTest {
                 field.setAccessible(true);
                 return ((MachineRecipeThread) field.get(controller)).cachedPatternRecipe(recipe.id());
             } catch (ReflectiveOperationException exception) { throw new GameTestAssertException("Cannot inspect actual recipe-thread memory: " + exception); }
+        }
+
+        long returnedItems() {
+            return host.getLogic().getReturnInv().getAvailableStacks().get(AEItemKey.of(Items.GOLD_INGOT));
+        }
+
+        long returnedFluids() {
+            return host.getLogic().getReturnInv().getAvailableStacks().get(AEFluidKey.of(Fluids.LAVA));
         }
 
         void assertOutputs(long copies) {

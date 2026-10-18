@@ -454,73 +454,80 @@ public final class AppMekPatternGameTest {
         }).thenSucceed();
     }
 
-    public void taggedChemicalRemainsLegalWithoutCompression(GameTestHelper helper) {
-        conservativeChemical(helper, 0);
+    public void taggedChemicalSupportsBatchDelivery(GameTestHelper helper) {
+        chemicalBatchPolicy(helper, 0);
     }
 
-    public void nonConsumedChemicalRemainsLegalWithoutCompression(GameTestHelper helper) {
-        conservativeChemical(helper, 1);
+    public void requestSuppliedNonConsumedChemicalReturnsAfterAdmission(GameTestHelper helper) {
+        chemicalBatchPolicy(helper, 1);
     }
 
     public void probabilisticChemicalRemainsLegalWithoutCompression(GameTestHelper helper) {
-        conservativeChemical(helper, 2);
+        chemicalBatchPolicy(helper, 2);
     }
 
-    private void conservativeChemical(GameTestHelper helper, int mode) {
+    public void requestInsufficientChemicalKeepsPhysicalCatalystCheck(GameTestHelper helper) {
+        chemicalBatchPolicy(helper, 3);
+    }
+
+    private void chemicalBatchPolicy(GameTestHelper helper, int mode) {
         MekanismKey oxygen = chemical("oxygen");
         MekanismKey hydrogen = chemical("hydrogen");
         ChemicalIngredient ingredient = mode == 0
                 ? ChemicalIngredient.tag(ResourceLocation.fromNamespaceAndPath("mekanism", "gaseous"), 500L)
                 : ChemicalIngredient.chemical(oxygen.getId(), 500L);
-        var requirement = new LoadedChemicalRequirement(IOType.INPUT, ingredient, 1F, List.of(), mode == 0 ? 1F : mode == 1 ? 0F : 0.5F);
-        var fixture = new CompatPatternCpuFixture(helper, "appmek_conservative_" + mode, "ae2_me_pattern_interface", ParallelTier.PLUS,
+        var requirement = new LoadedChemicalRequirement(IOType.INPUT, ingredient, 1F, List.of(), mode == 0 ? 1F : mode == 2 ? 0.5F : 0F);
+        var fixture = new CompatPatternCpuFixture(helper, "appmek_batch_policy_" + mode, "ae2_me_pattern_interface", ParallelTier.PLUS,
                 List.of(requirement, LoadedChemicalRequirement.output(hydrogen.getId(), 600L, 1F)),
                 List.of(new LoadedChemicalOutput(hydrogen.getId(), 600L, 1F)),
                 mode > 0 ? "chemical_input_hatch_basic" : null);
         ChemicalPortBlockEntity catalyst = mode > 0 ? helper.getBlockEntity(new BlockPos(2, 0, 0)) : null;
         fixture.storage.blocked.add(oxygen);
         fixture.storage.blocked.add(hydrogen);
+        long copies = mode <= 1 ? 16L : 1L;
+        long requestAmount = mode == 3 ? 250L : 1_000L;
         var sequence = fixture.ready().thenExecute(() -> {
-            IPatternDetails pattern = installChemicalPattern(fixture.host, oxygen, hydrogen);
-            var unchanged = PatternBatchPlanning.rewrite(Map.of(pattern, 19L), PatternBatchPlanning.capture(fixture.grid()));
-            helper.assertTrue(unchanged.size() == 1 && unchanged.get(pattern) == 19L,
-                    "Runtime-resolved chemical tags and non-consumed chemistry are not falsely compressed");
-            KeyCounter[] request = holders(pattern);
-            // Non-consumed requirements remain live conditions during processing, unlike paid inputs.
-            // The request itself is returned immediately and must not masquerade as a retained catalyst.
-            if (mode == 1) catalyst.chemicalTank().setStack(AppMekGameTestFixtures.chemical("oxygen", 500L));
-            helper.assertTrue(fixture.host.craftingMachine().pushPattern(pattern, request, Direction.NORTH),
-                    "Conservative planning still permits a legal normal single request; mode=" + mode
+            IPatternDetails pattern = installChemicalPattern(fixture.host, oxygen, hydrogen, requestAmount);
+            var rewritten = PatternBatchPlanning.rewrite(Map.of(pattern, 19L), PatternBatchPlanning.capture(fixture.grid()));
+            var unit = (PatternBatchDetails) pattern;
+            helper.assertTrue(rewritten.equals(mode == 2 ? Map.of(pattern, 19L)
+                            : Map.of(unit.scaled(16L), 1L, unit.scaled(3L), 1L)),
+                    "Tags and deterministic consumption allow batching; only intermediate chemical consumption stays unit-scale");
+            var dispatched = copies == 1L ? pattern : unit.scaled(copies);
+            KeyCounter[] request = holders(dispatched);
+            if (mode == 1 || mode == 3) catalyst.chemicalTank().setStack(AppMekGameTestFixtures.chemical("oxygen", 500L));
+            helper.assertTrue(fixture.host.craftingMachine().pushPattern(dispatched, request, Direction.NORTH),
+                    "Native admission checks the complete chemical request; mode=" + mode
                             + ", consumeChance=" + requirement.consumeChance() + ", chemical=" + requirement.ingredient().id()
                             + ", pattern=" + pattern.getClass().getSimpleName()
                             + ", oxygenHeld=" + holderAmount(request, oxygen)
                             + ", oxygenReturned=" + amount(fixture.host.getLogic().getReturnInv(), oxygen)
                             + ", tick=" + fixture.controller.runtimeSnapshot().crafting().tick()
                             + ", failure=" + fixture.controller.runtimeSnapshot().crafting().failure());
-            fixture.assertActive(1L);
-            if (mode == 1) catalyst.chemicalTank().setEmpty();
+            fixture.assertActive(copies);
+            if (mode == 1 || mode == 3) catalyst.chemicalTank().setEmpty();
             // Supply the continuing condition only after startup chose its real random outcome.
             if (mode == 2) catalyst.chemicalTank().setStack(AppMekGameTestFixtures.chemical("oxygen", 500L));
         });
-        if (mode == 1) {
+        if (mode == 3) {
             sequence.thenWaitUntil(() -> helper.assertTrue(fixture.controller.runtimeSnapshot().crafting().failure() != null
-                            && fixture.controller.runtimeSnapshot().crafting().tick() == 0
-                            && amount(fixture.host.getLogic().getReturnInv(), oxygen) == 1_000L
+                             && amount(fixture.host.getLogic().getReturnInv(), oxygen) == 250L
                             && amount(fixture.host.getLogic().getReturnInv(), hydrogen) == 0L,
-                    "Removing the genuine catalyst blocks processing without consuming or duplicating the returned request; state="
+                    "An insufficient request cannot replace the physical catalyst's continuing check; state="
                             + fixture.controller.runtimeSnapshot().crafting()))
                     .thenExecute(() -> catalyst.chemicalTank().setStack(AppMekGameTestFixtures.chemical("oxygen", 500L)));
         }
         sequence.thenWaitUntil(() -> {
             long remaining = amount(fixture.host.getLogic().getReturnInv(), oxygen);
-            helper.assertTrue(amount(fixture.host.getLogic().getReturnInv(), hydrogen) == 600L
-                            && (mode == 0 ? remaining == 500L : mode == 1 ? remaining == 1_000L
+            helper.assertTrue(amount(fixture.host.getLogic().getReturnInv(), hydrogen) == 600L * copies
+                             && (mode == 0 ? remaining == 500L * copies : mode == 1 ? remaining == 1_000L * copies
+                             : mode == 3 ? remaining == 250L
                             : remaining == 500L || remaining == 1_000L),
                     "Real normal execution respects tag consumption and both legitimate probability outcomes; oxygen="
                             + remaining + ", hydrogen=" + amount(fixture.host.getLogic().getReturnInv(), hydrogen)
                             + ", state=" + fixture.controller.runtimeSnapshot().crafting());
-            if (catalyst != null) helper.assertTrue(catalyst.chemicalTank().getStored() == 500L,
-                    "The independent physical catalyst is still present after completion; none of its units were consumed");
+            if (catalyst != null) helper.assertTrue(catalyst.chemicalTank().getStored() == (mode == 1 ? 0L : 500L),
+                     "A fully supplied request may finish without physical catalyst; physical-only conditions remain unconsumed");
         })
                 .thenSucceed();
     }
@@ -535,8 +542,13 @@ public final class AppMekPatternGameTest {
     private static MekanismKey chemical(String name) { return MekanismKey.of(AppMekGameTestFixtures.chemical(name, 1L)); }
 
     private static IPatternDetails installChemicalPattern(PatternInterfaceBlockEntity host, MekanismKey input, MekanismKey output) {
+        return installChemicalPattern(host, input, output, 1_000L);
+    }
+
+    private static IPatternDetails installChemicalPattern(PatternInterfaceBlockEntity host, MekanismKey input, MekanismKey output,
+                                                          long inputAmount) {
         host.getLogic().getPatternInv().addItems(PatternDetailsHelper.encodeProcessingPattern(
-                List.of(new GenericStack(input, 1_000L)), List.of(new GenericStack(output, 600L))));
+                List.of(new GenericStack(input, inputAmount)), List.of(new GenericStack(output, 600L))));
         return host.getLogic().getAvailablePatterns().getFirst();
     }
 

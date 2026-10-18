@@ -469,8 +469,15 @@ public final class AsyncRequirementPlanner {
     }
 
     public static @Nullable FailureReason capturedRequirementFailure(ControllerRuntimeSnapshot snapshot,
-                                                                       MachineRecipe recipe) {
-        for (LevelRequirement requirement : recipe.levelRequirements()) {
+                                                                        MachineRecipe recipe) {
+        return capturedRequirementFailure(snapshot, recipe.requirements());
+    }
+
+    /** Static conditions also apply to the effective requirements produced by beforeStart. */
+    public static @Nullable FailureReason capturedRequirementFailure(ControllerRuntimeSnapshot snapshot,
+                                                                      List<MachineRequirement> requirements) {
+        for (MachineRequirement candidate : requirements) {
+            if (!(candidate instanceof LevelRequirement requirement)) continue;
             MachineLevel required = MachineLevelRegistry.getLevel(requirement.levelId());
             MachineLevel actual = snapshot.foundLevels().get(requirement.typeId());
             if (required == null || actual == null || actual.priority() < required.priority()) {
@@ -478,7 +485,8 @@ public final class AsyncRequirementPlanner {
             }
         }
         int actualStage = Math.max(1, snapshot.structure().matchedStage());
-        for (StageRequirement requirement : recipe.stageRequirements()) {
+        for (MachineRequirement candidate : requirements) {
+            if (!(candidate instanceof StageRequirement requirement)) continue;
             if (actualStage < requirement.minStage()) return BuiltinFailureReasons.STAGE_INSUFFICIENT;
         }
         return null;

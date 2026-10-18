@@ -15,11 +15,15 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -36,6 +40,10 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksTestBootstrap;
@@ -43,6 +51,7 @@ import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInputCapability;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkPointHandler;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.internal.capability.SmartInterfaceCapability;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
@@ -80,6 +89,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -105,6 +115,9 @@ class PatternStartReservationTest {
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
         TestBootstrap.bootstrapCapabilities();
+        TestBootstrap.registerType(new LevelType(MMCR.id("missing_coil"), Component.empty()));
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("missing_level"), MMCR.id("missing_coil"), 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
     }
 
     @AfterEach
@@ -1563,6 +1576,217 @@ class PatternStartReservationTest {
                 assertThat(handler.availableForPrefetch()).isZero();
                 throw new IllegalStateException("prefetch search finished");
             }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(floats = {0F, 0.5F, 1F})
+    void probabilisticOutputPromisesAcceptUnchangedProbabilitiesButRejectCallbackChanges(float chance) {
+        List<MachineOutput> expected = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), chance),
+                new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 100), chance));
+        List<MachineOutput> same = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 3), chance),
+                new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 100), chance));
+        assertThat(CraftingRuntime.samePromisedOutputs(expected, same, 4L)).isTrue();
+        for (int index = 0; index < expected.size(); index++) {
+            var changed = new ArrayList<>(same);
+            changed.set(index, same.get(index).withChance(chance == 1F ? 0.5F : 1F));
+            assertThat(CraftingRuntime.samePromisedOutputs(expected, changed, 4L)).isFalse();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"key", "amount", "components", "chance"})
+    void beforeStartChangesPromisedOutputsRejectsWithoutPayment(String change) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            AtomicInteger hooks = new AtomicInteger();
+            var behavior = RecipeBehavior.builder().beforeStart(context -> {
+                hooks.incrementAndGet();
+                ItemStack output = new ItemStack(change.equals("key") ? Items.DIAMOND : Items.GOLD_INGOT,
+                        change.equals("amount") ? 2 : 1);
+                if (change.equals("components")) output.set(DataComponents.CUSTOM_NAME, Component.literal("changed"));
+                context.setOutputs(List.of(new MachineOutput.ItemOutput(output, change.equals("chance") ? 0.5F : 1F)));
+            }).build();
+            var fixture = new PendingStartFixture("exact_changed_promise_" + change, behavior,
+                    List.of(input(Items.IRON_INGOT, 1)), 256L);
+            var materials = new LongItemStorage(1, 1024L, () -> { });
+            materials.setContents(0, stack(Items.IRON_INGOT, 1), 256L);
+            var recipe = MachineRecipe.fromCanonical(MMCR.id("exact_promise_" + change), MMCR.id("test_cube"), 20,
+                    List.of(input(Items.IRON_INGOT, 1),
+                            new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT))),
+                    List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)),
+                    List.of(), 0, 1, false, true, false, Set.of());
+            RecipeRegistry.registerStatic(recipe);
+            assertThat(fixture.controller.reserveExactPatternStart(PATTERN_PORT, recipe.id(), recipe.runtimeMachineOutputs(),
+                    256L, List.of(new ItemBusCapability(materials, IOType.INPUT))).status())
+                    .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+            assertThat(hooks).hasValue(1);
+            assertThat(materials.amount(0)).isEqualTo(256L);
+            assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
+            assertThat(fixture.runtime.ledger().state().paidAttempts()).isZero();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"level", "stage", "callback_level", "callback_stage", "cancel"})
+    void batchDeliveryCannotBypassStaticConditionsOrCallbackCancellation(String condition) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            MachineRequirement guard = condition.endsWith("level")
+                    ? new LevelRequirement(MMCR.id("missing_coil"), MMCR.id("missing_level"))
+                    : new StageRequirement(2);
+            var requirements = new ArrayList<MachineRequirement>(List.of(input(Items.IRON_INGOT, 1)));
+            if (!condition.startsWith("callback_") && !condition.equals("cancel")) requirements.add(guard);
+            var behavior = RecipeBehavior.builder().beforeStart(context -> {
+                if (condition.startsWith("callback_")) {
+                    var modified = new ArrayList<>(context.requirements());
+                    modified.add(guard);
+                    context.setRequirements(modified);
+                }
+                if (condition.equals("cancel")) context.cancel();
+            }).build();
+            var fixture = new PendingStartFixture("guarded_batch_" + condition, behavior, requirements, 4L);
+            var materials = new LongItemStorage(1, 64L, () -> { });
+            setItem(materials, 0, stack(Items.IRON_INGOT, 4));
+            var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, List.of(new ItemBusCapability(materials, IOType.INPUT)));
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+            assertThat(materials.getStackInSlot(0).getCount()).isEqualTo(4);
+            assertThat(fixture.runtime.pendingPatternRecipeId()).isNull();
+            assertThat(fixture.runtime.active()).isFalse();
+        }
+    }
+
+    @Test
+    void batchUsesActualBeforeStartInputDemandWithoutAcceptingAPrefix() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var fixture = new PendingStartFixture("batch_changed_input", RecipeBehavior.builder().beforeStart(context ->
+                    context.replaceExactItemInputCount(Items.IRON_INGOT, 1, 2)).build(),
+                    List.of(input(Items.IRON_INGOT, 1), new StageRequirement(1)), 4L);
+            var materials = new LongItemStorage(1, 64L, () -> { });
+            setItem(materials, 0, stack(Items.IRON_INGOT, 4));
+            List<MachineCapability> capabilities = List.of(new ItemBusCapability(materials, IOType.INPUT));
+            assertThat(fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, capabilities).status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+            assertThat(materials.getStackInSlot(0).getCount()).isEqualTo(4);
+            setItem(materials, 0, stack(Items.IRON_INGOT, 8));
+            try (var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, capabilities)) {
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(reservation.parallelism()).isEqualTo(4L);
+                assertThat(reservation.commit()).isTrue();
+            }
+            assertThat(materials.getStackInSlot(0).isEmpty()).isTrue();
+            assertThat(fixture.runtime.parallelism()).isEqualTo(4L);
+        }
+    }
+
+    @Test
+    void smartConditionRejectsBulkDeliveryUntilItsActualValueMatches() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var fixture = new PendingStartFixture("batch_smart_condition", RecipeBehavior.defaults(), List.of(
+                    input(Items.IRON_INGOT, 1), SmartInterfaceRequirement.input("temperature", 10F, 20F)), 4L);
+            var values = new FloatValueStorage();
+            values.set("temperature", 5F);
+            var smart = new PatternFluxHost(RuntimeTestFixtures.itemInput(new BlockPos(5, 0, 0)),
+                    new SmartInterfaceCapability(values, IOType.INPUT));
+            smart.setLevel(fixture.controller.getLevel());
+            var components = new ArrayList<>(fixture.controller.componentRuntime().components());
+            components.add(new ProcessingComponent(null, smart, smart.getBlockPos(), smart.getBlockPos(), List.of()));
+            fixture.controller.componentRuntime().replaceComponents(components);
+            RuntimeTestFixtures.republish(fixture.controller);
+            var materials = new LongItemStorage(1, 64L, () -> { });
+            setItem(materials, 0, stack(Items.IRON_INGOT, 4));
+            List<MachineCapability> capabilities = List.of(new ItemBusCapability(materials, IOType.INPUT));
+            assertThat(fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, capabilities).status()).isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+            assertThat(materials.getStackInSlot(0).getCount()).isEqualTo(4);
+            values.set("temperature", 15F);
+            try (var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, capabilities)) {
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(reservation.parallelism()).isEqualTo(4L);
+                assertThat(reservation.commit()).isTrue();
+            }
+            assertThat(materials.getStackInSlot(0).isEmpty()).isTrue();
+            assertThat(values.value("temperature")).contains(15F);
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0,false,false", "2,false,false", "4,false,false", "4,true,false", "4,false,true", "4,true,true"})
+    void onlyFullyRequestSuppliedRetainedInputsSkipContinuousChecksAfterReload(int requestCatalysts,
+                                                                              boolean saveDuringCommit, boolean overlaps) throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var catalystItem = overlaps ? Items.IRON_INGOT : Items.DIAMOND;
+            var catalyst = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(catalystItem), 1,
+                    ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F);
+            var fixture = new PendingStartFixture("exact_retained_request", RecipeBehavior.defaults(),
+                    List.of(input(Items.IRON_INGOT, overlaps ? 2 : 1), catalyst), 4L);
+            var physical = RuntimeTestFixtures.itemInput(new BlockPos(5, 0, 0));
+            physical.setLevel(fixture.controller.getLevel());
+            setItem(physical.itemHandler(), 0, stack(catalystItem, 4));
+            var components = new ArrayList<>(fixture.controller.componentRuntime().components());
+            components.add(new ProcessingComponent(new MachineComponent(physical.kind(), physical.ioType()), physical,
+                    physical.getBlockPos(), physical.getBlockPos(), (String) null));
+            fixture.controller.componentRuntime().replaceComponents(components);
+            formForPattern(fixture.controller, true);
+            var request = new LongItemStorage(2, 64L, () -> { });
+            request.setContents(0, stack(Items.IRON_INGOT, 1), 4L);
+            request.setContents(1, stack(Items.DIAMOND, 1), overlaps ? 0 : requestCatalysts);
+            var saved = new CompoundTag();
+            try (var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    4L, List.of(new ItemBusCapability(request, IOType.INPUT)))) {
+                assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+                assertThat(reservation.commit(() -> {
+                    if (saveDuringCommit) fixture.runtime.save(saved, fixture.controller.getLevel().registryAccess());
+                })).isTrue();
+            }
+            assertThat(request.amount(0)).isZero();
+            assertThat(request.amount(1)).isEqualTo(overlaps ? 0 : requestCatalysts);
+            assertThat(physical.itemHandler().amount(0)).isEqualTo(overlaps ? 0L : 4L);
+            if (!saveDuringCommit) fixture.runtime.save(saved, fixture.controller.getLevel().registryAccess());
+            // AE owns the unconsumed request again; it is not a persistent physical input source.
+            request.setContents(1, stack(Items.DIAMOND, 1), 0L);
+            if (!overlaps) assertThat(physical.itemHandler().forceExtract(0, 4L, false)).isEqualTo(4L);
+            var restored = new CraftingRuntime(fixture.controller, fixture.controller.componentRuntime());
+            restored.load(saved, fixture.controller.resourceDomain(), fixture.controller.getLevel().registryAccess());
+            assertThat(restored.active()).isTrue();
+            restored.rebindCurrentVersions();
+            boolean validatedRequest = requestCatalysts == 4 && !overlaps;
+            if (validatedRequest) assertThat(restored.installedTickRequirements()).isEmpty();
+            else assertThat(restored.installedTickRequirements()).isNotEmpty();
+            LevelStub.setGameTime(fixture.controller.getLevel(), 1L);
+            restored.tick();
+            assertThat(restored.tickCount()).isEqualTo(validatedRequest && !saveDuringCommit ? 1 : 0);
+            if (saveDuringCommit) assertThat(restored.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+            if (validatedRequest && !saveDuringCommit) assertThat(restored.failure()).isNull();
+            else assertThat(restored.failure()).isNotNull();
+        }
+    }
+
+    @Test
+    void exactPaidReloadRetainsLongBatchAndSourceConstraint() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var fixture = new PendingStartFixture("exact_paid_reload", RecipeBehavior.defaults(),
+                    List.of(input(Items.IRON_INGOT, 2)), Integer.MAX_VALUE);
+            long total = Math.multiplyExact(2L, Integer.MAX_VALUE);
+            var materials = new LongItemStorage(1, Long.MAX_VALUE, () -> { });
+            materials.setContents(0, stack(Items.IRON_INGOT, 1), total);
+            var reservation = fixture.controller.reserveExactPatternStart(PATTERN_PORT, fixture.recipe.id(), List.of(),
+                    Integer.MAX_VALUE, List.of(new ItemBusCapability(materials, IOType.INPUT)));
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+            assertThat(reservation.commit()).isTrue();
+            assertThat(materials.amount(0)).isZero();
+            var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+            var output = new CompoundTag();
+            fixture.runtime.save(output, lookup);
+            fixture.controller.componentRuntime().replaceModifiers(Map.of());
+            var restored = new CraftingRuntime(fixture.controller, fixture.controller.componentRuntime());
+            restored.load(output, fixture.controller.resourceDomain(), lookup);
+            assertThat(restored.active()).isTrue();
+            assertThat(restored.parallelism()).isEqualTo((long) Integer.MAX_VALUE);
+            assertThat(restored.requiresPatternRequest()).isTrue();
+            assertThat(restored.activeRecipe().inputConsumptionPlan().isValidFor(restored.activeRecipe().effectiveRequirements())).isTrue();
+            assertThat(materials.amount(0)).isZero();
         }
     }
 
