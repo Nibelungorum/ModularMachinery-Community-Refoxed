@@ -95,59 +95,32 @@ public class MachineControllerBlock extends Block implements EntityBlock {
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext ctx) {
+        boolean verticalAllowed = isVerticalAllowed();
         Direction horizontalFacing = ctx.getHorizontalDirection().getOpposite();
-        double playerX = ctx.getPlayer() == null ? ctx.getClickedPos().getX() + 0.5d : ctx.getPlayer().getX();
-        double playerY = ctx.getPlayer() == null ? ctx.getClickedPos().getY() : ctx.getPlayer().getY();
-        double playerZ = ctx.getPlayer() == null ? ctx.getClickedPos().getZ() + 0.5d : ctx.getPlayer().getZ();
+        // Mekanism uses yaw zero without a player; AE2 uses the context's horizontal fallback.
+        if (ctx.getPlayer() == null && !verticalAllowed) horizontalFacing = Direction.NORTH;
+        float pitch = ctx.getPlayer() == null ? 0.0F : ctx.getPlayer().getXRot();
         Direction facing = facingForPlacement(
-                ctx.getClickedFace(),
-                ctx.getClickLocation().y,
-                playerY,
+                pitch,
                 horizontalFacing,
-                isVerticalAllowed(),
+                verticalAllowed,
                 isVerticalRequired());
         return defaultBlockState()
                 .setValue(FACING, facing)
-                .setValue(ROLL_FACING, rollFacingForPlacement(
-                        facing,
-                        ctx.getClickedPos().getX() + 0.5d,
-                        ctx.getClickedPos().getZ() + 0.5d,
-                        playerX,
-                        playerZ,
-                        horizontalFacing));
+                // The horizontal projection of screen-up reverses when looking up at the underside.
+                .setValue(ROLL_FACING, facing == Direction.UP
+                        ? horizontalFacing.getOpposite() : horizontalFacing);
     }
 
-    static Direction facingForPlacement(Direction clickedFace, double clickY, double playerY, Direction horizontalFallback, boolean verticalAllowed) {
-        if (!verticalAllowed) return facingForPlacement(clickedFace, horizontalFallback, false);
-        if (clickedFace == Direction.DOWN) return Direction.DOWN;
-        if (clickedFace == Direction.UP) return clickY < playerY - 1.0d ? Direction.UP : horizontalFallback;
-        return clickY > playerY + 1.0d ? Direction.DOWN : clickedFace;
-    }
-
-    static Direction facingForPlacement(Direction clickedFace, double clickY, double playerY,
-                                        Direction horizontalFallback, boolean verticalAllowed, boolean verticalRequired) {
-        if (!verticalRequired) return facingForPlacement(clickedFace, clickY, playerY, horizontalFallback, verticalAllowed);
-        if (clickedFace.getAxis().isVertical()) return clickedFace;
-        return clickY > playerY ? Direction.DOWN : Direction.UP;
-    }
-
-    static Direction rollFacingForPlacement(Direction facing, double blockCenterX, double blockCenterZ, double playerX, double playerZ, Direction horizontalFallback) {
-        if (!facing.getAxis().isVertical()) return horizontalFallback;
-
-        double dx = playerX - blockCenterX;
-        double dz = playerZ - blockCenterZ;
-        if (Math.abs(dx) == Math.abs(dz)) return horizontalFallback;
-        if (Math.abs(dx) > Math.abs(dz)) return dx < 0.0d ? Direction.WEST : Direction.EAST;
-        return dz < 0.0d ? Direction.NORTH : Direction.SOUTH;
-    }
-
-    static Direction facingForPlacement(Direction clickedFace, Direction horizontalFallback, boolean verticalAllowed) {
-        if (verticalAllowed) return clickedFace;
-        return clickedFace.getAxis().isVertical() ? horizontalFallback : clickedFace;
-    }
-
-    Direction facingForPlacement(Direction clickedFace, Direction horizontalFallback) {
-        return facingForPlacement(clickedFace, horizontalFallback, isVerticalAllowed());
+    static Direction facingForPlacement(float pitch, Direction horizontalFacing,
+                                        boolean verticalAllowed, boolean verticalRequired) {
+        if (verticalRequired) return pitch < 0.0F ? Direction.DOWN : Direction.UP;
+        if (verticalAllowed) {
+            // ME Drive placement keeps the exact +/-65 degree boundary horizontal.
+            if (pitch > 65.0F) return Direction.UP;
+            if (pitch < -65.0F) return Direction.DOWN;
+        }
+        return horizontalFacing;
     }
 
     private boolean isVerticalAllowed() {

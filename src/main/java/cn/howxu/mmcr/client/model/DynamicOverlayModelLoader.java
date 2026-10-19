@@ -156,11 +156,12 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
     static float[] uv(Direction direction, Direction rollFacing, Vector3f vertex) {
         if (direction.getAxis().isVertical()) {
+            boolean upward = direction == Direction.UP;
             return switch (rollFacing) {
-                case EAST -> new float[]{1.0f - vertex.z(), vertex.x()};
-                case SOUTH -> new float[]{vertex.x(), vertex.z()};
-                case WEST -> new float[]{vertex.z(), 1.0f - vertex.x()};
-                default -> new float[]{vertex.x(), vertex.z()};
+                case EAST -> new float[]{upward ? vertex.z() : 1.0f - vertex.z(), 1.0f - vertex.x()};
+                case SOUTH -> new float[]{upward ? 1.0f - vertex.x() : vertex.x(), 1.0f - vertex.z()};
+                case WEST -> new float[]{upward ? 1.0f - vertex.z() : vertex.z(), vertex.x()};
+                default -> new float[]{upward ? vertex.x() : 1.0f - vertex.x(), vertex.z()};
             };
         }
         return new float[]{u(direction, vertex), v(direction, vertex)};

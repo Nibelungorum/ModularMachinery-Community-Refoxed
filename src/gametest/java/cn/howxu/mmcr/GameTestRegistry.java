@@ -80,6 +80,10 @@ public final class GameTestRegistry {
     public static Collection<TestFunction> generateTests() {
         List<TestFunction> event = new ArrayList<>();
         register(event, "block_map_color", 20, BlockMapColorGameTest::registeredBlocksAreVisibleMapSurfaces);
+        register(event, "controller_placement_horizontal", 20, ControllerPlacementGameTest::horizontalPlacementFollowsEnrichmentChamber);
+        register(event, "controller_placement_optional_vertical", 20, ControllerPlacementGameTest::optionalVerticalPlacementFollowsMeDrive);
+        register(event, "controller_placement_required_vertical", 20, ControllerPlacementGameTest::requiredVerticalPlacementFollowsPitchSign);
+        register(event, "controller_placement_without_player", 20, ControllerPlacementGameTest::placementWithoutPlayerUsesReferenceFallbacks);
         register(event, "input_isolation_item_sources", 20, InputIsolationGameTest::itemSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_fluid_sources", 20, InputIsolationGameTest::fluidSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_combined_atomic", 20, InputIsolationGameTest::combinedInputSharesEnergyAndOutputAtomically);
@@ -849,6 +853,7 @@ public final class GameTestRegistry {
         event.removeIf(test -> {
             String name = test.testName();
             return !(name.startsWith("mmcr:pattern_batch_")
+                    || name.startsWith("mmcr:controller_placement_")
                     || name.equals("mmcr:ae2lt_pattern_batch_native_planning_admission")
                     || name.startsWith("mmcr:ae2_pending_")
                     || name.startsWith("mmcr:ae2_legacy_queue_")
@@ -878,6 +883,9 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
+        event.registerMachine(MachineBuilder.machine(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE)
+                .displayNameKey("machine.mmcr_test.controller_placement_required_vertical")
+                .controller(controller -> controller.requireVerticalFacing()).build());
         if (ModList.get().isLoaded("pneumaticcraft")) {
             PneumaticRecipeGameTest.registerMachineDefinitions(event);
         }
@@ -944,6 +952,11 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(StructureRegistration event) {
+        event.registerStructure(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE,
+                structure -> structure.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("C")
+                        .where('C', BlockPredicate.deferredBlock(
+                                () -> ModBlocks.controllerFor(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE).get()))
+                        .controller('C'))));
         if (ModList.get().isLoaded("pneumaticcraft")) {
             PneumaticRecipeGameTest.registerMachineStructures(event);
         }

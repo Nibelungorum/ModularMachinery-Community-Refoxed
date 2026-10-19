@@ -40,6 +40,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.joml.Vector3f;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;
@@ -68,6 +70,25 @@ class DynamicOverlayModelLoaderTest {
                 sprites.computeIfAbsent(MMCR.id("block/ctm/basic_casing/particle"), TestSprite::new),
                 texture -> sprites.computeIfAbsent(texture, TestSprite::new),
                 ItemTransforms.NO_TRANSFORMS, ItemOverrides.EMPTY, null);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "UP, NORTH, 0, 0, 1, 0, 0, 1",
+            "UP, SOUTH, 1, 1, 0, 1, 1, 0",
+            "UP, EAST, 1, 0, 1, 1, 0, 0",
+            "UP, WEST, 0, 1, 0, 0, 1, 1",
+            "DOWN, NORTH, 1, 0, 0, 0, 1, 1",
+            "DOWN, SOUTH, 0, 1, 1, 1, 0, 0",
+            "DOWN, EAST, 1, 1, 1, 0, 0, 1",
+            "DOWN, WEST, 0, 0, 0, 1, 1, 0"
+    })
+    void vertical_overlay_uses_roll_as_up_without_mirroring(Direction face, Direction up,
+                                                          float leftX, float leftZ, float rightX, float rightZ,
+                                                          float bottomX, float bottomZ) {
+        assertThat(DynamicOverlayModelLoader.uv(face, up, new Vector3f(leftX, 0, leftZ))).containsExactly(0, 0);
+        assertThat(DynamicOverlayModelLoader.uv(face, up, new Vector3f(rightX, 0, rightZ))).containsExactly(1, 0);
+        assertThat(DynamicOverlayModelLoader.uv(face, up, new Vector3f(bottomX, 0, bottomZ))).containsExactly(0, 1);
     }
 
     @ParameterizedTest

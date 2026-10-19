@@ -36,6 +36,8 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.MenuType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -60,38 +62,31 @@ class MachineControllerBlockTest {
                         FeatureFlags.VANILLA_SET));
     }
 
-    @Test
-    void vertical_allowed_controller_uses_clicked_face_for_placement() {
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, 1.5d, 1.0d, Direction.NORTH, true)).isEqualTo(Direction.NORTH);
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, 1.5d, 3.0d, Direction.NORTH, true)).isEqualTo(Direction.UP);
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.DOWN, 2.5d, 1.0d, Direction.NORTH, true)).isEqualTo(Direction.DOWN);
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, 3.5d, 3.0d, Direction.NORTH, true)).isEqualTo(Direction.NORTH);
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.EAST, 3.5d, 2.0d, Direction.NORTH, true)).isEqualTo(Direction.DOWN);
+    @ParameterizedTest
+    @CsvSource({"-90, DOWN", "-65.01, DOWN", "-65, NORTH", "-64.99, NORTH", "0, NORTH",
+            "64.99, NORTH", "65, NORTH", "65.01, UP", "90, UP"})
+    void vertical_allowed_controller_follows_me_drive_pitch_threshold(float pitch, Direction expected) {
+        assertThat(MachineControllerBlock.facingForPlacement(pitch, Direction.NORTH, true, false))
+                .isEqualTo(expected);
     }
 
     @Test
-    void vertical_placement_roll_facing_anchors_toward_player() {
-        assertThat(MachineControllerBlock.rollFacingForPlacement(Direction.UP, 10.5d, 10.5d, 8.0d, 10.0d, Direction.NORTH)).isEqualTo(Direction.WEST);
-        assertThat(MachineControllerBlock.rollFacingForPlacement(Direction.DOWN, 10.5d, 10.5d, 13.0d, 10.0d, Direction.NORTH)).isEqualTo(Direction.EAST);
-        assertThat(MachineControllerBlock.rollFacingForPlacement(Direction.UP, 10.5d, 10.5d, 10.0d, 8.0d, Direction.NORTH)).isEqualTo(Direction.NORTH);
-        assertThat(MachineControllerBlock.rollFacingForPlacement(Direction.DOWN, 10.5d, 10.5d, 10.0d, 13.0d, Direction.NORTH)).isEqualTo(Direction.SOUTH);
-        assertThat(MachineControllerBlock.rollFacingForPlacement(Direction.UP, 10.5d, 10.5d, 9.5d, 9.5d, Direction.EAST)).isEqualTo(Direction.EAST);
-        assertThat(MachineControllerBlock.rollFacingForPlacement(Direction.NORTH, 10.5d, 10.5d, 8.0d, 10.0d, Direction.SOUTH)).isEqualTo(Direction.SOUTH);
+    void horizontal_only_controller_faces_player_regardless_of_pitch() {
+        for (Direction horizontalFacing : Direction.Plane.HORIZONTAL) {
+            for (float pitch : new float[]{-90, -65, 0, 65, 90}) {
+                assertThat(MachineControllerBlock.facingForPlacement(pitch, horizontalFacing, false, false))
+                        .isEqualTo(horizontalFacing);
+            }
+        }
     }
 
-    @Test
-    void horizontal_only_controller_falls_back_when_clicked_face_is_vertical() {
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.UP, Direction.NORTH, false)).isEqualTo(Direction.NORTH);
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.DOWN, Direction.SOUTH, false)).isEqualTo(Direction.SOUTH);
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.EAST, Direction.NORTH, false)).isEqualTo(Direction.EAST);
-    }
-
-    @Test
-    void required_vertical_controller_never_uses_horizontal_facing() {
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.EAST, 2.0d, 2.0d,
-                Direction.NORTH, true, true).getAxis().isVertical()).isTrue();
-        assertThat(MachineControllerBlock.facingForPlacement(Direction.WEST, 4.0d, 2.0d,
-                Direction.NORTH, true, true).getAxis().isVertical()).isTrue();
+    @ParameterizedTest
+    @CsvSource({"-90, DOWN", "-65, DOWN", "-0.01, DOWN", "0, UP", "0.01, UP", "65, UP", "90, UP"})
+    void required_vertical_controller_uses_pitch_sign_and_defaults_up(float pitch, Direction expected) {
+        for (Direction horizontalFacing : Direction.Plane.HORIZONTAL) {
+            assertThat(MachineControllerBlock.facingForPlacement(pitch, horizontalFacing, true, true))
+                    .isEqualTo(expected);
+        }
     }
 
     @Test
