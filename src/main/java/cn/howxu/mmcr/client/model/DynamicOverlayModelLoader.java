@@ -7,6 +7,7 @@ import cn.howxu.mmcr.compat.athena.AthenaModelBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworkOverlay;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.port.MachinePort;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonObject;
@@ -50,6 +51,7 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -214,6 +216,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         private final TextureAtlasSprite particle;
         private final List<BakedModel> itemPasses;
         private final @Nullable BakedModel itemShaft;
+        private final Map<TextureAtlasSprite, RenderType> overlayRenderTypes = new ConcurrentHashMap<>();
 
         DynamicModel(DynamicOverlayBakedModel.Kind kind,
                      @Nullable DynamicOverlayItemModel.Description itemDescription,
@@ -227,7 +230,8 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             this.overrides = overrides;
             this.itemShaft = itemShaft;
             this.particle = particle;
-            this.itemPasses = List.of(new ItemPass(this, false), new ItemPass(this, true));
+            this.itemPasses = List.of(new ItemPass(this, RenderType.solid()),
+                    new ItemPass(this, RenderType.cutout()), new ItemPass(this, RenderType.translucent()));
         }
 
         @Override
@@ -284,8 +288,8 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     }
                 }
             }
-            if (side == null && (renderType == null || renderType == RenderType.translucent())) {
-                addBlockOverlays(quads, state, modelData);
+            if (side == null) {
+                addBlockOverlays(quads, state, modelData, renderType);
             }
             return quads;
         }
@@ -315,20 +319,20 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     }
                 }
             }
-            if (renderType == null || renderType == RenderType.translucent()) {
-                for (OverlayLayer layer : overlayLayers(description.overlayTextures(),
-                        description.stateOverlayTexture())) {
-                    for (Direction direction : description.overlayFaces()) {
-                        if (itemShaft != null && direction.getAxis() != Direction.Axis.Z) continue;
-                        quads.add(overlayFace(direction, Direction.NORTH, layer.texture(), layer.grow(),
-                                itemShaft == null ? null : Direction.Axis.Z));
-                    }
+            for (OverlayLayer layer : overlayLayers(description.overlayTextures(),
+                    description.stateOverlayTexture())) {
+                if (renderType != null && renderType != overlayRenderType(layer.texture())) continue;
+                for (Direction direction : description.overlayFaces()) {
+                    if (itemShaft != null && direction.getAxis() != Direction.Axis.Z) continue;
+                    quads.add(overlayFace(direction, Direction.NORTH, layer.texture(), layer.grow(),
+                            itemShaft == null ? null : Direction.Axis.Z));
                 }
             }
             return quads;
         }
 
-        private void addBlockOverlays(List<BakedQuad> quads, BlockState state, ModelData modelData) {
+        private void addBlockOverlays(List<BakedQuad> quads, BlockState state, ModelData modelData,
+                                      @Nullable RenderType renderType) {
             DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
             Direction overlayFace = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
                     && state.hasProperty(MachineControllerBlock.FACING)
@@ -342,6 +346,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     Boolean.TRUE.equals(modelData.get(EASTER_EGG_ACTIVE))) : null;
             Direction.Axis shaftAxis = stressAxis(state);
             for (OverlayLayer layer : overlayLayers(textures.overlays(), stateOverlay)) {
+                if (renderType != null && renderType != overlayRenderType(layer.texture())) continue;
                 for (Direction direction : Direction.values()) {
                     if (shaftAxis != null && direction.getAxis() != shaftAxis) continue;
                     if (overlayFace == null || direction == overlayFace) {
@@ -362,6 +367,22 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
         private TextureAtlasSprite sprite(ResourceLocation texture) {
             return runtimeSpriteGetter.apply(texture);
+        }
+
+        private RenderType overlayRenderType(ResourceLocation texture) {
+            // 26.1 chooses the layer per sprite; cache the backported alpha scan per baked model.
+            return overlayRenderTypes.computeIfAbsent(sprite(texture), sprite -> {
+                NativeImage image = sprite.contents().getOriginalImage();
+                boolean transparent = false;
+                for (int y = 0; y < image.getHeight(); y++) {
+                    for (int x = 0; x < image.getWidth(); x++) {
+                        int alpha = image.getPixelRGBA(x, y) >>> 24;
+                        if (alpha != 0 && alpha != 255) return RenderType.translucent();
+                        transparent |= alpha == 0;
+                    }
+                }
+                return transparent ? RenderType.cutout() : RenderType.solid();
+            });
         }
 
         private TextureAtlasSprite baseSprite(ResourceLocation texture) {
@@ -502,7 +523,8 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             if (stressAxis(state) != null) {
                 base = ChunkRenderTypeSet.union(base, ChunkRenderTypeSet.of(RenderType.solid()));
             }
-            return ChunkRenderTypeSet.union(base, ChunkRenderTypeSet.of(RenderType.translucent()));
+            return ChunkRenderTypeSet.union(base, ChunkRenderTypeSet.of(
+                    RenderType.solid(), RenderType.cutout(), RenderType.translucent()));
         }
 
         @Override
@@ -517,16 +539,16 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
      * @author howxu <dev@howxu.cn>
      */
     private static final class ItemPass extends BakedModelWrapper<DynamicModel> {
-        private final boolean overlay;
+        private final RenderType renderType;
 
-        private ItemPass(DynamicModel model, boolean overlay) {
+        private ItemPass(DynamicModel model, RenderType renderType) {
             super(model);
-            this.overlay = overlay;
+            this.renderType = renderType;
         }
 
         @Override
         public List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side, RandomSource random) {
-            return originalModel.itemQuads(side, overlay ? RenderType.translucent() : RenderType.solid());
+            return originalModel.itemQuads(side, renderType);
         }
 
         @Override
@@ -537,7 +559,10 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
         @Override
         public List<RenderType> getRenderTypes(ItemStack stack, boolean fabulous) {
-            return List.of(overlay ? NeoForgeRenderTypes.ITEM_UNSORTED_TRANSLUCENT.get()
+            if (renderType == RenderType.translucent()) {
+                return List.of(NeoForgeRenderTypes.ITEM_UNSORTED_TRANSLUCENT.get());
+            }
+            return List.of(renderType == RenderType.cutout() ? NeoForgeRenderTypes.ITEM_LAYERED_CUTOUT.get()
                     : NeoForgeRenderTypes.ITEM_LAYERED_SOLID.get());
         }
     }

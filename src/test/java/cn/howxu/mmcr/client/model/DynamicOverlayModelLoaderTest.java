@@ -119,7 +119,7 @@ class DynamicOverlayModelLoaderTest {
     }
 
     @Test
-    void port_base_is_solid_and_only_overlays_are_translucent() {
+    void port_base_is_solid_and_binary_alpha_overlays_are_cutout() {
         BakedModel model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
         var state = Blocks.IRON_BLOCK.defaultBlockState();
         var base = MMCR.id("block/formed_base");
@@ -128,17 +128,17 @@ class DynamicOverlayModelLoaderTest {
         RandomSource random = RandomSource.create(0L);
 
         assertThat(model.getRenderTypes(state, random, data).asList())
-                .containsExactly(RenderType.solid(), RenderType.translucent());
+                .containsExactly(RenderType.solid(), RenderType.cutout(), RenderType.translucent());
         for (var direction : Direction.values()) {
             assertThat(model.getQuads(state, direction, random, data, RenderType.solid()))
                     .extracting(quad -> quad.getSprite().contents().name()).containsExactly(base);
             assertThat(model.getQuads(state, direction, random, data, RenderType.translucent())).isEmpty();
         }
         assertThat(model.getQuads(state, null, random, data, RenderType.solid())).isEmpty();
-        assertThat(model.getQuads(state, null, random, data, RenderType.translucent()))
+        assertThat(model.getQuads(state, null, random, data, RenderType.cutout()))
                 .hasSize(6).allSatisfy(quad -> assertThat(quad.getSprite().contents().name())
                         .isEqualTo(DynamicOverlayBakedModel.defaultPortOverlayTexture()));
-        assertThat(model.getQuads(state, null, random, data, RenderType.cutout())).isEmpty();
+        assertThat(model.getQuads(state, null, random, data, RenderType.translucent())).isEmpty();
         assertThat(model.getQuads(state, Direction.NORTH, random, data, null)).hasSize(1);
     }
 
@@ -156,7 +156,7 @@ class DynamicOverlayModelLoaderTest {
 
         assertThat(model.getQuads(state, Direction.NORTH, random, ModelData.EMPTY, RenderType.solid()))
                 .extracting(quad -> quad.getSprite().contents().name()).containsExactly(base);
-        assertThat(model.getQuads(state, null, random, ModelData.EMPTY, RenderType.translucent()))
+        assertThat(model.getQuads(state, null, random, ModelData.EMPTY, RenderType.cutout()))
                 .allSatisfy(quad -> assertThat(quad.getDirection()).isEqualTo(Direction.EAST))
                 .extracting(quad -> quad.getSprite().contents().name()).containsExactly(
                         ControllerSpecCache.specFor(machineId).frontTexture(), MMCR.id("block/overlay_basic_active"));
@@ -174,15 +174,16 @@ class DynamicOverlayModelLoaderTest {
         var random = RandomSource.create(0L);
         var originalBase = model.getQuads(state, Direction.DOWN, random, ModelData.EMPTY, RenderType.solid())
                 .getFirst().getSprite();
-        var originalOverlays = model.getQuads(state, null, random, ModelData.EMPTY, RenderType.translucent())
+        var originalOverlays = model.getQuads(state, null, random, ModelData.EMPTY, RenderType.cutout())
                 .stream().map(BakedQuad::getSprite).toList();
+        assertThat(originalOverlays).hasSize(2);
         var passes = model.getRenderPasses(ItemStack.EMPTY, false);
         passes.forEach(pass -> pass.getQuads(null, null, random));
 
         // Atlas upload closes the old sprites and installs replacements, even for the same texture IDs.
         sprites.replaceAll((texture, sprite) -> {
             sprite.contents().close();
-            return new TestSprite(texture);
+            return new TestSprite(texture, 128);
         });
 
         assertThat(model.getQuads(state, Direction.DOWN, random, ModelData.EMPTY, RenderType.solid()))
@@ -192,9 +193,12 @@ class DynamicOverlayModelLoaderTest {
                 .extracting(BakedQuad::getSprite)
                 .containsExactly(sprites.get(ControllerSpecCache.specFor(machineId).frontTexture()),
                         sprites.get(MMCR.id("block/overlay_basic_idle")))
-                .doesNotContainAnyElementsOf(originalOverlays);
+                 .doesNotContainAnyElementsOf(originalOverlays);
+        assertThat(model.getQuads(state, null, random, ModelData.EMPTY, RenderType.cutout())).isEmpty();
+        assertThat(passes.get(1).getQuads(null, null, random)).isEmpty();
+        assertThat(passes.get(2).getQuads(null, null, random)).hasSize(2);
         for (var pass : passes) {
-            assertThat(pass.getQuads(null, null, random)).isNotEmpty()
+            assertThat(pass.getQuads(null, null, random))
                     .allSatisfy(quad -> assertThat(quad.getSprite())
                             .isSameAs(sprites.get(quad.getSprite().contents().name())));
         }
@@ -208,15 +212,54 @@ class DynamicOverlayModelLoaderTest {
         var passes = model.getRenderPasses(ItemStack.EMPTY, false);
         var random = RandomSource.create(0L);
 
-        assertThat(passes).hasSize(2);
+        assertThat(passes).hasSize(3);
         assertThat(passes.get(0).getRenderTypes(ItemStack.EMPTY, false))
                 .containsExactly(NeoForgeRenderTypes.ITEM_LAYERED_SOLID.get());
         assertThat(passes.get(1).getRenderTypes(ItemStack.EMPTY, false))
+                .containsExactly(NeoForgeRenderTypes.ITEM_LAYERED_CUTOUT.get());
+        assertThat(passes.get(2).getRenderTypes(ItemStack.EMPTY, false))
                 .containsExactly(NeoForgeRenderTypes.ITEM_UNSORTED_TRANSLUCENT.get());
         assertThat(passes.get(0).getQuads(null, null, random)).hasSize(6)
                 .allSatisfy(quad -> assertThat(quad.getSprite().contents().name()).isEqualTo(MMCR.id("block/ctm/basic_casing/particle")));
         assertThat(passes.get(1).getQuads(null, null, random)).hasSize(2)
                 .allSatisfy(DynamicOverlayModelLoaderTest::assertUvInsideSprite);
+        assertThat(passes.get(2).getQuads(null, null, random)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"255, solid", "0, cutout", "128, translucent"})
+    void block_and_item_overlays_select_the_layer_from_sprite_alpha(int alpha, String layerName) {
+        var machineId = MMCR.id("test_cube");
+        var front = ControllerSpecCache.specFor(machineId).frontTexture();
+        var idle = MMCR.id("block/overlay_basic_idle");
+        sprites.put(front, new TestSprite(front, alpha));
+        sprites.put(idle, new TestSprite(idle, alpha));
+        var block = ModBlocks.controllerFor(machineId).get();
+        var state = block.defaultBlockState();
+        var model = bake(DynamicOverlayBakedModel.Kind.CONTROLLER, BuiltInRegistries.BLOCK.getKey(block));
+        var random = RandomSource.create(0L);
+        var expectedLayer = switch (layerName) {
+            case "solid" -> RenderType.solid();
+            case "cutout" -> RenderType.cutout();
+            default -> RenderType.translucent();
+        };
+        var layers = List.of(RenderType.solid(), RenderType.cutout(), RenderType.translucent());
+        var passes = model.getRenderPasses(ItemStack.EMPTY, false);
+        for (int index = 0; index < layers.size(); index++) {
+            var layer = layers.get(index);
+            var blockQuads = model.getQuads(state, null, random, ModelData.EMPTY, layer);
+            var itemQuads = passes.get(index).getQuads(null, null, random);
+            if (layer == expectedLayer) {
+                assertThat(blockQuads).extracting(quad -> quad.getSprite().contents().name())
+                        .containsExactly(front, idle);
+                assertThat(itemQuads).extracting(quad -> quad.getSprite().contents().name())
+                        .contains(front, idle);
+            } else {
+                assertThat(blockQuads).isEmpty();
+                assertThat(itemQuads).extracting(quad -> quad.getSprite().contents().name())
+                        .doesNotContain(front, idle);
+            }
+        }
     }
 
     @Test
@@ -240,7 +283,8 @@ class DynamicOverlayModelLoaderTest {
             ModelData data = ctmData(source, state, sourceLayers);
             assertThat(model.getRenderTypes(state, RandomSource.create(seed), data).asList())
                     .containsExactlyElementsOf(ChunkRenderTypeSet.union(sourceLayers,
-                            ChunkRenderTypeSet.of(RenderType.translucent())).asList());
+                            ChunkRenderTypeSet.of(RenderType.solid(), RenderType.cutout(),
+                                    RenderType.translucent())).asList());
             for (RenderType layer : List.of(RenderType.solid(), RenderType.cutout(), RenderType.translucent())) {
                 var actual = model.getQuads(state, Direction.NORTH, RandomSource.create(seed), data, layer);
                 if (sourceLayers.contains(layer)) {
@@ -291,8 +335,20 @@ class DynamicOverlayModelLoaderTest {
     /** @author howxu <dev@howxu.cn> */
     private static final class TestSprite extends TextureAtlasSprite {
         private TestSprite(ResourceLocation texture) {
+            this(texture, 0);
+        }
+
+        private TestSprite(ResourceLocation texture, int alpha) {
             super(TextureAtlas.LOCATION_BLOCKS, new SpriteContents(texture, new FrameSize(16, 16),
-                    new NativeImage(16, 16, false), ResourceMetadata.EMPTY), 256, 256, 16, 16);
+                    image(alpha), ResourceMetadata.EMPTY), 256, 256, 16, 16);
+        }
+
+        private static NativeImage image(int alpha) {
+            NativeImage image = new NativeImage(16, 16, true);
+            image.fillRect(0, 0, 16, 16, 0xFFFFFFFF);
+            if (alpha != 255) image.setPixelRGBA(0, 0, 0x00FFFFFF);
+            image.setPixelRGBA(15, 15, alpha << 24 | 0x00FFFFFF);
+            return image;
         }
     }
 
