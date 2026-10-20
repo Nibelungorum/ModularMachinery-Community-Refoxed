@@ -10,6 +10,7 @@ import appeng.helpers.InterfaceLogicHost;
 import appeng.api.storage.MEStorage;
 import appeng.me.helpers.BaseActionSource;
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
@@ -310,6 +311,17 @@ public final class AppMekInterfaceGameTest {
         MekanismKey hydrogen = MekanismKey.of(AppMekGameTestFixtures.chemical("hydrogen", 1L));
         input.getStorage().setStack(0, new GenericStack(oxygen, 100L));
         input.getStorage().setStack(1, new GenericStack(hydrogen, 1_000L));
+        var capability = input.capability(new CapabilityType(MekanismRecipeTypes.CHEMICAL));
+        var facet = capability.facet(ChemicalViewFacet.class).orElseThrow();
+        helper.assertTrue(facet.tagContents((String) null).size() == 2 && facet.tagAmount((String) null) == 1_100L,
+                "String tag queries retain every chemical in the real ME input rather than only the first slot");
+        helper.assertTrue(facet.tagContents("mmcr_test:missing_chemical_tag").isEmpty()
+                        && facet.tagAmount("mmcr_test:missing_chemical_tag") == 0L,
+                "Explicit String tag filtering retains the ME chemical facet's validation");
+        var view = new MachineIoView(new CapabilitySnapshot(List.of(capability, capability)));
+        helper.assertTrue(view.chemicalAmount(oxygen.getId().toString()) == 100L
+                        && view.chemicalAmount(hydrogen.getId().toString()) == 1_000L,
+                "String aggregate lookup preserves both ME chemical slots without counting the same storage twice");
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(machine.controller().structureSnapshot().formed()
                         && machine.controller().runtimeSnapshot().crafting().failure() != null,
                 "Controller waits for missing oxygen"))

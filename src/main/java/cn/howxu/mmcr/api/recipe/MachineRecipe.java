@@ -421,6 +421,14 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return requiredHostIds;
     }
 
+    public MachineRecipe withId(String id) {
+        return withId(ResourceLocation.parse(id));
+    }
+
+    public boolean canRunOnConnectedHost(String hostId) {
+        return canRunOnConnectedHost(hostId == null ? null : ResourceLocation.parse(hostId));
+    }
+
     public boolean canRunOnConnectedHost(ResourceLocation hostId) {
         return hostId != null && (requiredHostIds.isEmpty() || requiredHostIds.contains(hostId));
     }

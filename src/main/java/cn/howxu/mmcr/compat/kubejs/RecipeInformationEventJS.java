@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.RecipeInformation;
 import dev.latvian.mods.kubejs.event.KubeEvent;
+import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
@@ -31,12 +32,25 @@ public final class RecipeInformationEventJS implements KubeEvent {
 
     public void addRecipePoolInfo(String poolId, String translationKey, Object... arguments) {
         if (!available()) return;
-        entries.add(RecipeInformation.pool(parseResourceLocation(poolId, "poolId"), translationKey, arguments));
+        addRecipePoolInfo(parseResourceLocation(poolId, "poolId"), translationKey, arguments);
+    }
+
+    // Check JEI availability before KubeJS can eagerly parse a script ID.
+    @HideFromJS
+    public void addRecipePoolInfo(ResourceLocation poolId, String translationKey, Object... arguments) {
+        if (!available()) return;
+        entries.add(RecipeInformation.pool(poolId, translationKey, arguments));
     }
 
     public void addRecipeInfo(String recipeId, String translationKey, Object... arguments) {
         if (!available()) return;
-        entries.add(RecipeInformation.recipe(parseResourceLocation(recipeId, "recipeId"), translationKey, arguments));
+        addRecipeInfo(parseResourceLocation(recipeId, "recipeId"), translationKey, arguments);
+    }
+
+    @HideFromJS
+    public void addRecipeInfo(ResourceLocation recipeId, String translationKey, Object... arguments) {
+        if (!available()) return;
+        entries.add(RecipeInformation.recipe(recipeId, translationKey, arguments));
     }
 
     List<RecipeInformation> entries() {

@@ -32,5 +32,5 @@ public interface MachineContext {
     List<ItemStack> upgradeItems();
     JadeText jadeText();
     long countStructureBlocks(Block block);
-    long countStructureBlocks(String blockId);
+    long countStructureBlocks(ResourceLocation blockId);
 }

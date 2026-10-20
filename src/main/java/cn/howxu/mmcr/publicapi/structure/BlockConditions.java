@@ -14,7 +14,6 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class BlockConditions {
     private BlockConditions() {}
     public static BlockCondition block(Block block) { return BlockAdapters.block(block); }
-    public static BlockCondition block(String id) { return BlockAdapters.block(id); }
     public static BlockCondition block(ResourceLocation id) { return BlockAdapters.block(id); }
     public static BlockCondition state(String state) { return BlockAdapters.state(state); }
     public static BlockCondition state(ResourceLocation id) { return BlockAdapters.state(id); }
@@ -56,9 +55,7 @@ public final class BlockConditions {
     public static BlockCondition heatPorts() { return BlockAdapters.heatPorts(); }
     public static BlockCondition upgradeBus() { return BlockAdapters.upgradeBus(); }
     public static BlockCondition ports() { return BlockAdapters.ports(); }
-    public static BlockCondition ports(String... ids) { return BlockAdapters.ports(ids); }
     public static BlockCondition ports(ResourceLocation... ids) { return BlockAdapters.ports(ids); }
-    public static BlockCondition port(String id) { return BlockAdapters.port(id); }
     public static BlockCondition port(ResourceLocation id) { return BlockAdapters.port(id); }
     public static BlockCondition parallelControllers() { return BlockAdapters.parallelControllers(); }
     public static BlockCondition factoryController() { return BlockAdapters.factoryController(); }

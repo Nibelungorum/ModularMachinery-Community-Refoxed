@@ -154,8 +154,13 @@ public class MachineBehaviorContext {
         } catch (RuntimeException exception) {
             throw new IllegalArgumentException("Invalid block id: " + blockId, exception);
         }
-        if (!BuiltInRegistries.BLOCK.containsKey(id)) throw new IllegalArgumentException("Unknown block: " + blockId);
-        return countStructureBlocks(BuiltInRegistries.BLOCK.get(id));
+        return countStructureBlocks(id);
+    }
+
+    public long countStructureBlocks(ResourceLocation blockId) {
+        Objects.requireNonNull(blockId, "blockId");
+        if (!BuiltInRegistries.BLOCK.containsKey(blockId)) throw new IllegalArgumentException("Unknown block: " + blockId);
+        return countStructureBlocks(BuiltInRegistries.BLOCK.get(blockId));
     }
 
     static MachineBehaviorContext empty() {

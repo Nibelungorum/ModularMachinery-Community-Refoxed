@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import dev.latvian.mods.kubejs.event.KubeEvent;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Server-script MMCR declarations collected during resource reload.
@@ -16,6 +17,10 @@ public final class MMCRServerEventJS implements KubeEvent {
     }
 
     public MachineStructureBuilderJS createStructure(String id) {
+        return createStructure(ResourceLocation.parse(id));
+    }
+
+    public MachineStructureBuilderJS createStructure(ResourceLocation id) {
         return new MachineStructureBuilderJS(id);
     }
 

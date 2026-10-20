@@ -8,9 +8,7 @@ import org.jetbrains.annotations.Nullable;
 @ApiStatus.NonExtendable
 public interface AppearanceOptions {
     AppearanceOptions appearance(ResourceLocation id);
-    AppearanceOptions appearance(String id);
     AppearanceOptions machineBasicBlock(ResourceLocation id);
-    AppearanceOptions machineBasicBlock(String id);
     AppearanceOptions controllerBaseTexture(ResourceLocation id);
     AppearanceOptions formedPortBaseTexture(ResourceLocation id);
     AppearanceOptions controllerIdleOverlayTexture(ResourceLocation id);

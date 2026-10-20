@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextHandler;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import dev.latvian.mods.kubejs.event.KubeEvent;
+import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -33,40 +34,76 @@ public final class ControllerScreenTextEventJS implements KubeEvent {
     }
 
     public void append(String scope, String lineId, Component text) {
-        textHandle().append(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"), requireText(text));
+        append(scope, parseNamespacedResourceLocation(lineId, "lineId"), text);
+    }
+
+    // Script strings must retain the explicit-namespace validation before ID conversion.
+    @HideFromJS
+    public void append(String scope, ResourceLocation lineId, Component text) {
+        textHandle().append(parseScope(scope), lineId, requireText(text));
     }
 
     public void appendAfter(String scope, String lineId, String afterLineId, Component text) {
-        textHandle().appendAfter(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"),
-                parseNamespacedResourceLocation(afterLineId, "afterLineId"), requireText(text));
+        appendAfter(scope, parseNamespacedResourceLocation(lineId, "lineId"),
+                parseNamespacedResourceLocation(afterLineId, "afterLineId"), text);
+    }
+
+    @HideFromJS
+    public void appendAfter(String scope, ResourceLocation lineId, ResourceLocation afterLineId, Component text) {
+        textHandle().appendAfter(parseScope(scope), lineId, afterLineId, requireText(text));
     }
 
     public void replace(String lineId, Component text) {
-        textHandle().replace(parseNamespacedResourceLocation(lineId, "lineId"), requireText(text));
+        replace(parseNamespacedResourceLocation(lineId, "lineId"), text);
+    }
+
+    @HideFromJS
+    public void replace(ResourceLocation lineId, Component text) {
+        textHandle().replace(lineId, requireText(text));
     }
 
     public void appendTranslatable(String scope, String lineId, String key, Object... args) {
+        appendTranslatable(scope, parseNamespacedResourceLocation(lineId, "lineId"), key, args);
+    }
+
+    @HideFromJS
+    public void appendTranslatable(String scope, ResourceLocation lineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().append(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"),
+        textHandle().append(parseScope(scope), lineId,
                 Component.translatable(key, args));
     }
 
     public void appendAfterTranslatable(String scope, String lineId, String afterLineId, String key, Object... args) {
+        appendAfterTranslatable(scope, parseNamespacedResourceLocation(lineId, "lineId"),
+                parseNamespacedResourceLocation(afterLineId, "afterLineId"), key, args);
+    }
+
+    @HideFromJS
+    public void appendAfterTranslatable(String scope, ResourceLocation lineId, ResourceLocation afterLineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().appendAfter(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"),
-                parseNamespacedResourceLocation(afterLineId, "afterLineId"), Component.translatable(key, args));
+        textHandle().appendAfter(parseScope(scope), lineId, afterLineId, Component.translatable(key, args));
     }
 
     public void replaceTranslatable(String lineId, String key, Object... args) {
+        replaceTranslatable(parseNamespacedResourceLocation(lineId, "lineId"), key, args);
+    }
+
+    @HideFromJS
+    public void replaceTranslatable(ResourceLocation lineId, String key, Object... args) {
         requireText(key, "key");
         if (args == null) throw new IllegalArgumentException("args must not be null");
-        textHandle().replace(parseNamespacedResourceLocation(lineId, "lineId"), Component.translatable(key, args));
+        textHandle().replace(lineId, Component.translatable(key, args));
     }
 
     public void remove(String scope, String lineId) {
-        textHandle().remove(parseScope(scope), parseNamespacedResourceLocation(lineId, "lineId"));
+        remove(scope, parseNamespacedResourceLocation(lineId, "lineId"));
+    }
+
+    @HideFromJS
+    public void remove(String scope, ResourceLocation lineId) {
+        textHandle().remove(parseScope(scope), lineId);
     }
 
     static ResourceLocation parseResourceLocation(String value, String name) {

@@ -140,7 +140,7 @@ class ControllerScreenTextKubeJSTest {
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("scope");
         assertThatThrownBy(() -> event.append("", "example:line", Component.literal("text")))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("scope");
-        assertThatThrownBy(() -> event.append("controller", null, Component.literal("text")))
+        assertThatThrownBy(() -> event.append("controller", (String) null, Component.literal("text")))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("lineId");
         assertThatThrownBy(() -> event.append("controller", "line", Component.literal("text")))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("namespace");
@@ -150,7 +150,7 @@ class ControllerScreenTextKubeJSTest {
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("key");
         assertThatThrownBy(() -> event.appendAfterTranslatable("controller", "example:line", "line", "example:key"))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("afterLineId");
-        assertThatThrownBy(() -> new MMCRStartupEventJS().registerControllerScreenText(null, ignored -> { }))
+        assertThatThrownBy(() -> new MMCRStartupEventJS().registerControllerScreenText((String) null, ignored -> { }))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("machineId");
     }
 

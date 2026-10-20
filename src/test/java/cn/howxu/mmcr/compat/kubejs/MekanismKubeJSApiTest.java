@@ -328,7 +328,7 @@ class MekanismKubeJSApiTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> builder.chemicalInput("   ", 1_000L));
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> builder.chemicalInput(null, 1_000L));
+                .isThrownBy(() -> builder.chemicalInput((String) null, 1_000L));
     }
 
     @Test

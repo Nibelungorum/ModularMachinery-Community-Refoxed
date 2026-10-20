@@ -194,6 +194,18 @@ public final class MachineIoView {
         return capacity;
     }
 
+    public long chemicalAmount(String chemicalId) {
+        return chemicalAmount(ResourceLocation.parse(chemicalId));
+    }
+
+    public long chemicalTagAmount(String tagId) {
+        return chemicalTagAmount(ResourceLocation.parse(tagId));
+    }
+
+    public long chemicalOutputCapacity(String chemicalId) {
+        return chemicalOutputCapacity(ResourceLocation.parse(chemicalId));
+    }
+
     public List<HeatState> heatInputs() {
         return heatStates(IOType.INPUT);
     }

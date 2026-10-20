@@ -4,6 +4,9 @@ import appeng.core.definitions.AEItems;
 import com.mojang.authlib.GameProfile;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -25,6 +28,7 @@ import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -93,6 +97,18 @@ public class MekanismPortGameTest {
                 "Normal chemical port rejects radioactive chemicals");
         helper.assertValueEqual(1_000L, insert(port, oxygen, 1_000L),
                 "Normal chemical port accepts non-radioactive chemicals");
+        var capability = new ChemicalPortCapability(port);
+        var snapshot = new CapabilitySnapshot(List.of(capability));
+        var facet = snapshot.facets(ChemicalViewFacet.class).getFirst();
+        String oxygenId = oxygen.getChemicalHolder().getRegisteredName();
+        String radioactiveId = radioactive.getChemicalHolder().getRegisteredName();
+        helper.assertTrue(facet.outputCapacity(oxygenId) > 0L && facet.outputCapacity(radioactiveId) == 0L,
+                "String chemical IDs retain the loaded facet's resource validation");
+        helper.assertTrue(!facet.matchesTag("mmcr_test:missing_chemical_tag"),
+                "String tag lookup reaches the chemical facet without implicit ResourceLocation conversion");
+        helper.assertTrue(new MachineIoView(snapshot).chemicalAmount(oxygenId) == 1_000L
+                        && new MachineIoView(snapshot).chemicalAmount(radioactiveId) == 0L,
+                "String aggregate lookup finds only the chemical accepted by the port");
         helper.succeed();
     }
 

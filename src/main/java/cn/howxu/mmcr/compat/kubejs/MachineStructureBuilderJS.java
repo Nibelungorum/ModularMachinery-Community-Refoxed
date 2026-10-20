@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import dev.latvian.mods.rhino.util.HideFromJS;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -311,6 +312,7 @@ public class MachineStructureBuilderJS extends BuilderBase<MachineStructureDefin
     public BlockPredicate anyOfHeatPorts() { return KubeJSInterfaceHelpers.anyOfHeatPorts(); }
     public BlockPredicate anyOfUpgradeBus() { return KubeJSInterfaceHelpers.anyOfUpgradeBus(); }
     public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    @HideFromJS
     public BlockPredicate anyOfPort(ResourceLocation... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public BlockPredicate anyOfPort(cn.howxu.mmcr.api.machine.definition.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);

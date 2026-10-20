@@ -96,7 +96,7 @@ public final class BehaviorAdapters {
         public List<ItemStack> upgradeItems() { return delegate.upgradeItems(); }
         public JadeText jadeText() { return PresentationAdapters.wrap(delegate.jadeText()); }
         public long countStructureBlocks(Block block) { return delegate.countStructureBlocks(block); }
-        public long countStructureBlocks(String blockId) { return delegate.countStructureBlocks(blockId); }
+        public long countStructureBlocks(ResourceLocation blockId) { return delegate.countStructureBlocks(blockId); }
     }
     private static final class TickAdapter extends MachineAdapter implements TickContext {
         private final TickBehaviorContext tick;
@@ -112,7 +112,7 @@ public final class BehaviorAdapters {
         public BlockPos controllerPos() { return delegate.controllerPos(); }
         public boolean formed() { return delegate.controller().currentStructureSnapshot().formed(); }
         public long countStructureBlocks(Block block) { return delegate.countStructureBlocks(block); }
-        public long countStructureBlocks(String id) { return delegate.countStructureBlocks(id); }
+        public long countStructureBlocks(ResourceLocation id) { return delegate.countStructureBlocks(id); }
     }
     private record StartAdapter(cn.howxu.mmcr.api.machine.definition.RecipeStartContext delegate) implements RecipeStartContext {
         public RecipeView recipe() { return RecipeAdapters.wrap(delegate.recipe()); }

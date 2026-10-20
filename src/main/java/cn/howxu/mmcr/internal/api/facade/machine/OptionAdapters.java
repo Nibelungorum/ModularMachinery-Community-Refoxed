@@ -52,9 +52,7 @@ final class OptionAdapters {
         private final AppearanceSpec.Builder delegate;
         Appearance(AppearanceSpec.Builder delegate) { this.delegate = delegate; }
         @Override public AppearanceOptions appearance(ResourceLocation id) { delegate.appearance(id); return this; }
-        @Override public AppearanceOptions appearance(String id) { delegate.appearance(id); return this; }
         @Override public AppearanceOptions machineBasicBlock(ResourceLocation id) { delegate.machineBasicBlock(id); return this; }
-        @Override public AppearanceOptions machineBasicBlock(String id) { delegate.machineBasicBlock(id); return this; }
         @Override public AppearanceOptions controllerBaseTexture(ResourceLocation id) { delegate.controllerBaseTexture(id); return this; }
         @Override public AppearanceOptions formedPortBaseTexture(ResourceLocation id) { delegate.formedPortBaseTexture(id); return this; }
         @Override public AppearanceOptions controllerIdleOverlayTexture(ResourceLocation id) { delegate.controllerIdleOverlayTexture(id); return this; }

@@ -38,7 +38,7 @@ class MachineLevelBuilderJSTest {
         new LevelTypeBuilderJS("test:coil").displayName("Coils").registerObject();
 
         new MachineLevelBuilderJS("test:copper_coil")
-                .type("test:coil")
+                .type(ResourceLocation.parse("test:coil"))
                 .priority(2)
                 .state("minecraft:copper_block")
                 .modifier(new ModifierDefinition(List.of(

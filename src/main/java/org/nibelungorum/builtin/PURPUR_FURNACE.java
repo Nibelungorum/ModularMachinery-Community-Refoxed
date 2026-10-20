@@ -68,23 +68,23 @@ public class PURPUR_FURNACE {
                                     .layer("NXXXXXO", " H   H ", " I   I ", " J   J ", "EH   HE", " PXXXQ ", "  EHE  ", "   R   ")
                                     .layer("STXXXUV", "  HCH  ", "  III  ", "  JJJ  ", " EHHHE ", " WYYYZ ", "       ", "       ")
                                     .layer(" abbbV ", "       ", "       ", "       ", "  EEE  ", "       ", "       ", "       ")
-                                    .where('X', block("minecraft:end_stone_bricks"))
+                                    .where('X', block(ResourceLocation.parse("minecraft:end_stone_bricks")))
                                     .where('A', state("minecraft:end_stone_brick_stairs[facing=south,half=bottom,shape=outer_left,waterlogged=false]"))
                                     .where('B', state("minecraft:end_stone_brick_stairs[facing=south,half=bottom,shape=straight,waterlogged=false]"))
                                     .where('D', state("minecraft:end_stone_brick_stairs[facing=west,half=bottom,shape=outer_left,waterlogged=false]"))
-                                    .where('E', block("minecraft:end_stone_brick_slab"))
+                                    .where('E', block(ResourceLocation.parse("minecraft:end_stone_brick_slab")))
                                     .where('F', state("minecraft:end_stone_brick_stairs[facing=east,half=bottom,shape=inner_right,waterlogged=false]"))
                                     .where('G', state("minecraft:end_stone_brick_stairs[facing=south,half=bottom,shape=inner_right,waterlogged=false]"))
                                     .where('H', any(
-                                            block("minecraft:purpur_pillar"),
+                                            block(ResourceLocation.parse("minecraft:purpur_pillar")),
                                             BlockConditions.itemInput(),
                                             BlockConditions.itemOutput(),
                                             BlockConditions.energyInput(),
                                             BlockConditions.parallelControllers(),
                                             BlockConditions.smartInterface() // Allow a smart interface at this position.
                                     ))
-                                    .where('I', block("minecraft:purple_terracotta"))
-                                    .where('J', block("minecraft:purpur_block"))
+                                    .where('I', block(ResourceLocation.parse("minecraft:purple_terracotta")))
+                                    .where('J', block(ResourceLocation.parse("minecraft:purpur_block")))
                                     .where('K', state("minecraft:purpur_stairs[facing=south,half=bottom,shape=outer_left,waterlogged=false]"))
                                     .where('L', state("minecraft:purpur_stairs[facing=south,half=bottom,shape=straight,waterlogged=false]"))
                                     .where('M', state("minecraft:purpur_stairs[facing=west,half=bottom,shape=outer_left,waterlogged=false]"))
@@ -92,7 +92,7 @@ public class PURPUR_FURNACE {
                                     .where('O', state("minecraft:end_stone_brick_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]"))
                                     .where('P', state("minecraft:purpur_stairs[facing=east,half=bottom,shape=straight,waterlogged=false]"))
                                     .where('Q', state("minecraft:purpur_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]"))
-                                    .where('R', block("minecraft:purpur_slab"))
+                                    .where('R', block(ResourceLocation.parse("minecraft:purpur_slab")))
                                     .where('S', state("minecraft:end_stone_brick_stairs[facing=north,half=bottom,shape=outer_right,waterlogged=false]"))
                                     .where('T', state("minecraft:end_stone_brick_stairs[facing=north,half=bottom,shape=inner_right,waterlogged=false]"))
                                     .where('U', state("minecraft:end_stone_brick_stairs[facing=north,half=bottom,shape=inner_left,waterlogged=false]"))

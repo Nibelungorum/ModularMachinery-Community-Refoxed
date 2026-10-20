@@ -13,5 +13,5 @@ public interface MachineView {
     BlockPos controllerPos();
     boolean formed();
     long countStructureBlocks(Block block);
-    long countStructureBlocks(String blockId);
+    long countStructureBlocks(ResourceLocation blockId);
 }

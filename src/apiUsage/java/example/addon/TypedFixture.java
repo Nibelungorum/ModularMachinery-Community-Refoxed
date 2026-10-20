@@ -73,7 +73,7 @@ public final class TypedFixture implements MachineDefinitionProvider {
                         .textures(id("front"), id("side"), id("top"), id("bottom"))
                         .allowVerticalFacing().requireVerticalFacing(false).fullyRotationallySymmetric(false)
                         .tooltip("machine.example_addon.tooltip"))
-                .appearance((AppearanceOptions options) -> options.machineBasicBlock("minecraft:iron_block")
+                .appearance((AppearanceOptions options) -> options.machineBasicBlock(ResourceLocation.parse("minecraft:iron_block"))
                         .controllerBaseTexture(id("base")).formedPortBaseTexture(id("port"))
                         .controllerIdleOverlayTexture(id("idle")).controllerActiveOverlayTexture(id("active")))
                 .factory((FactoryOptions options) -> options.hasFactory(true).threadLimit(4).thread("main", id("recipe")))

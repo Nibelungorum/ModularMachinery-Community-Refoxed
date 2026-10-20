@@ -56,6 +56,16 @@ class PublicStructureFacadeTest {
     static void bootstrapMinecraft() throws Exception { TestBootstrap.bootstrap(); }
 
     @Test
+    void identifier_conditions_resolve_blocks_lazily_and_state_expressions_keep_properties() {
+        var block = BlockConditions.block(ResourceLocation.parse("minecraft:stone"));
+        assertThat(block.blockSupplier().orElseThrow().get()).isSameAs(Blocks.STONE);
+        var state = BlockConditions.state("minecraft:furnace[lit=true]");
+        assertThat(state.blockState().orElseThrow().getValue(BlockStateProperties.LIT)).isTrue();
+        assertThatThrownBy(() -> BlockConditions.block(ResourceLocation.parse("missingmod:not_a_block"))
+                .blockSupplier().orElseThrow().get()).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void callbacks_run_immediately_and_requirements_accumulate_on_the_same_core_builder() {
         AtomicInteger callbacks = new AtomicInteger();
         ResourceLocation first = ResourceLocation.parse("mmcr:first");

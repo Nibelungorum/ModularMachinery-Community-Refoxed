@@ -119,17 +119,29 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     }
 
     public MachineBuilderJS allowNetworkMachine(String machineId) {
-        allowedNetworkMachineIds.add(ResourceLocation.parse(machineId));
+        return allowNetworkMachine(ResourceLocation.parse(machineId));
+    }
+
+    public MachineBuilderJS allowNetworkMachine(ResourceLocation machineId) {
+        allowedNetworkMachineIds.add(Objects.requireNonNull(machineId, "machineId"));
         return this;
     }
 
     public MachineBuilderJS requestProcess(String requestId, RequestProcess process) {
-        callbackBuilder.requestProcess(ResourceLocation.parse(requestId), process);
+        return requestProcess(ResourceLocation.parse(requestId), process);
+    }
+
+    public MachineBuilderJS requestProcess(ResourceLocation requestId, RequestProcess process) {
+        callbackBuilder.requestProcess(requestId, process);
         return this;
     }
 
     public MachineBuilderJS requestFailed(String requestId, RequestFailed failure) {
-        callbackBuilder.requestFailed(ResourceLocation.parse(requestId), failure);
+        return requestFailed(ResourceLocation.parse(requestId), failure);
+    }
+
+    public MachineBuilderJS requestFailed(ResourceLocation requestId, RequestFailed failure) {
+        callbackBuilder.requestFailed(requestId, failure);
         return this;
     }
 
@@ -212,12 +224,23 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return builder.build();
     }
 
+    public MachineBuilderJS recipePool() {
+        throw new IllegalArgumentException("recipePool requires at least one id");
+    }
+
     public MachineBuilderJS recipePool(String... recipePoolIds) {
         if (recipePoolIds == null || recipePoolIds.length == 0) {
             throw new IllegalArgumentException("recipePool requires at least one id");
         }
-        this.recipePoolIds = MachineRegistration.copyRecipePoolIds(id,
-                Arrays.stream(recipePoolIds).map(ResourceLocation::parse).toList());
+        return recipePool(Arrays.stream(recipePoolIds).map(ResourceLocation::parse).toArray(ResourceLocation[]::new));
+    }
+
+    @HideFromJS
+    public MachineBuilderJS recipePool(ResourceLocation... recipePoolIds) {
+        if (recipePoolIds == null || recipePoolIds.length == 0) {
+            throw new IllegalArgumentException("recipePool requires at least one id");
+        }
+        this.recipePoolIds = MachineRegistration.copyRecipePoolIds(id, Arrays.asList(recipePoolIds));
         return this;
     }
 
@@ -262,7 +285,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return runningSound(ResourceLocation.parse(soundId));
     }
 
-    @HideFromJS
     public MachineBuilderJS runningSound(ResourceLocation soundId) {
         MachineRegistration.validateSound(soundId);
         this.runningSoundId = soundId;
@@ -273,17 +295,26 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return finishSound(ResourceLocation.parse(soundId));
     }
 
-    @HideFromJS
     public MachineBuilderJS finishSound(ResourceLocation soundId) {
         MachineRegistration.validateSound(soundId);
         this.finishSoundId = soundId;
         return this;
     }
 
+    public MachineBuilderJS host() {
+        return this;
+    }
+
     public MachineBuilderJS host(String... moduleIds) {
         if (moduleIds == null) return this;
-        for (String moduleId : moduleIds) {
-            if (moduleId != null) acceptedModuleIds.add(ResourceLocation.parse(moduleId));
+        return host(Arrays.stream(moduleIds).filter(Objects::nonNull).map(ResourceLocation::parse).toArray(ResourceLocation[]::new));
+    }
+
+    @HideFromJS
+    public MachineBuilderJS host(ResourceLocation... moduleIds) {
+        if (moduleIds == null) return this;
+        for (ResourceLocation moduleId : moduleIds) {
+            if (moduleId != null) acceptedModuleIds.add(moduleId);
         }
         return this;
     }
@@ -318,7 +349,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerTextures(ResourceLocation.parse(front), ResourceLocation.parse(otherFive));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerTextures(ResourceLocation front, ResourceLocation otherFive) {
         this.controllerFrontTexture = front;
         this.controllerSideTexture = otherFive;
@@ -327,7 +357,10 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
-    @HideFromJS
+    public MachineBuilderJS controllerTextures(String front, String side, String top, String bottom) {
+        return controllerTextures(ResourceLocation.parse(front), ResourceLocation.parse(side), ResourceLocation.parse(top), ResourceLocation.parse(bottom));
+    }
+
     public MachineBuilderJS controllerTextures(ResourceLocation front, ResourceLocation side, ResourceLocation top, ResourceLocation bottom) {
         this.controllerFrontTexture = front;
         this.controllerSideTexture = side;
@@ -340,7 +373,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerFrontTexture(ResourceLocation.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerFrontTexture(ResourceLocation texture) {
         this.controllerFrontTexture = texture;
         return this;
@@ -350,7 +382,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerSideTexture(ResourceLocation.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerSideTexture(ResourceLocation texture) {
         this.controllerSideTexture = texture;
         return this;
@@ -360,7 +391,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerTopTexture(ResourceLocation.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerTopTexture(ResourceLocation texture) {
         this.controllerTopTexture = texture;
         return this;
@@ -370,7 +400,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerBottomTexture(ResourceLocation.parse(texture));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerBottomTexture(ResourceLocation texture) {
         this.controllerBottomTexture = texture;
         return this;
@@ -464,7 +493,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return machineBasicBlock(ResourceLocation.parse(blockId));
     }
 
-    @HideFromJS
     public MachineBuilderJS machineBasicBlock(ResourceLocation blockId) {
         this.machineBasicBlock = blockId;
         return this;
@@ -474,7 +502,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return controllerBaseTexture(ResourceLocation.parse(textureId));
     }
 
-    @HideFromJS
     public MachineBuilderJS controllerBaseTexture(ResourceLocation textureId) {
         this.controllerBaseTexture = textureId;
         return this;
@@ -484,13 +511,16 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return formedPortBaseTexture(ResourceLocation.parse(textureId));
     }
 
-    @HideFromJS
     public MachineBuilderJS formedPortBaseTexture(ResourceLocation textureId) {
         this.formedPortBaseTexture = textureId;
         return this;
     }
 
     public MachineBuilderJS appearance(String machineBasicBlock) {
+        return appearance(ResourceLocation.parse(machineBasicBlock));
+    }
+
+    public MachineBuilderJS appearance(ResourceLocation machineBasicBlock) {
         return machineBasicBlock(machineBasicBlock);
     }
 
@@ -552,6 +582,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public BlockPredicate parallelControllers() { return KubeJSInterfaceHelpers.parallelControllers(); }
     public BlockPredicate smartInterfaceBlock() { return KubeJSInterfaceHelpers.smartInterface(); }
     public BlockPredicate anyOfPort(String... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
+    @HideFromJS
     public BlockPredicate anyOfPort(ResourceLocation... ids) { return KubeJSInterfaceHelpers.anyOfPort(ids); }
     public cn.howxu.mmcr.api.machine.BlockPredicate anyOfPort(cn.howxu.mmcr.api.machine.definition.BlockPredicate... predicates) {
         return KubeJSInterfaceHelpers.anyOfPort(predicates);

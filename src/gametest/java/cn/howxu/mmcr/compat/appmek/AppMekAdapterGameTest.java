@@ -140,6 +140,10 @@ public final class AppMekAdapterGameTest {
         MEChemicalCapability first = new MEChemicalCapability(null, new InventoryChemicalHandler(inventory), CapabilityDirections.input(), false);
         MEChemicalCapability alias = new MEChemicalCapability(null, new InventoryChemicalHandler(inventory), CapabilityDirections.input(), false);
         CapabilitySnapshot snapshot = new CapabilitySnapshot(List.of(first, alias));
+        var scriptView = new MachineIoView(snapshot);
+        helper.assertTrue(scriptView.chemicalAmount("mekanism:oxygen") == 1_300L
+                        && scriptView.chemicalAmount("mekanism:hydrogen") == 900L,
+                "String queries aggregate every ME chemical slot and deduplicate aliased capability wrappers");
         var view = IoAdapters.wrap(new MachineIoView(snapshot));
         helper.assertTrue(view.chemicalInputs().size() == 2 && view.chemicalAmount(oxygen.getId()) == 1_300L
                         && view.chemicalAmount(hydrogen.getId()) == 900L,
@@ -161,7 +165,9 @@ public final class AppMekAdapterGameTest {
         var networkView = new MachineIoView(new CapabilitySnapshot(List.of(
                 new MEChemicalCapability(null, new NetworkChemicalHandler(() -> network, () -> List.of(oxygen), new BaseActionSource()), CapabilityDirections.input(), false),
                 new MEChemicalCapability(null, new NetworkChemicalHandler(() -> network, () -> List.of(oxygen), new BaseActionSource()), CapabilityDirections.input(), false))));
-        helper.assertTrue(networkView.chemicalAmount(oxygen.getId()) == 800L, "Two configured interfaces query one network key once");
+        helper.assertTrue(networkView.chemicalAmount(oxygen.getId()) == 800L
+                        && networkView.chemicalAmount("mekanism:oxygen") == 800L,
+                "Typed and String queries count one network key once across configured interfaces");
         helper.succeed();
     }
 
@@ -173,9 +179,13 @@ public final class AppMekAdapterGameTest {
         inventory.setStack(0, new GenericStack(MekanismKey.of(steam), 600L));
         inventory.setStack(1, new GenericStack(MekanismKey.of(steam), 700L));
         inventory.setStack(2, new GenericStack(MekanismKey.of(oxygen), 900L));
-        var view = new MachineIoView(new CapabilitySnapshot(List.of(new MEChemicalCapability(null,
-                new InventoryChemicalHandler(inventory), CapabilityDirections.input(), false))));
+        var facet = new MEChemicalCapability(null, new InventoryChemicalHandler(inventory), CapabilityDirections.input(), false);
+        var view = new MachineIoView(new CapabilitySnapshot(List.of(facet)));
         helper.assertTrue(view.chemicalTagAmount(tag.location()) == 1_300L, "Tag query sums matching slots without including other chemical kinds");
+        String tagId = tag.location().toString();
+        helper.assertTrue(facet.matchesTag(tagId) && facet.tagAmount(tagId) == 1_300L
+                        && facet.tagContents(tagId).size() == 1 && view.chemicalTagAmount(tagId) == 1_300L,
+                "String tag queries dispatch to the ME multi-resource facet and exclude nonmatching oxygen");
         helper.succeed();
     }
 

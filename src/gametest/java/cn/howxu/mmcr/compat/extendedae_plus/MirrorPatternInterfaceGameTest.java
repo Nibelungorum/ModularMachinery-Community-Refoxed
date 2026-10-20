@@ -628,7 +628,7 @@ public class MirrorPatternInterfaceGameTest {
         BlockArray declaration = MachineDefinitionConverter.toBlockArray(PatternBuilder.pattern().layer("P", "C")
                 .where('P', InterfacePredicates.anyOfPort(MMCR.id(MIRROR))).controller('C').build());
         BlockArray publicApi = MachineDefinitionConverter.toBlockArray(StructureAdapters.unwrap(Structures.pattern()
-                .layer("P", "C").where('P', BlockConditions.port(MIRROR)).controller('C').build()));
+                .layer("P", "C").where('P', BlockConditions.port(MMCR.id(MIRROR))).controller('C').build()));
         BlockPos offset = new BlockPos(0, -1, 0);
         for (BlockPredicate predicate : List.of(declaration.pattern().get(offset), publicApi.pattern().get(offset),
                 KubeJSInterfaceHelpers.port(MMCR.id(MIRROR)))) {

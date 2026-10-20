@@ -6,6 +6,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.runtime.JadeTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.JadeTextState;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,11 +73,11 @@ class JadeTextStateTest {
     void stateRejectsNullResourceLocationsAndText() {
         JadeTextState state = new JadeTextState();
 
-        assertThatThrownBy(() -> state.append(null, Component.literal("text")))
+        assertThatThrownBy(() -> state.append((ResourceLocation) null, Component.literal("text")))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> state.append(MMCR.id("line"), null))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> state.remove(null))
+        assertThatThrownBy(() -> state.remove((ResourceLocation) null))
                 .isInstanceOf(NullPointerException.class);
     }
 }

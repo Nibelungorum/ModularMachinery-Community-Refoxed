@@ -17,7 +17,6 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class BlockAdapters {
     private BlockAdapters() {}
     public static BlockCondition block(Block block) { return StructureAdapters.wrap(BlockPredicate.block(block)); }
-    public static BlockCondition block(String id) { return StructureAdapters.wrap(BlockPredicate.block(id)); }
     public static BlockCondition block(ResourceLocation id) { return StructureAdapters.wrap(BlockPredicate.block(id)); }
     public static BlockCondition state(String state) { return StructureAdapters.wrap(BlockPredicate.state(state)); }
     public static BlockCondition state(ResourceLocation id) { return StructureAdapters.wrap(BlockPredicate.state(id)); }
@@ -63,9 +62,7 @@ public final class BlockAdapters {
     public static BlockCondition heatPorts() { return StructureAdapters.wrap(InterfacePredicates.anyHeatPorts()); }
     public static BlockCondition upgradeBus() { return StructureAdapters.wrap(InterfacePredicates.anyUpgradeBus()); }
     public static BlockCondition ports() { return StructureAdapters.wrap(InterfacePredicates.ports()); }
-    public static BlockCondition ports(String... ids) { return StructureAdapters.wrap(InterfacePredicates.anyOfPort(ids)); }
     public static BlockCondition ports(ResourceLocation... ids) { return StructureAdapters.wrap(InterfacePredicates.anyOfPort(ids)); }
-    public static BlockCondition port(String id) { return StructureAdapters.wrap(InterfacePredicates.port(id)); }
     public static BlockCondition port(ResourceLocation id) { return StructureAdapters.wrap(InterfacePredicates.port(id)); }
     public static BlockCondition parallelControllers() { return StructureAdapters.wrap(InterfacePredicates.parallelControllers()); }
     public static BlockCondition factoryController() { return StructureAdapters.wrap(InterfacePredicates.factoryController()); }

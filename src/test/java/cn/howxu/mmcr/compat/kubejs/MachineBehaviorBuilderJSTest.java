@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
+import cn.howxu.mmcr.internal.runtime.JadeTextState;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import net.minecraft.core.BlockPos;
@@ -38,6 +39,43 @@ class MachineBehaviorBuilderJSTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void cancelled_start_keeps_string_id_text_on_the_same_handles_until_removed() {
+        ControllerScreenTextState screen = new ControllerScreenTextState();
+        JadeTextState jade = new JadeTextState();
+        MachineBehaviorContext context = new MachineBehaviorContext(null, null, BlockPos.ZERO,
+                MMCR.id("string_text_machine"), 0L, screen, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())), List.of(), jade);
+        var behavior = (RecipeBehavior) new MachineBuilderJS(MMCR.id("string_text_machine"))
+                .recipeBehavior(builder -> builder.beforeStart(start -> {
+                    start.cancel();
+                    var text = start.machineContext().screenText();
+                    text.append(ControllerScreenTextScope.CONTROLLER, "test:warning", Component.literal("warning"));
+                    text.appendAfter(ControllerScreenTextScope.CONTROLLER, "test:details", "test:warning", Component.literal("details"));
+                    start.machineContext().jadeText().append("test:warning", Component.literal("warning"));
+                    start.machineContext().jadeText().appendAfter("test:details", "test:warning", Component.literal("details"));
+                })).createObject().behavior();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("string_text_recipe"), context.machineId(), 1,
+                List.of(), List.of());
+        var start = new RecipeStartContext(context, recipe, 1, 1, 1, List.of(), List.of());
+        behavior.beforeStart().accept(start);
+        assertThat(start.cancelled()).isTrue();
+        screen.clear(ControllerScreenTextScope.OPERATION);
+        screen.replace("test:warning", Component.literal("updated"));
+        screen.flushReplacements();
+        assertThat(screen.snapshot().lines()).extracting(line -> line.lineId().toString())
+                .containsExactly("test:warning", "test:details");
+        assertThat(screen.snapshot().lines().getFirst().text()).isEqualTo(Component.literal("updated"));
+        screen.append(ControllerScreenTextScope.CONTROLLER, ResourceLocation.parse("test:warning"), Component.literal("typed"));
+        screen.remove(ControllerScreenTextScope.CONTROLLER, "test:warning");
+        assertThat(screen.snapshot().lines()).singleElement().satisfies(line ->
+                assertThat(line.lineId()).isEqualTo(ResourceLocation.parse("test:details")));
+        jade.replace("test:warning", Component.literal("updated"));
+        jade.remove("test:warning");
+        assertThat(jade.snapshot().lines()).singleElement().satisfies(line ->
+                assertThat(line.lineId()).isEqualTo(ResourceLocation.parse("test:details")));
     }
 
     @Test

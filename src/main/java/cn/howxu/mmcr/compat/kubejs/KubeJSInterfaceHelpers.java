@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.machine.definition.InterfacePredicates;
 import cn.howxu.mmcr.api.machine.definition.InterfaceTiers;
 import net.minecraft.resources.ResourceLocation;
+import dev.latvian.mods.rhino.util.HideFromJS;
 
 /** Script-safe interface predicates and requirement factories.
  * @author howxu <dev@howxu.cn>
@@ -83,6 +84,7 @@ public final class KubeJSInterfaceHelpers {
         throw new IllegalArgumentException("At least one port is required");
     }
 
+    @HideFromJS
     public static BlockPredicate anyOfPort(ResourceLocation... ids) {
         return convert(InterfacePredicates.anyOfPort(ids));
     }

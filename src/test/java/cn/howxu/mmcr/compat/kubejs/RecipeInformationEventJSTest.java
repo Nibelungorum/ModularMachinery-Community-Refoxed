@@ -31,7 +31,7 @@ class RecipeInformationEventJSTest {
         Object[] arguments = {Component.literal("temperature"), 3200};
 
         event.addRecipePoolInfo("mmcr:test_pool", "jei.example.pool", arguments);
-        event.addRecipeInfo("mmcr:test_recipe", "jei.example.recipe", arguments);
+        event.addRecipeInfo(MMCR.id("test_recipe"), "jei.example.recipe", arguments);
 
         assertThat(event.entries()).hasSize(2);
         assertThat(event.entries().get(0).target()).isEqualTo(Target.RECIPE_POOL);
@@ -59,7 +59,7 @@ class RecipeInformationEventJSTest {
         var event = new RecipeInformationEventJS(false, warnings::add);
 
         event.addRecipePoolInfo("not even parsed", " ");
-        event.addRecipeInfo(null, null, (Object[]) null);
+        event.addRecipeInfo((String) null, null, (Object[]) null);
 
         assertThat(event.entries()).isEmpty();
         assertThat(warnings).singleElement().asString().contains("JEI is not loaded");

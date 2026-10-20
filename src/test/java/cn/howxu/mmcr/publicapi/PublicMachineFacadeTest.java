@@ -141,7 +141,7 @@ class PublicMachineFacadeTest {
     @Test
     void repeated_configuration_replaces_options_without_changing_previous_specs() {
         var draft = Machines.machine(id("metadata"))
-                .appearance(options -> options.appearance("facade_test:base")
+                .appearance(options -> options.appearance(id("base"))
                         .controllerActiveOverlayTexture(id("active")))
                 .controller(options -> options.tooltip("old"))
                 .runningSound(id("running")).finishSound(id("finish"))

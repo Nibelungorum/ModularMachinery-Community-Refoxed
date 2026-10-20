@@ -19,7 +19,15 @@ public interface ChemicalViewFacet extends CapabilityFacet {
 
     boolean matchesTag(ResourceLocation tagId);
 
+    default boolean matchesTag(String tagId) {
+        return matchesTag(tagId == null ? null : ResourceLocation.parse(tagId));
+    }
+
     long outputCapacity(ResourceLocation chemicalId);
+
+    default long outputCapacity(String chemicalId) {
+        return outputCapacity(chemicalId == null ? null : ResourceLocation.parse(chemicalId));
+    }
 
     default Object queryIdentity() { return this; }
 
@@ -30,6 +38,14 @@ public interface ChemicalViewFacet extends CapabilityFacet {
 
     default List<ChemicalAmount> tagContents(ResourceLocation tagId) {
         return matchesTag(tagId) ? contents() : List.of();
+    }
+
+    default List<ChemicalAmount> tagContents(String tagId) {
+        return tagContents(tagId == null ? null : ResourceLocation.parse(tagId));
+    }
+
+    default long tagAmount(String tagId) {
+        return tagAmount(tagId == null ? null : ResourceLocation.parse(tagId));
     }
 
     default long tagAmount(ResourceLocation tagId) {

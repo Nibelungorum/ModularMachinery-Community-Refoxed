@@ -18,8 +18,10 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplayRegistry;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.internal.capability.SmartInterfaceCapability;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -36,6 +38,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * @author howxu <dev@howxu.cn>
  */
 class MachineIoViewTest {
+    @Test
+    void string_chemical_queries_preserve_multiple_resources_tags_and_shared_storage_identity() {
+        var oxygen = new ChemicalViewFacet.ChemicalAmount(ResourceLocation.parse("test:oxygen"), 400L);
+        var hydrogen = new ChemicalViewFacet.ChemicalAmount(ResourceLocation.parse("test:hydrogen"), 600L);
+        Object storage = new Object();
+        var first = new ChemicalCapability(storage, List.of(oxygen, hydrogen));
+        var alias = new ChemicalCapability(storage, List.of(oxygen, hydrogen));
+        var separate = new ChemicalCapability(new Object(), List.of(
+                new ChemicalViewFacet.ChemicalAmount(ResourceLocation.parse("test:hydrogen"), 25L)));
+        var view = new MachineIoView(new CapabilitySnapshot(List.of(first, alias, separate)));
+
+        assertThat(first.tagContents("test:both")).containsExactly(oxygen, hydrogen);
+        assertThat(first.tagAmount("test:both")).isEqualTo(1_000L);
+        assertThat(first.tagContents("test:missing")).isEmpty();
+        assertThat(first.tagAmount("test:missing")).isZero();
+        assertThat(view.chemicalAmount("test:oxygen")).isEqualTo(400L);
+        assertThat(view.chemicalAmount("test:hydrogen")).isEqualTo(625L);
+        assertThat(view.chemicalTagAmount("test:both")).isEqualTo(1_025L);
+        assertThat(view.chemicalTagAmount("test:missing")).isZero();
+    }
+
     @Test
     void smart_interface_values_are_read_once_from_shared_input_and_output_capabilities() {
         FloatValueStorage storage = new FloatValueStorage();
@@ -78,6 +101,21 @@ class MachineIoViewTest {
 
         assertThat(registry.displays(new TestCapability("missing", PresentationFacet.class)))
                 .containsExactly(new CapabilityDisplay("mmcr:missing", "Unavailable", "", Optional.empty()));
+    }
+
+    /** Multi-resource storage exposed through distinct capability wrappers.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record ChemicalCapability(Object queryIdentity, List<ChemicalAmount> contents)
+            implements MachineCapability, ChemicalViewFacet {
+        @Override public CapabilityType type() { return new CapabilityType(MMCR.id("test_chemical")); }
+        @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
+        @Override public CapabilityView view() { return new TestCapability("test_chemical", ChemicalViewFacet.class).view(); }
+        @Override public Optional<ResourceLocation> chemicalId() { return Optional.of(contents.getFirst().id()); }
+        @Override public long amount() { return contents.getFirst().amount(); }
+        @Override public boolean matchesTag(ResourceLocation tagId) { return ResourceLocation.parse("test:both").equals(tagId); }
+        @Override public long outputCapacity(ResourceLocation id) { return 0L; }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) { throw new UnsupportedOperationException(); }
     }
 
     /**

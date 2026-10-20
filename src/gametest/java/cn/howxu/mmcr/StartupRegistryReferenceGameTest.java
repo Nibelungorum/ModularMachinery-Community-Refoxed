@@ -4,6 +4,16 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
+import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
+import cn.howxu.mmcr.api.machine.definition.MachineIoView;
+import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.api.machine.definition.RecipeFinishContext;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
+import cn.howxu.mmcr.internal.runtime.JadeTextState;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
@@ -13,12 +23,16 @@ import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.publicapi.structure.level.Levels;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Direction;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RotatedPillarBlock;
+
+import java.util.List;
+import java.util.Set;
 
 /** Real startup-script coverage for non-vanilla registry references.
  * @author howxu <dev@howxu.cn>
@@ -71,7 +85,47 @@ public final class StartupRegistryReferenceGameTest {
         helper.assertTrue(horizontalLevel != null && horizontalLevel.statePredicate().matches(horizontalLog)
                         && !horizontalLevel.statePredicate().matches(Blocks.OAK_LOG.defaultBlockState()),
                 "Script level declarations preserve explicit state properties through deferred compilation");
+        assertIdentifierOverloads(helper);
         helper.succeed();
+    }
+
+    private static void assertIdentifierOverloads(GameTestHelper helper) {
+        ResourceLocation machineId = ResourceLocation.parse("mmcr_test:kubejs_identifier_overloads");
+        var machine = MachineDefinitions.getRegistration(machineId);
+        helper.assertTrue(machine != null, "ResourceLocation overload creates a registered script machine");
+        helper.assertTrue(machine.recipePoolIds().equals(List.of(ResourceLocation.parse("mmcr_test:identifier_pool"),
+                        ResourceLocation.parse("mmcr_test:identifier_other_pool"))),
+                "String varargs preserve recipe pool order");
+        var controller = machine.controllerSpec();
+        helper.assertTrue(controller.frontTexture().equals(ResourceLocation.parse("minecraft:block/stone"))
+                        && controller.sideTexture().equals(ResourceLocation.parse("minecraft:block/dirt"))
+                        && controller.topTexture().equals(ResourceLocation.parse("minecraft:block/gravel"))
+                        && controller.bottomTexture().equals(ResourceLocation.parse("minecraft:block/sand")),
+                "Four String texture arguments retain face order through Rhino");
+        helper.assertTrue(machine.appearance().controllerBaseTexture().equals(ResourceLocation.parse("minecraft:block/stone")),
+                "ResourceLocation arguments remain callable alongside String overloads through Rhino");
+        var screen = new ControllerScreenTextState();
+        var jade = new JadeTextState();
+        var context = new MachineBehaviorContext(null, helper.getLevel(), BlockPos.ZERO, machineId, 0L, screen, null,
+                new MachineIoView(new CapabilitySnapshot(List.of())), List.of(), jade);
+        var recipe = MachineRecipe.fromCanonical(ResourceLocation.parse("mmcr_test:identifier_recipe"),
+                machine.recipePoolIds().getFirst(), 1, List.of(), List.of(), List.of(), 0, 1,
+                false, false, false, Set.of());
+        var behavior = (RecipeBehavior) machine.behavior();
+        var start = new RecipeStartContext(context, recipe, 1, 1, 1, List.of(), List.of());
+        behavior.beforeStart().accept(start);
+        screen.clear(ControllerScreenTextScope.OPERATION);
+        screen.flushReplacements();
+        helper.assertTrue(start.cancelled() && screen.snapshot().lines().stream().map(line -> line.lineId()).toList()
+                        .equals(List.of(ResourceLocation.parse("mmcr_test:warning"), ResourceLocation.parse("mmcr_test:details"))),
+                "Cancelled JavaScript start retains ordered controller text added with String IDs");
+        helper.assertTrue(screen.snapshot().lines().getFirst().text().equals(Component.translatable("message.mmcr_test.updated")),
+                "ResourceLocation replacement updates the line created with a String ID");
+        behavior.beforeFinish().accept(new RecipeFinishContext(context, recipe, 1, 1, List.of()));
+        helper.assertTrue(screen.snapshot().lines().size() == 1
+                        && screen.snapshot().lines().getFirst().lineId().equals(ResourceLocation.parse("mmcr_test:details"))
+                        && jade.snapshot().lines().isEmpty(),
+                "JavaScript removes the same controller and Jade lines using String IDs");
     }
 
     private static void assertLevel(GameTestHelper helper, String levelId, String blockId) {
