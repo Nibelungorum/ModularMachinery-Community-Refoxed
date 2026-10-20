@@ -20,6 +20,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.items.IItemHandler;
@@ -102,6 +103,18 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<ItemStor
 
     public static void sendTo(Player player, IOPortBlockEntity port) {
         if (player instanceof ServerPlayer serverPlayer) sendTo(serverPlayer, port);
+    }
+
+    public static void onMenuOpen(PlayerContainerEvent.Open event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || player.containerMenu != event.getContainer()) return;
+        IOPortBlockEntity port = switch (event.getContainer()) {
+            case ExtendedItemMenu menu -> menu.owner();
+            case ExtendedFluidMenu menu -> menu.owner();
+            case CombinedPortMenu menu -> menu.owner();
+            case ExtendedCombinedMenu menu -> menu.owner();
+            default -> null;
+        };
+        if (port != null) sendTo(player, port);
     }
 
     public static void sendToViewers(IOPortBlockEntity port) {

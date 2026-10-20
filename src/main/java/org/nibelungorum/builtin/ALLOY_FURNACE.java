@@ -61,7 +61,7 @@ public class ALLOY_FURNACE {
                         ModifierOperation.MULTIPLY,
                         false
                 )));
-        event.registerModifierItem(new ItemStack(Items.DIAMOND_BLOCK), id("alloy_furnace_diamond_speedup"));
+        event.registerModifierItem(ResourceLocation.parse("minecraft:diamond_block"), id("alloy_furnace_diamond_speedup"));
 
         event.registerModifier(
                 id("alloy_furnace_gold_doubling"),
@@ -72,7 +72,7 @@ public class ALLOY_FURNACE {
                         ModifierOperation.MULTIPLY,
                         false
                 )));
-        event.registerModifierItem(new ItemStack(Items.GOLD_BLOCK), id("alloy_furnace_gold_doubling"));
+        event.registerModifierItem(ResourceLocation.parse("minecraft:gold_block"), id("alloy_furnace_gold_doubling"));
 
 
         if (!event.structures().containsKey(ALLOY_FURNACE)) {

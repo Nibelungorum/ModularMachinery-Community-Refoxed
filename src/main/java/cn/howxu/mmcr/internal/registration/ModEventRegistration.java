@@ -316,7 +316,10 @@ public final class ModEventRegistration {
                         ControllerSyncEvents.onPlayerChangedDimension(event);
                         syncPlayer(event.getEntity());
                     },
-                    ControllerSyncEvents::onMenuOpen,
+                    event -> {
+                        ControllerSyncEvents.onMenuOpen(event);
+                        PktPortStorageSyncPayload.onMenuOpen(event);
+                    },
                     ControllerSyncEvents::onMenuClose,
                     ControllerSyncEvents::onPlayerLoggedOut,
                     ModEventRegistration::registerCommands);

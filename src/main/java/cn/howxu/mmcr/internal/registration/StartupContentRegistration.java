@@ -129,6 +129,7 @@ public final class StartupContentRegistration {
     private static void tryCommitProductionStartup() {
         if (pendingProductionDefinitions == null || !productionStructuresInitialized || !productionStructuresCollected
                 || productionRecipesCollecting || !productionRecipesCollected) return;
+        ContentRegistrationCoordinator.commitModifierItemsAfterComponentsBound();
         ContentRegistrationCoordinator.commitRecipes();
         registerDynamicControllers(MachineDefinitions.effectiveSnapshot().keySet());
         pendingProductionDefinitions = null;

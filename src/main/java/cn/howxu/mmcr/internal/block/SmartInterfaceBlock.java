@@ -4,11 +4,13 @@ import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.menu.SmartInterfaceMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
-import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
@@ -49,9 +51,21 @@ public class SmartInterfaceBlock extends Block implements EntityBlock {
 
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
-        return new SimpleMenuProvider((containerId, playerInv, player) -> new SmartInterfaceMenu(containerId, playerInv,
-                level.getBlockEntity(pos) instanceof SmartInterfaceBlockEntity smartInterface ? smartInterface : null),
-                Component.translatable("container.mmcr.smart_interface"));
+        return new MenuProvider() {
+            @Override
+            public Component getDisplayName() { return Component.translatable("container.mmcr.smart_interface"); }
+
+            @Override
+            public AbstractContainerMenu createMenu(int containerId, Inventory playerInv, Player player) {
+                return new SmartInterfaceMenu(containerId, playerInv,
+                        level.getBlockEntity(pos) instanceof SmartInterfaceBlockEntity smartInterface ? smartInterface : null);
+            }
+
+            @Override
+            public void writeClientSideData(AbstractContainerMenu menu, RegistryFriendlyByteBuf buffer) {
+                buffer.writeBlockPos(pos);
+            }
+        };
     }
 
     @Override
@@ -59,7 +73,7 @@ public class SmartInterfaceBlock extends Block implements EntityBlock {
                                                Player player, BlockHitResult hit) {
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
-            if (provider != null) player.openMenu(provider, pos);
+            if (provider != null) player.openMenu(provider);
         }
         return InteractionResult.SUCCESS;
     }

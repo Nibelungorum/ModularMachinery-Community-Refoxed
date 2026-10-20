@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.api.facade.structure;
 
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+
 import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
 import cn.howxu.mmcr.api.machine.definition.DisplayStack;
 import cn.howxu.mmcr.api.machine.definition.MachineLevel;
@@ -60,9 +62,15 @@ public final class StructureAdapters {
     public static StructureConstraints.Builder constraints() { return new ConstraintOptions(StructureRequirements.builder()); }
     public static LevelTypeSpec levelType(ResourceLocation id, Component name) { return wrap(new LevelType(id, name)); }
     public static MachineLevelSpec level(ResourceLocation id, ResourceLocation typeId, int priority, BlockCondition condition,
-            ItemStack representative, ModifierBundle modifier) {
-        return wrap(new MachineLevel(id, typeId, priority, unwrap(condition), DisplayStack.of(representative),
+            ModifierBundle modifier) {
+        return wrap(new MachineLevel(id, typeId, priority, unwrap(condition), DisplayStack.of(ItemStack.EMPTY),
                 ModifierAdapters.unwrap(modifier)));
+    }
+
+    public static void registerLevel(StructureRegistration registration,
+            MachineLevelSpec level) {
+        if (level instanceof RuntimeLevelView view) registration.registerLevel(view.value);
+        else registration.registerLevel(unwrap(level));
     }
 
     public static StructureSpec wrap(MachineStructureDefinition value) { return new StructureView(Objects.requireNonNull(value)); }

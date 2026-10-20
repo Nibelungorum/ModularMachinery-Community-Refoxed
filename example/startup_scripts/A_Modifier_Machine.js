@@ -21,7 +21,7 @@ MMCREvents.startup(event => {
     )
 
     event.registerModifierItem(
-        Item.of("minecraft:emerald_block"),
+        "minecraft:emerald_block",
         "mmcr_kubejs:alloy_furnace_emerald_speedup"
     )
 
@@ -33,7 +33,7 @@ MMCREvents.startup(event => {
     )
 
     event.registerModifierItem(
-        Item.of("minecraft:lapis_block"),
+        "minecraft:lapis_block",
         "mmcr_kubejs:alloy_furnace_lapis_doubling"
     )
 

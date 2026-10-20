@@ -45,7 +45,6 @@ public class Plugin implements KubeJSPlugin {
             beginClientReload(manager, manager.scriptType.console.errors.size());
         }
         if (manager.scriptType == ScriptType.STARTUP) {
-            StartupContentRegistration.bindItemComponentsForEarlyRegistration();
             beginStartupRegistryPhase();
             registerDevelopmentMachineLevels();
         }

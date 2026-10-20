@@ -132,22 +132,28 @@ public final class RegistrationAdapters {
         }
         @Override public void registerLevel(MachineLevelSpec level) {
             Objects.requireNonNull(level, "level");
-            registration(() -> core.registerLevel(StructureAdapters.unwrapRuntime(level)));
+            registration(() -> StructureAdapters.registerLevel(core, level));
         }
         @Override public void registerModifier(ResourceLocation id, ModifierBundle modifier) {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(modifier, "modifier");
             registration(() -> core.registerModifier(id, ModifierAdapters.unwrap(modifier)));
         }
-        @Override public void registerModifierItem(ItemStack stack, ResourceLocation id) {
-            Objects.requireNonNull(stack, "stack");
+        @Override public void registerModifierItem(ResourceLocation itemId, ResourceLocation id) {
+            Objects.requireNonNull(itemId, "itemId");
             Objects.requireNonNull(id, "modifierId");
-            registration(() -> core.registerModifierItem(stack, id));
+            registration(() -> core.registerModifierItem(itemId, id));
         }
         @Override public Map<ResourceLocation, StructureSpec> structures() { return views(core.structures(), StructureAdapters::wrap); }
         @Override public Map<ResourceLocation, LevelTypeSpec> levelTypes() { return views(core.levelTypes(), StructureAdapters::wrap); }
-        @Override public Map<ResourceLocation, MachineLevelSpec> levels() { return views(core.levels(), StructureAdapters::wrap); }
+        @Override public Map<ResourceLocation, MachineLevelSpec> levels() {
+            Map<ResourceLocation, MachineLevelSpec> levels = new LinkedHashMap<>(
+                    views(core.levelDeclarations(), StructureAdapters::wrap));
+            levels.putAll(views(core.levels(), StructureAdapters::wrap));
+            return Collections.unmodifiableMap(levels);
+        }
         @Override public Map<ResourceLocation, ModifierBundle> modifiers() { return views(core.modifiers(), ModifierAdapters::wrap); }
         @Override public Map<ResourceLocation, List<ItemStack>> modifierItems() { return core.modifierItems(); }
+        @Override public Map<ResourceLocation, ResourceLocation> modifierItemIds() { return core.modifierItemIds(); }
     }
 }

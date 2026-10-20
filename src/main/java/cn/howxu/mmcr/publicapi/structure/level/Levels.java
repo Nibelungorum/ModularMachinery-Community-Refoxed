@@ -5,7 +5,6 @@ import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierBundle;
 import cn.howxu.mmcr.publicapi.structure.BlockCondition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 
 /** Factories for level declarations; registry lifecycle belongs to registration.
  * @author howxu <dev@howxu.cn>
@@ -16,7 +15,7 @@ public final class Levels {
         return StructureAdapters.levelType(id, displayName);
     }
     public static MachineLevelSpec level(ResourceLocation id, ResourceLocation typeId, int priority,
-            BlockCondition condition, ItemStack representative, ModifierBundle modifier) {
-        return StructureAdapters.level(id, typeId, priority, condition, representative, modifier);
+            BlockCondition condition, ModifierBundle modifier) {
+        return StructureAdapters.level(id, typeId, priority, condition, modifier);
     }
 }

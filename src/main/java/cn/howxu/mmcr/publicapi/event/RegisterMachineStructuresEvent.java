@@ -35,10 +35,11 @@ public final class RegisterMachineStructuresEvent extends Event {
     public void registerLevelType(LevelTypeSpec type) { registrar.registerLevelType(type); }
     public void registerLevel(MachineLevelSpec level) { registrar.registerLevel(level); }
     public void registerModifier(ResourceLocation id, ModifierBundle modifier) { registrar.registerModifier(id, modifier); }
-    public void registerModifierItem(ItemStack stack, ResourceLocation id) { registrar.registerModifierItem(stack, id); }
+    public void registerModifierItem(ResourceLocation itemId, ResourceLocation id) { registrar.registerModifierItem(itemId, id); }
     public Map<ResourceLocation, StructureSpec> structures() { return registrar.structures(); }
     public Map<ResourceLocation, LevelTypeSpec> levelTypes() { return registrar.levelTypes(); }
     public Map<ResourceLocation, MachineLevelSpec> levels() { return registrar.levels(); }
     public Map<ResourceLocation, ModifierBundle> modifiers() { return registrar.modifiers(); }
     public Map<ResourceLocation, List<ItemStack>> modifierItems() { return registrar.modifierItems(); }
+    public Map<ResourceLocation, ResourceLocation> modifierItemIds() { return registrar.modifierItemIds(); }
 }

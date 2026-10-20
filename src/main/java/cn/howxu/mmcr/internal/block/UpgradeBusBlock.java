@@ -5,12 +5,13 @@ import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
-import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.BlockAndTintGetter;
@@ -60,10 +61,21 @@ public final class UpgradeBusBlock extends Block implements EntityBlock {
 
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
-        return new SimpleMenuProvider(
-                (containerId, playerInventory, player) -> new UpgradeBusMenu(containerId, playerInventory,
-                        level.getBlockEntity(pos) instanceof UpgradeBusBlockEntity bus ? bus : null),
-                Component.empty());
+        return new MenuProvider() {
+            @Override
+            public Component getDisplayName() { return Component.empty(); }
+
+            @Override
+            public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
+                return new UpgradeBusMenu(containerId, playerInventory,
+                        level.getBlockEntity(pos) instanceof UpgradeBusBlockEntity bus ? bus : null);
+            }
+
+            @Override
+            public void writeClientSideData(AbstractContainerMenu menu, RegistryFriendlyByteBuf buffer) {
+                UpgradeBusMenu.writeClientOpenData(buffer, pos, size);
+            }
+        };
     }
 
     @Override
@@ -72,7 +84,7 @@ public final class UpgradeBusBlock extends Block implements EntityBlock {
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) {
-                player.openMenu(provider, buffer -> UpgradeBusMenu.writeClientOpenData(buffer, pos, size));
+                player.openMenu(provider);
             }
         }
         return InteractionResult.SUCCESS;

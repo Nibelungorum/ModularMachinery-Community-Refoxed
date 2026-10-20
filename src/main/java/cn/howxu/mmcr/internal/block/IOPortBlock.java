@@ -8,7 +8,6 @@ import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
-import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
@@ -26,12 +25,12 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.MenuProvider;
-import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.server.level.ServerPlayer;
@@ -95,9 +94,32 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
 
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
-        return new SimpleMenuProvider(
-                (containerId, playerInv, player) -> openServerMenu(kind.id(), containerId, playerInv, level, pos),
-                titleFor(kind.id()));
+        return new MenuProvider() {
+            @Override
+            public Component getDisplayName() { return titleFor(kind.id()); }
+
+            @Override
+            public @Nullable AbstractContainerMenu createMenu(int containerId, Inventory playerInv, Player player) {
+                return openServerMenu(kind.id(), containerId, playerInv, level, pos);
+            }
+
+            @Override
+            public void writeClientSideData(AbstractContainerMenu menu, RegistryFriendlyByteBuf buffer) {
+                switch (menu) {
+                    case ItemBusMenu bus -> ItemBusMenu.writeClientOpenData(buffer, pos, bus.owner());
+                    case ExtendedItemMenu bus -> ExtendedItemMenu.writeClientOpenData(buffer, bus.owner());
+                    case ExtendedFluidMenu hatch -> ExtendedFluidMenu.writeClientOpenData(buffer, hatch.owner());
+                    case CombinedPortMenu combined -> CombinedPortMenu.writeClientOpenData(buffer, combined.owner());
+                    case ExtendedCombinedMenu combined -> ExtendedCombinedMenu.writeClientOpenData(buffer, combined.owner());
+                    case FluidHatchMenu ignored -> buffer.writeBlockPos(pos);
+                    case EnergyHatchMenu ignored -> buffer.writeBlockPos(pos);
+                    default -> {
+                        if (ArsNouveauBridge.get().isSourcePort(kind.id())) buffer.writeBlockPos(pos);
+                        else MekanismBridge.get().writeClientOpenData(buffer, kind.id(), pos);
+                    }
+                }
+            }
+        };
     }
 
     @Override
@@ -161,36 +183,7 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
             }
             if (AppliedFluxBridge.get().isPort(kind.id())) return InteractionResult.CONSUME;
             MenuProvider provider = state.getMenuProvider(level, pos);
-            if (provider != null) {
-                PortMenuKind menuKind = menuKindFor(kind.id());
-                if (menuKind == PortMenuKind.ITEM) {
-                    if (!(level.getBlockEntity(pos) instanceof ItemBusBlockEntity bus)) return InteractionResult.SUCCESS;
-                    player.openMenu(provider, buffer -> ItemBusMenu.writeClientOpenData(buffer, pos, bus));
-                } else if (menuKind == PortMenuKind.FLUID || menuKind == PortMenuKind.ENERGY
-                        || menuKind == PortMenuKind.EXTENDED_ENERGY) {
-                    player.openMenu(provider, pos);
-                } else if (menuKind == PortMenuKind.EXTENDED_ITEM) {
-                    if (!(level.getBlockEntity(pos) instanceof ExtendedItemBusBlockEntity bus)) return InteractionResult.SUCCESS;
-                    player.openMenu(provider, buffer -> ExtendedItemMenu.writeClientOpenData(buffer, bus));
-                    PktPortStorageSyncPayload.sendTo(player, bus);
-                } else if (menuKind == PortMenuKind.EXTENDED_FLUID) {
-                    if (!(level.getBlockEntity(pos) instanceof ExtendedFluidHatchBlockEntity hatch)) return InteractionResult.SUCCESS;
-                    player.openMenu(provider, buffer -> ExtendedFluidMenu.writeClientOpenData(buffer, hatch));
-                    PktPortStorageSyncPayload.sendTo(player, hatch);
-                } else if (menuKind == PortMenuKind.COMBINED) {
-                    if (!(level.getBlockEntity(pos) instanceof CombinedPortBlockEntity combined)) return InteractionResult.SUCCESS;
-                    player.openMenu(provider, buffer -> CombinedPortMenu.writeClientOpenData(buffer, combined));
-                    PktPortStorageSyncPayload.sendTo(player, combined);
-                } else if (menuKind == PortMenuKind.EXTENDED_COMBINED) {
-                    if (!(level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity combined)) return InteractionResult.SUCCESS;
-                    player.openMenu(provider, buffer -> ExtendedCombinedMenu.writeClientOpenData(buffer, combined));
-                    PktPortStorageSyncPayload.sendTo(player, combined);
-                } else if (ArsNouveauBridge.get().isSourcePort(kind.id())) {
-                    player.openMenu(provider, pos);
-                } else if (MekanismBridge.get().isPort(kind.id())) {
-                    player.openMenu(provider, buffer -> MekanismBridge.get().writeClientOpenData(buffer, kind.id(), pos));
-                }
-            }
+            if (provider != null) player.openMenu(provider);
         }
         return InteractionResult.SUCCESS;
     }
@@ -262,26 +255,24 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
         return id.equals(baseId) || id.startsWith(baseId + "_");
     }
 
-    private static AbstractContainerMenu openServerMenu(String kind, int containerId,
+    private static @Nullable AbstractContainerMenu openServerMenu(String kind, int containerId,
                                                         Inventory playerInv,
                                                         Level level, BlockPos pos) {
+        if (!(level.getBlockEntity(pos) instanceof IOPortBlockEntity port)
+                || port.isRemoved() || !port.kind().id().equals(kind)) return null;
         return switch (menuKindFor(kind)) {
-            case ITEM -> new ItemBusMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof ItemBusBlockEntity bus ? bus : null);
-            case FLUID -> new FluidHatchMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof FluidHatchBlockEntity hatch ? hatch : null);
-            case ENERGY -> new EnergyHatchMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity hatch ? hatch : null);
-            case EXTENDED_ITEM -> new ExtendedItemMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof ExtendedItemBusBlockEntity bus ? bus : null);
-            case EXTENDED_FLUID -> new ExtendedFluidMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof ExtendedFluidHatchBlockEntity hatch ? hatch : null);
-            case EXTENDED_ENERGY -> new EnergyHatchMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity hatch ? hatch : null);
-            case COMBINED -> new CombinedPortMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof CombinedPortBlockEntity combined ? combined : null);
-            case EXTENDED_COMBINED -> new ExtendedCombinedMenu(containerId, playerInv,
-                    level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity combined ? combined : null);
+            case ITEM -> port instanceof ItemBusBlockEntity bus ? new ItemBusMenu(containerId, playerInv, bus) : null;
+            case FLUID -> port instanceof FluidHatchBlockEntity hatch ? new FluidHatchMenu(containerId, playerInv, hatch) : null;
+            case ENERGY, EXTENDED_ENERGY -> port instanceof EnergyHatchBlockEntity hatch
+                    ? new EnergyHatchMenu(containerId, playerInv, hatch) : null;
+            case EXTENDED_ITEM -> port instanceof ExtendedItemBusBlockEntity bus
+                    ? new ExtendedItemMenu(containerId, playerInv, bus) : null;
+            case EXTENDED_FLUID -> port instanceof ExtendedFluidHatchBlockEntity hatch
+                    ? new ExtendedFluidMenu(containerId, playerInv, hatch) : null;
+            case COMBINED -> port instanceof CombinedPortBlockEntity combined
+                    ? new CombinedPortMenu(containerId, playerInv, combined) : null;
+            case EXTENDED_COMBINED -> port instanceof ExtendedCombinedPortBlockEntity combined
+                    ? new ExtendedCombinedMenu(containerId, playerInv, combined) : null;
             case NONE -> {
                 AbstractContainerMenu menu = ArsNouveauBridge.get().createMenu(kind, containerId, playerInv, level, pos);
                 yield menu != null ? menu : MekanismBridge.get().createMenu(kind, containerId, playerInv, level, pos);

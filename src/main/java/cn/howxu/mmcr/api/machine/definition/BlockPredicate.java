@@ -24,6 +24,7 @@ public final class BlockPredicate {
     private final boolean automaticController;
     private final Block block;
     private final BlockState state;
+    private final String stateReference;
     private final Supplier<? extends Block> blockSupplier;
     private final TagKey<Block> tag;
     private final List<BlockPredicate> alternatives;
@@ -31,10 +32,17 @@ public final class BlockPredicate {
     private BlockPredicate(boolean machineCoupler, boolean automaticController, Block block, BlockState state,
             Supplier<? extends Block> blockSupplier,
             TagKey<Block> tag, List<BlockPredicate> alternatives) {
+        this(machineCoupler, automaticController, block, state, blockSupplier, tag, alternatives, null);
+    }
+
+    private BlockPredicate(boolean machineCoupler, boolean automaticController, Block block, BlockState state,
+            Supplier<? extends Block> blockSupplier, TagKey<Block> tag, List<BlockPredicate> alternatives,
+            String stateReference) {
         this.machineCoupler = machineCoupler;
         this.automaticController = automaticController;
         this.block = block;
         this.state = state;
+        this.stateReference = stateReference;
         this.blockSupplier = blockSupplier;
         this.tag = tag;
         this.alternatives = alternatives;
@@ -50,18 +58,27 @@ public final class BlockPredicate {
 
     public static BlockPredicate block(ResourceLocation id) {
         Objects.requireNonNull(id, "id");
-        return deferredBlock(() -> BuiltInRegistries.BLOCK.get(id));
+        return deferredBlock(() -> BuiltInRegistries.BLOCK.getOptional(id)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown block: " + id)));
     }
 
     public static BlockPredicate state(String id) {
         Objects.requireNonNull(id, "id");
         int propertiesStart = id.indexOf('[');
-        if (propertiesStart < 0) return state(ResourceLocation.parse(id));
-        if (!id.endsWith("]")) throw new IllegalArgumentException("Invalid block state: " + id);
-        String blockId = id.substring(0, propertiesStart);
+        ResourceLocation.parse(propertiesStart < 0 ? id : id.substring(0, propertiesStart));
+        if (propertiesStart >= 0 && (!id.endsWith("]") || propertiesStart == id.length() - 2)) {
+            throw new IllegalArgumentException("Invalid block state: " + id);
+        }
+        return new BlockPredicate(false, false, null, null, null, null, List.of(), id);
+    }
+
+    private static BlockState resolveState(String id) {
+        int propertiesStart = id.indexOf('[');
+        ResourceLocation blockId = ResourceLocation.parse(propertiesStart < 0 ? id : id.substring(0, propertiesStart));
+        BlockState state = BuiltInRegistries.BLOCK.getOptional(blockId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown block: " + blockId)).defaultBlockState();
+        if (propertiesStart < 0) return state;
         String properties = id.substring(propertiesStart + 1, id.length() - 1);
-        if (properties.isEmpty()) throw new IllegalArgumentException("Invalid block state: " + id);
-        BlockState state = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(blockId)).defaultBlockState();
         for (String assignment : properties.split(",", -1)) {
             String[] pair = assignment.split("=", -1);
             if (pair.length != 2 || pair[0].isEmpty() || pair[1].isEmpty()) {
@@ -71,12 +88,12 @@ public final class BlockPredicate {
             if (property == null) throw new IllegalArgumentException("Unknown block state property: " + pair[0]);
             state = setProperty(state, property, pair[1]);
         }
-        return blockState(state);
+        return state;
     }
 
     public static BlockPredicate state(ResourceLocation id) {
         Objects.requireNonNull(id, "id");
-        return blockState(BuiltInRegistries.BLOCK.get(id).defaultBlockState());
+        return state(id.toString());
     }
 
     private static <T extends Comparable<T>> BlockState setProperty(
@@ -144,7 +161,7 @@ public final class BlockPredicate {
     }
 
     public Optional<BlockState> blockState() {
-        return Optional.ofNullable(state);
+        return stateReference == null ? Optional.ofNullable(state) : Optional.of(resolveState(stateReference));
     }
 
     public Optional<Supplier<? extends Block>> blockSupplier() {
@@ -166,12 +183,13 @@ public final class BlockPredicate {
         return machineCoupler == that.machineCoupler && automaticController == that.automaticController
                 && Objects.equals(block, that.block)
                 && Objects.equals(state, that.state)
+                && Objects.equals(stateReference, that.stateReference)
                 && Objects.equals(tag, that.tag)
                 && alternatives.equals(that.alternatives);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(machineCoupler, automaticController, block, state, tag, alternatives);
+        return Objects.hash(machineCoupler, automaticController, block, state, stateReference, tag, alternatives);
     }
 }

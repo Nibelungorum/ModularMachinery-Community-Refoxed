@@ -5,11 +5,13 @@ import cn.howxu.mmcr.internal.menu.FactorySchedulerMenu;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
-import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.SoundType;
@@ -50,11 +52,22 @@ public class FactorySchedulerBlock extends Block implements EntityBlock {
 
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
-        return new SimpleMenuProvider(
-                (containerId, playerInv, player) -> level.getBlockEntity(pos) instanceof FactorySchedulerBlockEntity scheduler
+        return new MenuProvider() {
+            @Override
+            public Component getDisplayName() { return Component.translatable("container.mmcr.factory_controller"); }
+
+            @Override
+            public AbstractContainerMenu createMenu(int containerId, Inventory playerInv, Player player) {
+                return level.getBlockEntity(pos) instanceof FactorySchedulerBlockEntity scheduler
                         ? new FactorySchedulerMenu(containerId, playerInv, scheduler)
-                        : new FactorySchedulerMenu(containerId, playerInv),
-                Component.translatable("container.mmcr.factory_controller"));
+                        : new FactorySchedulerMenu(containerId, playerInv);
+            }
+
+            @Override
+            public void writeClientSideData(AbstractContainerMenu menu, RegistryFriendlyByteBuf buffer) {
+                buffer.writeBlockPos(pos);
+            }
+        };
     }
 
     @Override
@@ -62,7 +75,7 @@ public class FactorySchedulerBlock extends Block implements EntityBlock {
                                                Player player, BlockHitResult hit) {
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
-            if (provider != null) player.openMenu(provider, pos);
+            if (provider != null) player.openMenu(provider);
         }
         return InteractionResult.SUCCESS;
     }

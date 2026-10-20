@@ -229,10 +229,11 @@ class PublicMachineBuilderTest {
 
         ResourceLocation diamondId = MMCR.id("alloy_furnace_diamond_speedup");
         ResourceLocation goldId = MMCR.id("alloy_furnace_gold_doubling");
+        var itemBindings = structures.freeze().resolveModifierItems();
         assertThat(definitions.definitions()).containsKey(machineId);
-        assertThat(structures.modifierItems().get(diamondId)).singleElement()
+        assertThat(itemBindings.get(diamondId)).singleElement()
                 .satisfies(stack -> assertThat(stack.is(Items.DIAMOND_BLOCK)).isTrue());
-        assertThat(structures.modifierItems().get(goldId)).singleElement()
+        assertThat(itemBindings.get(goldId)).singleElement()
                 .satisfies(stack -> assertThat(stack.is(Items.GOLD_BLOCK)).isTrue());
 
         var stage = structures.structures().get(machineId).stages().getFirst();

@@ -58,10 +58,14 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -1738,6 +1742,48 @@ public final class ControllerUiGameTest {
             throw new AssertionError("Cannot inspect the real recipe runtime", exception);
         }
     }
+    public static void spectatorControllerMetadata(GameTestHelper helper) {
+        BlockPos relative = new BlockPos(2, 1, 2);
+        for (var machine : List.of(MMCR.id("test_cube"), MMCR.id("data_storage_tick"))) {
+            helper.setBlock(relative, ModBlocks.controllerFor(machine).get().defaultBlockState());
+            assertSpectatorMetadata(helper, helper.getBlockEntity(relative),
+                    machine.getPath().equals("data_storage_tick") ? Kind.TICK : Kind.NORMAL);
+        }
+        formedFixture(helper, fixture -> {
+            try (fixture) {
+                assertSpectatorMetadata(helper, fixture.owner, Kind.FACTORY);
+            }
+        });
+        helper.succeed();
+    }
+
+    private static void assertSpectatorMetadata(GameTestHelper helper, MachineControllerBlockEntity owner, Kind kind) {
+        var player = player(helper);
+        BlockPos pos = owner.getBlockPos();
+        player.setPos(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+        player.setGameMode(GameType.SPECTATOR);
+        try {
+            player.gameMode.useItemOn(player, helper.getLevel(), ItemStack.EMPTY, InteractionHand.MAIN_HAND,
+                    new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false));
+            helper.assertTrue(player.containerMenu instanceof ControllerUiMenu,
+                    "Spectator native interaction opens the shared controller menu: " + kind);
+            var opening = packets(player, AdvancedOpenScreenPayload.class).getLast();
+            var buffer = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(opening.additionalData()), helper.getLevel().registryAccess());
+            try {
+                var metadata = ControllerMenuOpenData.read(buffer);
+                helper.assertTrue(metadata.equals(ui(player).uiOpenData()) && metadata.pos().equals(pos)
+                                && metadata.kind() == kind && !buffer.isReadable(),
+                        "Spectator opening retains machine/session metadata used by registered custom screens: " + kind);
+            } finally {
+                buffer.release();
+            }
+            helper.assertTrue(ui(player).uiServerSession().validate(), "Spectator controller session stays usable: " + kind);
+        } finally {
+            player.closeContainer();
+            ((RecordingConnection) player.connection).getConnection().channel().close();
+        }
+    }
+
     public void openMetadataAndLifecycle(GameTestHelper helper) {
         BlockPos relativePos = new BlockPos(1, 1, 1);
         var block = (MachineControllerBlock) ModBlocks.controllerFor(MMCR.id("test_cube")).get();

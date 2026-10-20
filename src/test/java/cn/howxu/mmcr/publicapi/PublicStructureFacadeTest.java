@@ -135,19 +135,16 @@ class PublicStructureFacadeTest {
     }
 
     @Test
-    void level_retains_exact_state_runtime_conversion_modifiers_and_defensive_stacks() {
+    void level_retains_exact_state_runtime_conversion_and_modifiers_without_startup_stacks() {
         var state = Blocks.FURNACE.defaultBlockState().setValue(BlockStateProperties.LIT, true);
         var bundle = Modifiers.bundle(Modifiers.numeric("parallelism", ModifierScope.MACHINE, 2,
                 ModifierOperation.ADD, false));
-        ItemStack original = new ItemStack(Items.FURNACE, 4);
         ResourceLocation typeId = ResourceLocation.parse("mmcr:facade_level_type");
         var type = Levels.type(typeId, Component.translatable("level.mmcr.facade"));
         assertThat(StructureAdapters.unwrap(type).id()).isEqualTo(typeId);
         var level = Levels.level(ResourceLocation.parse("mmcr:facade_level"), typeId, 1,
-                BlockConditions.blockState(state), original, bundle);
-        original.setCount(1);
-        level.representative().setCount(2);
-        assertThat(level.representative().getCount()).isEqualTo(4);
+                BlockConditions.blockState(state), bundle);
+        assertThat(level.representative().isEmpty()).isTrue();
         assertThat(level.statePredicate().blockState()).contains(state);
         assertThat(level.modifier().modifiers()).hasSize(1);
         var runtime = MachineDefinitionConverter.toMachineLevel(StructureAdapters.unwrap(level));
@@ -248,7 +245,7 @@ class PublicStructureFacadeTest {
         assertThat(view.alternatives().get(4).isMachineCoupler()).isTrue();
         assertThat(calls).hasValue(0);
         var declaredLevel = Levels.level(ResourceLocation.parse("mmcr:converted_runtime"),
-                ResourceLocation.parse("mmcr:converted_type"), 1, view, new ItemStack(Items.STONE), Modifiers.bundle());
+                ResourceLocation.parse("mmcr:converted_type"), 1, view, Modifiers.bundle());
         var runtime = StructureAdapters.unwrapRuntime(declaredLevel);
         assertThat(runtime.statePredicate().children().get(2)).isEqualTo(deferred);
         assertThat(runtime.statePredicate().children().get(3)).isEqualTo(tag);

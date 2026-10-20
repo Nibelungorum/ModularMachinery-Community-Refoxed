@@ -114,10 +114,9 @@ public final class TypedFixture implements MachineDefinitionProvider {
         ParallelizationModifierSpec parallel = Modifiers.parallelized(true);
         ModifierBundle bundle = Modifiers.combine(Modifiers.bundle(duration, threads), Modifiers.bundle(parallel));
         LevelTypeSpec type = Levels.type(LEVEL_TYPE, Component.translatable("level.example_addon.coil"));
-        MachineLevelSpec level = Levels.level(LEVEL, LEVEL_TYPE, 1, BlockConditions.blockState(Blocks.IRON_BLOCK.defaultBlockState()),
-                new ItemStack(Items.IRON_BLOCK), bundle);
+        MachineLevelSpec level = Levels.level(LEVEL, LEVEL_TYPE, 1, BlockConditions.state("minecraft:iron_block"), bundle);
         event.registerLevelType(type); event.registerLevel(level);
-        event.registerModifier(MODIFIER, bundle); event.registerModifierItem(new ItemStack(Items.DIAMOND), MODIFIER);
+        event.registerModifier(MODIFIER, bundle); event.registerModifierItem(ResourceLocation.parse("minecraft:diamond"), MODIFIER);
         BlockCondition ports = BlockConditions.any(BlockConditions.itemPorts(), BlockConditions.fluidPorts(),
                 BlockConditions.energyPorts(), BlockConditions.chemicalPorts(), BlockConditions.heatPorts(),
                 BlockConditions.sourceInput(), BlockConditions.sourceOutput(), BlockConditions.sourcePorts(),

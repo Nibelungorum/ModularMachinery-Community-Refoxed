@@ -2,11 +2,13 @@ package cn.howxu.mmcr.compat.pneumaticcraft.loaded;
 
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
-import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -29,8 +31,21 @@ public final class AirInterfaceBlock extends IOPortBlock {
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
         if (!(level.getBlockEntity(pos) instanceof AirPortBlockEntity port)) return null;
-        return new SimpleMenuProvider((containerId, inventory, player) -> new AirPortMenu(containerId, inventory, port),
-                Component.translatable("block.mmcr." + kind().id()));
+        return new MenuProvider() {
+            @Override
+            public Component getDisplayName() { return Component.translatable("block.mmcr." + kind().id()); }
+
+            @Override
+            public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Player player) {
+                return level.getBlockEntity(pos) == port && !port.isRemoved()
+                        ? new AirPortMenu(containerId, inventory, port) : null;
+            }
+
+            @Override
+            public void writeClientSideData(AbstractContainerMenu menu, RegistryFriendlyByteBuf buffer) {
+                buffer.writeBlockPos(pos);
+            }
+        };
     }
 
     @Override
@@ -38,7 +53,7 @@ public final class AirInterfaceBlock extends IOPortBlock {
                                                Player player, BlockHitResult hit) {
         if (!level.isClientSide()) {
             MenuProvider provider = state.getMenuProvider(level, pos);
-            if (provider != null) player.openMenu(provider, pos);
+            if (provider != null) player.openMenu(provider);
         }
         return InteractionResult.SUCCESS;
     }

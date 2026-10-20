@@ -1,14 +1,13 @@
 package cn.howxu.mmcr.compat.kubejs;
 
-import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
+import cn.howxu.mmcr.api.machine.definition.DisplayStack;
+import cn.howxu.mmcr.api.machine.definition.MachineLevel;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import dev.latvian.mods.kubejs.registry.BuilderBase;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Objects;
 
@@ -20,7 +19,7 @@ import java.util.Objects;
 public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
     public transient ResourceLocation typeId;
     public transient int priority;
-    public transient BlockState state;
+    public transient String state;
     public transient ModifierDefinition modifier = ModifierDefinition.EMPTY;
 
     public MachineLevelBuilderJS(ResourceLocation id) {
@@ -41,12 +40,8 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
         return this;
     }
 
-    public MachineLevelBuilderJS state(Object state) {
-        this.state = switch (state) {
-            case String blockId -> BuiltInRegistries.BLOCK.get(ResourceLocation.parse(blockId)).defaultBlockState();
-            case BlockState blockState -> blockState;
-            default -> throw new IllegalArgumentException("Machine level state must be a block id or BlockState: " + state);
-        };
+    public MachineLevelBuilderJS state(String blockStateId) {
+        this.state = Objects.requireNonNull(blockStateId, "blockStateId");
         return this;
     }
 
@@ -59,7 +54,8 @@ public class MachineLevelBuilderJS extends BuilderBase<MachineLevel> {
     public MachineLevel createObject() {
         if (typeId == null) throw new IllegalStateException("type() not called");
         if (state == null) throw new IllegalStateException("state() not called");
-        return new MachineLevel(id, typeId, priority, new BlockPredicate.OfBlockState(state), ItemStack.EMPTY, modifier);
+        return new MachineLevel(id, typeId, priority, BlockPredicate.state(state),
+                DisplayStack.of(ItemStack.EMPTY), modifier);
     }
 
     public void registerObject() {

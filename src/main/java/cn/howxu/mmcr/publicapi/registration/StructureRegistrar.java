@@ -22,10 +22,11 @@ public interface StructureRegistrar {
     void registerLevelType(LevelTypeSpec type);
     void registerLevel(MachineLevelSpec level);
     void registerModifier(ResourceLocation id, ModifierBundle modifier);
-    void registerModifierItem(ItemStack stack, ResourceLocation modifierId);
+    void registerModifierItem(ResourceLocation itemId, ResourceLocation modifierId);
     Map<ResourceLocation, StructureSpec> structures();
     Map<ResourceLocation, LevelTypeSpec> levelTypes();
     Map<ResourceLocation, MachineLevelSpec> levels();
     Map<ResourceLocation, ModifierBundle> modifiers();
     Map<ResourceLocation, List<ItemStack>> modifierItems();
+    Map<ResourceLocation, ResourceLocation> modifierItemIds();
 }

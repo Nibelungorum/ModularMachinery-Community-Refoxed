@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.recipe.modifier;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.registration.ApiRegistrationException;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -64,8 +65,10 @@ public final class ModifierRegistry {
                 List<ItemStack> copies = stacks.stream().map(stack -> {
                     ItemStack copy = Objects.requireNonNull(stack, "item binding").copy();
                     ModifierItemKey key = ModifierItemKey.of(copy);
-                    if (nextBindings.putIfAbsent(key, modifierId) != null) {
-                        throw new ApiRegistrationException("Duplicate machine modifier item binding");
+                    ResourceLocation previous = nextBindings.putIfAbsent(key, modifierId);
+                    if (previous != null) {
+                        throw new ApiRegistrationException("Duplicate machine modifier item binding for "
+                                + BuiltInRegistries.ITEM.getKey(copy.getItem()) + " between " + previous + " and " + modifierId);
                     }
                     return copy;
                 }).toList();

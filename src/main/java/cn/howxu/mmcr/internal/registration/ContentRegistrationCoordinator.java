@@ -90,6 +90,7 @@ public final class ContentRegistrationCoordinator {
         requireCollecting();
 
         commitStructures();
+        commitModifierItemsAfterComponentsBound();
         commitRecipes();
         testCommitCount++;
         lastStartupSnapshot = new StartupSnapshotForTesting(
@@ -109,7 +110,7 @@ public final class ContentRegistrationCoordinator {
 
         Map<ResourceLocation, MachineRegistration> registrations = validateAndConvertMachines();
         Map<ResourceLocation, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
-        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.modifierItems());
+        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers());
         registrations.values().forEach(registration -> {
             if (MachineDefinitions.containsStatic(registration.id())) {
                 MachineDefinitions.replace(registration);
@@ -118,6 +119,12 @@ public final class ContentRegistrationCoordinator {
             }
         });
         MachineStructureRegistry.replaceStartup(structures);
+    }
+
+    /** Resolves startup item IDs only after their default data components are available. */
+    public static synchronized void commitModifierItemsAfterComponentsBound() {
+        requireCollecting();
+        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.resolveModifierItems());
     }
 
     /**

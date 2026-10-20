@@ -89,3 +89,18 @@ def prepareGameTestExampleItems = tasks.register('prepareGameTestExampleItems', 
 tasks.matching { it.name == 'runGameTestServer' }.configureEach {
     dependsOn prepareGameTestExampleItems
 }
+
+// Exercise the shipped Mekanism example and KubeJS-created fixtures through the real startup lifecycle.
+def prepareRegistryReferenceGameTestScripts = tasks.register('prepareRegistryReferenceGameTestScripts', Copy) {
+    from('example') {
+        include 'startup_scripts/mekanism/Registry_References.js'
+        include 'server_scripts/structure/mekanism/Registry_References.js'
+        include 'server_scripts/recipe/mekanism/Registry_References.js'
+    }
+    from('src/gametest/kubejs')
+    into layout.projectDirectory.dir('run/gameTestServer/kubejs')
+}
+
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    dependsOn prepareRegistryReferenceGameTestScripts
+}

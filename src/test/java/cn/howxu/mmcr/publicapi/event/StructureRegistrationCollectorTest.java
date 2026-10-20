@@ -12,8 +12,7 @@ import cn.howxu.mmcr.publicapi.structure.level.Levels;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.Set;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -43,7 +42,7 @@ class StructureRegistrationCollectorTest {
         StructureRegistration.current().registerLevelType(new LevelType(type, Component.translatable("test.mmcr.coil")));
         var event = RegistrationAdapters.prepare(Set.of(machine));
         event.registerLevel(Levels.level(level, type, 1, BlockConditions.block(Blocks.FURNACE),
-                ItemStack.EMPTY, Modifiers.bundle()));
+                Modifiers.bundle()));
         // Models KJS writing its core collector after Java event subscribers have returned.
         StructureRegistration.current().registerModifier(modifier, ModifierDefinition.EMPTY);
         event.registerStructure(machine, draft -> draft.fullStructure(stage -> stage
@@ -65,14 +64,14 @@ class StructureRegistrationCollectorTest {
     void unresolved_modifier_binding_rejects_freeze_without_closing_collector() {
         var modifier = MMCR.id("unresolved_public_modifier");
         var event = new RegisterMachineStructuresEvent(Set.of());
-        event.registerModifierItem(new ItemStack(Items.EMERALD), modifier);
+        var itemId = ResourceLocation.parse("minecraft:emerald");
+        event.registerModifierItem(itemId, modifier);
         assertThatThrownBy(() -> RegistrationAdapters.freeze(event)).isInstanceOf(RegistrationException.class)
                 .hasMessageContaining(modifier.toString());
         event.registerModifier(modifier, Modifiers.bundle());
         var snapshot = RegistrationAdapters.freeze(event);
-        assertThat(snapshot.modifierItems()).containsKey(modifier);
-        var copy = event.modifierItems().get(modifier).getFirst();
-        copy.setCount(5);
-        assertThat(event.modifierItems().get(modifier).getFirst().getCount()).isEqualTo(1);
+        assertThat(snapshot.modifierItemIds()).containsEntry(itemId, modifier);
+        assertThat(event.modifierItemIds()).containsEntry(itemId, modifier);
+        assertThatThrownBy(() -> event.modifierItemIds().clear()).isInstanceOf(UnsupportedOperationException.class);
     }
 }

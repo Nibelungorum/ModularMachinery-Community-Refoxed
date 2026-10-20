@@ -180,7 +180,13 @@ public final class GameTestRegistry {
             register(event, "input_isolation_ordinary_pattern_topup", 20, InputIsolationGameTest::ordinaryPatternRequestCanTopUpAndRollback);
         }
         if (ModList.get().isLoaded("mekanism")) {
+            register(event, "startup_mekanism_registry_references", 20,
+                    StartupRegistryReferenceGameTest::mekanismExampleResolvesRegisteredContent);
             register(event, "input_isolation_chemical_shared_heat", 20, InputIsolationGameTest::chemicalIsolationStillSharesHeatAndEnergy);
+        }
+        if (ModList.get().isLoaded("kubejs")) {
+            register(event, "startup_kubejs_registry_references", 20,
+                    StartupRegistryReferenceGameTest::kubejsReferencesResolveAfterRegistryCallbacks);
         }
         register(event, "running_installed_fluid_probability", 20, RunningRecipeGameTest::installedFluidProbabilityAttempts);
         register(event, "running_mixed_input_native_partial", 20, RunningRecipeGameTest::mixedInputCommitRetainsNativePaymentAfterEnergyChanges);
@@ -197,6 +203,7 @@ public final class GameTestRegistry {
                 PatchouliGuideGameTest::acquisitionMatchesOptionalInstallation);
         register(event, "controller_ui_menu_lifecycle", 20,
                 helper -> new ControllerUiGameTest().openMetadataAndLifecycle(helper));
+        register(event, "spectator_controller_ui_metadata", 20, ControllerUiGameTest::spectatorControllerMetadata);
         register(event, "controller_ui_terminal_menu_lifecycle", 20, ControllerUiGameTest::terminalMenuLifecycle);
         register(event, "controller_ui_manual_structure_check", 20, ControllerUiGameTest::manualStructureCheck);
         register(event, "controller_ui_request_storage", 100, ControllerUiGameTest::requestStorage);
@@ -331,6 +338,7 @@ public final class GameTestRegistry {
         register(event, "energy_input_ejection_continues_after_partial_target", 100, helper -> new AutoIOGameTest().energyInputEjectionContinuesAfterPartialTarget(helper));
         register(event, "energy_input_ejection_preserves_remainder", 100, helper -> new AutoIOGameTest().energyInputEjectionPreservesRemainder(helper));
         register(event, "port_menu_direction", 100, helper -> new PortMenuDirectionGameTest().itemBusMenuAllowsContainerSlotTransfers(helper));
+        register(event, "spectator_menu_opening", 20, SpectatorMenuGameTest::allBlockMenusCarryOpeningData);
         register(event, "shared_multiblock_teardown", 100, helper -> new SharedMultiblockIoGameTest().sharedEnergyPortFormsBothControllersAndSurvivesOneTeardown(helper));
         register(event, "shared_multiblock_input", 100, helper -> new SharedMultiblockIoGameTest().sharedInputPartiallyStartsBothControllers(helper));
         register(event, "shared_multiblock_energy", 100, helper -> new SharedMultiblockIoGameTest().finiteSharedEnergyRotatesTickGrantsBetweenLanes(helper));
@@ -853,6 +861,10 @@ public final class GameTestRegistry {
         event.removeIf(test -> {
             String name = test.testName();
             return !(name.startsWith("mmcr:pattern_batch_")
+                    || name.equals("mmcr:spectator_menu_opening")
+                    || name.equals("mmcr:spectator_controller_ui_metadata")
+                    || name.equals("mmcr:startup_mekanism_registry_references")
+                    || name.equals("mmcr:startup_kubejs_registry_references")
                     || name.startsWith("mmcr:controller_placement_")
                     || name.equals("mmcr:ae2lt_pattern_batch_native_planning_admission")
                     || name.startsWith("mmcr:ae2_pending_")
@@ -947,6 +959,9 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(RegisterMachineStructuresEvent event) {
+        if (ModList.get().isLoaded("mekanism")) {
+            StartupRegistryReferenceGameTest.registerPublicReferences(event);
+        }
         registerMachineStructures(RegistrationAdapters.core(event));
         if (ModList.get().isLoaded("botania")) BotaniaManaRecipeGameTest.registerStructures(event);
     }

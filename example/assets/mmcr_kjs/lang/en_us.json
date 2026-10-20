@@ -1,4 +1,9 @@
 {
+    "machine.mmcr_kubejs.mekanism_registry_demo": "Mekanism Registry Demo",
+    "recipe_pool.mmcr_kubejs.mekanism_registry_demo": "Mekanism Registry Demo",
+    "block.mmcr.mekanism_registry_demo_controller": "Mekanism Registry Demo Controller",
+    "item.mmcr.mekanism_registry_demo_controller": "Mekanism Registry Demo Controller",
+    "level.mmcr_kubejs.induction_cell": "Induction Cell",
     "block.mmcr.kubejs_alloy_furnace_controller": "Alloy Furnace Controller",
     "block.mmcr.kubejs_blast_furnace_controller": "Blast Furnace Controller",
     "block.mmcr.kubejs_cracker_controller": "Cracker Controller",

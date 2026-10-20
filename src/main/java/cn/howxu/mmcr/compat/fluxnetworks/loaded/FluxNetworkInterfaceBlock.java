@@ -6,12 +6,17 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.Level;
@@ -22,6 +27,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import sonar.fluxnetworks.common.device.TileFluxDevice;
+import sonar.fluxnetworks.api.FluxConstants;
 import sonar.fluxnetworks.register.RegistryItems;
 
 import java.util.function.Supplier;
@@ -41,7 +47,27 @@ public final class FluxNetworkInterfaceBlock extends IOPortBlock {
 
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
-        return level.getBlockEntity(pos) instanceof TileFluxDevice device ? device : null;
+        if (!(level.getBlockEntity(pos) instanceof TileFluxDevice device)) return null;
+        return new MenuProvider() {
+            @Override
+            public Component getDisplayName() { return device.getDisplayName(); }
+
+            @Override
+            public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Player player) {
+                return level.getBlockEntity(pos) == device && !device.isRemoved() && device.canPlayerAccess(player)
+                        ? device.createMenu(containerId, inventory, player) : null;
+            }
+
+            @Override
+            public void writeClientSideData(AbstractContainerMenu menu, RegistryFriendlyByteBuf buffer) {
+                // Match TileFluxDevice.onPlayerInteract's native opening format.
+                buffer.writeBoolean(true);
+                buffer.writeBlockPos(pos);
+                CompoundTag tag = new CompoundTag();
+                device.writeCustomTag(tag, FluxConstants.NBT_TILE_UPDATE);
+                buffer.writeNbt(tag);
+            }
+        };
     }
 
     @Override

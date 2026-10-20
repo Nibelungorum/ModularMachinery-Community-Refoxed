@@ -597,12 +597,13 @@ class PluginBindingTest {
             var definition = new ModifierDefinition(List.of());
 
             event.registerModifier(modifierId.toString(), definition);
-            event.registerModifierItem(new ItemStack(Items.DIAMOND, 16), modifierId.toString());
+            event.registerModifierItem("minecraft:diamond", modifierId.toString());
 
             var snapshot = StructureRegistration.current().freeze();
             assertThat(snapshot.modifiers()).containsEntry(modifierId, definition);
-            assertThat(snapshot.modifierItems().get(modifierId)).singleElement()
-                    .satisfies(stack -> assertThat(stack.getCount()).isEqualTo(1));
+            assertThat(snapshot.modifierItems()).isEmpty();
+            assertThat(snapshot.resolveModifierItems().get(modifierId)).singleElement()
+                    .satisfies(stack -> assertThat(stack.getItem()).isSameAs(Items.DIAMOND));
         } finally {
             StructureRegistration.resetCollector();
         }

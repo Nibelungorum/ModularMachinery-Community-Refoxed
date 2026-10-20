@@ -354,9 +354,9 @@ class InterfaceHelpersTest {
 
     @Test
     void state_lookup_rejects_invalid_properties() {
-        assertThatThrownBy(() -> BlockPredicate.state("minecraft:oak_log[missing=value]"))
+        assertThatThrownBy(() -> BlockPredicate.state("minecraft:oak_log[missing=value]").blockState())
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> BlockPredicate.state("minecraft:oak_log[axis=invalid]"))
+        assertThatThrownBy(() -> BlockPredicate.state("minecraft:oak_log[axis=invalid]").blockState())
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
