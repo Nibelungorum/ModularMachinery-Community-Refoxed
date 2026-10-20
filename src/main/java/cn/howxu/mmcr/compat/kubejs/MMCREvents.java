@@ -14,10 +14,10 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public interface MMCREvents {
-    String STARTUP_ID = "mmcr.startup";
-    String SERVER_ID = "mmcr.server";
-    String CLIENT_ID = "mmcr.client";
-    EventGroup GROUP = EventGroup.of("mmcr");
+    String STARTUP_ID = "MMCREvents.startup";
+    String SERVER_ID = "MMCREvents.server";
+    String CLIENT_ID = "MMCREvents.client";
+    EventGroup GROUP = EventGroup.of("MMCREvents");
 
     static EventGroup group() {
         Holder.init();
