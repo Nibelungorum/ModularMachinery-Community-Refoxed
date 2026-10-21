@@ -6,8 +6,6 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.PersistenceFacet;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
-import cn.howxu.mmcr.compat.kubejs.SmartInterfaceEvents;
-import cn.howxu.mmcr.compat.kubejs.SmartInterfaceUpdateEventJS;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.capability.SmartInterfaceCapability;
 import cn.howxu.mmcr.util.IOType;
@@ -107,7 +105,6 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         capabilityStorage.set(type, value);
         changed();
         notifyControllersOfValueChange();
-        postUpdate(type, oldValue, value);
         return true;
     }
 
@@ -235,12 +232,6 @@ public class SmartInterfaceBlockEntity extends LinkedAppearanceBlockEntity imple
         if (level != null) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
         }
-    }
-
-    private void postUpdate(String type, Float oldValue, Float newValue) {
-        if (level == null || level.isClientSide() || machineId == null) return;
-        SmartInterfaceEvents.post(new SmartInterfaceUpdateEventJS(worldPosition, machineId, type,
-                oldValue, newValue, List.copyOf(controllers)));
     }
 
     private void applyCapabilityValues(Map<String, Float> nextValues) {

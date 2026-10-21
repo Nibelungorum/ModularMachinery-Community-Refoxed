@@ -24,7 +24,6 @@ import net.neoforged.fml.ModList;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.LinkedHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -193,14 +192,10 @@ public class Plugin implements KubeJSPlugin {
     @Override
     public void registerEvents(EventGroupRegistry registry) {
         registry.register(MMCREvents.group());
-        registry.register(SmartInterfaceEvents.group());
     }
 
     static Map<String, String> events() {
-        Map<String, String> events = new LinkedHashMap<>();
-        events.putAll(MMCREvents.events());
-        events.put(SmartInterfaceEvents.UPDATED_ID, SmartInterfaceEvents.UPDATED_ID);
-        return events;
+        return MMCREvents.events();
     }
 
     private static void registerDevelopmentMachineLevels() {

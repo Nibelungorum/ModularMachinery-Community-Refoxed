@@ -569,10 +569,10 @@ class PluginBindingTest {
 
     @Test
     void plugin_exposes_strict_mmcr_lifecycle_events() {
-        assertThat(Plugin.events()).containsEntry("mmcr.startup", "mmcr.startup");
-        assertThat(Plugin.events()).containsEntry("mmcr.server", "mmcr.server");
-        assertThat(Plugin.events()).containsEntry("mmcr.client", "mmcr.client");
-        assertThat(Plugin.events()).containsEntry("mmcr.smart_interface.updated", "mmcr.smart_interface.updated");
+        assertThat(Plugin.events()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "mmcr.startup", "mmcr.startup",
+                "mmcr.server", "mmcr.server",
+                "mmcr.client", "mmcr.client"));
     }
 
     @Test
@@ -778,20 +778,6 @@ class PluginBindingTest {
         assertThat(mmcr.getAPI()).isInstanceOf(KubeJSApi.class);
         assertThat(mmcr.getValues().INT_MAX).isEqualTo(Integer.MAX_VALUE);
         assertThat(mmcr.getValues().INT_MIN).isEqualTo(Integer.MIN_VALUE);
-    }
-
-    @Test
-    void smart_interface_update_event_exposes_interface_owned_shape() {
-        SmartInterfaceUpdateEventJS event = new SmartInterfaceUpdateEventJS(
-                new BlockPos(1, 2, 3), MMCR.id("test_machine"), "temperature", 20F, 30F,
-                List.of(new BlockPos(0, 0, 0), new BlockPos(9, 0, 0)));
-
-        assertThat(event.interfacePos()).isEqualTo(new BlockPos(1, 2, 3));
-        assertThat(event.machineId()).isEqualTo(MMCR.id("test_machine"));
-        assertThat(event.type()).isEqualTo("temperature");
-        assertThat(event.controllerCount()).isEqualTo(2);
-        assertThat(event.controllerPositions()).containsExactly(new BlockPos(0, 0, 0), new BlockPos(9, 0, 0));
-        assertThat(event.controllerPos()).isEqualTo(new BlockPos(0, 0, 0));
     }
 
     @Test
