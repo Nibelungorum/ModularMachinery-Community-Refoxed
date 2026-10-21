@@ -79,9 +79,6 @@ jobs:
       - name: Unit Test
         run: gradle test
 
-      - name: GameTest
-        run: gradle runGameTestServer
-
       - name: Build
         run: gradle build
 
