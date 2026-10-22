@@ -10,10 +10,19 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
+import cn.howxu.mmcr.internal.block.DataStorageBlock;
+import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
+import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
+import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
+import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
+import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
+import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
@@ -23,6 +32,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 
 import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +97,8 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Map<BlockPos, BlockState> states = new LinkedHashMap<>();
         Map<BlockPos, ResourceLocation> levelSlots = new LinkedHashMap<>();
         Map<BlockPos, List<StructurePreviewSchema.Candidate>> candidates = new LinkedHashMap<>();
+        Map<BlockPos, Integer> highlights = new LinkedHashMap<>();
+        Map<BlockPredicate, Boolean> interfaceCache = new HashMap<>();
         int levelRank = highestSharedLevelRank(stage);
         Map<BlockPos, BlockPredicate> pattern = rotatedPattern.pattern();
         boolean hasController = hasController(pattern);
@@ -101,6 +113,16 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                             : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
             if (state == null) continue;
             states.put(position, orientState(position, state, facing, hasController, correctedFacing));
+            List<SingleBlockModifierReplacement> replacements = rotatedModifierReplacements.get(position);
+            int mask = acceptsInterface(entry.getValue(), interfaceCache) ? PreviewHighlights.INTERFACE : 0;
+            if (levelSlot != null) mask |= PreviewHighlights.LEVEL;
+            if (replacements != null && !replacements.isEmpty()) {
+                mask |= PreviewHighlights.MODIFIER;
+                if (replacements.stream().anyMatch(replacement -> acceptsInterface(replacement.getReplacement(), interfaceCache))) {
+                    mask |= PreviewHighlights.INTERFACE;
+                }
+            }
+            if (mask != 0) highlights.put(position, mask);
             if (lazyCandidates) {
             } else {
                 List<StructurePreviewSchema.Candidate> positionCandidates = candidates(entry.getValue(), rotatedModifierReplacements.get(position));
@@ -109,10 +131,35 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
             if (levelSlot != null) levelSlots.put(position, levelSlot);
         }
         if (lazyCandidates) {
-            return StructurePreviewSchema.withCandidateResolver(machineId, states, levelSlots,
+            return StructurePreviewSchema.withCandidateResolver(machineId, states, levelSlots, highlights,
                     position -> candidates(pattern.get(position), rotatedModifierReplacements.get(position)));
         }
-        return new StructurePreviewSchema(machineId, states, levelSlots, candidates, true);
+        return StructurePreviewSchema.withHighlights(machineId, states, levelSlots, candidates, highlights);
+    }
+
+    private static boolean acceptsInterface(BlockPredicate predicate, Map<BlockPredicate, Boolean> cache) {
+        Boolean cached = cache.get(predicate);
+        if (cached != null) return cached;
+        boolean accepted = switch (predicate) {
+            case BlockPredicate.OfBlock block -> isInterfaceBlock(block.block());
+            case BlockPredicate.OfBlockState state -> isInterfaceBlock(state.state().getBlock());
+            case BlockPredicate.DeferredBlock deferred -> deferred.networkInterface() || isInterfaceBlock(deferred.supplier().get());
+            case BlockPredicate.OfTag tag -> BuiltInRegistries.BLOCK.getTag(tag.tag()).stream()
+                    .flatMap(values -> values.stream()).anyMatch(holder -> isInterfaceBlock(holder.value()));
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(child -> acceptsInterface(child, cache));
+            case BlockPredicate.Any ignored -> true;
+            case BlockPredicate.Air ignored -> false;
+            case BlockPredicate.MachineCoupler ignored -> true;
+        };
+        cache.put(predicate, accepted);
+        return accepted;
+    }
+
+    private static boolean isInterfaceBlock(Block block) {
+        return block instanceof IOPortBlock || block instanceof ParallelControllerBlock
+                || block instanceof FactorySchedulerBlock || block instanceof SmartInterfaceBlock
+                || block instanceof DataStorageBlock || block instanceof NetworkInterfaceBlock
+                || block instanceof UpgradeBusBlock || block instanceof ModuleCouplerBlock;
     }
 
     private static int highestSharedLevelRank(MachineStructureStage stage) {

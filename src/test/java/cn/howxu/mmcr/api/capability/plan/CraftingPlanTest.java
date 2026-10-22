@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,32 @@ class CraftingPlanTest {
         assertThat(outputs).hasValue(0);
         assertThat(plan.commitOutputs()).isTrue();
         assertThat(outputs).hasValue(1);
+    }
+
+    @Test
+    void excluded_inputs_and_outputs_stay_unpaid_during_native_start_commit() {
+        LongValueStorage storage = new LongValueStorage(20L, 20L, null);
+        storage.setAmount(20L);
+        CraftingPlan plan = new CraftingPlan(List.of(
+                new RequirementPlan(2, 1, List.of(() -> {
+                    storage.setAmount(storage.amount() - 7L);
+                    return CapabilityResult.successful();
+                }), null),
+                new RequirementPlan(5, 1, List.of(() -> {
+                    storage.setAmount(storage.amount() - 3L);
+                    return CapabilityResult.successful();
+                }), null),
+                new RequirementPlan(8, 1, List.of(() -> {
+                    storage.setAmount(storage.amount() + 4L);
+                    return CapabilityResult.successful();
+                }), null)), 1,
+                Map.of(2, RecipeModifier.IOType.INPUT, 5, RecipeModifier.IOType.INPUT, 8, RecipeModifier.IOType.OUTPUT));
+
+        assertThat(plan.commitInputsRuntime(Set.of(2), () -> { }, () -> true)).isTrue();
+        assertThat(storage.amount()).isEqualTo(17L);
+        assertThat(plan.wasNativeExecuted(2)).isFalse();
+        assertThat(plan.wasNativeExecuted(5)).isTrue();
+        assertThat(plan.wasNativeExecuted(8)).isFalse();
     }
 
     @Test

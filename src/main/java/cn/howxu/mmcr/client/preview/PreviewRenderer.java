@@ -16,6 +16,8 @@ interface PreviewRenderer {
 
     default void setInteractive(boolean interactive) { }
 
+    default void setPositionHighlightsEnabled(boolean enabled) { }
+
     Object hitResult();
 
     void selectHit(Object hitResult);

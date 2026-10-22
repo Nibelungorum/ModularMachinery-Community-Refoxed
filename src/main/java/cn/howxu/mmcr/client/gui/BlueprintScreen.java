@@ -50,7 +50,7 @@ public final class BlueprintScreen extends Screen {
     private static final int MATERIAL_SCROLLBAR_LEFT_OFFSET = 4;
     private static final int MATERIAL_SCROLLBAR_TOP_OFFSET = 6;
     private static final int MATERIAL_SCROLLBAR_BOTTOM_INSET = 10;
-    private static final int CANDIDATE_SCROLLBAR_LEFT_OFFSET = 5;
+    private static final int CANDIDATE_SCROLLBAR_LEFT_OFFSET = 4;
     private static final int CANDIDATE_SCROLLBAR_TOP_OFFSET = -6;
     private static final int CANDIDATE_SCROLLBAR_BOTTOM_INSET = 4;
     private static final int CANDIDATE_COLUMNS = 4;
@@ -85,6 +85,7 @@ public final class BlueprintScreen extends Screen {
     private @Nullable Button resetButton;
     private @Nullable Button nextStageButton;
     private @Nullable Button previousStageButton;
+    private @Nullable Button highlightButton;
     private int materialScrollOffset;
     private int candidateScrollOffset;
     private boolean draggingMaterialScrollbar;
@@ -169,6 +170,13 @@ public final class BlueprintScreen extends Screen {
                         "jei.mmcr.structure_preview.previous_level", this::selectPreviousStage));
             }
         }
+        highlightButton = addRenderableWidget(textButton(
+                "gui.mmcr.structure_preview.highlights.off", currentLayout.highlightButton(),
+                "gui.mmcr.structure_preview.highlights.enable", () -> {
+                    panel.togglePositionHighlights();
+                    syncHighlightButton();
+                }));
+        syncHighlightButton();
     }
 
     @Override
@@ -325,7 +333,7 @@ public final class BlueprintScreen extends Screen {
         int candidatesY = selectedBlockY + selectedBlockHeight + GAP;
         int candidatesHeight = previewBottom - candidatesY;
         int buttonWidth = (candidatesWidth - GAP) / 2;
-        int controlsRows = multipleStages ? 4 : 2;
+        int controlsRows = multipleStages ? 5 : 3;
         int controlsHeight = controlsRows * BUTTON_HEIGHT + (controlsRows - 1) * GAP;
         int controlsY = BASE_HEIGHT - OUTER_MARGIN - controlsHeight;
         BlueprintRect[] layerButtons = new BlueprintRect[]{
@@ -343,6 +351,9 @@ public final class BlueprintScreen extends Screen {
                 ? scaledRect(left, top, candidatesX, controlsY + 3 * (BUTTON_HEIGHT + GAP),
                         buttonWidth * 2 + GAP, BUTTON_HEIGHT, scale)
                 : null;
+        BlueprintRect highlight = scaledRect(left, top, candidatesX,
+                controlsY + (controlsRows - 1) * (BUTTON_HEIGHT + GAP),
+                buttonWidth * 2 + GAP, BUTTON_HEIGHT, scale);
         return new BlueprintLayout(left, top, scale,
                 scaledRect(left, top, OUTER_MARGIN, OUTER_MARGIN, PREVIEW_WIDTH, PREVIEW_HEIGHT, scale),
                 scaledRect(left, top, OUTER_MARGIN, materialsY, PREVIEW_WIDTH, materialsHeight, scale),
@@ -350,7 +361,7 @@ public final class BlueprintScreen extends Screen {
                 scaledRect(left, top, candidatesX, titleY, candidatesWidth, BUTTON_HEIGHT, scale),
                 scaledRect(left, top, candidatesX, selectedBlockY, candidatesWidth, selectedBlockHeight, scale),
                 scaledRect(left, top, candidatesX, controlsY, candidatesWidth, controlsHeight, scale),
-                layerButtons, nextStage, previousStage);
+                layerButtons, nextStage, previousStage, highlight);
     }
 
     static int clampScrollOffset(int offset, int totalRows, int visibleRows) {
@@ -398,6 +409,16 @@ public final class BlueprintScreen extends Screen {
                 Component.translatable(key), clicked -> action.run());
         button.setTooltip(Tooltip.create(Component.translatable(tooltipKey)));
         return button;
+    }
+
+    private void syncHighlightButton() {
+        if (highlightButton == null) return;
+        boolean enabled = panel.positionHighlightsEnabled();
+        highlightButton.setMessage(Component.translatable("gui.mmcr.structure_preview.highlights."
+                + (enabled ? "on" : "off")));
+        highlightButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.structure_preview.highlights."
+                + (enabled ? "disable" : "enable"))
+                .append("\n").append(Component.translatable("gui.mmcr.structure_preview.highlights.legend"))));
     }
 
     private void selectNextStage() {
@@ -765,7 +786,8 @@ record BlueprintRect(int x, int y, int width, int height) {
 record BlueprintLayout(int left, int top, float scale, BlueprintRect preview,
         BlueprintRect materials, BlueprintRect candidates, BlueprintRect title,
         BlueprintRect selectedBlock, BlueprintRect controls, BlueprintRect[] layerButtons,
-        @Nullable BlueprintRect nextStageButton, @Nullable BlueprintRect previousStageButton) {
+        @Nullable BlueprintRect nextStageButton, @Nullable BlueprintRect previousStageButton,
+        BlueprintRect highlightButton) {
     int materialSlotSize() {
         return BlueprintScreen.MATERIAL_SLOT_SIZE;
     }

@@ -24,6 +24,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.IronBarsBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
@@ -60,6 +61,28 @@ class IdentifierOverloadsTest {
         var typed = (Wrapper) context.evaluateString(scope,
                 "api.state(api.id('minecraft:stone'))", "typed-state", 1, null);
         assertThat(((BlockPredicate.OfBlockState) typed.unwrap()).state().is(Blocks.STONE)).isTrue();
+    }
+
+    @Test
+    void rhino_state_preserves_multiple_properties_when_id_conversion_is_registered() {
+        var context = kubeJsContext();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "api", new KubeJSApi(), context);
+        var result = (Wrapper) context.evaluateString(scope,
+                "api.state('minecraft:iron_bars[east=true,north=false,south=true,waterlogged=false,west=true]')",
+                "state-multiple-properties", 1, null);
+        var predicate = (BlockPredicate.OfBlockState) result.unwrap();
+        var expected = Blocks.IRON_BARS.defaultBlockState()
+                .setValue(IronBarsBlock.EAST, true)
+                .setValue(IronBarsBlock.NORTH, false)
+                .setValue(IronBarsBlock.SOUTH, true)
+                .setValue(IronBarsBlock.WEST, true)
+                .setValue(IronBarsBlock.WATERLOGGED, false);
+        assertThat(predicate.state()).isEqualTo(expected);
+        assertThat(predicate.matches(expected)).isTrue();
+        assertThat(predicate.matches(expected.setValue(IronBarsBlock.EAST, false))).isFalse();
+        assertThat(((BlockPredicate.OfBlockState) new KubeJSApi().state(ResourceLocation.parse("minecraft:stone")))
+                .state()).isSameAs(Blocks.STONE.defaultBlockState());
     }
 
     @Test

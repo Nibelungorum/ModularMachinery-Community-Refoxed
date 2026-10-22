@@ -27,6 +27,19 @@ class PreviewCameraTest {
     }
 
     @Test
+    void pan_moves_anchor_in_the_view_plane_even_when_the_camera_is_tilted() {
+        PreviewCamera camera = new PreviewCamera();
+        camera.reset(new Vector3f(), 8.0F, 0.0F, (float) Math.toRadians(60.0D));
+        Vector3f beforePosition = camera.position();
+
+        camera.pan(2.0F, -3.0F);
+
+        Vector3f expectedOffset = new Vector3f(2.0F, 1.5F, (float) -Math.sqrt(6.75D));
+        assertThat(camera.lookAt().distance(expectedOffset)).isLessThan(0.00001F);
+        assertThat(camera.position().sub(beforePosition).distance(expectedOffset)).isLessThan(0.00001F);
+    }
+
+    @Test
     void zoom_and_pan_do_not_increment_rotation_version() {
         PreviewCamera camera = new PreviewCamera();
         camera.reset(new Vector3f(), 8.0F);

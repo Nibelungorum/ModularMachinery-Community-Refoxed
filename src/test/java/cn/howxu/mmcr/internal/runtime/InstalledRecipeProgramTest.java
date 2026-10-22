@@ -467,8 +467,7 @@ class InstalledRecipeProgramTest {
             assertThat(runtime.start(recipe, 16L).isCrafting()).isTrue();
             assertThat(runtime.parallelism()).isEqualTo(supply / 7L);
             runtime.ensureInstalledProgram();
-            assertThat(energy.energyStorage().getAmountAsLong()).isZero();
-            energy.energyStorage().setAmount(supply);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(supply);
             LevelStub.setGameTime(controller.getLevel(), ++gameTime);
             runtime.tick();
             runtime.finish();

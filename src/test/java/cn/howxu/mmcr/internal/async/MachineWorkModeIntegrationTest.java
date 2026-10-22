@@ -888,7 +888,7 @@ class MachineWorkModeIntegrationTest {
         assertThat(thread.runtime().active()).isTrue();
         assertThat(thread.runtime().tickCount()).isZero();
         assertThat(starts).hasValue(1);
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(93L);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100L);
         assertThat(normalSearchAttempts(controller)).isEqualTo(attempts + 1L);
     }
 
@@ -966,7 +966,8 @@ class MachineWorkModeIntegrationTest {
         assertThat(thread.isStartPending()).isFalse();
         assertThat(thread.hasFullSearchPending()).isFalse();
         assertThat(starts).hasValue(2);
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterFirst - 7L);
+        assertThat(thread.runtime().tickCount()).isZero();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(afterFirst);
         assertThat(normalSearchAttempts(controller)).isEqualTo(attempts);
     }
 
@@ -1063,7 +1064,7 @@ class MachineWorkModeIntegrationTest {
                 energy.getBlockPos(), (String) null)));
         RuntimeTestFixtures.republish(controller);
         level = (ServerLevel) controller.getLevel();
-        energy.energyStorage().setAmount(14L);
+        energy.energyStorage().setAmount(7L);
         ArrayDeque<Runnable> workers = new ArrayDeque<>();
         MachineAsyncCoordinator async = installQueuedCoordinator(workers);
         MachineRecipeThread thread = normalRecipeThread(controller);
@@ -1150,6 +1151,10 @@ class MachineWorkModeIntegrationTest {
                 controller.currentStructureSnapshot().version())).isEqualTo(StartResult.STARTED);
         assertThat(thread.runtime().recipe()).isSameAs(reloaded);
         assertThat(thread.hasRestartPending()).isFalse();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(beforeRestart);
+        RuntimeTestFixtures.advanceGameTime(level);
+        thread.runtime().tick();
+        assertThat(thread.runtime().finishPending()).isTrue();
         assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(beforeRestart - 14L);
     }
 
@@ -1218,7 +1223,7 @@ class MachineWorkModeIntegrationTest {
         assertThat(thread.hasRestartPending()).isTrue();
         assertThat(thread.hasFullSearchPending()).isFalse();
         assertThat(shared.reserveExecution(thread.runtime(), "base")).isFalse();
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(972L);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(986L);
         assertThat(normalSearchAttempts(controller)).isEqualTo(attempts);
         assertThat(normalSearchRetries(controller)).isEqualTo(retries);
 
@@ -1230,7 +1235,7 @@ class MachineWorkModeIntegrationTest {
         assertThat(starts).hasValue(2);
         assertThat(thread.hasRestartPending()).isTrue();
         assertThat(thread.hasFullSearchPending()).isFalse();
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(972L);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(986L);
         async.pumpReceiptDrains();
         assertThat(workers).isNotEmpty();
         drainQueuedCoordinator(async, workers);
@@ -1249,12 +1254,12 @@ class MachineWorkModeIntegrationTest {
         assertThat(thread.hasFullSearchPending()).isFalse();
         assertThat(starts).hasValue(3);
         assertThat(finishes).hasValue(2);
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(965L);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(986L);
         assertThat(normalSearchAttempts(controller)).isEqualTo(attempts);
         assertThat(normalSearchRetries(controller)).isEqualTo(retries);
         shared.resolve(level);
         assertThat(starts).hasValue(3);
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(965L);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(986L);
     }
 
     private static long normalSearchRetries(MachineControllerBlockEntity controller) throws ReflectiveOperationException {

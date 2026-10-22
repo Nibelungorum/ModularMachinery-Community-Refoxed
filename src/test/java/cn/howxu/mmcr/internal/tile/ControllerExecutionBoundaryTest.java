@@ -168,7 +168,7 @@ class ControllerExecutionBoundaryTest {
     }
 
     @Test
-    void shared_sync_start_still_pays_in_post_and_only_ticks_at_the_next_be_boundary() throws Exception {
+    void shared_sync_start_does_not_pay_energy_in_post_and_only_ticks_at_the_next_be_boundary() throws Exception {
         List<MachineControllerBlockEntity> controllers = sharedControllers(2, 1, false);
         ServerLevel level = (ServerLevel) controllers.getFirst().getLevel();
         EnergyInputHatchBlockEntity input = inputOf(controllers.getFirst());
@@ -185,7 +185,7 @@ class ControllerExecutionBoundaryTest {
         }
         post(level);
         post(level);
-        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(beforeStart - 2L * TICK_ENERGY);
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(beforeStart);
         assertThat(controllers).allSatisfy(controller -> {
             assertThat(runtime(controller).active()).isTrue();
             assertThat(runtime(controller).tickCount()).isZero();
@@ -193,11 +193,11 @@ class ControllerExecutionBoundaryTest {
         });
         pre(level);
         controllers.get(0).serverTick();
-        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(beforeStart - 3L * TICK_ENERGY);
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(beforeStart - TICK_ENERGY);
         controllers.get(1).serverTick();
-        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(beforeStart - 4L * TICK_ENERGY);
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(beforeStart - 2L * TICK_ENERGY);
         post(level);
-        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(beforeStart - 4L * TICK_ENERGY);
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(beforeStart - 2L * TICK_ENERGY);
         assertThat(controllers).allSatisfy(controller -> assertThat(runtime(controller).tickCount()).isEqualTo(1));
         assertThat(pendingTickRequests(level)).isZero();
     }

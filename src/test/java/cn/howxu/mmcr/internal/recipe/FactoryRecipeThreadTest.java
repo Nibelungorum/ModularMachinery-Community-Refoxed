@@ -240,7 +240,8 @@ class FactoryRecipeThreadTest {
                 assertThat(lane.runtime().active()).isEqualTo(supplied);
                 if (supplied) {
                     assertThat(planningCalls.get()).isEqualTo(1);
-                    assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(beforeRestart - 7L);
+                    assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(beforeRestart);
+                    assertThat(lane.runtime().tickCount()).isZero();
                     assertThat(lane.runtime().recipe()).isSameAs(recipe);
                 } else {
                     assertThat(lane.runtime().failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);

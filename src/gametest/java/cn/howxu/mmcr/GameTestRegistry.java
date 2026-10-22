@@ -188,6 +188,7 @@ public final class GameTestRegistry {
             register(event, "startup_kubejs_registry_references", 20,
                     StartupRegistryReferenceGameTest::kubejsReferencesResolveAfterRegistryCallbacks);
         }
+        register(event, "running_energy_admission", 20, RunningRecipeGameTest::ordinaryEnergyChargesOnlyRecipeTicks);
         register(event, "running_installed_fluid_probability", 20, RunningRecipeGameTest::installedFluidProbabilityAttempts);
         register(event, "running_mixed_input_native_partial", 20, RunningRecipeGameTest::mixedInputCommitRetainsNativePaymentAfterEnergyChanges);
         register(event, "running_retained_input_removed", 20, RunningRecipeGameTest::removedRetainedInputStopsContinuousPayment);
@@ -861,6 +862,10 @@ public final class GameTestRegistry {
         event.removeIf(test -> {
             String name = test.testName();
             return !(name.startsWith("mmcr:pattern_batch_")
+                    || name.startsWith("mmcr:running_")
+                    || name.startsWith("mmcr:input_isolation_")
+                    || name.startsWith("mmcr:fluxnetworks_")
+                    || name.startsWith("mmcr:appflux_")
                     || name.equals("mmcr:spectator_menu_opening")
                     || name.equals("mmcr:spectator_controller_ui_metadata")
                     || name.equals("mmcr:startup_mekanism_registry_references")

@@ -976,7 +976,7 @@ public final class CraftingRuntime {
                     continue;
                 }
                 PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches,
-                        requestCapabilities == null ? List.of() : requestCapabilities);
+                        requestCapabilities == null ? List.of() : requestCapabilities, !facets.isEmpty());
                 if (!startAttemptCurrent(lifecycle, originalLedger)
                         || !patternOwnerCurrent() || !patternSourceCurrent(sourceOwner) || pendingPatternStart != null || pendingPaymentStart != null
                         || patternStartReserved || !Objects.equals(domain, controller.resourceDomain())
@@ -1245,10 +1245,17 @@ public final class CraftingRuntime {
 
     public record PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
                                 RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
-                                List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities) {
+                                List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities,
+                                boolean energyInputsExcluded) {
         public PreparedStart {
             prefetches = List.copyOf(prefetches);
             requestCapabilities = List.copyOf(requestCapabilities);
+        }
+
+        public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
+                             RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
+                             List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities) {
+            this(recipe, runtime, catalogVersion, effective, plan, prefetches, requestCapabilities, !prefetches.isEmpty());
         }
 
         public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
@@ -1479,7 +1486,8 @@ public final class CraftingRuntime {
             }
             if (prefetches == null) return fail(missingInputStatus());
             prepared = new PreparedStart(effectiveRecipe, runtime,
-                    catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches);
+                    catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches,
+                    List.of(), !facets.isEmpty());
         } catch (RuntimeException exception) {
             if (prefetches != null) releaseUnpaidPrefetches(prefetches);
             MMCR.LOG.warn("Recipe start planning failed: recipe={} controller={}",
@@ -2932,10 +2940,26 @@ public final class CraftingRuntime {
                                 reservations, Map.of(), null, null, airStartSampling));
                 if (!result.success()) return result.status();
             }
+            Set<Integer> unpaidInputs = new HashSet<>(airInputIndexes);
+            List<Integer> energyIndexes = new ArrayList<>();
+            for (int index = 0; index < requirements.size(); index++) {
+                if (requirements.get(index) instanceof EnergyRequirement energy && energy.io() == IOType.INPUT) {
+                    unpaidInputs.add(index);
+                    energyIndexes.add(index);
+                }
+            }
+            // Native storage writes cannot be rolled back on 1.21.1. Re-plan the
+            // combined live energy demand without executing it; only recipe ticks pay.
+            if (!energyIndexes.isEmpty() && !prepared.energyInputsExcluded()) {
+                PlanningResult checked = legacyPatternContext(prepared.runtime(), prepared.requestCapabilities())
+                        .planFixedRequirements(energyIndexes.stream().map(requirements::get).toList(),
+                                prepared.plan().parallelism(), Map.of(), energyIndexes);
+                if (!checked.successful()) return checked.failure() == null ? missingInputStatus() : checked.failure();
+            }
             if (payment.state().phase() == RecipeCommitLedger.Phase.READY && !preparedStartCurrent(prepared)) {
                 return failure(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RECIPE_START, Map.of());
             }
-            if (!prepared.plan().commitInputsRuntime(airInputIndexes, beforeNative,
+            if (!prepared.plan().commitInputsRuntime(unpaidInputs, beforeNative,
                     () -> payment == ledger && lifecycle == controller.lifecycleEpoch()
                             && pendingPaymentStart == prepared)) {
                 if (payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();

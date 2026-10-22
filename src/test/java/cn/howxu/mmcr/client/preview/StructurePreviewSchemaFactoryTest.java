@@ -35,6 +35,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.tags.TagKey;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import org.junit.jupiter.api.BeforeAll;
@@ -48,6 +49,9 @@ import java.util.LinkedHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import net.minecraft.world.level.block.Block;
+import static cn.howxu.mmcr.client.preview.PreviewHighlights.INTERFACE;
+import static cn.howxu.mmcr.client.preview.PreviewHighlights.LEVEL;
+import static cn.howxu.mmcr.client.preview.PreviewHighlights.MODIFIER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -72,10 +76,14 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     private static void bindHolderTag(Holder<?> holder, TagKey<?> tag) throws Exception {
+        bindHolderTags(holder, Set.of(tag));
+    }
+
+    private static void bindHolderTags(Holder<?> holder, Collection<? extends TagKey<?>> tags) throws Exception {
         Method bindTags = Class.forName("net.minecraft.core.Holder$Reference")
                 .getDeclaredMethod("bindTags", Collection.class);
         bindTags.setAccessible(true);
-        bindTags.invoke(holder, Set.of(tag));
+        bindTags.invoke(holder, tags);
     }
 
     @AfterEach
@@ -112,6 +120,7 @@ class StructurePreviewSchemaFactoryTest {
         StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(machine);
 
         assertThat(schema.stateAt(BlockPos.ZERO)).isEqualTo(ModBlocks.MODULE_BRIDGE.get().defaultBlockState());
+        assertThat(schema.highlightAt(BlockPos.ZERO)).isEqualTo(INTERFACE);
     }
 
     @Test
@@ -152,10 +161,16 @@ class StructurePreviewSchemaFactoryTest {
 
     @Test
     void factory_skips_unrepresentable_predicates_without_failing_the_schema() {
-        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()));
-        DynamicMachine machine = new DynamicMachine(MMCR.id("unrepresentable"), "machine.unrepresentable", pattern);
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()),
+                Map.of(), Map.of(BlockPos.ZERO, 'M'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .modifier('M', modifierReplacement(ModBlocks.SMART_INTERFACE.get())).build(pattern));
 
-        assertThat(new StructurePreviewSchemaFactory().create(machine).states()).isEmpty();
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("unrepresentable"));
+
+        assertThat(schema.states()).isEmpty();
+        assertThat(schema.highlights()).isEmpty();
     }
 
     @Test
@@ -220,6 +235,8 @@ class StructurePreviewSchemaFactoryTest {
         assertThat(schema.levelSlots()).containsOnly(
                 Map.entry(resolved, MMCR.id("coil")), Map.entry(unresolved, MMCR.id("casing")));
         assertThat(schema.stateAt(unresolved)).isEqualTo(Blocks.AIR.defaultBlockState());
+        assertThat(schema.highlightAt(resolved)).isEqualTo(LEVEL);
+        assertThat(schema.highlightAt(unresolved)).isEqualTo(INTERFACE | LEVEL);
     }
 
     @Test
@@ -290,6 +307,200 @@ class StructurePreviewSchemaFactoryTest {
 
         assertThat(schema.candidatesAt(BlockPos.ZERO)).extracting(ItemStack::getItem).containsExactlyInAnyOrder(
                 Blocks.IRON_BLOCK.asItem(), ModBlocks.BLOCKS.get("item_input_bus").get().asItem());
+        assertThat(schema.stateAt(BlockPos.ZERO)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+        assertThat(schema.highlightAt(BlockPos.ZERO)).isEqualTo(INTERFACE);
+    }
+
+    @Test
+    void factory_recognizes_all_interface_block_types_but_not_the_main_controller_or_casing() {
+        List<Block> interfaces = List.of(
+                ModBlocks.BLOCKS.get("item_input_bus").get(),
+                ModBlocks.BLOCKS.get("parallel_controller_normal").get(),
+                ModBlocks.FACTORY_CONTROLLER.get(), ModBlocks.SMART_INTERFACE.get(), ModBlocks.DATA_STORAGE.get(),
+                ModBlocks.NETWORK_INTERFACE.get(), ModBlocks.BLOCKS.get("upgrade_bus_normal").get(),
+                ModBlocks.MODULE_BRIDGE.get());
+        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        pattern.put(BlockPos.ZERO, new BlockPredicate.OfBlock(ModBlocks.controllerFor(MMCR.id("test_cube")).get()));
+        pattern.put(new BlockPos(-1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK));
+        for (int index = 0; index < interfaces.size(); index++) {
+            pattern.put(new BlockPos(index + 1, 0, 0), new BlockPredicate.OfBlock(interfaces.get(index)));
+        }
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(pattern), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("interface_types"));
+
+        assertThat(schema.highlightAt(BlockPos.ZERO)).isZero();
+        assertThat(schema.highlightAt(new BlockPos(-1, 0, 0))).isZero();
+        for (int index = 0; index < interfaces.size(); index++) {
+            assertThat(schema.highlightAt(new BlockPos(index + 1, 0, 0))).as("%s", interfaces.get(index))
+                    .isEqualTo(INTERFACE);
+        }
+        assertThat(schema.highlights()).hasSize(interfaces.size());
+    }
+
+    @Test
+    void factory_checks_nested_alternatives_exact_states_deferred_blocks_and_special_matchers() {
+        Block port = ModBlocks.BLOCKS.get("item_input_bus").get();
+        BlockPredicate iron = new BlockPredicate.OfBlock(Blocks.IRON_BLOCK);
+        Map<BlockPos, BlockPredicate> pattern = Map.of(
+                new BlockPos(1, 0, 0), new BlockPredicate.AnyOf(List.of(iron,
+                        new BlockPredicate.AnyOf(List.of(iron, new BlockPredicate.OfBlock(port))))),
+                new BlockPos(2, 0, 0), new BlockPredicate.OfBlockState(port.defaultBlockState()),
+                new BlockPos(3, 0, 0), new BlockPredicate.DeferredBlock(() -> port),
+                new BlockPos(4, 0, 0), new BlockPredicate.AnyOf(List.of(iron,
+                        new BlockPredicate.DeferredBlock(() -> {
+                            throw new AssertionError("network matcher supplier must not resolve for classification");
+                        }, true))),
+                new BlockPos(5, 0, 0), new BlockPredicate.AnyOf(List.of(iron, new BlockPredicate.Any())),
+                new BlockPos(6, 0, 0), new BlockPredicate.AnyOf(List.of(iron, new BlockPredicate.Air())),
+                new BlockPos(7, 0, 0), new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                new BlockPos(8, 0, 0), new BlockPredicate.DeferredBlock(() -> Blocks.IRON_BLOCK));
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(pattern), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("predicate_roles"));
+
+        assertThat(schema.highlights()).containsOnly(
+                Map.entry(new BlockPos(1, 0, 0), INTERFACE), Map.entry(new BlockPos(2, 0, 0), INTERFACE),
+                Map.entry(new BlockPos(3, 0, 0), INTERFACE), Map.entry(new BlockPos(4, 0, 0), INTERFACE),
+                Map.entry(new BlockPos(5, 0, 0), INTERFACE));
+        assertThat(schema.stateAt(new BlockPos(1, 0, 0))).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+    }
+
+    @Test
+    void factory_checks_tag_members_and_does_not_keep_classification_across_schema_resolutions() throws Exception {
+        TagKey<Block> tag = TagKey.create(Registries.BLOCK, MMCR.id("preview_interface_options"));
+        Map<TagKey<Block>, List<Holder<Block>>> originalTags = new LinkedHashMap<>();
+        BuiltInRegistries.BLOCK.getTags().forEach(values -> originalTags.put(values.getFirst(), values.getSecond().stream().toList()));
+        Map<Holder<Block>, List<TagKey<Block>>> originalHolderTags = new LinkedHashMap<>();
+        BuiltInRegistries.BLOCK.forEach(block -> originalHolderTags.put(block.builtInRegistryHolder(),
+                block.builtInRegistryHolder().tags().toList()));
+        Map<TagKey<Block>, List<Holder<Block>>> tags = new LinkedHashMap<>(originalTags);
+        BlockPredicate predicate = new BlockPredicate.OfTag(tag);
+        MachineStructureStage stage = new MachineStructureStage(1, new BlockArray(Map.of(
+                BlockPos.ZERO, predicate, new BlockPos(1, 0, 0), predicate)), PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+        StructurePreviewSchemaFactory factory = new StructurePreviewSchemaFactory();
+        try {
+            tags.put(tag, List.of(Blocks.IRON_BLOCK.builtInRegistryHolder(),
+                    ModBlocks.BLOCKS.get("item_input_bus").get().builtInRegistryHolder()));
+            BuiltInRegistries.BLOCK.bindTags(tags);
+
+            StructurePreviewSchema acceptsPort = factory.create(stage, MMCR.id("tag_roles"));
+
+            assertThat(acceptsPort.stateAt(BlockPos.ZERO)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+            assertThat(acceptsPort.highlights()).containsOnly(Map.entry(BlockPos.ZERO, INTERFACE),
+                    Map.entry(new BlockPos(1, 0, 0), INTERFACE));
+
+            tags.put(tag, List.of(Blocks.IRON_BLOCK.builtInRegistryHolder()));
+            BuiltInRegistries.BLOCK.bindTags(tags);
+
+            assertThat(factory.create(stage, MMCR.id("tag_roles")).highlights()).isEmpty();
+        } finally {
+            BuiltInRegistries.BLOCK.bindTags(originalTags);
+            for (var entry : originalHolderTags.entrySet()) {
+                bindHolderTags(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    @Test
+    void factory_marks_replacement_interfaces_without_marking_ordinary_casing() {
+        BlockPos replacement = new BlockPos(1, 0, 0);
+        BlockPos ordinary = new BlockPos(2, 0, 0);
+        BlockPos ordinaryModifier = new BlockPos(3, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(
+                replacement, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                ordinary, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                ordinaryModifier, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)), Map.of(),
+                Map.of(replacement, 'M', ordinaryModifier, 'N'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .modifier('M', modifierReplacement(ModBlocks.SMART_INTERFACE.get()))
+                        .modifier('N', modifierReplacement(Blocks.GOLD_BLOCK)).build(pattern));
+        StructurePreviewSchemaFactory factory = new StructurePreviewSchemaFactory();
+
+        StructurePreviewSchema lazy = factory.create(stage, MMCR.id("replacement_roles"));
+        StructurePreviewSchema eager = factory.resolve(stage, StructurePreviewVariantSelection.defaults());
+
+        assertThat(lazy.highlights()).containsOnly(Map.entry(replacement, INTERFACE | MODIFIER),
+                Map.entry(ordinaryModifier, MODIFIER));
+        assertThat(lazy.highlightAt(ordinary)).isZero();
+        assertThat(eager.highlights()).isEqualTo(lazy.highlights());
+        assertThat(PreviewHighlights.color(lazy.highlightAt(replacement))).isEqualTo(0x44FF00FF);
+    }
+
+    @Test
+    void repeated_interface_alternatives_and_replacements_do_not_increase_color_or_opacity() {
+        Block port = ModBlocks.BLOCKS.get("item_input_bus").get();
+        BlockPredicate repeated = new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlock(port),
+                new BlockPredicate.OfBlock(port), new BlockPredicate.DeferredBlock(() -> port)));
+        BlockArray pattern = new BlockArray(Map.of(BlockPos.ZERO, repeated), Map.of(), Map.of(BlockPos.ZERO, 'M'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .modifier('M', modifierReplacement(port))
+                        .modifier('M', modifierReplacement(ModBlocks.SMART_INTERFACE.get())).build(pattern));
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("duplicate_roles"));
+
+        assertThat(schema.highlightAt(BlockPos.ZERO)).isEqualTo(INTERFACE | MODIFIER);
+        assertThat(PreviewHighlights.color(schema.highlightAt(BlockPos.ZERO))).isEqualTo(0x44FF00FF);
+    }
+
+    @Test
+    void factory_rotates_all_three_overlapping_roles_with_horizontal_and_vertical_states() {
+        ResourceLocation levelType = MMCR.id("rotated_highlight_level");
+        registerLevels(Map.of(levelType, List.of(Blocks.COPPER_BLOCK)));
+        BlockPos raw = new BlockPos(1, 2, 3);
+        BlockArray pattern = new BlockArray(Map.of(raw, new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)),
+                Map.of(), Map.of(raw, 'L'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .levelSlot('L', levelType).modifier('L', modifierReplacement(ModBlocks.SMART_INTERFACE.get()))
+                        .build(pattern));
+        Map<Direction, BlockPos> expectedPositions = Map.of(
+                Direction.EAST, new BlockPos(3, 2, -1), Direction.UP, new BlockPos(-1, 3, 2));
+
+        expectedPositions.forEach((facing, position) -> {
+            StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("rotated_roles"), facing);
+
+            assertThat(schema.states()).containsOnly(Map.entry(position, Blocks.COPPER_BLOCK.defaultBlockState()));
+            assertThat(schema.highlights()).containsOnly(Map.entry(position, INTERFACE | LEVEL | MODIFIER));
+            assertThat(schema.levelSlotAt(position)).isEqualTo(levelType);
+            assertThat(schema.highlightAt(raw)).isZero();
+            assertThat(PreviewHighlights.color(schema.highlightAt(position))).isEqualTo(0x44FFFFFF);
+        });
+    }
+
+    @Test
+    void factory_reuses_predicate_classification_without_resolving_preview_candidates() {
+        ResourceLocation levelType = MMCR.id("cached_highlight_level");
+        registerLevels(Map.of(levelType, List.of(Blocks.COPPER_BLOCK)));
+        AtomicInteger resolutions = new AtomicInteger();
+        Block port = ModBlocks.BLOCKS.get("item_input_bus").get();
+        BlockPredicate predicate = new BlockPredicate.DeferredBlock(() -> {
+            resolutions.incrementAndGet();
+            return port;
+        });
+        BlockPos first = new BlockPos(1, 0, 0);
+        BlockPos second = new BlockPos(2, 0, 0);
+        BlockArray pattern = new BlockArray(Map.of(first, predicate, second, predicate), Map.of(),
+                Map.of(first, 'L', second, 'L'));
+        MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
+                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.builder()
+                        .levelSlot('L', levelType).build(pattern));
+
+        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, MMCR.id("cached_roles"));
+
+        assertThat(schema.highlights()).containsOnly(Map.entry(first, INTERFACE | LEVEL), Map.entry(second, INTERFACE | LEVEL));
+        assertThat(resolutions).hasValue(1);
+        assertThat(schema.candidatesAt(first)).extracting(ItemStack::getItem).containsExactly(port.asItem());
+        assertThat(resolutions).hasValue(2);
+        schema.candidatesAt(first);
+        assertThat(resolutions).hasValue(2);
+        assertThat(schema.candidatesAt(second)).extracting(ItemStack::getItem).containsExactly(port.asItem());
+        assertThat(resolutions).hasValue(3);
     }
 
     @Test

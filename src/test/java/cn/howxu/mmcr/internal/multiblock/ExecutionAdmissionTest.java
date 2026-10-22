@@ -11,6 +11,8 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.internal.recipe.RecipeThread.StartResult;
@@ -28,6 +30,9 @@ import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -121,7 +126,7 @@ class ExecutionAdmissionTest {
                 shared.resolve(level);
             }
             assertThat(runtime.active()).isTrue();
-            assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(1_000L - 7L * (attempt + 1));
+            assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(1_000L);
             assertThat(runtime.installedProgram()).isNull();
             assertThat(workers).isNotEmpty();
             Field tasksField = MachineAsyncCoordinator.class.getDeclaredField("tasks");
@@ -197,7 +202,7 @@ class ExecutionAdmissionTest {
         assertThat(recordCount()).isZero();
         CraftingRuntime replacement = lane("factory-32");
         assertThat(replacement.start(recipe, 1L).isCrafting()).isTrue();
-        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(paid - 7L);
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(paid);
     }
 
     @Test
@@ -232,7 +237,7 @@ class ExecutionAdmissionTest {
             assertThat(recordCount()).isEqualTo(1);
             drainWorkersAndAcks();
             assertThat(blocked.start(recipe, 1L).isCrafting()).isTrue();
-            assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(paid - 7L);
+            assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(paid);
         } finally {
             SharedIoCoordinator.discard(temporaryLevel);
             MachineAsyncCoordinator.discard(temporaryLevel);
@@ -250,11 +255,11 @@ class ExecutionAdmissionTest {
             shared.cancel(controller.getBlockPos());
             throw new IllegalStateException("failed native ownership notification");
         })).isTrue();
-        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(993L);
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(1_000L);
         assertThat(runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
         runtime.resume();
         runtime.tick();
-        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(993L);
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(1_000L);
     }
 
     @Test
@@ -304,14 +309,28 @@ class ExecutionAdmissionTest {
 
     @Test
     void cancel_during_input_commit_keeps_paid_terminal_even_before_runtime_activation() throws Exception {
+        var material = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        material.itemHandler().setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(new MachineComponent(material.kind(), material.ioType()), material,
+                material.getBlockPos(), material.getBlockPos(), (String) null));
+        controller.componentRuntime().replaceComponents(components);
+        RuntimeTestFixtures.republish(controller);
         CraftingRuntime runtime = lane("commit-cancel");
-        var prepared = runtime.preparePatternStart(recipe, 1L, List.of());
+        MachineRecipe materialRecipe = RecipeTestSupport.create(MMCR.id("execution_admission_material"),
+                MMCR.id("test_cube"), 40, List.of(new EnergyRequirement(7L),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                                ItemStack.EMPTY)), List.of());
+        var prepared = runtime.preparePatternStart(materialRecipe, 1L, List.of());
         assertThat(prepared).isNotNull();
         assertThat(runtime.reservePatternStart()).isTrue();
-        Field notification = input.energyStorage().getClass().getDeclaredField("onChange");
+        Field backing = material.itemHandler().getClass().getDeclaredField("storage");
+        backing.setAccessible(true);
+        Object storage = backing.get(material.itemHandler());
+        Field notification = storage.getClass().getDeclaredField("onChange");
         notification.setAccessible(true);
-        Runnable original = (Runnable) notification.get(input.energyStorage());
-        notification.set(input.energyStorage(), (Runnable) () -> {
+        Runnable original = (Runnable) notification.get(storage);
+        notification.set(storage, (Runnable) () -> {
             original.run();
             shared.cancel(controller.getBlockPos());
             runtime.invalidate();
@@ -319,10 +338,11 @@ class ExecutionAdmissionTest {
         try {
             assertThat(runtime.commitPatternStart(prepared)).isTrue();
         } finally {
-            notification.set(input.energyStorage(), original);
+            notification.set(storage, original);
         }
         assertThat(runtime.active()).isFalse();
-        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(993L);
+        assertThat(material.itemHandler().amount(0)).isZero();
+        assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(1_000L);
         assertThat(shared.receiptsForTesting(runtime, "commit-cancel")).singleElement().satisfies(receipt -> {
             assertThat(receipt.terminal()).isTrue();
             assertThat(receipt.paidAttempts()).isZero();

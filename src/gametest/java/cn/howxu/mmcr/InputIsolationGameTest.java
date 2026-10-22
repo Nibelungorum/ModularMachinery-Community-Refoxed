@@ -384,11 +384,11 @@ public final class InputIsolationGameTest {
             var complete = host.reservePatternStart(outputs, capabilities);
             helper.assertTrue(complete.status() == PatternStartReservation.Status.RESERVED && complete.commit(), "Complete native pattern admission pays once");
             holder.clear();
-            helper.assertTrue(energy.energyStorage().getAmountAsLong() == 13 && items(outside) == (topUp ? 0 : 10)
+            helper.assertTrue(energy.energyStorage().getAmountAsLong() == 20 && items(outside) == (topUp ? 0 : 10)
                     && fluids(outside) == (topUp ? 0 : 1_000)
                     && host.getLogic().getReturnInv().getAvailableStacks().get(iron) == 9
                     && host.getLogic().getReturnInv().getAvailableStacks().get(water) == 1_000,
-                    "Pattern payment uses only its request/group, shared FE, and never returned resources");
+                    "Pattern admission pays only its request/group, checks shared FE, and never consumes returned resources");
             helper.assertTrue(fixture.runtime.activeInputScope().kind() == (isolated ? InputScope.Kind.ISOLATED : InputScope.Kind.ORDINARY)
                     && fixture.runtime.activeInputScope().sources().equals(topUp ? List.of(host.getBlockPos(), outside.getBlockPos())
                     : List.of(host.getBlockPos())), "Pattern execution pins actual host/group coordinates");

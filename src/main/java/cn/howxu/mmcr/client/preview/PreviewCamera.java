@@ -52,9 +52,10 @@ public final class PreviewCamera {
     public void pan(float x, float y) {
         float horizontalX = (float) Math.cos(yaw);
         float horizontalZ = (float) -Math.sin(yaw);
-        float offsetX = horizontalX * x;
-        float offsetY = -y;
-        float offsetZ = horizontalZ * x;
+        float verticalDepth = (float) Math.sin(pitch) * y;
+        float offsetX = horizontalX * x - horizontalZ * verticalDepth;
+        float offsetY = -(float) Math.cos(pitch) * y;
+        float offsetZ = horizontalZ * x + horizontalX * verticalDepth;
         if (offsetX == 0.0F && offsetY == 0.0F && offsetZ == 0.0F) return;
         lookAt.add(offsetX, offsetY, offsetZ);
         version++;

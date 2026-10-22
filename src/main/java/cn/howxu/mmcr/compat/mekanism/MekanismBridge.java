@@ -43,8 +43,9 @@ public interface MekanismBridge {
         return null;
     }
 
-    default HeatDisplayData heatDisplayData(double kelvin) {
-        return new HeatDisplayData(kelvin, "K");
+    /** Presents heat output, not an absolute temperature. */
+    default HeatDisplayData heatDisplayData(double heat) {
+        return new HeatDisplayData(heat, "K");
     }
 
     default boolean isNonEmptyRadioactiveChemicalPort(BlockEntity blockEntity) {

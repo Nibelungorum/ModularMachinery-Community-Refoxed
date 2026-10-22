@@ -122,8 +122,9 @@ public final class StructurePreviewWidget implements AutoCloseable {
         dragged = true;
         if (button == 0) {
             camera.orbit((float) -dragX * 0.01F, (float) dragY * 0.01F);
-        } else if (button == 2) {
-            camera.pan((float) dragX, (float) dragY);
+        } else if (button == 1 || button == 2) {
+            float panScale = camera.distance() / viewport.height();
+            camera.pan((float) -dragX * panScale, (float) -dragY * panScale);
         } else {
             return false;
         }
@@ -162,6 +163,11 @@ public final class StructurePreviewWidget implements AutoCloseable {
     public void showAllLayers() {
         selectedLayer = -1;
         renderer.setVisibility(PreviewVisibility.ALL);
+    }
+
+    public void setPositionHighlightsEnabled(boolean enabled) {
+        if (closed) return;
+        renderer.setPositionHighlightsEnabled(enabled);
     }
 
     public void reset() {

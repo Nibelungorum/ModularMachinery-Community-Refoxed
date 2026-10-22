@@ -13,7 +13,6 @@ import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
-import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
@@ -91,6 +90,47 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author howxu <dev@howxu.cn>
  */
 public final class RunningRecipeGameTest {
+    public static void ordinaryEnergyChargesOnlyRecipeTicks(GameTestHelper helper) {
+        var controller = retainedInputController(helper);
+        var energy = (EnergyInputHatchBlockEntity) helper.getBlockEntity(new BlockPos(2, 2, 1));
+        energy.energyStorage().setAmount(100L);
+        setWorkMode(controller, MachineWorkMode.SYNC);
+        var runtime = attachedRuntime(controller);
+        long originalTime = helper.getLevel().getGameTime();
+        try {
+            var recipe = MachineRecipe.fromCanonical(MMCR.id("running_energy_admission"), controller.currentRecipePoolId(),
+                    10, List.of(new EnergyRequirement(10L)), List.of(), List.of(), 0, 1,
+                    false, false, false, Set.of());
+            RecipeRegistry.registerStatic(recipe);
+            helper.assertTrue(runtime.start(recipe, 1).isCrafting(),
+                    "Exactly the total recipe energy admits the execution");
+            helper.assertTrue(energy.energyStorage().getAmountAsLong() == 100L && runtime.tickCount() == 0,
+                    "Admission checks ordinary energy without charging an extra tick");
+            var installed = runtime.ensureInstalledProgram();
+            helper.assertTrue(installed != null, "The real energy execution installs successfully");
+            for (int tick = 1; tick <= 10; tick++) {
+                long time = originalTime + tick;
+                ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(time);
+                long round = SharedIoCoordinator.get(helper.getLevel()).beginExecutionRound(time, true);
+                helper.assertTrue(installed.tryAttempt(round, time) && installed.advance(),
+                        "Each explicit recipe tick succeeds with exactly its declared energy");
+                helper.assertTrue(energy.energyStorage().getAmountAsLong() == 100L - tick * 10L,
+                        "The actual hatch pays exactly once per recipe tick");
+            }
+            helper.assertTrue(!runtime.active() && runtime.ledger().state().outputPaid(),
+                    "Ten paid installed recipe ticks complete the execution");
+            runtime.finish();
+            helper.assertTrue(!runtime.active() && energy.energyStorage().getAmountAsLong() == 0L,
+                    "Completion needs no extra energy payment");
+        } finally {
+            runtime.invalidate();
+            SharedIoCoordinator.get(helper.getLevel()).cancel(controller.getBlockPos());
+            controller.releaseStructureClaims();
+            ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(originalTime);
+        }
+        helper.succeed();
+    }
+
     public static void installedFluidProbabilityAttempts(GameTestHelper helper) {
         var fluid = place(helper, new BlockPos(1, 1, 1), "fluid_input_hatch", FluidInputHatchBlockEntity.class);
         var energy = place(helper, new BlockPos(2, 1, 1), "energy_input_hatch", EnergyInputHatchBlockEntity.class);
@@ -583,23 +623,25 @@ public final class RunningRecipeGameTest {
     public static void resourcePaidSaveReentranceRestoresPausedLedger(GameTestHelper helper) {
         var controller = retainedInputController(helper);
         EnergyInputHatchBlockEntity energy = helper.getBlockEntity(new BlockPos(2, 2, 1));
+        ItemInputBusBlockEntity material = helper.getBlockEntity(new BlockPos(1, 2, 0));
+        insert(material.itemHandler(), 0, new ItemStack(Items.IRON_INGOT), 1L);
         energy.energyStorage().setAmount(40);
         var runtime = attachedRuntime(controller);
         MachineControllerBlockEntity restoredController = null;
         try {
             var recipe = MachineRecipe.fromCanonical(MMCR.id("running_resource_paid_reentrant_save"), controller.currentRecipePoolId(),
-                    2, List.of(new EnergyRequirement(7)), List.of(), List.of(), 0, 1,
+                    2, List.of(new EnergyRequirement(7), itemInput(1, 1F)), List.of(), List.of(), 0, 1,
                     false, false, false, Set.of());
             RecipeRegistry.registerStatic(recipe);
             var savedRuntime = new AtomicReference<CompoundTag>();
             var savedPort = new AtomicReference<CompoundTag>();
-            installSaveNotification(energy.energyStorage(), () -> {
+            installSaveNotification(material.itemHandler(), () -> {
                 var output = new CompoundTag();
                 runtime.save(output, helper.getLevel().registryAccess());
                 savedRuntime.set(output);
                 savedPort.set(energy.saveWithoutMetadata(helper.getLevel().registryAccess()));
             });
-            var planned = context(List.of(energy)).planInputs(recipe, 1);
+            var planned = context(List.of(energy, material)).planInputs(recipe, 1);
             helper.assertTrue(planned.successful() && planned.plan() != null,
                     "Actual hatch payment is feasible: failure=" + planned.failure());
             var prepared = runtime.preparePatternStart(recipe, 1, List.of());
@@ -607,7 +649,9 @@ public final class RunningRecipeGameTest {
                     + " pool=" + controller.currentRecipePoolId() + " module=" + controller.currentRuntimeSnapshot().moduleConnectionStatus());
             helper.assertTrue(runtime.reservePatternStart(), "Formed, ticker-qualified attached runtime reserves hatch payment");
             helper.assertTrue(runtime.commitPatternStart(prepared), "Runtime commits resources and ledger through its native start path");
-            helper.assertTrue(savedRuntime.get() != null && savedPort.get() != null, "Root notification saved real port and runtime NBT");
+            helper.assertTrue(material.itemHandler().amount(0) == 0 && energy.energyStorage().getAmountAsLong() == 40,
+                    "Native material startup payment consumes the item but never charges ordinary FE");
+            helper.assertTrue(savedRuntime.get() != null && savedPort.get() != null, "Native material notification saved real port and runtime NBT");
             helper.assertTrue(savedRuntime.get().getCompound("execution_commit").getString("phase")
                             .equals(RecipeCommitLedger.Phase.UNCERTAIN.name()),
                     "Reentrant native mutation save records uncertainty rather than inventing confirmed payment");
@@ -627,7 +671,7 @@ public final class RunningRecipeGameTest {
             helper.assertTrue(restored.active() && restored.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED
                             && restored.ledger().state().paidAttempts() == 0
                             && restoredEnergy.energyStorage().getAmountAsLong() == energy.energyStorage().getAmountAsLong()
-                            && restoredEnergy.energyStorage().getAmountAsLong() == 33,
+                            && restoredEnergy.energyStorage().getAmountAsLong() == 40,
                     "Unsettled payment restores paused with its committed actual hatch balance");
             var paused = restored.ledger().state();
             restored.tick();
@@ -635,7 +679,7 @@ public final class RunningRecipeGameTest {
             helper.assertTrue(restored.ensureInstalledProgram() == null && restored.captureProgramCompilation() == null,
                     "Restored ERROR_PAUSED runtime cannot install or submit worker compilation");
             helper.assertTrue(restored.ledger().state().equals(paused)
-                            && restored.tickCount() == 0 && restoredEnergy.energyStorage().getAmountAsLong() == 33,
+                            && restored.tickCount() == 0 && restoredEnergy.energyStorage().getAmountAsLong() == 40,
                     "Restored ERROR_PAUSED runtime cannot silently resume or replay payment through either execution path");
         } finally {
             runtime.invalidate();
@@ -800,19 +844,22 @@ public final class RunningRecipeGameTest {
         }
     }
 
-    private static void installSaveNotification(LongEnergyStorage storage, Runnable save) {
+    private static void installSaveNotification(LongItemStorage storage, Runnable save) {
         try {
-            var field = LongEnergyStorage.class.getDeclaredField("onChange");
+            var backing = LongItemStorage.class.getDeclaredField("storage");
+            backing.setAccessible(true);
+            Object slots = backing.get(storage);
+            var field = slots.getClass().getDeclaredField("onChange");
             field.setAccessible(true);
-            Runnable original = (Runnable) field.get(storage);
+            Runnable original = (Runnable) field.get(slots);
             var pending = new AtomicReference<>(save);
-            field.set(storage, (Runnable) () -> {
+            field.set(slots, (Runnable) () -> {
                 original.run();
                 Runnable action = pending.getAndSet(null);
                 if (action != null) action.run();
             });
         } catch (ReflectiveOperationException exception) {
-            throw new AssertionError("Cannot observe real native energy payment", exception);
+            throw new AssertionError("Cannot observe real native material payment", exception);
         }
     }
 }

@@ -119,8 +119,8 @@ final class PatternBatchNativeCpuFixture {
                                  long craftsPerPattern, boolean dynamicRecipe) {
         this.helper = helper;
         this.cpuPosition = cpuPosition;
-        // Native local FE pays one start check and forty running ticks, not forty total payments.
-        feBudget = machineEnergy ? Math.multiplyExact(crafts, 41L) : 0L;
+        // Ordinary FE admission only checks supply; forty actual recipe ticks pay.
+        feBudget = machineEnergy ? Math.multiplyExact(crafts, 40L) : 0L;
         if (!cpuPosition.equals(CPU)) {
             BlockPos end = helper.absolutePos(cpuPosition.offset(1, 0, 0));
             helper.assertTrue(helper.getBounds().contains(helper.absolutePos(CONTROLLER).getCenter())

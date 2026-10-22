@@ -27,6 +27,11 @@ public final class MekanismTemperatureDisplay {
         return unit.convertFromK(kelvin, true);
     }
 
+    /** Converts heat flow using the configured unit scale, without its absolute zero offset. */
+    public static double fromHeat(double heat, TemperatureUnit unit) {
+        return unit.convertFromK(heat, false);
+    }
+
     public static String symbol(TemperatureUnit unit) {
         return unit.getSymbol(false);
     }

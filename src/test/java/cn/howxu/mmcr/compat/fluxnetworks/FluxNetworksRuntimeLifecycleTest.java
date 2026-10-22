@@ -34,6 +34,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInputCapability;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInputBlockEntity;
@@ -45,6 +46,8 @@ import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
@@ -65,11 +68,16 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import sonar.fluxnetworks.api.FluxConstants;
 import sonar.fluxnetworks.common.data.FluxDeviceConfigComponent;
 import sun.misc.Unsafe;
@@ -164,6 +172,111 @@ class FluxNetworksRuntimeLifecycleTest {
         rig.runtime().invalidate();
         assertThat(buffer.amount()).isEqualTo(2L);
         assertThat(buffer.reserved()).isZero();
+    }
+
+    @Test
+    void appFluxReconnectionCannotSkipThePreparedOrdinaryEnergyAdmissionCheck() {
+        boolean[] online = {false};
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        buffer.setAmount(10L);
+        FluxEnergyInputCapability appFlux = new FluxEnergyInputCapability(buffer, "reconnecting_appflux",
+                requested -> Optional.empty(), () -> online[0]);
+        LongItemStorage material = new LongItemStorage(1, 64L, null);
+        material.setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        Rig rig = rig(new ItemBusCapability(material, IOType.INPUT), appFlux);
+        MachineRecipe recipe = recipe("reconnecting_appflux", 3, List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                new EnergyRequirement(10L)));
+        var prepared = rig.runtime().preparePatternStart(recipe, 1L, List.of());
+        assertThat(prepared).isNotNull();
+        assertThat(rig.runtime().reservePatternStart()).isTrue();
+        buffer.setAmount(0L);
+        online[0] = true;
+
+        assertThat(rig.runtime().commitPatternStart(prepared)).isFalse();
+        assertThat(rig.runtime().active()).isFalse();
+        assertThat(material.amount(0)).isEqualTo(1L);
+        assertThat(buffer.amount()).isZero();
+        assertThat(buffer.reserved()).isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    void mixedFluxAndAppFluxPrefetchRemainSeparateFromOrdinaryEnergyAdmission(boolean pattern, boolean async) {
+        EnergyStorage ordinary = new EnergyStorage(100);
+        ordinary.receiveEnergy(100, false);
+        Point point = point("mixed_point", 12L);
+        FluxEnergyBuffer appBuffer = new FluxEnergyBuffer();
+        long[] networkExtracted = {0L};
+        FluxEnergyInputCapability appFlux = new FluxEnergyInputCapability(appBuffer, "mixed_appflux",
+                requested -> Optional.of(() -> {
+                    networkExtracted[0] += requested;
+                    return CapabilityResult.successful();
+                }));
+        FluxNetworkPlugHandler output = plug();
+        Rig rig = rig(new EnergyHatchCapability(ordinary, IOType.INPUT), point.capability(), appFlux,
+                new FluxNetworkOutputCapability(output));
+        MachineRecipe recipe = recipe("mixed_admission_" + pattern + "_" + async, 3, List.of(
+                new EnergyRequirement(4L), new EnergyRequirement(6L),
+                new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 4L, List.of())));
+        if (pattern) {
+            var prepared = rig.runtime().preparePatternStart(recipe, 1L, List.of());
+            assertThat(prepared).isNotNull();
+            assertThat(rig.runtime().reservePatternStart()).isTrue();
+            assertThat(rig.runtime().commitPatternStart(prepared)).isTrue();
+        } else {
+            assertThat(rig.runtime().start(recipe, 1L).isCrafting()).isTrue();
+        }
+        assertBalances(point, 12L, 12L);
+        assertThat(appBuffer.amount()).isEqualTo(18L);
+        assertThat(appBuffer.reserved()).isEqualTo(18L);
+        assertThat(networkExtracted[0]).isEqualTo(18L);
+        assertThat(ordinary.getEnergyStored()).isEqualTo(100);
+        assertThat(output.getBuffer()).isZero();
+        for (int tick = 1; tick <= 3; tick++) {
+            if (async) asyncTick(rig, false);
+            else rig.runtime().tick();
+            assertThat(point.handler().getBuffer() + appBuffer.amount()).isEqualTo(30L - tick * 10L);
+            assertThat(point.handler().reserved() + appBuffer.reserved()).isEqualTo(30L - tick * 10L);
+            assertThat(output.getBuffer()).isEqualTo(tick * 4L);
+            assertThat(networkExtracted[0]).isEqualTo(18L);
+            assertThat(ordinary.getEnergyStored()).isEqualTo(100);
+        }
+        assertThat(rig.runtime().finishPending()).isTrue();
+        rig.runtime().finish();
+        assertThat(rig.runtime().active()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void offlineAppFluxLocalCacheUsesOrdinaryTickPaymentsWithoutNetworkPrefetch(boolean pattern) {
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        buffer.setAmount(30L);
+        long[] networkExtracted = {0L};
+        FluxEnergyInputCapability appFlux = new FluxEnergyInputCapability(buffer, "offline_appflux",
+                requested -> Optional.of(() -> {
+                    networkExtracted[0] += requested;
+                    return CapabilityResult.successful();
+                }), () -> false);
+        Rig rig = rig(appFlux);
+        MachineRecipe recipe = recipe("offline_appflux_" + pattern, 3, 10L);
+        if (pattern) {
+            var prepared = rig.runtime().preparePatternStart(recipe, 1L, List.of());
+            assertThat(prepared).isNotNull();
+            assertThat(rig.runtime().reservePatternStart()).isTrue();
+            assertThat(rig.runtime().commitPatternStart(prepared)).isTrue();
+        } else {
+            assertThat(rig.runtime().start(recipe, 1L).isCrafting()).isTrue();
+        }
+        assertThat(buffer.amount()).isEqualTo(30L);
+        assertThat(buffer.reserved()).isZero();
+        for (int tick = 1; tick <= 3; tick++) {
+            rig.runtime().tick();
+            assertThat(buffer.amount()).isEqualTo(30L - tick * 10L);
+            assertThat(networkExtracted[0]).isZero();
+        }
+        rig.runtime().finish();
+        assertThat(rig.runtime().active()).isFalse();
     }
 
     @Test

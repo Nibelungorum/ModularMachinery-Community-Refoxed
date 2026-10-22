@@ -1199,7 +1199,7 @@ class FactoryRuntimeTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
         EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), energy);
-        energy.energyStorage().setAmount(8L);
+        energy.energyStorage().setAmount(4L);
         MachineRecipe cached = RecipeTestSupport.create(MMCR.id("factory_cached_energy"), MMCR.id("test_cube"),
                 1, List.of(new EnergyRequirement(4L)), List.of());
         MachineRecipe alternative = recipe("factory_available_alternative", 20);
@@ -1861,6 +1861,7 @@ class FactoryRuntimeTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_missing_energy"), MMCR.id("test_cube"), 3,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2)));
 
+        runtime.tick(List.of(recipe), 1);
         runtime.tick(List.of(recipe), 1);
         runtime.tick(List.of(recipe), 1);
 

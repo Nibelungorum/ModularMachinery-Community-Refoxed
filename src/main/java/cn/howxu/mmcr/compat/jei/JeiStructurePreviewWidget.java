@@ -17,8 +17,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import mezz.jei.api.runtime.IIngredientManager;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
+import java.util.function.IntPredicate;
 import java.util.function.LongSupplier;
 
 /**
@@ -42,20 +44,24 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private static final int CANDIDATE_INPUT_TARGET_BASE = 200;
     private final @Nullable StructurePreviewPanel panel;
     private final @Nullable Preview testingPreview;
+    private final IntPredicate mouseButtonDown;
     private final int x;
     private final int y;
     private final int width;
     private final int height;
     private final @Nullable IIngredientManager ingredientManager;
     private final LongSupplier clock = System::currentTimeMillis;
-    private boolean previewDragActive;
     private int pressedInputTarget = -1;
+    private int pressedInputButton = -1;
+    private int previewDragButton = -1;
     private boolean closed;
 
     public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height,
             IIngredientManager ingredientManager) {
         this.panel = new StructurePreviewPanel(machine);
         this.testingPreview = null;
+        this.mouseButtonDown = button -> GLFW.glfwGetMouseButton(
+                Minecraft.getInstance().getWindow().getWindow(), button) == GLFW.GLFW_PRESS;
         this.x = x;
         this.y = y;
         this.width = width;
@@ -63,9 +69,11 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         this.ingredientManager = ingredientManager;
     }
 
-    private JeiStructurePreviewWidget(Preview preview, int x, int y, int width, int height) {
+    private JeiStructurePreviewWidget(Preview preview, int x, int y, int width, int height,
+            IntPredicate mouseButtonDown) {
         this.panel = null;
         this.testingPreview = preview;
+        this.mouseButtonDown = mouseButtonDown;
         this.x = x;
         this.y = y;
         this.width = width;
@@ -74,7 +82,12 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     static JeiStructurePreviewWidget forTesting(Preview preview, int x, int y, int width, int height) {
-        return new JeiStructurePreviewWidget(preview, x, y, width, height);
+        return forTesting(preview, x, y, width, height, button -> true);
+    }
+
+    static JeiStructurePreviewWidget forTesting(Preview preview, int x, int y, int width, int height,
+            IntPredicate mouseButtonDown) {
+        return new JeiStructurePreviewWidget(preview, x, y, width, height, mouseButtonDown);
     }
 
     @Override public ScreenPosition getPosition() { return new ScreenPosition(x, y); }
@@ -83,22 +96,32 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public void drawWidget(GuiGraphics graphics, double mouseX, double mouseY) {
-        if (previewDragActive && !Minecraft.getInstance().mouseHandler.isLeftPressed()) cancelPreviewDrag();
+        int heldButton = previewDragButton >= 0 ? previewDragButton : pressedInputButton;
+        if (heldButton >= 0 && !mouseButtonDown.test(heldButton)) {
+            cancelPreviewDrag();
+            pressedInputTarget = -1;
+            pressedInputButton = -1;
+        }
         if (panel == null) return;
         ScreenPosition origin = guiOrigin(graphics);
         panel.render(graphics, width, height, 0.0F, origin.x(), origin.y(),
                 origin.x() + (int) mouseX, origin.y() + (int) mouseY, origin.x(), origin.y());
         if (!panel.isReady()) return;
-        String[] labels = panel.hasMultipleStages() ? new String[]{"+", "-", "A", "R", "M"} : new String[]{"+", "-", "A", "R"};
-        for (int index = 0; index < labels.length; index++) {
+        String[] labels = {"+", "-", "A", "R", "M"};
+        int highlightControl = highlightControlIndex();
+        for (int index = 0; index <= highlightControl; index++) {
             int controlX = UI_X_OFFSET + index * CONTROL_STEP;
             int controlY = height + CONTROL_Y_OFFSET;
-            graphics.fill(controlX, controlY, controlX + CONTROL_SIZE, controlY + CONTROL_SIZE, 0xFF808080);
+            int background = index == highlightControl && positionHighlightsEnabled() ? 0xFF40798B : 0xFF808080;
+            graphics.fill(controlX, controlY, controlX + CONTROL_SIZE, controlY + CONTROL_SIZE, background);
             graphics.pose().pushPose();
             graphics.pose().translate(controlX + CONTROL_SIZE / 2.0F, controlY + CONTROL_SIZE / 2.0F, 0.0F);
             graphics.pose().scale(CONTROL_SCALE, CONTROL_SCALE, 1.0F);
-            int labelWidth = Minecraft.getInstance().font.width(labels[index]);
-            graphics.drawString(Minecraft.getInstance().font, Component.literal(labels[index]),
+            Component label = index == highlightControl
+                    ? Component.translatable("gui.mmcr.structure_preview.highlights.short")
+                    : Component.literal(labels[index]);
+            int labelWidth = Minecraft.getInstance().font.width(label);
+            graphics.drawString(Minecraft.getInstance().font, label,
                     -labelWidth / 2, -Minecraft.getInstance().font.lineHeight / 2, 0xFFFFFFFF, false);
             graphics.pose().popPose();
         }
@@ -169,33 +192,45 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             return false;
         }
         int button = input.getKey().getValue();
-        if (button != 0 || !isReady()) {
+        if (button < 0 || button > 2 || !isReady()) {
             if (!simulate) {
                 pressedInputTarget = -1;
                 cancelPreviewDrag();
             }
             return false;
         }
+        if (simulate && previewDragButton >= 0
+                && (button == previewDragButton || !mouseButtonDown.test(previewDragButton))) {
+            cancelPreviewDrag();
+        }
+        if (previewDragButton >= 0 && button != previewDragButton) return false;
         int inputTarget = inputTarget(mouseX, mouseY);
+        if (button != 0 && inputTarget != PREVIEW_INPUT_TARGET) inputTarget = -1;
         if (simulate) {
             pressedInputTarget = inputTarget;
+            pressedInputButton = button;
             return inputTarget >= 0;
         }
         int pressedTarget = pressedInputTarget;
+        int pressedButton = pressedInputButton;
         pressedInputTarget = -1;
-        if (pressedTarget != inputTarget) {
-            cancelPreviewDrag();
-            return false;
-        }
-        if (previewDragActive) {
-            previewDragActive = false;
+        pressedInputButton = -1;
+        if (previewDragButton >= 0) {
+            previewDragButton = -1;
             boolean inside = insidePreview(mouseX, mouseY);
             boolean handled = mouseReleased(previewMouseX(mouseX), previewMouseY(mouseY), button);
             return inside || handled;
         }
+        if (pressedTarget != inputTarget || pressedButton != button) {
+            cancelPreviewDrag();
+            return false;
+        }
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
-            switch (control) {
+            if (button != 0) return false;
+            if (input.isSimulate()) return true;
+            if (control == highlightControlIndex()) togglePositionHighlights();
+            else switch (control) {
                 case 0 -> selectPreviousLayer();
                 case 1 -> selectNextLayer();
                 case 2 -> showAllLayers();
@@ -203,11 +238,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
                 case 4 -> selectNextStage();
                 default -> { }
             }
-            previewDragActive = false;
             return true;
         }
         if (candidateAt(mouseX, mouseY) >= 0) {
-            return true;
+            return button == 0;
         }
         if (!insidePreview(mouseX, mouseY)) return false;
         if (!mouseClicked(previewMouseX(mouseX), previewMouseY(mouseY), button)) return false;
@@ -216,17 +250,21 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
 
     @Override
     public boolean handleMouseDragged(double mouseX, double mouseY, InputConstants.Key mouseKey, double dragX, double dragY) {
-        if (mouseKey.getType() != InputConstants.Type.MOUSE || mouseKey.getValue() != 0 || !isReady()
+        if (previewDragButton >= 0 && mouseKey.getType() == InputConstants.Type.MOUSE
+                && mouseKey.getValue() != previewDragButton) return false;
+        if (mouseKey.getType() != InputConstants.Type.MOUSE || mouseKey.getValue() < 0
+                || mouseKey.getValue() > 2 || !isReady()
                 || controlAt(mouseX, mouseY) >= 0 || candidateAt(mouseX, mouseY) >= 0
                 || !insidePreview(mouseX, mouseY)) {
             cancelPreviewDrag();
             return false;
         }
-        if (!previewDragActive) {
+        if (previewDragButton < 0) {
+            if (pressedInputTarget != PREVIEW_INPUT_TARGET || pressedInputButton != mouseKey.getValue()) return false;
             double pressX = previewMouseX(mouseX - dragX);
             double pressY = previewMouseY(mouseY - dragY);
-            previewDragActive = mouseClicked(pressX, pressY, mouseKey.getValue());
-            if (!previewDragActive) return false;
+            if (!mouseClicked(pressX, pressY, mouseKey.getValue())) return false;
+            previewDragButton = mouseKey.getValue();
         }
         boolean handled = mouseDragged(previewMouseX(mouseX), previewMouseY(mouseY), mouseKey.getValue(), dragX, dragY);
         if (!handled) cancelPreviewDrag();
@@ -241,10 +279,12 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     private void cancelPreviewDrag() {
+        if (previewDragButton < 0) return;
+        int button = previewDragButton;
+        previewDragButton = -1;
         pressedInputTarget = -1;
-        if (!previewDragActive) return;
-        previewDragActive = false;
-        mouseReleased(-1.0D, -1.0D, 0);
+        pressedInputButton = -1;
+        mouseReleased(-1.0D, -1.0D, button);
     }
 
     private int candidateAt(double mouseX, double mouseY) {
@@ -282,8 +322,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         int relativeX = (int) Math.floor(mouseX - UI_X_OFFSET);
         if (relativeX < 0) return -1;
         int column = relativeX / CONTROL_STEP;
-        int controls = panel != null && panel.hasMultipleStages() ? 5 : 4;
-        return column >= 0 && column < controls
+        return column >= 0 && column <= highlightControlIndex()
                 && mouseX < UI_X_OFFSET + column * CONTROL_STEP + CONTROL_SIZE ? column : -1;
     }
 
@@ -292,6 +331,12 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         if (!isReady()) return;
         int control = controlAt(mouseX, mouseY);
         if (control >= 0) {
+            if (control == highlightControlIndex()) {
+                tooltip.add(Component.translatable("gui.mmcr.structure_preview.highlights."
+                        + (positionHighlightsEnabled() ? "disable" : "enable")));
+                tooltip.add(Component.translatable("gui.mmcr.structure_preview.highlights.legend"));
+                return;
+            }
             String[] keys = {"previous_layer", "next_layer", "all_layers", "reset", "next_level"};
             tooltip.add(Component.translatable("jei.mmcr.structure_preview." + keys[control]));
             return;
@@ -358,7 +403,22 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     private void selectNextStage() {
-        if (panel != null) panel.selectNextStage();
+        if (testingPreview != null) testingPreview.selectNextStage();
+        else panel.selectNextStage();
+    }
+
+    private int highlightControlIndex() {
+        boolean multipleStages = testingPreview != null ? testingPreview.hasMultipleStages() : panel.hasMultipleStages();
+        return multipleStages ? 5 : 4;
+    }
+
+    private boolean positionHighlightsEnabled() {
+        return testingPreview != null ? testingPreview.positionHighlightsEnabled() : panel.positionHighlightsEnabled();
+    }
+
+    private void togglePositionHighlights() {
+        if (testingPreview != null) testingPreview.togglePositionHighlights();
+        else panel.togglePositionHighlights();
     }
 
     interface Preview {
@@ -371,6 +431,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
         default void next() { }
         default void all() { }
         default void reset() { }
+        default boolean hasMultipleStages() { return false; }
+        default void selectNextStage() { }
+        default boolean positionHighlightsEnabled() { return false; }
+        default void togglePositionHighlights() { }
     }
 
 }

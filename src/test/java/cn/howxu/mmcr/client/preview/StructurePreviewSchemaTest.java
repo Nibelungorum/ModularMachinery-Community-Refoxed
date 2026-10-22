@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.preview;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -15,6 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static cn.howxu.mmcr.client.preview.PreviewHighlights.INTERFACE;
+import static cn.howxu.mmcr.client.preview.PreviewHighlights.LEVEL;
+import static cn.howxu.mmcr.client.preview.PreviewHighlights.MODIFIER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -79,6 +83,7 @@ class StructurePreviewSchemaTest {
         assertThat(schema.stateAt(new BlockPos(2, 3, 4))).isEqualTo(state);
         assertThat(schema.levelSlots()).containsEntry(new BlockPos(2, 3, 4), slot);
         assertThat(schema.levelSlotAt(new BlockPos(2, 3, 4))).isEqualTo(slot);
+        assertThat(schema.highlightAt(new BlockPos(2, 3, 4))).isEqualTo(LEVEL);
         assertThat(schema.min()).isEqualTo(new BlockPos(2, 3, 4));
         assertThat(schema.max()).isEqualTo(new BlockPos(2, 3, 4));
         assertThatThrownBy(() -> schema.levelSlots().clear()).isInstanceOf(UnsupportedOperationException.class);
@@ -95,18 +100,63 @@ class StructurePreviewSchemaTest {
     }
 
     @Test
+    void schema_snapshots_nonzero_highlights_with_immutable_position_keys() {
+        BlockPos.MutableBlockPos source = new BlockPos.MutableBlockPos(2, 3, 4);
+        BlockPos unmarked = BlockPos.ZERO;
+        Map<BlockPos, Integer> highlights = new LinkedHashMap<>();
+        highlights.put(source, INTERFACE | MODIFIER);
+        highlights.put(unmarked, 0);
+        StructurePreviewSchema schema = StructurePreviewSchema.withHighlights(MMCR.id("marked_preview"),
+                Map.of(source, Blocks.IRON_BLOCK.defaultBlockState(), unmarked, Blocks.GOLD_BLOCK.defaultBlockState()),
+                Map.of(), Map.of(), highlights);
+
+        source.set(10, 11, 12);
+        highlights.clear();
+
+        assertThat(schema.highlights()).containsOnly(Map.entry(new BlockPos(2, 3, 4), INTERFACE | MODIFIER));
+        assertThat(schema.highlightAt(new BlockPos(2, 3, 4))).isEqualTo(INTERFACE | MODIFIER);
+        assertThat(schema.highlightAt(unmarked)).isZero();
+        assertThat(schema.highlightAt(new BlockPos(99, 99, 99))).isZero();
+        assertThatThrownBy(() -> schema.highlights().clear()).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void legacy_candidate_constructors_derive_only_level_roles() {
+        BlockPos position = BlockPos.ZERO;
+        var states = Map.of(position, Blocks.IRON_BLOCK.defaultBlockState());
+        var slots = Map.of(position, MMCR.id("coil"));
+        ItemStack stack = new ItemStack(ModBlocks.SMART_INTERFACE.get());
+
+        StructurePreviewSchema legacyItems = new StructurePreviewSchema(MMCR.id("legacy_items"), states, slots,
+                Map.of(position, List.of(stack)));
+        StructurePreviewSchema legacyMarked = new StructurePreviewSchema(MMCR.id("legacy_marked"), states, slots,
+                Map.of(position, List.of(new StructurePreviewSchema.Candidate(stack, true))), true);
+        StructurePreviewSchema legacyResolver = StructurePreviewSchema.withCandidateResolver(MMCR.id("legacy_resolver"),
+                states, slots, ignored -> List.of(new StructurePreviewSchema.Candidate(stack, true)));
+
+        assertThat(legacyItems.highlightAt(position)).isEqualTo(LEVEL);
+        assertThat(legacyMarked.highlightAt(position)).isEqualTo(LEVEL);
+        assertThat(legacyResolver.highlightAt(position)).isEqualTo(LEVEL);
+    }
+
+    @Test
     void schema_resolves_candidates_only_for_the_requested_position() {
         AtomicInteger resolutions = new AtomicInteger();
         BlockPos first = BlockPos.ZERO;
         BlockPos second = new BlockPos(1, 0, 0);
+        Map<BlockPos, Integer> highlights = new LinkedHashMap<>();
+        highlights.put(first, INTERFACE | MODIFIER);
         StructurePreviewSchema schema = StructurePreviewSchema.withCandidateResolver(MMCR.id("lazy_candidates"),
                 Map.of(first, Blocks.IRON_BLOCK.defaultBlockState(), second, Blocks.GOLD_BLOCK.defaultBlockState()), Map.of(),
-                position -> {
+                highlights, position -> {
                     resolutions.incrementAndGet();
                     return List.of(new StructurePreviewSchema.Candidate(new ItemStack(
                             position.equals(first) ? Blocks.IRON_BLOCK : Blocks.GOLD_BLOCK), false));
                 });
+        highlights.clear();
 
+        assertThat(schema.highlights()).containsOnly(Map.entry(first, INTERFACE | MODIFIER));
+        assertThat(schema.highlightAt(first)).isEqualTo(INTERFACE | MODIFIER);
         assertThat(resolutions).hasValue(0);
         assertThat(schema.candidatesAt(first)).extracting(ItemStack::getItem).containsExactly(Blocks.IRON_BLOCK.asItem());
         assertThat(schema.candidatesAt(first)).extracting(ItemStack::getItem).containsExactly(Blocks.IRON_BLOCK.asItem());

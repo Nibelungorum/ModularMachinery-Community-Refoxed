@@ -61,6 +61,12 @@ public final class StructurePreviewRenderer implements PreviewRenderer {
     }
 
     @Override
+    public void setPositionHighlightsEnabled(boolean enabled) {
+        if (closed) return;
+        scene.setPositionHighlightsEnabled(enabled);
+    }
+
+    @Override
     public void resetCamera() {
         invalidateHoverInputs();
     }

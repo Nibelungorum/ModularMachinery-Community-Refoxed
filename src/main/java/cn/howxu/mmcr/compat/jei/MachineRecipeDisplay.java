@@ -304,10 +304,10 @@ public record MachineRecipeDisplay(
                 MekanismTemperatureDisplay.fromKelvin(kelvin, unit), MekanismTemperatureDisplay.symbol(unit));
     }
 
-    public static Component outputHeatLabel(double kelvin) {
+    public static Component outputHeatLabel(double heat) {
         var unit = MekanismTemperatureDisplay.configuredUnit();
         return Component.translatable("jei.mmcr.machine_recipe.heat_output",
-                MekanismTemperatureDisplay.fromKelvin(kelvin, unit), MekanismTemperatureDisplay.symbol(unit));
+                MekanismTemperatureDisplay.fromHeat(heat, unit), MekanismTemperatureDisplay.symbol(unit));
     }
 
     /**

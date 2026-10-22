@@ -220,14 +220,14 @@ class CraftingRuntimeAirTest {
         assertThat(runtime.start(recipe("mixed_fe", 3, List.of(AirRequirement.output(80), itemInput(),
                 new EnergyRequirement(2), AirRequirement.input(40, 4F))), 1).isCrafting()).isTrue();
         assertThat(items.itemHandler().amount(0)).isEqualTo(1);
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(98);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(100);
         assertThat(input.air).isEqualTo(480);
         assertThat(runtime.activeRecipe().inputConsumptionPlan().consumedInputBatches()).containsExactly(0, 1, 0, 0);
         for (int tick = 0; tick < 3; tick++) runtime.tick();
         runtime.finish();
         assertThat(runtime.active()).isFalse();
         assertThat(items.itemHandler().amount(0)).isEqualTo(1);
-        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(92);
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(94);
         assertThat(input.air).isEqualTo(360);
         assertThat(output.air).isEqualTo(240);
     }
@@ -616,7 +616,7 @@ class CraftingRuntimeAirTest {
             assertThat(runTick(runtime, controller, async)).isFalse();
             assertThat(runtime.failure().reason()).isEqualTo(AirFailureReasons.INSUFFICIENT_PRESSURE);
             assertThat(runtime.tickCount()).isEqualTo(1);
-            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(96);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(98);
             input.air = 440;
             assertThat(runTick(runtime, controller, async)).isTrue();
             assertThat(runTick(runtime, controller, async)).isTrue();
@@ -624,7 +624,7 @@ class CraftingRuntimeAirTest {
             assertThat(runtime.active()).isFalse();
             assertThat(input.air).isEqualTo(360);
             assertThat(output.air).isEqualTo(240);
-            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(92);
+            assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(94);
             assertThat(input.applyCalls).isEqualTo(3);
             assertThat(output.applyCalls).isEqualTo(3);
         }
