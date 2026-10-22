@@ -5,6 +5,7 @@ import cn.howxu.mmcr.client.preview.PreviewLevel;
 import cn.howxu.mmcr.client.preview.PreviewVisibility;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.test.TestBootstrap;
+import net.minecraft.client.renderer.BiomeColors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
@@ -65,6 +66,19 @@ class PreviewSceneMeshCompilerTest {
 
         assertThat(future).isNotDone();
         assertThat(pendingWorker.get()).isNotNull();
+    }
+
+    @Test
+    void preview_water_tint_is_opaque_and_preserves_biome_rgb() {
+        StructurePreviewSchema schema = new StructurePreviewSchema(MMCR.id("preview_water_tint_test"),
+                Map.of(BlockPos.ZERO, Blocks.WATER.defaultBlockState()), Map.of());
+        try (PreviewLevel level = PreviewLevel.create(schema, () -> PreviewVisibility.ALL)) {
+            var region = PreviewSceneMeshCompiler.previewRegion(level, schema, PreviewVisibility.ALL);
+
+            int tint = BiomeColors.getAverageWaterColor(region, BlockPos.ZERO);
+
+            assertThat(tint).isEqualTo(0xFF3F76E4);
+        }
     }
 
     @Test

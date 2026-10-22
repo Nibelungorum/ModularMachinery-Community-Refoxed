@@ -23,6 +23,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.FastColor;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
@@ -306,7 +307,7 @@ public final class PreviewSceneMeshCompiler {
                 return level.getShade(direction, shade);
             }
             @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
-                return resolver.getColor(biome, position.getX(), position.getZ());
+                return FastColor.ARGB32.opaque(resolver.getColor(biome, position.getX(), position.getZ()));
             }
         };
     }

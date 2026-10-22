@@ -7,6 +7,7 @@ import net.minecraft.client.renderer.block.BlockModelShaper;
 import net.minecraft.client.renderer.block.LiquidBlockRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.util.FastColor;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
@@ -134,8 +135,8 @@ public final class WorldPreviewCompileInput {
 
             @Override
             public int getBlockTint(BlockPos position, ColorResolver resolver) {
-                return resolver.getColor(biomes.getOrDefault(position.asLong(), defaultBiome),
-                        position.getX(), position.getZ());
+                return FastColor.ARGB32.opaque(resolver.getColor(biomes.getOrDefault(position.asLong(), defaultBiome),
+                        position.getX(), position.getZ()));
             }
         }
 }

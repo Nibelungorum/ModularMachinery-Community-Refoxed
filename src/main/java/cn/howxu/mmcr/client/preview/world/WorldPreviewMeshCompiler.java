@@ -18,6 +18,7 @@ import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.FastColor;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.ColorResolver;
@@ -220,7 +221,7 @@ public final class WorldPreviewMeshCompiler {
             }
             @Override public LevelLightEngine getLightEngine() { return level.getLightEngine(); }
             @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
-                return resolver.getColor(level.getBiome(position).value(), position.getX(), position.getZ());
+                return FastColor.ARGB32.opaque(resolver.getColor(level.getBiome(position).value(), position.getX(), position.getZ()));
             }
         };
     }

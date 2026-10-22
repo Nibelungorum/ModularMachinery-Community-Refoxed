@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.client.preview.world;
 
+import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.client.preview.PreviewLevel;
+import cn.howxu.mmcr.client.preview.PreviewVisibility;
+import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewSnapshot;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
@@ -10,11 +14,19 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.*;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BiomeColors;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeGenerationSettings;
+import net.minecraft.world.level.biome.BiomeSpecialEffects;
+import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -79,6 +91,50 @@ class WorldPreviewMeshCompilerTest {
         assertThatThrownBy(() -> WorldPreviewMeshCompiler.compile(
                 null, BlockPos.ZERO, entries, Integer.MAX_VALUE, null, cancelled))
                 .isInstanceOf(WorldPreviewMeshCompiler.CancelledCompilation.class);
+    }
+
+    @Test
+    void liveRegionWaterTintIsOpaqueAndPreservesBiomeRgb() throws Exception {
+        var state = Blocks.WATER.defaultBlockState();
+        StructurePreviewSchema schema = new StructurePreviewSchema(MMCR.id("world_preview_water_tint_test"),
+                Map.of(BlockPos.ZERO, state), Map.of());
+        try (PreviewLevel level = PreviewLevel.create(schema, () -> PreviewVisibility.ALL)) {
+            var factory = WorldPreviewMeshCompiler.class.getDeclaredMethod("region", Level.class, Map.class);
+            factory.setAccessible(true);
+            var region = (BlockAndTintGetter) factory.invoke(null, level, schema.states());
+
+            int tint = BiomeColors.getAverageWaterColor(region, BlockPos.ZERO);
+
+            assertThat(tint).isEqualTo(0xFF3F76E4);
+        }
+    }
+
+    @Test
+    void snapshotRegionWaterTintIsOpaqueForCapturedAndFallbackBiomes() throws Exception {
+        var state = Blocks.WATER.defaultBlockState();
+        StructurePreviewSchema schema = new StructurePreviewSchema(MMCR.id("world_snapshot_water_tint_test"),
+                Map.of(BlockPos.ZERO, state), Map.of());
+        try (PreviewLevel level = PreviewLevel.create(schema, () -> PreviewVisibility.ALL)) {
+            Biome biome = level.getUncachedNoiseBiome(0, 0, 0).value();
+            Biome fallbackBiome = new Biome.BiomeBuilder().hasPrecipitation(false).temperature(0.8F).downfall(0.0F)
+                    .specialEffects(new BiomeSpecialEffects.Builder().waterColor(0x123456)
+                            .waterFogColor(0x050533).fogColor(0xC0D8FF).skyColor(0x78A7FF).build())
+                    .mobSpawnSettings(new MobSpawnSettings.Builder().build())
+                    .generationSettings(new BiomeGenerationSettings.PlainBuilder().build())
+                    .build();
+            var constructor = Class.forName(WorldPreviewCompileInput.class.getName() + "$SnapshotRegion")
+                    .getDeclaredConstructor(Map.class, Map.class, Biome.class, int.class, int.class, LevelLightEngine.class);
+            constructor.setAccessible(true);
+            var region = (BlockAndTintGetter) constructor.newInstance(
+                    Map.of(BlockPos.ZERO.asLong(), state), Map.of(BlockPos.ZERO.asLong(), biome),
+                    fallbackBiome, level.getMinBuildHeight(), level.getHeight(), null);
+
+            int capturedTint = BiomeColors.getAverageWaterColor(region, BlockPos.ZERO);
+            int fallbackTint = BiomeColors.getAverageWaterColor(region, new BlockPos(2, 0, 0));
+
+            assertThat(capturedTint).isEqualTo(0xFF3F76E4);
+            assertThat(fallbackTint).isEqualTo(0xFF123456);
+        }
     }
 
     @Test
