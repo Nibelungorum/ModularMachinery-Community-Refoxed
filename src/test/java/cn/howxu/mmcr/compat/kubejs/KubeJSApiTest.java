@@ -447,7 +447,7 @@ class KubeJSApiTest {
     @Test
     void rhino_commits_partial_energy_output_and_big_integer_data_without_class_loading() throws Exception {
         TestBootstrap.bootstrapCapabilities();
-        var energy = new LongEnergyStorage(100L, 4L, null);
+        var energy = new LongEnergyStorage(4L, 1L, null);
         var plan = new MachineIoPlan(new CapabilitySnapshot(List.of(new EnergyHatchCapability(energy, cn.howxu.mmcr.util.IOType.OUTPUT))));
         var storage = DataStorage.view(new cn.howxu.mmcr.api.data.DataStorage());
         var context = new ContextFactory().enter();

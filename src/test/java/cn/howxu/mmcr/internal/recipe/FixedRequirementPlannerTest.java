@@ -30,10 +30,18 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import com.mojang.serialization.MapCodec;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.compat.create.StressSession;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -56,6 +64,88 @@ class FixedRequirementPlannerTest {
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
         TestBootstrap.bootstrapCapabilities();
+    }
+
+    @Test
+    void energy_output_uses_capacity_even_with_zero_transfer_limit_in_both_planners() {
+        for (long limit : new long[] { 512_000L, 0L }) {
+            LongEnergyStorage storage = storage(2_000_000L, limit, 100_000L);
+            List<MachineRequirement> requirements = List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 800_000L));
+            var maximum = new RequirementPlanner().plan(requirements, List.of(output(storage)), new PlanningContext(3L, 0));
+            assertThat(maximum.successful()).isTrue();
+            assertThat(maximum.plan().parallelism()).isEqualTo(2L);
+            var fixed = fixed(requirements, List.of(output(storage)), 2L, List.of(0), Map.of());
+            assertThat(fixed.successful()).isTrue();
+            assertThat(storage.getAmountAsLong()).isEqualTo(100_000L);
+            assertThat(fixed.plan().commit()).isTrue();
+            assertThat(storage.getAmountAsLong()).isEqualTo(1_700_000L);
+            storage.setAmount(100_000L);
+            assertThat(maximum.plan().commit()).isTrue();
+            assertThat(storage.getAmountAsLong()).isEqualTo(1_700_000L);
+        }
+    }
+
+    @Test
+    void energy_output_capacity_is_shared_by_aliases_and_partial_output_never_overfills() {
+        LongEnergyStorage storage = storage(1_000_000L, 0L, 100_000L);
+        List<MachineCapability> capabilities = List.of(output(storage), output(storage));
+        List<MachineRequirement> requirements = List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 800_000L));
+        assertThat(fixed(requirements, capabilities, 2L, List.of(0), Map.of()).successful()).isFalse();
+        assertThat(storage.getAmountAsLong()).isEqualTo(100_000L);
+        var partial = fixed(requirements, capabilities, 2L, List.of(0), Map.of(0, OutputPolicy.ALLOW_PARTIAL));
+        assertThat(partial.successful()).isTrue();
+        assertThat(partial.outputSimulations()).singleElement().satisfies(simulation -> {
+            assertThat(simulation.requested()).isEqualTo(1_600_000L);
+            assertThat(simulation.accepted()).isEqualTo(900_000L);
+        });
+        assertThat(partial.plan().commit()).isTrue();
+        assertThat(storage.getAmountAsLong()).isEqualTo(1_000_000L);
+        assertThat(fixed(requirements, capabilities, 1L, List.of(0), Map.of()).successful()).isFalse();
+    }
+
+    @Test
+    void energy_output_revalidates_capacity_without_partially_filling_a_stale_destination() {
+        LongEnergyStorage storage = storage(1_000_000L, 10L, 0L);
+        var result = fixed(List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 800_000L)),
+                List.of(output(storage)), 1L, List.of(0), Map.of());
+        assertThat(result.successful()).isTrue();
+        storage.setAmount(300_000L);
+        assertThat(result.plan().commit()).isFalse();
+        assertThat(storage.getAmountAsLong()).isEqualTo(300_000L);
+    }
+
+    @Test
+    void recipe_output_does_not_remove_input_or_external_energy_transfer_limits() {
+        LongEnergyStorage storage = storage(2_000_000L, 512_000L, 0L);
+        var result = fixed(List.of(new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 800_000L)),
+                List.of(output(storage)), 1L, List.of(0), Map.of());
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(fixed(List.of(new EnergyRequirement(800_000L)), List.of(input(storage)),
+                1L, List.of(0), Map.of()).successful()).isFalse();
+        assertThat(storage.extractEnergy(800_000, true)).isEqualTo(512_000);
+        assertThat(storage.receiveEnergy(800_000, true)).isEqualTo(512_000);
+        assertThat(storage.getAmountAsLong()).isEqualTo(800_000L);
+    }
+
+    @Test
+    void item_and_fluid_recipe_outputs_ignore_external_transfer_limits_but_respect_capacity() {
+        LongItemStorage items = new LongItemStorage(2, 64L, null);
+        LongFluidStorage fluids = new LongFluidStorage(4_000_000_000L, null);
+        List<MachineCapability> capabilities = List.of(new ItemBusCapability(items, IOType.OUTPUT),
+                new FluidHatchCapability(fluids, IOType.OUTPUT));
+        List<MachineRequirement> requirements = List.of(
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.IRON_INGOT, 32)),
+                new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new FluidStack(Fluids.WATER, 1_000_000_000)));
+        var result = fixed(requirements, capabilities, 3L, List.of(0, 1), Map.of());
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(items.amount(0)).isEqualTo(64L);
+        assertThat(items.amount(1)).isEqualTo(32L);
+        assertThat(fluids.amount(0)).isEqualTo(3_000_000_000L);
+        assertThat(fixed(requirements, capabilities, 2L, List.of(0, 1), Map.of()).successful()).isFalse();
+        assertThat(items.amount(1)).isEqualTo(32L);
+        assertThat(fluids.amount(0)).isEqualTo(3_000_000_000L);
     }
 
     @Test

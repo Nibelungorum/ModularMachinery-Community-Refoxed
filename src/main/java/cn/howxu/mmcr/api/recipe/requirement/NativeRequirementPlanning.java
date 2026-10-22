@@ -257,7 +257,8 @@ final class NativeRequirementPlanning {
             LongValueStorage local = value != null && value.storage() instanceof LongValueStorage storage ? storage : null;
             long transfer = nativeStorage != null ? energyTransferLimit(nativeStorage)
                     : local == null ? 0L : local.transferLimit();
-            long moved = Math.min(remaining, Math.min(energyAvailable(capability, reservations, insert),
+            long available = energyAvailable(capability, reservations, insert);
+            long moved = Math.min(remaining, insert ? available : Math.min(available,
                     RequirementHandlerSupport.scaled(transfer, parallelism)));
             if (moved <= 0L) continue;
             if (nativeStorage != null ? !reservations.reserveValueTotal(nativeStorage, moved, insert)

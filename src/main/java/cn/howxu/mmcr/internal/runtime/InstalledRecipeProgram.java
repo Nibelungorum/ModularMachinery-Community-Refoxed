@@ -154,8 +154,9 @@ public final class InstalledRecipeProgram {
                 int id = rule.ids()[candidate];
                 IEnergyStorage storage = storages[id];
                 long available = rule.insert() ? capacity(storage) - virtualAmounts[id] : virtualAmounts[id];
-                long moved = Math.min(remaining, Math.min(Math.max(0L, available),
-                        SaturatingLong.multiply(limit(storage), program.parallelism())));
+                long transferable = rule.insert() ? available : Math.min(available,
+                        SaturatingLong.multiply(limit(storage), program.parallelism()));
+                long moved = Math.min(remaining, Math.max(0L, transferable));
                 rule.amounts()[candidate] = moved;
                 virtualAmounts[id] += rule.insert() ? moved : -moved;
                 remaining -= moved;
@@ -201,6 +202,9 @@ public final class InstalledRecipeProgram {
         return storage instanceof LongEnergyHandler handler ? handler.getTransferLimit() : Integer.MAX_VALUE;
     }
     private long move(IEnergyStorage storage, long amount, boolean insert) {
+        if (insert && storage instanceof LongEnergyStorage nativeStorage) {
+            return nativeStorage.forceInsert(amount, false);
+        }
         // One candidate may span multiple native per-call limits at installed parallelism.
         long remaining = amount;
         while (remaining > 0L) {

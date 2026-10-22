@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirementHandler;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.util.IOType;
 import org.junit.jupiter.api.Test;
 
@@ -69,6 +70,21 @@ class EnergyRequirementHandlerTest {
         assertThat(commit(plan, 1)).isFalse();
         assertThat(first.getAmountAsLong()).isEqualTo(500);
         assertThat(second.getAmountAsLong()).isEqualTo(500);
+    }
+
+    @Test
+    void external_long_energy_output_keeps_native_chunks_without_limiting_recipe_output() {
+        for (long parallelism : new long[] { 1L, 2L }) {
+            LongEnergyStorage storage = emptyStorage(100, 10);
+            var capability = new EnergyHatchCapability(new WrappedEnergyStorage(storage), IOType.OUTPUT);
+            var plan = new EnergyRequirementHandler().plan(
+                    new EnergyRequirement(RecipeModifier.IOType.OUTPUT, 20L / parallelism),
+                    List.of(capability), new PlanningContext(parallelism, 0));
+            assertThat(plan.successful()).isTrue();
+            assertThat(commit(plan, parallelism)).isTrue();
+            assertThat(storage.getAmountAsLong()).isEqualTo(20L);
+            assertThat(storage.insertLong(20L, true)).isEqualTo(10L);
+        }
     }
 
     @Test
@@ -154,5 +170,22 @@ class EnergyRequirementHandlerTest {
 
     private static LongEnergyStorage emptyStorage(int capacity, int transferLimit) {
         return new LongEnergyStorage(capacity, transferLimit, () -> {});
+    }
+
+    /** Native rate-limited storage without MMCR's direct insertion API.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record WrappedEnergyStorage(LongEnergyStorage storage) implements LongEnergyHandler {
+        @Override public long getTransferLimit() { return storage.getTransferLimit(); }
+        @Override public long getAmountAsLong() { return storage.getAmountAsLong(); }
+        @Override public long getCapacityAsLong() { return storage.getCapacityAsLong(); }
+        @Override public long insertLong(long amount, boolean simulate) { return storage.insertLong(amount, simulate); }
+        @Override public long extractLong(long amount, boolean simulate) { return storage.extractLong(amount, simulate); }
+        @Override public int receiveEnergy(int amount, boolean simulate) { return storage.receiveEnergy(amount, simulate); }
+        @Override public int extractEnergy(int amount, boolean simulate) { return storage.extractEnergy(amount, simulate); }
+        @Override public int getEnergyStored() { return storage.getEnergyStored(); }
+        @Override public int getMaxEnergyStored() { return storage.getMaxEnergyStored(); }
+        @Override public boolean canExtract() { return storage.canExtract(); }
+        @Override public boolean canReceive() { return storage.canReceive(); }
     }
 }

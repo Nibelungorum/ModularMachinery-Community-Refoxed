@@ -114,9 +114,10 @@ public sealed interface AsyncCapabilityPlanner permits AsyncCapabilityPlanner.Re
             long available = insert
                     ? capacity - amount2
                     : amount2;
-            long maximum = scaled(transferLimit, parallelism);
+            long maximum = insert ? available : scaled(transferLimit, parallelism);
             long amount = Math.min(amount1, Math.min(available, maximum));
             if (amount <= 0L) return Optional.empty();
+            if (insert) return Optional.of(new AsyncCapabilityOperation.Scalar(capabilityId, amount, true));
 
             List<AsyncCapabilityOperation> operations = new ArrayList<>();
             while (amount > 0L) {

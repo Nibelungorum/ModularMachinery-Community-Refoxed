@@ -120,13 +120,14 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
 
     private CapabilityResult commitNative(CapabilityRequests.ValueRequest request) {
         long remaining = request.amount();
-        long transferLimit = transferLimit();
+        long transferLimit = request.insert() && energyStorage instanceof LongEnergyStorage
+                ? Long.MAX_VALUE : transferLimit();
         long available = request.insert() ? capacity() - amount() : amount();
         if (remaining > available || transferLimit <= 0L
-                || remaining > RequirementHandlerSupport.scaled(transferLimit, request.parallelism())) {
+                || !request.insert() && remaining > RequirementHandlerSupport.scaled(transferLimit, request.parallelism())) {
             return failure(request.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
         }
-        for (long batch = 0L; batch < request.parallelism() && remaining > 0L; batch++) {
+        for (long batch = 0L; (request.insert() || batch < request.parallelism()) && remaining > 0L; batch++) {
             long chunk = Math.min(remaining, transferLimit);
             if (moveEnergy(chunk, request.insert(), true) != chunk) return failure(request.insert()
                     ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
@@ -139,6 +140,9 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     }
 
     private long moveEnergy(long amount, boolean insert, boolean simulate) {
+        if (insert && energyStorage instanceof LongEnergyStorage storage) {
+            return storage.forceInsert(amount, simulate);
+        }
         if (energyStorage instanceof LongEnergyHandler storage) {
             return insert ? storage.insertLong(amount, simulate) : storage.extractLong(amount, simulate);
         }

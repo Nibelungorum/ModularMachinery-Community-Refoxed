@@ -520,6 +520,35 @@ class AsyncRequirementPlannerTest {
     }
 
     @Test
+    void scalar_output_plans_and_commits_by_capacity_even_with_zero_transfer_limit() throws Exception {
+        for (long limit : new long[] { 512_000L, 0L }) {
+            LongEnergyStorage storage = new LongEnergyStorage(2_000_000L, limit, null);
+            EnergyHatchCapability capability = new EnergyHatchCapability(storage, IOType.OUTPUT);
+            var id = capability.type().id();
+            var operation = new AsyncCapabilityPlanner.Scalar(id).plan(
+                    new AsyncCapabilitySnapshot.Scalar(id, 0L, 2_000_000L, limit),
+                    new AsyncCapabilityRequest.Scalar(id, 2L, 1_600_000L, true)).orElseThrow();
+            assertThat(operation).isEqualTo(new AsyncCapabilityOperation.Scalar(id, 1_600_000L, true));
+            assertThat(commit(capability, operation).success()).isTrue();
+            assertThat(storage.getAmountAsLong()).isEqualTo(1_600_000L);
+        }
+    }
+
+    @Test
+    void scalar_output_still_bounds_planning_and_commit_by_available_capacity() throws Exception {
+        LongEnergyStorage storage = new LongEnergyStorage(1_000_000L, 0L, null);
+        EnergyHatchCapability capability = new EnergyHatchCapability(storage, IOType.OUTPUT);
+        var id = capability.type().id();
+        var operation = new AsyncCapabilityPlanner.Scalar(id).plan(
+                new AsyncCapabilitySnapshot.Scalar(id, 100_000L, 1_000_000L, 0L),
+                new AsyncCapabilityRequest.Scalar(id, 1L, 1_600_000L, true)).orElseThrow();
+        assertThat(operation).isEqualTo(new AsyncCapabilityOperation.Scalar(id, 900_000L, true));
+        storage.setAmount(200_000L);
+        assertThat(commit(capability, operation).success()).isFalse();
+        assertThat(storage.getAmountAsLong()).isEqualTo(200_000L);
+    }
+
+    @Test
     void batch_limited_energy_groups_revalidate_and_roll_back_when_storage_changes() throws Exception {
         LongEnergyStorage storage = new LongEnergyStorage(100L, 20L, null);
         storage.setAmount(60L);
