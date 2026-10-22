@@ -5,8 +5,9 @@
 </p>
 
 <p align="center">
-    <a href="https://www.curseforge.com/minecraft/mc-mods/modular-machinery-community-refoxed"><img src="https://cf.way2muchnoise.eu/full_1654570_downloads.svg"></a>
-    <a href="https://modrinth.com/mod/modular-machinery-community-refoxed"><img src="https://shieldcn.dev/modrinth/downloads/bUctkb7B.svg?size=sm"></a>
+    <a href="https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed"><img src="https://img.shields.io/github/actions/workflow/status/Nibelungorum/ModularMachinery-Community-Refoxed/ci.yml"></a>
+    <a href="https://www.curseforge.com/minecraft/mc-mods/modular-machinery-community-refoxed"><img src="https://img.shields.io/modrinth/dt/bUctkb7B?logo=modrinth"></a>
+    <a href="https://modrinth.com/mod/modular-machinery-community-refoxed"><img src="https://img.shields.io/curseforge/dt/1654570?logo=curseforge&&color=F16436"></a>
 </p>
 
 Modular Machinery: Community Refoxed (MMCR) is an **unofficial** NeoForge port and continuation of [Modular Machinery Community Edition](https://github.com/NovaEngineering-Source/ModularMachinery-Community-Edition) for newer Minecraft versions. It provides configurable multiblock machines, recipe processing, ports, controllers, a lot of DIY interfaces and integration of popular mods.
