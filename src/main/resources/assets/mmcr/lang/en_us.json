@@ -388,6 +388,8 @@
   "gui.mmcr.blueprint.level": "Level=%s",
   "gui.mmcr.blueprint.candidates": "Replaceable Blocks:",
   "gui.mmcr.blueprint.materials": "Materials",
+  "gui.mmcr.structure_preview.fluid_source_count": "Source Blocks: %s",
+  "gui.mmcr.structure_preview.fluid_non_source_count": "Non-source Blocks: %s",
   "gui.mmcr.blueprint.next_level": "Next Level",
   "gui.mmcr.blueprint.previous_level": "Previous Level",
   "gui.mmcr.blueprint.modifier": "This is a Modifier",

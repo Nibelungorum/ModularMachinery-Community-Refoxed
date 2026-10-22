@@ -388,6 +388,8 @@
   "gui.mmcr.blueprint.level": "Level=%s",
   "gui.mmcr.blueprint.candidates": "可替换方块:",
   "gui.mmcr.blueprint.materials": "材料",
+  "gui.mmcr.structure_preview.fluid_source_count": "源方块: %s",
+  "gui.mmcr.structure_preview.fluid_non_source_count": "非源方块: %s",
   "gui.mmcr.blueprint.next_level": "下一级",
   "gui.mmcr.blueprint.previous_level": "上一级",
   "gui.mmcr.blueprint.modifier": "这是一个 Modifier",

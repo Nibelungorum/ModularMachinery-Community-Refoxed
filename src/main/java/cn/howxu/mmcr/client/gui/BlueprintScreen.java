@@ -515,8 +515,7 @@ public final class BlueprintScreen extends Screen {
             if (slot.contains(mouseX, mouseY)) {
                 ItemStack iconStack = entry.stack().copyWithCount(1);
                 ArrayList<Component> tooltip = new ArrayList<>(getTooltipFromItem(minecraft, iconStack));
-                tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count",
-                        ReadableNumber.formatExact(entry.count())));
+                tooltip.addAll(entry.tooltipLines());
                 hoveredTooltip = tooltip;
             }
         }

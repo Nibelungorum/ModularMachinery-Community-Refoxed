@@ -4,7 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
-import cn.howxu.mmcr.util.ReadableNumber;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
@@ -98,8 +97,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
                 int page = StructureMaterialWidget.pageFor(System.currentTimeMillis(), summary.entries().size());
                 int pageEntry = page * StructureMaterialWidget.SLOT_COUNT + entryIndex;
                 if (pageEntry < summary.entries().size()) {
-                    tooltip.add(Component.translatable("jei.mmcr.machine_recipe.item_count",
-                            ReadableNumber.formatExact(summary.entries().get(pageEntry).count())));
+                    summary.entries().get(pageEntry).tooltipLines().forEach(tooltip::add);
                 }
             });
         }

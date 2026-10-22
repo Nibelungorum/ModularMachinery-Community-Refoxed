@@ -6,10 +6,16 @@ import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
+import cn.howxu.mmcr.util.ReadableNumber;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.FluidType;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -60,22 +66,34 @@ public final class StructureMaterialSummary {
     private static StructureMaterialSummary fromStates(Iterable<BlockState> states) {
         List<MutableEntry> merged = new ArrayList<>();
         for (BlockState state : states) {
-            ItemStack stack = new ItemStack(state.getBlock());
+            boolean fluid = state.getBlock() instanceof LiquidBlock;
+            FluidState fluidState = state.getFluidState();
+            ItemStack stack = fluid
+                    ? fluidState.getType().getFluidType().getBucket(
+                            new FluidStack(fluidState.getType(), FluidType.BUCKET_VOLUME))
+                    : new ItemStack(state.getBlock());
             if (stack.isEmpty()) continue;
             MutableEntry existing = merged.stream()
                     .filter(entry -> ItemStack.isSameItemSameComponents(entry.stack, stack))
                     .findFirst()
                     .orElse(null);
             if (existing == null) {
-                merged.add(new MutableEntry(stack, 1));
-            } else {
+                existing = new MutableEntry(stack);
+                merged.add(existing);
+            }
+            if (!fluid) {
                 existing.count++;
+            } else if (fluidState.isSource()) {
+                existing.count++;
+                existing.sourceCount++;
+            } else {
+                existing.nonSourceCount++;
             }
         }
 
         return new StructureMaterialSummary(merged.stream()
                 .sorted(Comparator.comparingInt((MutableEntry entry) -> entry.count).reversed())
-                .map(entry -> new Entry(entry.stack, entry.count))
+                .map(entry -> new Entry(entry.stack, Math.max(1, entry.count), entry.sourceCount, entry.nonSourceCount))
                 .toList());
     }
 
@@ -103,10 +121,17 @@ public final class StructureMaterialSummary {
     }
 
     public List<ItemStack> transferStacks() {
-        return entries.stream().map(Entry::transferStack).toList();
+        return entries.stream()
+                .filter(entry -> entry.sourceCount() > 0 || entry.nonSourceCount() == 0)
+                .map(Entry::transferStack).toList();
     }
 
-    public record Entry(ItemStack stack, int count) {
+    /** Display quantity is at least one, including buckets used only to identify non-source fluid. */
+    public record Entry(ItemStack stack, int count, int sourceCount, int nonSourceCount) {
+        public Entry(ItemStack stack, int count) {
+            this(stack, count, 0, 0);
+        }
+
         public Entry {
             if (count < 1) throw new IllegalArgumentException("count must be positive");
             stack = stack.copyWithCount(1);
@@ -117,6 +142,16 @@ public final class StructureMaterialSummary {
             return stack.copy();
         }
 
+        public List<Component> tooltipLines() {
+            if (sourceCount > 0 || nonSourceCount > 0) {
+                return List.of(Component.translatable("gui.mmcr.structure_preview.fluid_source_count",
+                                ReadableNumber.formatExact(sourceCount)),
+                        Component.translatable("gui.mmcr.structure_preview.fluid_non_source_count",
+                                ReadableNumber.formatExact(nonSourceCount)));
+            }
+            return List.of(Component.translatable("jei.mmcr.machine_recipe.item_count", ReadableNumber.formatExact(count)));
+        }
+
         private ItemStack transferStack() {
             return stack.copyWithCount(count);
         }
@@ -125,10 +160,11 @@ public final class StructureMaterialSummary {
     private static final class MutableEntry {
         private final ItemStack stack;
         private int count;
+        private int sourceCount;
+        private int nonSourceCount;
 
-        private MutableEntry(ItemStack stack, int count) {
+        private MutableEntry(ItemStack stack) {
             this.stack = stack;
-            this.count = count;
         }
     }
 }
