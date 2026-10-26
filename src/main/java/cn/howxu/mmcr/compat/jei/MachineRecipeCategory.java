@@ -78,10 +78,19 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             FluidGuiRenderer.drawFluid(guiGraphics, fluid, 0, 0, 16, 16);
         }
 
+        // Required by JEI's legacy abstract interface; normal calls use the contextual overload.
         @Override
+        @Deprecated(since = "29.31.0", forRemoval = true)
+        @SuppressWarnings("removal")
         public List<Component> getTooltip(FluidStack fluid, TooltipFlag tooltipFlag) {
             Minecraft minecraft = Minecraft.getInstance();
-            return fluidTooltip(fluid, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+            return getTooltip(fluid, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+        }
+
+        @Override
+        public List<Component> getTooltip(FluidStack fluid, Item.TooltipContext context,
+                @Nullable Player player, TooltipFlag tooltipFlag) {
+            return fluidTooltip(fluid, context, player, tooltipFlag);
         }
     };
 
@@ -159,7 +168,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     static void addRecipeArrow(IRecipeExtrasBuilder builder, IGuiHelper guiHelper, RecipeSlotLayout.Arrow arrow) {
         boolean vertical = arrow.height() > arrow.width();
         IDrawable drawable = new RecipeArrowDrawable(guiHelper.createAnimatedRecipeArrow(200), vertical);
-        builder.addDrawable(drawable, arrow.x(), arrow.y());
+        builder.addDrawableWidget(drawable).setPosition(arrow.x(), arrow.y());
     }
 
     @Override
@@ -383,14 +392,24 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 }
             }
 
+            // Required by JEI's legacy abstract interface; normal calls use the contextual overload.
             @Override
+            @Deprecated(since = "29.31.0", forRemoval = true)
+            @SuppressWarnings("removal")
             public List<Component> getTooltip(ItemStack ingredient, TooltipFlag tooltipFlag) {
+                Minecraft minecraft = Minecraft.getInstance();
+                return getTooltip(ingredient, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+            }
+
+            @Override
+            public List<Component> getTooltip(ItemStack ingredient, Item.TooltipContext context,
+                    @Nullable Player player, TooltipFlag tooltipFlag) {
                 Minecraft minecraft = Minecraft.getInstance();
                 ItemStack candidate = levelCandidate(requirement,
                         minecraft.level == null ? 0L : minecraft.level.getGameTime());
                 return candidate.isEmpty()
                         ? List.of()
-                        : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+                        : candidate.getTooltipLines(context, player, tooltipFlag);
             }
         };
     }

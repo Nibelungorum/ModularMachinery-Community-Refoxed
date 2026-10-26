@@ -8,12 +8,15 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
+import mezz.jei.api.ingredients.IIngredientHelper;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.component.DataComponentMap;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -23,6 +26,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -59,9 +63,28 @@ class MachineRecipeTransferHandlerTest {
         List<IRecipeSlotView> transformed = MachineRecipeTransferHandler
                 .withActualInputCounts(source, display);
 
-        assertThat(transformed).singleElement().satisfies(slot ->
-                assertThat(slot.getItemStacks().map(ItemStack::getCount).toList())
-                        .containsExactly(8, 8));
+        assertThat(transformed).singleElement().satisfies(slot -> {
+            assertThat(slot.getItemStacks().map(ItemStack::getCount).toList()).containsExactly(8, 8);
+            assertThat(slot.getDisplayedIngredients().map(ingredient -> ingredient.getItemStack().orElseThrow())
+                    .map(ItemStack::getCount).toList()).containsExactly(8);
+            assertThat(slot.getTagKey()).isEqualTo(placeholder.getTagKey()).isPresent();
+            assertThat(slot.getDisplayedItemStack().orElseThrow().getCount()).isEqualTo(8);
+
+            @SuppressWarnings("unchecked")
+            IIngredientHelper<ItemStack> helper = (IIngredientHelper<ItemStack>) Proxy.newProxyInstance(
+                    IIngredientHelper.class.getClassLoader(), new Class<?>[]{IIngredientHelper.class},
+                    (proxy, method, args) -> {
+                        if (method.getName().equals("normalizeIngredient")) {
+                            return ((ItemStack) args[0]).copyWithCount(1);
+                        }
+                        throw new UnsupportedOperationException(method.getName());
+                    });
+            ITypedIngredient<ItemStack> ingredient = slot.getDisplayedIngredient().orElseThrow()
+                    .castToItemStackType();
+            assertThat(ingredient.normalize(helper).getIngredient().getCount()).isOne();
+            assertThat(ingredient.getIngredient().getCount()).isEqualTo(8);
+        });
+        assertThat(placeholder.getItemStacks().map(ItemStack::getCount).toList()).containsExactly(1, 1);
     }
 
     @Test
@@ -117,6 +140,16 @@ class MachineRecipeTransferHandlerTest {
             }
 
             @Override
+            public Stream<ITypedIngredient<?>> getDisplayedIngredients() {
+                return ingredients.stream().limit(1);
+            }
+
+            @Override
+            public Optional<TagKey<?>> getTagKey() {
+                return Optional.of(TagKey.create(Registries.ITEM, MMCR.id("transfer_inputs")));
+            }
+
+            @Override
             public RecipeIngredientRole getRole() {
                 return RecipeIngredientRole.INPUT;
             }
@@ -142,6 +175,11 @@ class MachineRecipeTransferHandlerTest {
         public ItemStack getIngredient() {
             return stack;
         }
+
+        @Override
+        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
+            return new TypedItem(ingredientHelper.normalizeIngredient(stack));
+        }
     }
 
     private record TypedFluid(FluidStack stack) implements ITypedIngredient<FluidStack> {
@@ -153,6 +191,11 @@ class MachineRecipeTransferHandlerTest {
         @Override
         public FluidStack getIngredient() {
             return stack;
+        }
+
+        @Override
+        public ITypedIngredient<FluidStack> normalize(IIngredientHelper<FluidStack> ingredientHelper) {
+            return new TypedFluid(ingredientHelper.normalizeIngredient(stack));
         }
     }
 }
