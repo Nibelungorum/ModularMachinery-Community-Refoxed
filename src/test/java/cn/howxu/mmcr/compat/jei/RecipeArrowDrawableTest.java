@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.jei;
 
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.drawable.IDrawableAnimated;
+import mezz.jei.api.gui.widgets.IDrawableWidget;
 import mezz.jei.api.gui.widgets.IRecipeExtrasBuilder;
 import mezz.jei.api.helpers.IGuiHelper;
 import net.minecraft.client.gui.GuiGraphics;
@@ -46,20 +47,29 @@ class RecipeArrowDrawableTest {
                     }
                     return null;
                 });
-        AtomicReference<Object[]> added = new AtomicReference<>();
+        AtomicReference<IDrawable> added = new AtomicReference<>();
+        AtomicReference<Object[]> position = new AtomicReference<>();
+        IDrawableWidget widget = (IDrawableWidget) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{IDrawableWidget.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("setPosition")) position.set(args);
+                    return proxy;
+                });
         IRecipeExtrasBuilder extras = (IRecipeExtrasBuilder) Proxy.newProxyInstance(
                 getClass().getClassLoader(), new Class<?>[]{IRecipeExtrasBuilder.class},
                 (proxy, method, args) -> {
-                    if (method.getName().equals("addDrawable") && args.length == 3) added.set(args);
-                    return null;
+                    if (method.getName().equals("addDrawableWidget")) {
+                        added.set((IDrawable) args[0]);
+                        return widget;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
                 });
         RecipeSlotLayout.Arrow arrow = RecipeSlotLayout.forCounts(inputs, outputs).arrow();
         MachineRecipeCategory.addRecipeArrow(extras, helper, arrow);
         assertThat(cycle.get()).isEqualTo(200);
         assertThat(added.get()).isNotNull();
-        assertThat(added.get()[1]).isEqualTo(arrow.x());
-        assertThat(added.get()[2]).isEqualTo(arrow.y());
-        IDrawable drawable = (IDrawable) added.get()[0];
+        assertThat(position.get()).containsExactly(arrow.x(), arrow.y());
+        IDrawable drawable = added.get();
         assertThat(drawable.getWidth()).isEqualTo(arrow.width());
         assertThat(drawable.getHeight()).isEqualTo(arrow.height());
         assertThat(drawable.getWidth()).isEqualTo(vertical ? 16 : 22);

@@ -92,13 +92,13 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         @Override
         @Deprecated(forRemoval = true)
         public List<Component> getTooltip(FluidStack ingredient, TooltipFlag tooltipFlag) {
-            return List.of();
+            return fluidTooltip(ingredient);
         }
 
         @Override
-        public void getTooltip(@NotNull ITooltipBuilder tooltip, @NotNull FluidStack ingredient, Item.@NotNull TooltipContext tooltipContext, @Nullable Player player, TooltipFlag tooltipFlag) {
-            IIngredientRenderer.super.getTooltip(tooltip, ingredient, tooltipContext, player, tooltipFlag);
-            tooltip.addAll(fluidTooltip(ingredient));
+        public List<Component> getTooltip(FluidStack ingredient, Item.TooltipContext tooltipContext,
+                @Nullable Player player, TooltipFlag tooltipFlag) {
+            return fluidTooltip(ingredient);
         }
     };
 
@@ -195,7 +195,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
     static void addRecipeArrow(IRecipeExtrasBuilder builder, IGuiHelper guiHelper, RecipeSlotLayout.Arrow arrow) {
         boolean vertical = arrow.height() > arrow.width();
         IDrawable drawable = new RecipeArrowDrawable(guiHelper.createAnimatedRecipeArrow(200), vertical);
-        builder.addDrawable(drawable, arrow.x(), arrow.y());
+        builder.addDrawableWidget(drawable).setPosition(arrow.x(), arrow.y());
     }
 
     @Override
@@ -513,7 +513,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             @Override
             @Deprecated(forRemoval = true)
             public List<Component> getTooltip(@NotNull ItemStack ingredient, @NotNull TooltipFlag tooltipFlag) {
-                return List.of();
+                Minecraft minecraft = Minecraft.getInstance();
+                return getTooltip(ingredient, Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
             }
 
             @Override
@@ -523,7 +524,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                         minecraft.level == null ? 0L : minecraft.level.getGameTime());
                 return candidate.isEmpty()
                         ? List.of()
-                        : candidate.getTooltipLines(Item.TooltipContext.of(minecraft.level), minecraft.player, tooltipFlag);
+                        : candidate.getTooltipLines(tooltipContext, player, tooltipFlag);
             }
         };
     }

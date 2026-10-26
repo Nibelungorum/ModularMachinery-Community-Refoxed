@@ -5,6 +5,7 @@ import cn.howxu.mmcr.registry.ModUIs;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
+import mezz.jei.api.recipe.transfer.IRecipeTransferContext;
 import mezz.jei.api.recipe.transfer.IRecipeTransferError;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandlerHelper;
@@ -12,6 +13,7 @@ import mezz.jei.api.recipe.RecipeType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.api.recipe.RecipeIngredientRole;
+import mezz.jei.common.transfer.RecipeTransferContext;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.tags.TagKey;
 import net.minecraft.network.chat.Component;
@@ -26,6 +28,7 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
@@ -61,8 +64,27 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
         return recipeType;
     }
 
+    // Keep the legacy entry point for integrations that have not adopted transfer contexts.
     @Override
+    @Deprecated(forRemoval = true)
+    @SuppressWarnings("removal")
     public @Nullable IRecipeTransferError transferRecipe(ItemBusMenu container, MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlots, Player player, boolean maxTransfer, boolean doTransfer) {
+        return transferRecipeInternal(container, recipe, recipeSlots,
+                (handler, slots) -> handler.transferRecipe(container, recipe, slots, player, maxTransfer, doTransfer));
+    }
+
+    @Override
+    public @Nullable IRecipeTransferError transferRecipe(
+            IRecipeTransferContext<MachineRecipeDisplay, ItemBusMenu> context, boolean doTransfer) {
+        return transferRecipeInternal(context.getContainer(), context.getRecipe(), context.getRecipeSlots(),
+                (handler, slots) -> handler.transferRecipe(
+                        RecipeTransferContext.copyWithRecipeSlots(context, slots), doTransfer));
+    }
+
+    private @Nullable IRecipeTransferError transferRecipeInternal(
+            ItemBusMenu container, MachineRecipeDisplay recipe, IRecipeSlotsView recipeSlots,
+            BiFunction<IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay>, IRecipeSlotsView,
+                    @Nullable IRecipeTransferError> transfer) {
         List<JeiDisplayEntry> inputs = recipe.entries().stream()
                 .filter(entry -> entry.role() == RecipeIngredientRole.INPUT)
                 .toList();
@@ -70,9 +92,10 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
             Optional<IRecipeTransferHandler<?, ?>> adapterHandler = JeiIngredientAdapterRegistry
                     .get(entry.typeId()).flatMap(JeiIngredientAdapter::transferHandler);
             if (adapterHandler.isPresent()) {
-                @SuppressWarnings("rawtypes")
-                IRecipeTransferHandler handler = adapterHandler.get();
-                return handler.transferRecipe(container, recipe, recipeSlots, player, maxTransfer, doTransfer);
+                @SuppressWarnings("unchecked")
+                IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay> handler =
+                        (IRecipeTransferHandler<ItemBusMenu, MachineRecipeDisplay>) adapterHandler.get();
+                return transfer.apply(handler, recipeSlots);
             }
         }
         Optional<JeiDisplayEntry> unsupported = inputs.stream()
@@ -104,7 +127,7 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
                         ItemBusMenu.PLAYER_INVENTORY_SLOT_COUNT));
         IRecipeSlotsView actualCountSlots = helper.createRecipeSlotsView(
                 withActualInputCounts(recipeSlots, recipe, this::typedItem));
-        return handler.transferRecipe(container, recipe, actualCountSlots, player, maxTransfer, doTransfer);
+        return transfer.apply(handler, actualCountSlots);
     }
 
     static List<IRecipeSlotView> withActualInputCounts(
