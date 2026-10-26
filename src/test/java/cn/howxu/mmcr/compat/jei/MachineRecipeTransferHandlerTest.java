@@ -8,11 +8,12 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
-import mezz.jei.api.ingredients.IIngredientHelper;
-import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
+import mezz.jei.common.ingredients.TypedIngredient;
+import mezz.jei.common.ingredients.TypedIngredientUtil;
+import mezz.jei.library.ingredients.IngredientManager;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.Registries;
@@ -26,7 +27,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -59,9 +59,10 @@ class MachineRecipeTransferHandlerTest {
                 new ItemStack(Items.IRON_INGOT, 1),
                 new ItemStack(Items.GOLD_INGOT, 1));
         IRecipeSlotsView source = () -> List.of(placeholder);
+        IngredientManager ingredientManager = JeiTestIngredients.manager();
 
         List<IRecipeSlotView> transformed = MachineRecipeTransferHandler
-                .withActualInputCounts(source, display);
+                .withActualInputCounts(source, display, ingredientManager);
 
         assertThat(transformed).singleElement().satisfies(slot -> {
             assertThat(slot.getItemStacks().map(ItemStack::getCount).toList()).containsExactly(8, 8);
@@ -70,18 +71,11 @@ class MachineRecipeTransferHandlerTest {
             assertThat(slot.getTagKey()).isEqualTo(placeholder.getTagKey()).isPresent();
             assertThat(slot.getDisplayedItemStack().orElseThrow().getCount()).isEqualTo(8);
 
-            @SuppressWarnings("unchecked")
-            IIngredientHelper<ItemStack> helper = (IIngredientHelper<ItemStack>) Proxy.newProxyInstance(
-                    IIngredientHelper.class.getClassLoader(), new Class<?>[]{IIngredientHelper.class},
-                    (proxy, method, args) -> {
-                        if (method.getName().equals("normalizeIngredient")) {
-                            return ((ItemStack) args[0]).copyWithCount(1);
-                        }
-                        throw new UnsupportedOperationException(method.getName());
-                    });
             ITypedIngredient<ItemStack> ingredient = slot.getDisplayedIngredient().orElseThrow()
                     .castToItemStackType();
-            assertThat(ingredient.normalize(helper).getIngredient().getCount()).isOne();
+            assertThat(TypedIngredientUtil.checkAndValidateTypedIngredientFromApi(ingredientManager, ingredient))
+                    .isSameAs(ingredient);
+            assertThat(ingredientManager.normalizeTypedIngredient(ingredient).getIngredient().getCount()).isOne();
             assertThat(ingredient.getIngredient().getCount()).isEqualTo(8);
         });
         assertThat(placeholder.getItemStacks().map(ItemStack::getCount).toList()).containsExactly(1, 1);
@@ -97,12 +91,13 @@ class MachineRecipeTransferHandlerTest {
                 List.of());
         MachineRecipeDisplay display = MachineRecipeDisplay.from(recipe);
 
-        IRecipeSlotView fluidSlot = ingredientSlot(new TypedFluid(new FluidStack(Fluids.WATER, 1_000)));
+        IRecipeSlotView fluidSlot = ingredientSlot(TypedIngredient.createUnvalidated(
+                NeoForgeTypes.FLUID_STACK, new FluidStack(Fluids.WATER, 1_000)));
         IRecipeSlotView itemSlot = itemSlot(new ItemStack(Items.IRON_INGOT, 1));
         IRecipeSlotsView source = () -> List.of(fluidSlot, itemSlot);
 
         List<IRecipeSlotView> transformed = MachineRecipeTransferHandler
-                .withActualInputCounts(source, display);
+                .withActualInputCounts(source, display, JeiTestIngredients.manager());
 
         assertThat(transformed.get(0).getIngredients(NeoForgeTypes.FLUID_STACK)
                 .map(FluidStack::getAmount).toList())
@@ -116,7 +111,7 @@ class MachineRecipeTransferHandlerTest {
     private static IRecipeSlotView itemSlot(ItemStack... stacks) {
         List<ITypedIngredient<?>> ingredients = new ArrayList<>(stacks.length);
         for (ItemStack stack : stacks) {
-            ingredients.add(new TypedItem(stack));
+            ingredients.add(TypedIngredient.createUnvalidated(VanillaTypes.ITEM_STACK, stack));
         }
         return ingredientSlot(ingredients.toArray(ITypedIngredient<?>[]::new));
     }
@@ -163,39 +158,5 @@ class MachineRecipeTransferHandlerTest {
                 return Optional.empty();
             }
         };
-    }
-
-    private record TypedItem(ItemStack stack) implements ITypedIngredient<ItemStack> {
-        @Override
-        public IIngredientType<ItemStack> getType() {
-            return VanillaTypes.ITEM_STACK;
-        }
-
-        @Override
-        public ItemStack getIngredient() {
-            return stack;
-        }
-
-        @Override
-        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
-            return new TypedItem(ingredientHelper.normalizeIngredient(stack));
-        }
-    }
-
-    private record TypedFluid(FluidStack stack) implements ITypedIngredient<FluidStack> {
-        @Override
-        public IIngredientType<FluidStack> getType() {
-            return NeoForgeTypes.FLUID_STACK;
-        }
-
-        @Override
-        public FluidStack getIngredient() {
-            return stack;
-        }
-
-        @Override
-        public ITypedIngredient<FluidStack> normalize(IIngredientHelper<FluidStack> ingredientHelper) {
-            return new TypedFluid(ingredientHelper.normalizeIngredient(stack));
-        }
     }
 }

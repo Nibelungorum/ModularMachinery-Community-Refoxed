@@ -15,6 +15,7 @@ import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.recipe.types.IRecipeType;
+import mezz.jei.api.runtime.IIngredientManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.component.DataComponents;
@@ -51,7 +52,9 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     private static final int TRANSFER_BUTTON_Y_4X = 111;
 
     private final IDrawable icon;
-    public MachineStructureCategory(IGuiHelper guiHelper) {
+    private final IIngredientManager ingredientManager;
+    public MachineStructureCategory(IGuiHelper guiHelper, IIngredientManager ingredientManager) {
+        this.ingredientManager = ingredientManager;
         icon = guiHelper.createDrawableItemLike(ModBlocks.BASIC_CASING.get());
     }
 
@@ -108,7 +111,7 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
         JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(display.machine(), PREVIEW_X, PREVIEW_Y,
-                previewWidth(), previewHeight());
+                previewWidth(), previewHeight(), ingredientManager);
         JeiPreviewLifecycle.registerActive(preview);
         builder.addWidget(preview);
         builder.addInputHandler(preview);

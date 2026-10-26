@@ -10,9 +10,7 @@ import mezz.jei.api.gui.inputs.IJeiUserInput;
 import mezz.jei.api.gui.builder.ITooltipBuilder;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
 import mezz.jei.api.constants.VanillaTypes;
-import mezz.jei.api.ingredients.IIngredientHelper;
-import mezz.jei.api.ingredients.IIngredientType;
-import mezz.jei.api.ingredients.ITypedIngredient;
+import mezz.jei.api.runtime.IIngredientManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenPosition;
@@ -44,6 +42,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private static final int LAYOUT_WIDTH = 168;
     private final @Nullable StructurePreviewPanel panel;
     private final @Nullable Preview testingPreview;
+    private final @Nullable IIngredientManager ingredientManager;
     private final IntPredicate mouseButtonDown;
     private final int x;
     private final int y;
@@ -53,7 +52,9 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private int previewDragButton = -1;
     private boolean closed;
 
-    public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height) {
+    public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height,
+            IIngredientManager ingredientManager) {
+        this.ingredientManager = ingredientManager;
         this.panel = new StructurePreviewPanel(machine);
         this.testingPreview = null;
         this.mouseButtonDown = button -> GLFW.glfwGetMouseButton(
@@ -68,6 +69,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             IntPredicate mouseButtonDown) {
         this.panel = null;
         this.testingPreview = preview;
+        this.ingredientManager = null;
         this.mouseButtonDown = mouseButtonDown;
         this.x = x;
         this.y = y;
@@ -281,7 +283,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
             ItemStack stack = candidate.stack();
             tooltip.add(stack.getHoverName());
             if (candidate.modifier()) tooltip.add(Component.translatable("jei.mmcr.structure_preview.modifier"));
-            tooltip.setIngredient(new ItemStackIngredient(stack));
+            if (ingredientManager != null) {
+                ingredientManager.createTypedIngredient(VanillaTypes.ITEM_STACK, stack, false)
+                        .ifPresent(tooltip::setIngredient);
+            }
         }
     }
 
@@ -350,14 +355,6 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private void togglePositionHighlights() {
         if (testingPreview != null) testingPreview.togglePositionHighlights();
         else panel.togglePositionHighlights();
-    }
-
-    private record ItemStackIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
-        @Override public IIngredientType<ItemStack> getType() { return VanillaTypes.ITEM_STACK; }
-        @Override public ItemStack getIngredient() { return stack; }
-        @Override public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
-            return new ItemStackIngredient(ingredientHelper.normalizeIngredient(stack));
-        }
     }
 
     interface Preview {

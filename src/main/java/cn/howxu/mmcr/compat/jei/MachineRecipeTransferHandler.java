@@ -10,10 +10,9 @@ import mezz.jei.api.recipe.transfer.IRecipeTransferError;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandlerHelper;
 import mezz.jei.api.recipe.types.IRecipeType;
-import mezz.jei.api.ingredients.IIngredientHelper;
-import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.ingredients.ITypedIngredient;
 import mezz.jei.api.recipe.RecipeIngredientRole;
+import mezz.jei.api.runtime.IIngredientManager;
 import mezz.jei.common.transfer.RecipeTransferContext;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
@@ -40,10 +39,13 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
 
     private final IRecipeTransferHandlerHelper helper;
     private final IRecipeType<MachineRecipeDisplay> recipeType;
+    private final IIngredientManager ingredientManager;
 
-    public MachineRecipeTransferHandler(IRecipeTransferHandlerHelper helper, IRecipeType<MachineRecipeDisplay> recipeType) {
+    public MachineRecipeTransferHandler(IRecipeTransferHandlerHelper helper, IRecipeType<MachineRecipeDisplay> recipeType,
+            IIngredientManager ingredientManager) {
         this.helper = helper;
         this.recipeType = recipeType;
+        this.ingredientManager = ingredientManager;
     }
 
     @Override
@@ -123,13 +125,13 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
                         container.playerInventorySlotStart(),
                         ItemBusMenu.PLAYER_INVENTORY_SLOT_COUNT));
         IRecipeSlotsView actualCountSlots = helper.createRecipeSlotsView(
-                withActualInputCounts(recipeSlots, recipe));
+                withActualInputCounts(recipeSlots, recipe, ingredientManager));
         return transfer.apply(handler, actualCountSlots);
     }
 
     static List<IRecipeSlotView> withActualInputCounts(
             IRecipeSlotsView recipeSlots,
-            MachineRecipeDisplay recipe) {
+            MachineRecipeDisplay recipe, IIngredientManager ingredientManager) {
         List<JeiDisplayEntry> itemEntries = recipe.entries().stream()
                 .filter(entry -> entry.role() == RecipeIngredientRole.INPUT)
                 .filter(JeiDisplayEntry::transferable)
@@ -145,12 +147,13 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
                         return slot;
                     }
                     int count = itemEntries.get(itemInputIndex[0]++).count();
-                    return new ActualCountSlotView(slot, count);
+                    return new ActualCountSlotView(slot, count, ingredientManager);
                 })
                 .toList();
     }
 
-    private record ActualCountSlotView(IRecipeSlotView delegate, int count) implements IRecipeSlotView {
+    private record ActualCountSlotView(IRecipeSlotView delegate, int count,
+            IIngredientManager ingredientManager) implements IRecipeSlotView {
 
         @Override
             public Stream<ITypedIngredient<?>> getAllIngredients() {
@@ -161,19 +164,19 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
             public List<@Nullable ITypedIngredient<?>> getAllIngredientsList() {
                 List<@Nullable ITypedIngredient<?>> ingredients = new ArrayList<>(delegate.getAllIngredientsList().size());
                 for (ITypedIngredient<?> ingredient : delegate.getAllIngredientsList()) {
-                    ingredients.add(ingredient == null ? null : withActualCount(ingredient, count));
+                    ingredients.add(ingredient == null ? null : withActualCount(ingredient, count, ingredientManager));
                 }
                 return Collections.unmodifiableList(ingredients);
             }
 
             @Override
             public Optional<ITypedIngredient<?>> getDisplayedIngredient() {
-                return delegate.getDisplayedIngredient().map(ingredient -> withActualCount(ingredient, count));
+                return delegate.getDisplayedIngredient().map(ingredient -> withActualCount(ingredient, count, ingredientManager));
             }
 
             @Override
             public Stream<ITypedIngredient<?>> getDisplayedIngredients() {
-                return delegate.getDisplayedIngredients().map(ingredient -> withActualCount(ingredient, count));
+                return delegate.getDisplayedIngredients().map(ingredient -> withActualCount(ingredient, count, ingredientManager));
             }
 
             @Override
@@ -197,25 +200,10 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
             }
         }
 
-    private static ITypedIngredient<?> withActualCount(ITypedIngredient<?> ingredient, int count) {
+    private static ITypedIngredient<?> withActualCount(ITypedIngredient<?> ingredient, int count,
+            IIngredientManager ingredientManager) {
         ItemStack stack = ingredient.getIngredient(VanillaTypes.ITEM_STACK).orElse(null);
-        return stack == null ? ingredient : new ActualItemIngredient(stack.copyWithCount(count));
-    }
-
-    private record ActualItemIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
-        @Override
-        public IIngredientType<ItemStack> getType() {
-            return VanillaTypes.ITEM_STACK;
-        }
-
-        @Override
-        public ItemStack getIngredient() {
-            return stack;
-        }
-
-        @Override
-        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
-            return new ActualItemIngredient(ingredientHelper.normalizeIngredient(stack));
-        }
+        return stack == null ? ingredient : ingredientManager.createTypedIngredient(
+                VanillaTypes.ITEM_STACK, stack.copyWithCount(count), false).orElseThrow();
     }
 }

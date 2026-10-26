@@ -1,15 +1,10 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
-import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.widgets.IRecipeWidget;
-import mezz.jei.api.ingredients.IIngredientHelper;
-import mezz.jei.api.ingredients.IIngredientType;
-import mezz.jei.api.ingredients.ITypedIngredient;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenPosition;
-import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 import java.util.Optional;
@@ -93,29 +88,14 @@ public final class StructureMaterialWidget implements IRecipeWidget {
         int first = page * SLOT_COUNT;
         for (int slotIndex = 0; slotIndex < SLOT_COUNT; slotIndex++) {
             int entryIndex = first + slotIndex;
-            List<Optional<ITypedIngredient<?>>> values = List.of(entryIndex < summary.entries().size()
-                    ? Optional.of(new ItemStackIngredient(summary.entries().get(entryIndex).stack()))
-                    : Optional.empty());
             IRecipeSlotDrawable slot = slots.get(slotIndex);
             slot.clearDisplayOverrides();
-            slot.createDisplayOverrides().addOptionalTypedIngredients(values);
-        }
-    }
-
-    private record ItemStackIngredient(ItemStack stack) implements ITypedIngredient<ItemStack> {
-        @Override
-        public IIngredientType<ItemStack> getType() {
-            return VanillaTypes.ITEM_STACK;
-        }
-
-        @Override
-        public ItemStack getIngredient() {
-            return stack.copyWithCount(1);
-        }
-
-        @Override
-        public ITypedIngredient<ItemStack> normalize(IIngredientHelper<ItemStack> ingredientHelper) {
-            return new ItemStackIngredient(ingredientHelper.normalizeIngredient(getIngredient()));
+            var overrides = slot.createDisplayOverrides();
+            if (entryIndex < summary.entries().size()) {
+                overrides.add(summary.entries().get(entryIndex).stack().copyWithCount(1));
+            } else {
+                overrides.addOptionalTypedIngredients(List.of(Optional.empty()));
+            }
         }
     }
 }
