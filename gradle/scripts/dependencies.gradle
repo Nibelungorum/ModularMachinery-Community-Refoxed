@@ -35,7 +35,8 @@ dependencies {
     implementation "curse.maven:${eae_id}:${eae_version}"
     // ExtendedAE-Plus 1.6.3
     compileOnly "maven.modrinth:${eaep_id}:${eaep_version}"
-    localRuntime "maven.modrinth:${eaep_id}:${eaep_version}"
+    // EAEP do not fix JEI bugs, It will be removed temporarily
+    // localRuntime "maven.modrinth:${eaep_id}:${eaep_version}"
     // glodium 26.1-1.2-neoforge
     implementation "maven.modrinth:${glodium_id}:${glodium_version}"
 
