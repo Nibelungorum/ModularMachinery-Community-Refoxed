@@ -17,7 +17,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.Fluid;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -65,12 +68,14 @@ public final class MultiblockAssemblyService {
         private final List<Placement> placements;
         private final int budget;
         private final boolean reservedMaterial;
+        private final StructureItemSource materialSource;
         private final List<Placement> skippedPlacements = new ArrayList<>();
         private int nextIndex;
         private int placedCount;
         private boolean completionReported;
 
-        private BuildTask(BlockPos controllerKey, int stage, List<Placement> placements, int budget, boolean reservedMaterial) {
+        private BuildTask(BlockPos controllerKey, int stage, List<Placement> placements, int budget,
+                          boolean reservedMaterial, StructureItemSource materialSource) {
             this.controllerKey = controllerKey.immutable();
             this.stage = stage;
             this.placements = placements.stream()
@@ -78,12 +83,18 @@ public final class MultiblockAssemblyService {
                     .toList();
             this.budget = budget;
             this.reservedMaterial = reservedMaterial;
+            this.materialSource = materialSource;
         }
 
         public static BuildTask create(BlockPos controllerKey, int stage, List<Placement> placements, int budget,
                                        boolean reservedMaterial) {
+            return create(controllerKey, stage, placements, budget, reservedMaterial, null);
+        }
+
+        public static BuildTask create(BlockPos controllerKey, int stage, List<Placement> placements, int budget,
+                                       boolean reservedMaterial, StructureItemSource materialSource) {
             if (budget < 1) throw new IllegalArgumentException("budget must be positive");
-            return new BuildTask(controllerKey, stage, placements, budget, reservedMaterial);
+            return new BuildTask(controllerKey, stage, placements, budget, reservedMaterial, materialSource);
         }
 
         public static BuildTask create(BlockPos controllerKey, List<Placement> placements, int budget,
@@ -108,7 +119,11 @@ public final class MultiblockAssemblyService {
             int advanced = end - nextIndex;
             while (nextIndex < end) {
                 Placement placement = placements.get(nextIndex++);
-                if (placementAction.test(placement)) placedCount++;
+                boolean placed = reservedMaterial && isFluidSource(placement.state())
+                        ? materialSource != null && materialSource.placeFluidSource(placement.state().getFluidState().getType(),
+                                () -> placementAction.test(placement))
+                        : placementAction.test(placement);
+                if (placed) placedCount++;
                 else skippedPlacements.add(placement);
             }
             return advanced;
@@ -123,13 +138,15 @@ public final class MultiblockAssemblyService {
         }
 
         public List<ItemStack> unconsumedRequirements() {
-            return unconsumedPlacements().stream().map(placement -> placement.requirement().copy()).toList();
+            return unconsumedPlacements().stream().map(Placement::requirement)
+                    .filter(stack -> !stack.isEmpty()).map(ItemStack::copy).toList();
         }
 
         public List<ItemStack> refundRequirements() {
             if (!reservedMaterial) return List.of();
             return Stream.concat(skippedPlacements.stream(), unconsumedPlacements().stream())
-                    .map(placement -> placement.requirement().copy())
+                    .map(Placement::requirement)
+                    .filter(stack -> !stack.isEmpty()).map(ItemStack::copy)
                     .toList();
         }
 
@@ -171,11 +188,17 @@ public final class MultiblockAssemblyService {
     }
 
     public static List<Placement> createTemplatePlacements(BlockPos controllerPos, BlockArray rotatedPattern) {
+        return createTemplatePlacements(controllerPos, rotatedPattern, false);
+    }
+
+    private static List<Placement> createTemplatePlacements(BlockPos controllerPos, BlockArray rotatedPattern,
+                                                           boolean includeFlowingFluids) {
         List<Placement> placements = new ArrayList<>();
         for (var entry : rotatedPattern.pattern().entrySet()) {
             if (entry.getKey().equals(BlockPos.ZERO)) continue;
             BlockPredicate predicate = entry.getValue();
-            preferredState(predicate).ifPresent(state -> addPlacement(placements, controllerPos.offset(entry.getKey()), state, predicate));
+            preferredState(predicate).ifPresent(state -> addPlacement(placements, controllerPos.offset(entry.getKey()),
+                    state, predicate, includeFlowingFluids));
         }
         return placements;
     }
@@ -215,7 +238,8 @@ public final class MultiblockAssemblyService {
         BlockArray pattern = controller.assemblyPattern(machine.get(), stage);
         List<Placement> placements = applySelectedLevels(machine.get(), stage, pattern, controller.getBlockPos(),
                 createTemplatePlacements(controller.getBlockPos(), pattern), selectedLevels).stream()
-                .filter(placement -> player.level().getBlockState(placement.pos()).isAir())
+                .filter(placement -> isBuildableState(placement.state()))
+                .filter(placement -> canReplace(player.level().getBlockState(placement.pos())))
                 .toList();
         placements = limitOperation(placements);
         if (placements.isEmpty()) {
@@ -240,7 +264,7 @@ public final class MultiblockAssemblyService {
             }
         }
         BuildTask task = BuildTask.create(controller.getBlockPos(), stage, placements,
-                controller.buildBlocksPerTick(), !freeBuild);
+                controller.buildBlocksPerTick(), !freeBuild, source);
         if (!controller.startBuildTask(task, player)) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }
@@ -272,23 +296,36 @@ public final class MultiblockAssemblyService {
 
     public static Result demolish(ServerPlayer player, MachineControllerBlockEntity controller, int stage,
                                   int maxBlocks, StructureItemSink sink) {
+        return demolish(player, controller, stage, maxBlocks, sink, false);
+    }
+
+    public static Result demolish(ServerPlayer player, MachineControllerBlockEntity controller, int stage,
+                                  int maxBlocks, StructureItemSink sink, boolean freeRemoval) {
         var machine = controller.boundMachine();
         if (machine.isEmpty()) {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
         }
         BlockArray pattern = controller.assemblyPattern(machine.get(), stage);
         boolean stateSensitive = controller.assemblyStateSensitive(machine.get());
-        List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern);
+        List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern, true);
         maxBlocks = Math.min(maxBlocks, ServerConfig.assemblyMaxBlocksPerOperation());
         List<Removal> removals = new ArrayList<>();
         for (Placement placement : template) {
             if (removals.size() >= maxBlocks) break;
             BlockState current = player.level().getBlockState(placement.pos());
             if (current.isAir()) continue;
-            if (!placement.matches(current, stateSensitive)) continue;
+            if (current.getBlock() instanceof LiquidBlock) {
+                if (!freeRemoval && (!isFluidSource(current) || !sink.supportsFluidSources())) continue;
+                if (!placement.matches(current, false)) continue;
+            } else if (!placement.matches(current, stateSensitive)) continue;
             removals.add(new Removal(placement.pos(), current, current.getBlock().asItem().getDefaultInstance()));
         }
-        int removed = removeAcceptedDrops(removals, sink, removal -> player.level().removeBlock(removal.pos(), false));
+        int removed = removeAcceptedDrops(removals, sink, removal -> {
+            // removeBlock preserves the old fluid state, so liquids must explicitly become air.
+            return removal.state().getBlock() instanceof LiquidBlock
+                    ? player.level().setBlock(removal.pos(), Blocks.AIR.defaultBlockState(), 3)
+                    : player.level().removeBlock(removal.pos(), false);
+        }, freeRemoval);
         if (removed == 0) {
             return new Result(InteractionResult.SUCCESS, 0, new ComponentKey("message.mmcr.terminal.demolish.none"));
         }
@@ -299,10 +336,20 @@ public final class MultiblockAssemblyService {
     }
 
     static int removeAcceptedDrops(List<Removal> removals, StructureItemSink sink, Predicate<Removal> remove) {
+        return removeAcceptedDrops(removals, sink, remove, false);
+    }
+
+    private static int removeAcceptedDrops(List<Removal> removals, StructureItemSink sink, Predicate<Removal> remove,
+                                           boolean freeRemoval) {
         int removed = 0;
         for (Removal removal : removals) {
-            if (!removal.drop().isEmpty() && !sink.accept(removal.drop().copy())) break;
-            if (!remove.test(removal)) break;
+            if (!freeRemoval && removal.state().getBlock() instanceof LiquidBlock) {
+                if (!isFluidSource(removal.state()) || !sink.supportsFluidSources()) continue;
+                if (!sink.recoverFluidSource(removal.state().getFluidState().getType(), () -> remove.test(removal))) break;
+            } else {
+                if (!freeRemoval && !removal.drop().isEmpty() && !sink.accept(removal.drop().copy())) break;
+                if (!remove.test(removal)) break;
+            }
             removed++;
         }
         return removed;
@@ -310,16 +357,40 @@ public final class MultiblockAssemblyService {
 
     public static List<Placement> extractAvailablePlacements(List<Placement> placements, StructureItemSource source) {
         List<ItemStack> available = source.copyStacks();
+        Map<Fluid, Long> availableFluids = new HashMap<>(source.copyFluidSources());
         List<Placement> selected = new ArrayList<>();
         for (Placement placement : placements) {
             candidateStates(placement.predicate()).stream()
                     .sorted(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed())
-                    .map(state -> new Placement(placement.pos(), state, requirementFor(state).copyWithCount(placement.requirement().getCount()), placement.predicate()))
-                    .filter(candidate -> reserve(available, candidate.requirement()))
+                    .filter(MultiblockAssemblyService::isBuildableState)
+                    .map(state -> new Placement(placement.pos(), state, isFluidSource(state) ? ItemStack.EMPTY
+                            : requirementFor(state).copyWithCount(Math.max(1, placement.requirement().getCount())), placement.predicate()))
+                    .filter(candidate -> isFluidSource(candidate.state())
+                            ? reserveFluidSource(availableFluids, candidate.state().getFluidState().getType())
+                            : reserve(available, candidate.requirement()))
                     .findFirst()
                     .ifPresent(selected::add);
         }
         return selected.size() == placements.size() ? selected : List.of();
+    }
+
+    public static boolean canReplace(BlockState state) {
+        return state.isAir() || state.getBlock() instanceof LiquidBlock && !state.getFluidState().isSource();
+    }
+
+    public static boolean isFluidSource(BlockState state) {
+        return state.getBlock() instanceof LiquidBlock && state.getFluidState().isSource();
+    }
+
+    private static boolean isBuildableState(BlockState state) {
+        return state.getBlock() instanceof LiquidBlock ? isFluidSource(state) : !requirementFor(state).isEmpty();
+    }
+
+    private static boolean reserveFluidSource(Map<Fluid, Long> available, Fluid fluid) {
+        long sources = available.getOrDefault(fluid, 0L);
+        if (sources < 1L) return false;
+        available.put(fluid, sources - 1L);
+        return true;
     }
 
     private static ItemStack requirementFor(BlockState state) {
@@ -376,11 +447,11 @@ public final class MultiblockAssemblyService {
         return MachineLevelRegistry.findLevel(state).map(level -> level.priority()).orElse(Integer.MIN_VALUE);
     }
 
-    private static void addPlacement(List<Placement> placements, BlockPos pos, BlockState state, BlockPredicate predicate) {
-        ItemStack requirement = requirementFor(state);
-        if (!requirement.isEmpty()) {
-            placements.add(new Placement(pos, state, requirement, predicate));
-        }
+    private static void addPlacement(List<Placement> placements, BlockPos pos, BlockState state, BlockPredicate predicate,
+                                     boolean includeFlowingFluids) {
+        if (!(includeFlowingFluids && state.getBlock() instanceof LiquidBlock) && !isBuildableState(state)) return;
+        ItemStack requirement = state.getBlock() instanceof LiquidBlock ? ItemStack.EMPTY : requirementFor(state);
+        placements.add(new Placement(pos, state, requirement, predicate));
     }
 
     private static void merge(List<ItemStack> requirements, ItemStack stack) {

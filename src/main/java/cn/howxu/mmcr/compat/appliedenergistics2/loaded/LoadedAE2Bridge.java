@@ -153,8 +153,12 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 || !wirelessAccessPoint.isActive()) return Optional.empty();
         IGrid grid = wirelessAccessPoint.getGrid();
         if (grid == null) return Optional.empty();
-        return Optional.of(new AE2NetworkStructureItemStorage(grid.getStorageService().getInventory(),
-                IActionSource.ofPlayer(player)));
+        return Optional.of(new AE2NetworkStructureItemStorage(() -> {
+            if (player.isRemoved() || player.level() != level || !level.hasChunkAt(accessPoint.pos())
+                    || level.getBlockEntity(accessPoint.pos()) != wirelessAccessPoint || !wirelessAccessPoint.isActive()) return null;
+            IGrid currentGrid = wirelessAccessPoint.getGrid();
+            return currentGrid == null ? null : currentGrid.getStorageService().getInventory();
+        }, IActionSource.ofPlayer(player)));
     }
 
     @Override

@@ -16,6 +16,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.Fluids;
+import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -270,6 +275,148 @@ class MultiblockAssemblyServiceTest {
 
         assertEquals(1, legacy.stage());
         assertEquals(1, legacyWithReservation.stage());
+    }
+
+    @Test
+    void replacementAllowsOnlyAirAndFlowingLiquidBlocks() {
+        assertTrue(MultiblockAssemblyService.canReplace(Blocks.AIR.defaultBlockState()));
+        assertTrue(MultiblockAssemblyService.canReplace(Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1)));
+        assertTrue(MultiblockAssemblyService.canReplace(Blocks.LAVA.defaultBlockState().setValue(LiquidBlock.LEVEL, 8)));
+        assertFalse(MultiblockAssemblyService.canReplace(Blocks.WATER.defaultBlockState()));
+        assertFalse(MultiblockAssemblyService.canReplace(Blocks.LAVA.defaultBlockState()));
+        assertFalse(MultiblockAssemblyService.canReplace(Blocks.STONE.defaultBlockState()));
+        assertFalse(MultiblockAssemblyService.canReplace(Blocks.OAK_SLAB.defaultBlockState()
+                .setValue(BlockStateProperties.WATERLOGGED, true)));
+        assertFalse(MultiblockAssemblyService.isFluidSource(Blocks.OAK_SLAB.defaultBlockState()
+                .setValue(BlockStateProperties.WATERLOGGED, true)));
+    }
+
+    @Test
+    void templateIncludesFluidSourcesButSkipsExplicitFlowingStates() {
+        BlockArray pattern = new BlockArray(Map.of(
+                BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.WATER),
+                BlockPos.ZERO.west(), new BlockPredicate.OfBlock(Blocks.LAVA),
+                BlockPos.ZERO.north(), new BlockPredicate.OfBlockState(
+                        Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1))));
+
+        var placements = MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, pattern);
+
+        assertEquals(2, placements.size());
+        assertTrue(placements.stream().allMatch(placement -> MultiblockAssemblyService.isFluidSource(placement.state())));
+        assertTrue(MultiblockAssemblyService.aggregateRequirements(placements).isEmpty());
+    }
+
+    @Test
+    void fluidSelectionReservesTotalSourceCountWithoutConsumingStorage() {
+        var placements = MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, new BlockArray(Map.of(
+                BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.WATER),
+                BlockPos.ZERO.west(), new BlockPredicate.OfBlock(Blocks.WATER))));
+        StructureItemSource oneSource = fluidSource(1);
+        StructureItemSource twoSources = fluidSource(2);
+
+        assertTrue(MultiblockAssemblyService.extractAvailablePlacements(placements, oneSource).isEmpty());
+        assertTrue(MultiblockAssemblyService.extractAvailablePlacements(placements,
+                PlayerInventoryStructureItemSource.forStacks(List.of(new ItemStack(Items.WATER_BUCKET)))).isEmpty());
+        assertEquals(2, MultiblockAssemblyService.extractAvailablePlacements(placements, twoSources).size());
+        assertEquals(2L, twoSources.copyFluidSources().get(Fluids.WATER));
+    }
+
+    @Test
+    void taskConsumesFluidOnlyForSuccessfulExecutedPlacements() {
+        StructureItemSource source = fluidSource(2);
+        var placements = MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, new BlockArray(Map.of(
+                BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.WATER),
+                BlockPos.ZERO.west(), new BlockPredicate.OfBlock(Blocks.WATER))));
+        var task = MultiblockAssemblyService.BuildTask.create(BlockPos.ZERO, 1, placements, 1, true, source);
+
+        task.advance(ignored -> false);
+        assertEquals(2L, source.copyFluidSources().get(Fluids.WATER));
+        task.advance(ignored -> true);
+        assertEquals(1L, source.copyFluidSources().get(Fluids.WATER));
+        assertEquals(1, task.placedCount());
+        assertTrue(task.refundRequirements().isEmpty());
+    }
+
+    @Test
+    void cancelledFluidTaskLeavesUnexecutedSourcesInStorage() {
+        StructureItemSource source = fluidSource(2);
+        var placements = MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, new BlockArray(Map.of(
+                BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.WATER),
+                BlockPos.ZERO.west(), new BlockPredicate.OfBlock(Blocks.WATER))));
+        var registry = new MultiblockAssemblyService.BuildTaskRegistry();
+        registry.submit(MultiblockAssemblyService.BuildTask.create(BlockPos.ZERO, 1, placements, 1, true, source));
+
+        registry.advance(BlockPos.ZERO, ignored -> true);
+        var cancelled = registry.cancel(BlockPos.ZERO);
+
+        assertEquals(1L, source.copyFluidSources().get(Fluids.WATER));
+        assertEquals(1, cancelled.unconsumedPlacements().size());
+        assertTrue(cancelled.refundRequirements().isEmpty());
+    }
+
+    @Test
+    void creativeFluidTaskDoesNotNeedAMaterialSource() {
+        var placement = new MultiblockAssemblyService.Placement(BlockPos.ZERO, Blocks.WATER.defaultBlockState(), ItemStack.EMPTY);
+        var task = MultiblockAssemblyService.BuildTask.create(BlockPos.ZERO, List.of(placement), 1, false);
+
+        task.advance(ignored -> true);
+
+        assertEquals(1, task.placedCount());
+        assertTrue(task.refundRequirements().isEmpty());
+    }
+
+    @Test
+    void fluidPreferredAlternativeCanFallBackToAnAvailableBlockItem() {
+        var predicate = new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlock(Blocks.WATER),
+                new BlockPredicate.OfBlock(Blocks.STONE)));
+        var placements = MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO,
+                new BlockArray(Map.of(BlockPos.ZERO.east(), predicate)));
+        var source = PlayerInventoryStructureItemSource.forStacks(List.of(new ItemStack(Items.STONE)));
+
+        var selected = MultiblockAssemblyService.extractAvailablePlacements(placements, source);
+
+        assertEquals(1, selected.size());
+        assertEquals(Blocks.STONE, selected.getFirst().state().getBlock());
+        assertEquals(1, selected.getFirst().requirement().getCount());
+    }
+
+    @Test
+    void ordinaryDemolitionSkipsFluidsAndStillRemovesLaterItemBlocks() {
+        List<MultiblockAssemblyService.Removal> removed = new ArrayList<>();
+        var source = new MultiblockAssemblyService.Removal(BlockPos.ZERO, Blocks.WATER.defaultBlockState(), ItemStack.EMPTY);
+        var flowing = new MultiblockAssemblyService.Removal(BlockPos.ZERO.east(),
+                Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1), ItemStack.EMPTY);
+        var stone = new MultiblockAssemblyService.Removal(BlockPos.ZERO.west(), Blocks.STONE.defaultBlockState(), new ItemStack(Items.STONE));
+
+        int count = MultiblockAssemblyService.removeAcceptedDrops(List.of(source, flowing, stone), ignored -> true, removed::add);
+
+        assertEquals(1, count);
+        assertEquals(List.of(stone), removed);
+    }
+
+    private static StructureItemSource fluidSource(long sources) {
+        return new StructureItemSource() {
+            private long remaining = sources;
+
+            @Override
+            public List<ItemStack> copyStacks() { return List.of(); }
+
+            @Override
+            public boolean canExtractAll(List<ItemStack> requirements) { return requirements.isEmpty(); }
+
+            @Override
+            public boolean extractAll(List<ItemStack> requirements) { return requirements.isEmpty(); }
+
+            @Override
+            public Map<Fluid, Long> copyFluidSources() { return Map.of(Fluids.WATER, remaining); }
+
+            @Override
+            public boolean placeFluidSource(Fluid fluid, BooleanSupplier placement) {
+                if (fluid != Fluids.WATER || remaining < 1 || !placement.getAsBoolean()) return false;
+                remaining--;
+                return true;
+            }
+        };
     }
 
     private static ItemStack itemStack(Item item, int count) {

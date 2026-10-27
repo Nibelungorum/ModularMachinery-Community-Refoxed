@@ -21,6 +21,7 @@ import cn.howxu.mmcr.registry.ModItems;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
@@ -33,6 +34,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.phys.AABB;
@@ -134,6 +137,89 @@ public class TerminalAssemblyGameTest {
                     helper.assertTrue(helper.getLevel().getBlockState(occupiedPos).is(preexistingBlock), "Occupied block is preserved");
                 })
                 .thenExecute(helper::succeed);
+    }
+
+    public void buildReplacesFlowingLiquidsButProtectsOccupiedBlocks(GameTestHelper helper) {
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        var placements = template(controller);
+        BlockPos flowing = placements.get(0).pos();
+        BlockPos source = placements.get(1).pos();
+        BlockPos waterlogged = placements.get(2).pos();
+        helper.getLevel().setBlock(flowing, Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1), 2);
+        helper.getLevel().setBlock(source, Blocks.WATER.defaultBlockState(), 2);
+        helper.getLevel().setBlock(waterlogged, Blocks.OAK_SLAB.defaultBlockState()
+                .setValue(BlockStateProperties.WATERLOGGED, true), 2);
+
+        var result = MultiblockAssemblyService.build(servicePlayer(helper), controller, true);
+        controller.serverTick();
+
+        helper.assertTrue(result.changedBlocks() == placements.size() - 2, "Planning includes flowing water but excludes occupied sources and slabs");
+        helper.assertTrue(helper.getLevel().getBlockState(flowing).is(ModBlocks.CASING.get()), "Execution replaces flowing water");
+        helper.assertTrue(helper.getLevel().getBlockState(source).is(Blocks.WATER), "Existing source stays untouched");
+        helper.assertTrue(helper.getLevel().getBlockState(waterlogged).is(Blocks.OAK_SLAB), "Waterlogged block stays untouched");
+        helper.succeed();
+    }
+
+    public void creativeBuildPlacesOnlyFluidSources(GameTestHelper helper) {
+        MachineControllerBlockEntity controller = fluidController(helper);
+        ServerPlayer player = servicePlayer(helper);
+        player.getAbilities().instabuild = true;
+        player.setPos(controller.getBlockPos().getCenter());
+        ItemStack terminal = new ItemStack(ModItems.TERMINAL.get());
+        terminal.set(ModDataComponents.TERMINAL_DATA.get(), TerminalData.DEFAULT.withController(
+                GlobalPos.of(helper.getLevel().dimension(), controller.getBlockPos())));
+        player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
+
+        var result = TerminalService.execute(player, terminal, TerminalAction.BUILD, 0, null, null);
+        helper.assertTrue(result.accepted(), "Creative inventory mode accepts fluid-only construction");
+        controller.serverTick();
+        assertFluidTargets(helper, controller);
+        var pattern = controller.assemblyPattern(controller.boundMachine().orElseThrow());
+        for (var entry : pattern.pattern().entrySet()) {
+            if (entry.getKey().equals(BlockPos.ZERO) || entry.getValue().preferredState().orElseThrow().getFluidState().isSource()) continue;
+            helper.getLevel().setBlock(controller.getBlockPos().offset(entry.getKey()),
+                    Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1), 2);
+        }
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.DEMOLISH, 0, null, null).accepted(),
+                "Creative demolition accepts source and non-source fluid targets");
+        for (BlockPos relative : pattern.pattern().keySet()) {
+            if (relative.equals(BlockPos.ZERO)) continue;
+            helper.assertTrue(helper.getLevel().getBlockState(controller.getBlockPos().offset(relative)).isAir(),
+                    "Creative demolition clears both source and flowing fluid without returns");
+        }
+        helper.succeed();
+    }
+
+    static MachineControllerBlockEntity fluidController(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(4, 2, 4);
+        helper.setBlock(pos, ModBlocks.controllerFor(MMCR.id("fluid_assembly")).get().defaultBlockState());
+        var controller = helper.getBlockEntity(pos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("fluid_assembly")));
+        var pattern = controller.assemblyPattern(controller.boundMachine().orElseThrow());
+        for (BlockPos relative : pattern.pattern().keySet()) {
+            if (relative.equals(BlockPos.ZERO)) continue;
+            for (Direction direction : Direction.values()) {
+                if (direction == Direction.UP) continue;
+                BlockPos wall = controller.getBlockPos().offset(relative).relative(direction);
+                if (!wall.equals(controller.getBlockPos())) helper.getLevel().setBlock(wall, Blocks.STONE.defaultBlockState(), 2);
+            }
+        }
+        return controller;
+    }
+
+    static void assertFluidTargets(GameTestHelper helper, MachineControllerBlockEntity controller) {
+        var pattern = controller.assemblyPattern(controller.boundMachine().orElseThrow());
+        for (var entry : pattern.pattern().entrySet()) {
+            if (entry.getKey().equals(BlockPos.ZERO)) continue;
+            var target = entry.getValue().preferredState().orElseThrow();
+            var current = helper.getLevel().getBlockState(controller.getBlockPos().offset(entry.getKey()));
+            helper.assertTrue(target.getFluidState().isSource()
+                            ? current.is(Blocks.WATER) && current.getFluidState().isSource() : current.isAir(),
+                    "Only source targets are built; explicit flowing targets remain empty");
+        }
     }
 
     public void demolishSkipsAirAndNonMatchingBlocks(GameTestHelper helper) {

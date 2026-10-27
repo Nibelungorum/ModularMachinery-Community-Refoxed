@@ -1902,7 +1902,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return true;
         }
         int placedBefore = buildTaskRegistry().placedCount(getBlockPos());
-        buildTaskRegistry().advance(getBlockPos(), placement -> level.getBlockState(placement.pos()).isAir()
+        buildTaskRegistry().advance(getBlockPos(), placement -> MultiblockAssemblyService.canReplace(level.getBlockState(placement.pos()))
                 && level.setBlock(placement.pos(), placement.state(), 3));
         int placedThisTick = buildTaskRegistry().placedCount(getBlockPos()) - placedBefore;
         buildTaskPlacementsPerTickForTesting.merge(level.getGameTime(), placedThisTick, Integer::sum);
