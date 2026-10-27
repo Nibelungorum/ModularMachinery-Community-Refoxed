@@ -1,0 +1,13 @@
+MMCREvents.server(event => {
+    const api = event.getAPI()
+    const structure = event.createStructure("mmcr_kubejs:water")
+        .pattern("XXXXX", "XXXXX")
+        .pattern("XXXXX", "XABBX")
+        .pattern("XXXXX", "XBBAX")
+        .pattern("XXXXX", "XXCXX")
+        .set('X', api.block('kubejs:heat_proof_machine_casing'))
+        .set('A', api.state('minecraft:water[level=0]'))
+        .set('B', api.state('minecraft:water[level=1]'))
+        .controller('C')
+        .build()
+})

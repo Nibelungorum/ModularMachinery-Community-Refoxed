@@ -44,6 +44,7 @@ import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.InterfaceMenuGameTest;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.StructureFluidGameTest;
 import cn.howxu.mmcr.compat.patchouli.PatchouliGuideGameTest;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -58,6 +59,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.fml.ModList;
 
@@ -356,6 +358,14 @@ public final class GameTestRegistry {
                 helper -> new NetworkInterfaceGameTest().blockReplacementClearsPeerConnections(helper));
         register(event, "tag_component_ingredient", 100, helper -> new TagComponentIngredientGameTest().tagIngredientMatchesComponentPredicate(helper));
         register(event, "terminal_build", 100, helper -> new TerminalAssemblyGameTest().buildSkipsOccupiedPositionsAndPlacesOnlyMissingBlocks(helper));
+        register(event, "terminal_build_flowing_replacement", 100,
+                helper -> new TerminalAssemblyGameTest().buildReplacesFlowingLiquidsButProtectsOccupiedBlocks(helper));
+        register(event, "terminal_build_creative_fluid", 100,
+                helper -> new TerminalAssemblyGameTest().creativeBuildPlacesOnlyFluidSources(helper));
+        register(event, "ae2_terminal_fluid_build", 100,
+                helper -> new AE2TerminalGameTest().boundAccessPointBuildsFluidSources(helper));
+        register(event, "ae2_terminal_fluid_failure_safety", 100,
+                helper -> new StructureFluidGameTest().failedPlacementsPreserveFluidStorage(helper));
         register(event, "terminal_service_rejects_non_terminal", 100,
                 helper -> new TerminalAssemblyGameTest().terminalServiceRejectsActionsWithoutHeldTerminal(helper));
         register(event, "terminal_service_rejects_level_without_controller", 100,
@@ -867,6 +877,8 @@ public final class GameTestRegistry {
             String name = test.testName();
             return !(name.startsWith("mmcr:pattern_batch_")
                     || name.startsWith("mmcr:structure_material_")
+                    || name.startsWith("mmcr:terminal_")
+                    || name.startsWith("mmcr:ae2_terminal_")
                     || name.startsWith("mmcr:running_")
                     || name.startsWith("mmcr:input_isolation_")
                     || name.startsWith("mmcr:fluxnetworks_")
@@ -927,7 +939,7 @@ public final class GameTestRegistry {
                 .allowMultithreading()
                 .factory(factory -> factory.hasFactory(true).threadLimit(4)).build());
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
-                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
+                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure", "fluid_assembly")) {
             ResourceLocation id = MMCR.id(name);
             MachineBuilder builder = MachineBuilder.machine(id);
             builder.displayNameKey("machine.mmcr_test." + name);
@@ -1023,6 +1035,13 @@ public final class GameTestRegistry {
                         .where('S', BlockPredicate.deferredBlock(() -> ModBlocks.DATA_STORAGE.get()))
                         .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(ControllerUiGameTest.MACHINE_ID).get()))
                         .where('F', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("factory_controller").get()))
+                        .controller('C'))));
+        event.registerStructure(MMCR.id("fluid_assembly"), structure -> structure.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("W W", " C ", " F ")
+                        .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(MMCR.id("fluid_assembly")).get()))
+                        .where('W', BlockPredicate.block(Blocks.WATER))
+                        .where('F', BlockPredicate.blockState(Blocks.WATER.defaultBlockState()
+                                .setValue(LiquidBlock.LEVEL, 1)))
                         .controller('C'))));
         ResourceLocation upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
         event.registerModifier(upgradeBusBlockModifierId,

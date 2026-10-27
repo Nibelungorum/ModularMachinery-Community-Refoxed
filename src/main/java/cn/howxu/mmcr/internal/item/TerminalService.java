@@ -175,7 +175,7 @@ public final class TerminalService {
                         ? MultiblockAssemblyService.build(player, controller, data.stage(), storage.source(), freeInventoryBuild,
                                 data.selectedLevels())
                         : MultiblockAssemblyService.demolish(player, controller, data.stage(),
-                                ServerConfig.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink);
+                                ServerConfig.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink, freeInventoryBuild);
                 player.sendSystemMessage(Component.translatable(result.message().key(), result.message().args()));
                 return result.interactionResult().consumesAction()
                         ? accepted(player, stack, result.message().key()) : rejected(player, stack, result.message().key());

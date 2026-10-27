@@ -4,6 +4,9 @@ import appeng.api.config.Actionable;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEFluidKey;
+import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
+import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.networking.WirelessAccessPointBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
@@ -29,6 +32,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity.RemovalReason;
 
 /**
  * Verifies terminal material transfers through an AE2 wireless access point.
@@ -87,6 +95,80 @@ public class AE2TerminalGameTest {
             helper.assertTrue(chest.getInventory().extract(AEItemKey.of(Items.STONE), 1L,
                             Actionable.SIMULATE, IActionSource.empty()) == 1L,
                     "Demolish insertion returns the material to the ME network");
+            helper.succeed();
+        });
+    }
+
+    public void boundAccessPointBuildsFluidSources(GameTestHelper helper) {
+        BlockPos accessPointPos = new BlockPos(0, 0, 0);
+        BlockPos chestPos = new BlockPos(2, 0, 0);
+        BlockPos energyPos = new BlockPos(0, 0, 2);
+        helper.setBlock(accessPointPos, AEBlocks.WIRELESS_ACCESS_POINT.block().defaultBlockState());
+        helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
+        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        MachineControllerBlockEntity controller = TerminalAssemblyGameTest.fluidController(helper);
+        helper.runAtTickTime(2, () -> {
+            WirelessAccessPointBlockEntity accessPoint = helper.getBlockEntity(accessPointPos);
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
+            CreativeEnergyCellBlockEntity energy = helper.getBlockEntity(energyPos);
+            chest.setCell(AEItems.FLUID_CELL_1K.stack());
+            GridHelper.createConnection(accessPoint.getMainNode().getNode(), chest.getMainNode().getNode());
+            GridHelper.createConnection(accessPoint.getMainNode().getNode(), energy.getMainNode().getNode());
+        });
+        helper.runAtTickTime(4, () -> {
+            MEChestBlockEntity chest = helper.getBlockEntity(chestPos);
+            ServerPlayer player = player(helper);
+            player.setPos(controller.getBlockPos().getCenter());
+            TerminalData data = TerminalData.DEFAULT.withInventoryMode(TerminalInventoryMode.AE2)
+                    .withAe2AccessPoint(GlobalPos.of(helper.getLevel().dimension(), helper.absolutePos(accessPointPos)));
+            var storage = StructureItemStorageResolver.resolve(player, data).orElseThrow();
+            var source = storage.source();
+            AEFluidKey water = AEFluidKey.of(Fluids.WATER);
+            long bucket = AEFluidKey.AMOUNT_BLOCK;
+            chest.getInventory().insert(water, bucket + bucket / 2, Actionable.MODULATE, IActionSource.empty());
+
+            var missing = MultiblockAssemblyService.build(player, controller, 1, source, false);
+            helper.assertTrue(missing.interactionResult() == InteractionResult.FAIL && !controller.hasActiveBuildTask(),
+                    "A batch requiring two sources rejects less than two buckets");
+            helper.assertTrue(chest.getInventory().extract(water, Long.MAX_VALUE, Actionable.SIMULATE,
+                    IActionSource.empty()) == bucket + bucket / 2, "Rejected batch consumes no fluid");
+            chest.getInventory().insert(water, bucket, Actionable.MODULATE, IActionSource.empty());
+            var accepted = MultiblockAssemblyService.build(player, controller, 1, source, false);
+            helper.assertTrue(accepted.interactionResult() == InteractionResult.SUCCESS && accepted.changedBlocks() == 2,
+                    "Fluid-only ME batch includes both sources and skips the explicit flowing target");
+            helper.assertTrue(chest.getInventory().extract(water, Long.MAX_VALUE, Actionable.SIMULATE,
+                    IActionSource.empty()) == 2 * bucket + bucket / 2, "Accepted batch does not pre-extract fluids");
+            controller.serverTick();
+            TerminalAssemblyGameTest.assertFluidTargets(helper, controller);
+            helper.assertTrue(chest.getInventory().extract(water, Long.MAX_VALUE, Actionable.SIMULATE,
+                    IActionSource.empty()) == bucket / 2, "Two placed source blocks consume exactly two buckets");
+
+            var inventoryRemoval = MultiblockAssemblyService.demolish(player, controller, 1, 16, ignored -> true, false);
+            helper.assertTrue(inventoryRemoval.changedBlocks() == 0, "Ordinary inventory demolition preserves source fluids");
+            var pattern = controller.assemblyPattern(controller.boundMachine().orElseThrow());
+            BlockPos flowingTarget = pattern.pattern().entrySet().stream()
+                    .filter(entry -> !entry.getKey().equals(BlockPos.ZERO)
+                            && !entry.getValue().preferredState().orElseThrow().getFluidState().isSource())
+                    .map(entry -> controller.getBlockPos().offset(entry.getKey())).findFirst().orElseThrow();
+            helper.getLevel().setBlock(flowingTarget, Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1), 2);
+            var recovered = MultiblockAssemblyService.demolish(player, controller, 1, 16, storage.sink(), false);
+            helper.assertTrue(recovered.changedBlocks() == 2, "ME demolition recovers only the two source blocks");
+            helper.assertTrue(helper.getLevel().getBlockState(flowingTarget).is(Blocks.WATER)
+                            && !helper.getLevel().getBlockState(flowingTarget).getFluidState().isSource(),
+                    "ME demolition leaves non-source fluid untouched");
+            for (var placement : MultiblockAssemblyService.createTemplatePlacements(controller.getBlockPos(), pattern)) {
+                helper.assertTrue(helper.getLevel().getBlockState(placement.pos()).isAir(), "Recovered source block is removed");
+            }
+            helper.assertTrue(chest.getInventory().extract(water, Long.MAX_VALUE, Actionable.SIMULATE,
+                    IActionSource.empty()) == 2 * bucket + bucket / 2, "Every removed source returns one bucket to ME storage");
+            helper.getLevel().removeBlock(helper.absolutePos(accessPointPos), false);
+            helper.assertTrue(source.copyFluidSources().isEmpty()
+                            && !source.placeFluidSource(Fluids.WATER, () -> { throw new AssertionError("Disconnected source cannot place"); }),
+                    "An existing task source rechecks its bound access point instead of using a stale network");
+            helper.assertFalse(storage.sink().recoverFluidSource(Fluids.WATER,
+                            () -> { throw new AssertionError("Disconnected storage cannot remove a source"); }),
+                    "Disconnected recovery leaves the source block untouched");
+            player.setRemoved(RemovalReason.DISCARDED);
             helper.succeed();
         });
     }
