@@ -58,6 +58,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.EnumMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -98,6 +99,83 @@ class FactoryRecipeThreadTest {
         } finally {
             if (serverThreadScope != null) serverThreadScope.close();
         }
+    }
+
+    @Test
+    void a_temporarily_missing_pool_does_not_rebind_a_core_lanes_supplied_sources() {
+        var fixture = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        AtomicReference<ResourceLocation> selected = new AtomicReference<>(MMCR.id("test_cube"));
+        AtomicInteger poolReads = new AtomicInteger();
+        var controller = new MachineControllerBlockEntity(BlockPos.ZERO, fixture.getBlockState()) {
+            @Override public ResourceLocation currentRecipePoolId() {
+                poolReads.incrementAndGet();
+                return selected.get();
+            }
+        };
+        var source = RecipeTestSupport.create(MMCR.id("candidate_temporary_pool"), MMCR.id("test_cube"), 20, List.of(), List.of());
+        var lane = FactoryRecipeThread.core(controller, "missing-pool", Set.of(source));
+        var sources = List.of(source);
+        assertThat(lane.candidatesFor(sources)).containsExactly(source);
+        selected.set(null);
+        poolReads.set(0);
+        assertThat(lane.candidatesFor(sources)).isEmpty();
+        assertThat(poolReads).hasValue(1);
+        selected.set(source.recipePoolId());
+        assertThat(lane.candidatesFor(sources)).containsExactly(source);
+    }
+
+    @Test
+    void candidate_cache_avoids_deep_hashing_and_observes_mutable_source_lists() {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+            AtomicInteger hashes = new AtomicInteger();
+            AtomicReference<RequirementType<HashCountingRequirement>> registered = new AtomicReference<>();
+            var type = new RequirementType.Definition<HashCountingRequirement>(MMCR.id("candidate_hash_requirement"),
+                    MapCodec.unit(() -> new HashCountingRequirement(registered.get(), hashes)),
+                    (requirement, capabilities, context) -> new RequirementPlan(context.requirementIndex(),
+                            context.requestedParallelism(), List.of(), null), requirement -> requirement);
+            registered.set(type);
+            RequirementHandlerRegistry.register(type);
+            var first = MachineRecipe.fromCanonical(MMCR.id("candidate_hash_first"), MMCR.id("test_cube"), 20,
+                    List.of(new HashCountingRequirement(type, hashes)), List.of(), List.of(), 0, 1, false, false, false, Set.of());
+            var second = first.withId(MMCR.id("candidate_hash_second"));
+            var lane = FactoryRecipeThread.simple(controller);
+            var sources = new ArrayList<>(List.of(first, second, first));
+            hashes.set(0);
+            var captured = lane.candidatesFor(sources, 123L);
+            assertThat(captured).containsExactly(first, second);
+            assertThat(lane.candidatesFor(sources, 123L)).isSameAs(captured);
+            assertThat(hashes).hasValue(0);
+            sources.set(0, second);
+            sources.remove(2);
+            assertThat(lane.candidatesFor(sources, 123L)).containsExactly(second);
+            assertThat(hashes).hasValue(0);
+        }
+    }
+
+    @Test
+    void candidate_cache_preserves_distinct_semantics_and_uses_the_actual_catalog_revision() {
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        var original = RecipeTestSupport.create(MMCR.id("candidate_distinct"), MMCR.id("test_cube"), 20, List.of(), List.of());
+        var equal = RecipeTestSupport.create(original.id(), original.recipePoolId(), 20, List.of(), List.of());
+        var different = RecipeTestSupport.create(original.id(), original.recipePoolId(), 21, List.of(), List.of());
+        var sources = List.of(original, equal, different);
+        var lane = FactoryRecipeThread.simple(controller);
+        assertThat(lane.candidatesFor(sources, 123L)).containsExactly(original, different);
+        try {
+            RecipeRegistry.replaceDynamic(Map.of(original.id(), equal));
+            assertThat(lane.candidatesFor(sources, 123L)).containsExactly(equal);
+            RecipeRegistry.replaceDynamic(Map.of());
+            assertThat(lane.candidatesFor(sources, 123L)).isEmpty();
+        } finally {
+            RecipeRegistry.clearForTesting();
+        }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record HashCountingRequirement(RequirementType<HashCountingRequirement> type, AtomicInteger hashes) implements MachineRequirement {
+        @Override public IOType io() { return IOType.INPUT; }
+        @Override public int hashCode() { hashes.incrementAndGet(); return System.identityHashCode(hashes); }
     }
 
     @Test

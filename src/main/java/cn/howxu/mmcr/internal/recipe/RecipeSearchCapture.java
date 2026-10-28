@@ -22,6 +22,7 @@ import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.InputScope;
@@ -62,7 +63,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -83,18 +83,26 @@ final class RecipeSearchCapture {
     private final Map<MatchingKey, Map<Integer, LoadedMekanismBridge.ChemicalSearchPolicy>> chemicalPolicies = new HashMap<>();
     private final Map<Boolean, List<Scope>> scopeCache = new HashMap<>();
     private final Map<MatchingKey, List<Integer>> matchingCapabilities = new HashMap<>();
+    private final Map<LiveKey, Boolean> liveMatches = new HashMap<>();
     private final Map<MachineRequirement, Boolean> nativeHandlers = new IdentityHashMap<>();
-    private final Map<Object, Map<OutputPolicy, Long>> outputCapacities = new IdentityHashMap<>();
+    private final Map<Object, Map<OutputPolicy, long[]>> outputCapacities = new IdentityHashMap<>();
     private final List<AsyncCapabilitySnapshot> pools = new ArrayList<>();
     private final Map<Integer, AsyncCapabilitySnapshot> snapshots = new HashMap<>();
     private final Map<Object, Map<Object, Integer>> resourceCells = new IdentityHashMap<>();
     private final Map<Object, Integer> valueCells = new IdentityHashMap<>();
     private final Map<Object, Set<AsyncResourceValue>> matchingResources = new HashMap<>();
-    private final Map<MachineRequirement, Object> outputResources = new IdentityHashMap<>();
-    private final Map<ResourceLocation, Set<AsyncResourceValue>> universe = new HashMap<>();
+    private final Map<ChemicalPredicate, Boolean> chemicalValidity = new HashMap<>();
+    private final Map<MachineRequirement, OutputResource> outputResources = new IdentityHashMap<>();
+    private final RecipeSearchResources resources = new RecipeSearchResources();
+    private final Map<PortKey, CapturedPorts> portLayouts = new HashMap<>();
+    private final Map<MachineRecipe, Overlap> overlaps = new IdentityHashMap<>();
+    private final ResourcePort[] resourcePorts;
+    private final boolean[] liveCapabilities;
 
     private RecipeSearchCapture(CapabilitySnapshot capabilities) {
         this.capabilities = capabilities.capabilities();
+        resourcePorts = new ResourcePort[this.capabilities.size()];
+        liveCapabilities = new boolean[this.capabilities.size()];
         hasPrefetch = this.capabilities.stream().anyMatch(capability -> capability.facet(RecipeEnergyPrefetchFacet.class).isPresent());
         routing = capabilities.facets(InputRoutingFacet.class).stream().findFirst().orElse(null);
         routingIndex = routing == null ? null : InputRoutingIndex.capture(routing);
@@ -117,10 +125,12 @@ final class RecipeSearchCapture {
                 if (!nativeHandlers.computeIfAbsent(requirement, RecipeSearchCapture::nativeHandler)) continue;
                 needed.addAll(requirement.type().capabilityIds());
                 if (requirement instanceof LoadedHeatRequirement) needed.add(MekanismRecipeTypes.HEAT);
-                Object output = nativeOutput(requirement);
-                if (output != null) {
-                    outputResources.put(requirement, output);
-                    universe.computeIfAbsent(requirement.type().id(), ignored -> new LinkedHashSet<>()).add(value(output));
+                if (!outputResources.containsKey(requirement)) {
+                    OutputResource output = nativeOutput(requirement);
+                    if (output != null) {
+                        outputResources.put(requirement, output);
+                        resources.add(requirement.type().id(), output.value());
+                    }
                 }
             }
         }
@@ -132,13 +142,21 @@ final class RecipeSearchCapture {
                 if (facet == null) continue;
                 AsyncCapabilitySnapshot snapshot = facet.captureSnapshot();
                 snapshots.put(index, snapshot);
-                if (snapshot instanceof AsyncCapabilitySnapshot.Resource resource && resourceStorage(capability) != null) {
-                    Set<AsyncResourceValue> values = universe.computeIfAbsent(capability.view().type().id(),
-                            key -> new LinkedHashSet<>());
-                    for (int slot = 0; slot < resource.slots().size(); slot++) {
-                        int pool = resourceCell(index, slot);
-                        ((AsyncCapabilitySnapshot.Resource) pools.get(pool)).slots().getFirst().resource().ifPresent(values::add);
+                Object storage = resourceStorage(capability);
+                liveCapabilities[index] = storage instanceof NativeReservationAccess access && access.requiresServerOutputPlanning()
+                        || capability.facet(RecipeEnergyPrefetchFacet.class).isPresent()
+                        || capability.facet(EnergyOutputAdmissionFacet.class).isPresent();
+                if (snapshot instanceof AsyncCapabilitySnapshot.Resource resource && storage != null) {
+                    int[] slotPools = new int[resource.slots().size()];
+                    for (int slot = 0; slot < slotPools.length; slot++) {
+                        int pool = resourceCell(storage, resource, slot);
+                        slotPools[slot] = pool;
+                        ((AsyncCapabilitySnapshot.Resource) pools.get(pool)).slots().getFirst().resource()
+                                .ifPresent(value -> resources.add(capability.view().type().id(), value));
                     }
+                    ItemHandlerFacet items = capability.facet(ItemHandlerFacet.class).orElse(null);
+                    resourcePorts[index] = new ResourcePort(storage, slotPools, items != null && items.supportsLargeStacks(),
+                            outputCapacities.computeIfAbsent(storage, ignoredStorage -> new HashMap<>()));
                 }
             }
         }
@@ -172,18 +190,15 @@ final class RecipeSearchCapture {
                         !routedSources.contains(occurrence)))) {
                     if (proof == null) { proof = RecipeSearchProof.Reason.INCOMPLETE_ROUTING; proofIndex = index; }
                 }
-                boolean live = matching.stream().anyMatch(occurrence -> {
-                    MachineCapability capability = capabilities.get(occurrence);
-                    Object storage = resourceStorage(capability);
+                boolean live = liveMatches.computeIfAbsent(new LiveKey(requirement.type().id(), matching),
+                        ignored -> matching.stream().anyMatch(occurrence -> {
                     AsyncCapabilitySnapshot snapshot = snapshots.get(occurrence);
                     boolean shapeMatches = requirement instanceof EnergyRequirement ? snapshot instanceof AsyncCapabilitySnapshot.Scalar
                             : requirement instanceof LoadedHeatRequirement ? snapshot instanceof AsyncCapabilitySnapshot.Heat
                             : snapshot instanceof AsyncCapabilitySnapshot.Resource;
-                    return !shapeMatches || snapshot instanceof AsyncCapabilitySnapshot.Resource && storage == null
-                            || storage instanceof NativeReservationAccess access && access.requiresServerOutputPlanning()
-                            || capability.facet(RecipeEnergyPrefetchFacet.class).isPresent()
-                            || capability.facet(EnergyOutputAdmissionFacet.class).isPresent();
-                });
+                    return !shapeMatches || snapshot instanceof AsyncCapabilitySnapshot.Resource && resourcePorts[occurrence] == null
+                            || liveCapabilities[occurrence];
+                }));
                 if (live && !(requirement instanceof LevelRequirement) && !(requirement instanceof StageRequirement)) {
                     if (proof == null) { proof = RecipeSearchProof.Reason.LIVE_CAPABILITY; proofIndex = index; }
                     continue;
@@ -193,7 +208,7 @@ final class RecipeSearchCapture {
             List<Scope> scopes = scopes(material);
             candidates.add(new Candidate(source.id(), source.priority(), source.inputRequirementCount(),
                     Math.min(maximumParallelism, recipe.parallelismLimit()), staticFailure == null ? null : staticFailure.id(),
-                    rules, scopes, overlap(source), proof, proofIndex));
+                    rules, scopes, overlaps.computeIfAbsent(source, RecipeSearchCapture::overlap), proof, proofIndex));
         }
         return new RecipeSearchSnapshot(new RecipeSearchSnapshot.Stamp(catalogVersion, runtime.structure().version(),
                 runtime.capabilityVersion(), runtime.modifierVersion(), runtime.stateVersion(), runtime.upgradeContentRevision(),
@@ -216,7 +231,7 @@ final class RecipeSearchCapture {
 
     private List<Integer> matching(MachineRequirement requirement) {
         MatchingKey key = new MatchingKey(requirement.type().id(), requirement.io(), requirement.tags(),
-                requirement instanceof LoadedChemicalRequirement chemical ? chemical.ingredient() : null);
+                requirement instanceof LoadedChemicalRequirement chemical ? chemicalPredicate(chemical) : null);
         return matchingCapabilities.computeIfAbsent(key, ignored -> findMatching(requirement));
     }
 
@@ -251,39 +266,35 @@ final class RecipeSearchCapture {
         float consume = 1F;
         boolean valid = true;
         Set<AsyncResourceValue> accepted = Set.of();
-        Object nativeOutput = outputResources.get(requirement);
-        AsyncResourceValue outputValue = nativeOutput == null ? null : value(nativeOutput);
+        OutputResource capturedOutput = outputResources.get(requirement);
+        Object nativeOutput = capturedOutput == null ? null : capturedOutput.resource();
+        AsyncResourceValue outputValue = capturedOutput == null ? null : capturedOutput.value();
         ResourceLocation reason = (output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT).id();
         if (requirement instanceof ItemRequirement item) {
             kind = Kind.RESOURCE;
-            amount = output ? item.stack(null).getCount() : item.count();
+            amount = output ? capturedOutput == null ? 0L : capturedOutput.amount() : item.count();
             chance = item.chance();
             consume = item.consumeChance();
             valid = output ? !partial || nativeOutput != null : item.item() != null;
             if (!output && valid) accepted = matchingResources.computeIfAbsent(
-                    new ItemPredicate(item.item(), item.components()), ignored -> resources(requirement).stream().filter(value -> {
-                        ItemStack resource = NativeAsyncResourceValues.item(value);
-                        return item.item().test(resource) && item.components().matches(resource);
-                    }).collect(Collectors.toUnmodifiableSet()));
+                    new ItemPredicate(item.item(), item.components()), ignored -> resources.matching(item));
         } else if (requirement instanceof FluidRequirement fluid) {
             kind = Kind.RESOURCE;
-            amount = output ? fluid.stack().getAmount() : fluid.amount();
+            amount = output ? capturedOutput == null ? 0L : capturedOutput.amount() : fluid.amount();
             chance = fluid.chance();
             consume = fluid.consumeChance();
             valid = output ? !partial || nativeOutput != null : fluid.fluid() != null;
-            if (!output && valid) accepted = matchingResources.computeIfAbsent(fluid.fluid(), ignored -> resources(requirement).stream()
-                    .filter(value -> fluid.fluid().test(NativeAsyncResourceValues.fluid(value)))
-                    .collect(Collectors.toUnmodifiableSet()));
+            if (!output && valid) accepted = matchingResources.computeIfAbsent(fluid.fluid(), ignored -> resources.matching(fluid));
         } else if (requirement instanceof LoadedChemicalRequirement chemical) {
             kind = Kind.RESOURCE;
             amount = chemical.ingredient().amount();
             chance = chemical.chance();
             consume = chemical.consumeChance();
-            valid = LoadedMekanismBridge.validChemicalSearch(chemical);
+            valid = chemicalValidity.computeIfAbsent(chemicalPredicate(chemical),
+                    ignored -> LoadedMekanismBridge.validChemicalSearch(chemical));
             if (!valid) reason = MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH.id();
-            else if (!output) accepted = matchingResources.computeIfAbsent(chemical.ingredient(), ignored -> resources(requirement).stream()
-                    .filter(value -> LoadedMekanismBridge.matchesChemicalSearch(chemical, value))
-                    .collect(Collectors.toUnmodifiableSet()));
+            else if (!output) accepted = matchingResources.computeIfAbsent(chemicalPredicate(chemical),
+                    ignored -> LoadedMekanismBridge.matchingChemicalSearchResources(chemical, resources.all(requirement.type().id())));
             if (valid) reason = (output ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
                     : MekanismFailureReasons.CHEMICAL_INPUT_MISSING).id();
         } else if (requirement instanceof EnergyRequirement energy) {
@@ -297,22 +308,47 @@ final class RecipeSearchCapture {
                     : MekanismFailureReasons.HEAT_OUTPUT_BLOCKED).id();
             valid = heat >= 0D;
         }
+        Kind capturedKind = kind;
+        CapturedPorts capturedPorts = portLayouts.computeIfAbsent(new PortKey(kind, direction, matching, outputValue,
+                requirement instanceof LoadedChemicalRequirement chemical ? chemicalPredicate(chemical) : null),
+                ignored -> capturePorts(requirement, capturedKind, matching, nativeOutput, outputValue));
+        List<Port> ports = capturedPorts.ports();
+        if (requirement instanceof LoadedChemicalRequirement && valid) {
+            if (matching.isEmpty()) reason = (output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT).id();
+            else if (output && capturedPorts.radioactiveRejected()) {
+                boolean space = false;
+                for (Port port : ports) {
+                    var slot = ((AsyncCapabilitySnapshot.Resource) pools.get(port.pool())).slots().getFirst();
+                    if ((slot.resource().isEmpty() || slot.resource().get().equals(outputValue)) && port.capacity() > slot.amount()) {
+                        space = true;
+                        break;
+                    }
+                }
+                if (!space) reason = MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED.id();
+            }
+        }
+        return new Rule(index, requirement.type().id(), kind, direction, Math.max(0L, amount), heat, chance, consume,
+                output && partial, valid, accepted, outputValue, ports, reason);
+    }
+
+    private CapturedPorts capturePorts(MachineRequirement requirement, Kind kind, List<Integer> matching,
+                                       @Nullable Object nativeOutput, @Nullable AsyncResourceValue outputValue) {
+        boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
         List<Port> ports = new ArrayList<>();
         boolean radioactiveRejected = false;
         for (int occurrence : matching) {
             MachineCapability capability = capabilities.get(occurrence);
             AsyncCapabilitySnapshot snapshot = snapshots.get(occurrence);
             if (kind == Kind.RESOURCE) {
-                Object storage = resourceStorage(capability);
-                if (storage == null || !(snapshot instanceof AsyncCapabilitySnapshot.Resource resource)) continue;
+                ResourcePort port = resourcePorts[occurrence];
+                if (port == null) continue;
                 var policy = requirement instanceof LoadedChemicalRequirement chemical ? chemicalPolicy(chemical, occurrence) : null;
                 if (policy != null) radioactiveRejected |= policy.radioactiveRejected();
-                for (int slot = 0; slot < resource.slots().size(); slot++) {
-                    int pool = resourceCell(occurrence, slot);
-                    ItemHandlerFacet items = capability.facet(ItemHandlerFacet.class).orElse(null);
+                long[] capacities = !output || nativeOutput == null || policy != null ? null : outputCapacities(port, nativeOutput, outputValue);
+                for (int slot = 0; slot < port.pools().length; slot++) {
+                    int pool = port.pools()[slot];
                     long capacity = !output || nativeOutput == null ? 0L
-                            : policy != null ? policy.outputCapacity()
-                            : outputCapacity(storage, slot, nativeOutput, outputValue, items != null && items.supportsLargeStacks());
+                            : policy != null ? policy.outputCapacity() : capacities[slot];
                     ports.add(new Port(pool, occurrence, capacity, policy == null ? Long.MAX_VALUE : policy.inputLimit()));
                 }
             } else if (kind == Kind.SCALAR && snapshot instanceof AsyncCapabilitySnapshot.Scalar) {
@@ -329,47 +365,34 @@ final class RecipeSearchCapture {
                 ports.add(new Port(pool, occurrence, 0L, 0L));
             }
         }
-        if (requirement instanceof LoadedChemicalRequirement && valid) {
-            if (matching.isEmpty()) reason = (output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT).id();
-            else if (output && radioactiveRejected) {
-                boolean space = false;
-                for (Port port : ports) {
-                    var slot = ((AsyncCapabilitySnapshot.Resource) pools.get(port.pool())).slots().getFirst();
-                    if ((slot.resource().isEmpty() || slot.resource().get().equals(outputValue)) && port.capacity() > slot.amount()) {
-                        space = true;
-                        break;
-                    }
-                }
-                if (!space) reason = MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED.id();
-            }
-        }
-        return new Rule(index, requirement.type().id(), kind, direction, Math.max(0L, amount), heat, chance, consume,
-                output && partial, valid, accepted, outputValue, ports, reason);
+        return new CapturedPorts(List.copyOf(ports), radioactiveRejected);
     }
 
     private LoadedMekanismBridge.ChemicalSearchPolicy chemicalPolicy(LoadedChemicalRequirement requirement, int occurrence) {
-        MatchingKey key = new MatchingKey(requirement.type().id(), requirement.io(), requirement.tags(), requirement.ingredient());
+        MatchingKey key = new MatchingKey(requirement.type().id(), requirement.io(), requirement.tags(), chemicalPredicate(requirement));
         return chemicalPolicies.computeIfAbsent(key, ignored -> new HashMap<>()).computeIfAbsent(occurrence,
                 ignored -> LoadedMekanismBridge.chemicalSearchPolicy(requirement, capabilities.get(occurrence)));
     }
 
-    private long outputCapacity(Object storage, int slot, Object resource,
-                                AsyncResourceValue value, boolean largeStacks) {
-        return outputCapacities.computeIfAbsent(storage, ignored -> new HashMap<>())
-                .computeIfAbsent(new OutputPolicy(slot, value, largeStacks), ignored -> {
-                    long capacity;
-                    if (storage instanceof IItemHandler handler && resource instanceof ItemStack item) {
-                        if (!handler.isItemValid(slot, item)) return 0L;
-                        capacity = handler instanceof NativeStackSync.Item sync ? sync.capacity(slot, item)
-                                : handler instanceof LongItemStorage local ? local.capacity(slot) : handler.getSlotLimit(slot);
-                        if (!largeStacks) capacity = Math.min(capacity, item.getMaxStackSize());
-                    } else if (storage instanceof IFluidHandler handler && resource instanceof FluidStack fluid) {
-                        if (!handler.isFluidValid(slot, fluid)) return 0L;
-                        capacity = handler instanceof NativeStackSync.Fluid sync ? sync.capacity(slot)
-                                : handler instanceof LongFluidStorage local ? local.capacity(slot) : handler.getTankCapacity(slot);
-                    } else return 0L;
-                    return Math.max(0L, capacity);
-                });
+    private long[] outputCapacities(ResourcePort port, Object resource, AsyncResourceValue value) {
+        return port.outputCapacities().computeIfAbsent(new OutputPolicy(value, port.largeStacks()), ignored -> {
+            long[] capacities = new long[port.pools().length];
+            long stackLimit = resource instanceof ItemStack item && !port.largeStacks() ? item.getMaxStackSize() : Long.MAX_VALUE;
+            for (int slot = 0; slot < capacities.length; slot++) {
+                long capacity;
+                if (port.storage() instanceof IItemHandler handler && resource instanceof ItemStack item) {
+                    if (!handler.isItemValid(slot, item)) continue;
+                    capacity = handler instanceof NativeStackSync.Item sync ? sync.capacity(slot, item)
+                            : handler instanceof LongItemStorage local ? local.capacity(slot) : handler.getSlotLimit(slot);
+                } else if (port.storage() instanceof IFluidHandler handler && resource instanceof FluidStack fluid) {
+                    if (!handler.isFluidValid(slot, fluid)) continue;
+                    capacity = handler instanceof NativeStackSync.Fluid sync ? sync.capacity(slot)
+                            : handler instanceof LongFluidStorage local ? local.capacity(slot) : handler.getTankCapacity(slot);
+                } else continue;
+                capacities[slot] = Math.max(0L, Math.min(capacity, stackLimit));
+            }
+            return capacities;
+        });
     }
 
     private static @Nullable Object resourceStorage(MachineCapability capability) {
@@ -381,14 +404,11 @@ final class RecipeSearchCapture {
         return capability instanceof LoadedMekanismBridge.ChemicalPort port ? port.chemicalTank() : null;
     }
 
-    private int resourceCell(int occurrence, int slot) {
-        MachineCapability capability = capabilities.get(occurrence);
-        Object storage = resourceStorage(capability);
+    private int resourceCell(Object storage, AsyncCapabilitySnapshot.Resource snapshot, int slot) {
         Object identity = storage instanceof NativeReservationAccess access ? access.reservationIdentity() : storage;
         Object key = storage instanceof NativeReservationAccess access ? access.reservationSlot(slot) : slot;
         Map<Object, Integer> cells = resourceCells.computeIfAbsent(identity, ignored -> new HashMap<>());
         return cells.computeIfAbsent(key, ignored -> {
-            var snapshot = (AsyncCapabilitySnapshot.Resource) snapshots.get(occurrence);
             var value = snapshot.slots().get(slot);
             pools.add(new AsyncCapabilitySnapshot.Resource(snapshot.capabilityId(), List.of(
                     new AsyncCapabilitySnapshot.ResourceSlot(value.resource(), value.amount(), Long.MAX_VALUE))));
@@ -409,14 +429,26 @@ final class RecipeSearchCapture {
                     && LoadedHeatRequirement.supportsSearchSnapshot();
     }
 
-    private static @Nullable Object nativeOutput(MachineRequirement requirement) {
+    private static @Nullable OutputResource nativeOutput(MachineRequirement requirement) {
         if (requirement.io() != RecipeModifier.IOType.OUTPUT) return null;
-        if (requirement instanceof ItemRequirement item) return item.stack(null).isEmpty() ? null : item.stack(null).copyWithCount(1);
-        if (requirement instanceof FluidRequirement fluid) return fluid.stack().isEmpty() ? null : fluid.stack().copyWithAmount(1);
-        if (requirement instanceof LoadedChemicalRequirement chemical && LoadedChemicalRequirement.supportsSearchSnapshot()) {
-            return LoadedMekanismBridge.chemicalSearchOutput(chemical);
-        }
-        return null;
+        Object resource;
+        long amount;
+        if (requirement instanceof ItemRequirement item) {
+            ItemStack stack = item.stack(null);
+            if (stack.isEmpty()) return null;
+            resource = stack.copyWithCount(1);
+            amount = stack.getCount();
+        } else if (requirement instanceof FluidRequirement fluid) {
+            FluidStack stack = fluid.stack();
+            if (stack.isEmpty()) return null;
+            resource = stack.copyWithAmount(1);
+            amount = stack.getAmount();
+        } else if (requirement instanceof LoadedChemicalRequirement chemical && LoadedChemicalRequirement.supportsSearchSnapshot()) {
+            resource = LoadedMekanismBridge.chemicalSearchOutput(chemical);
+            if (resource == null) return null;
+            amount = chemical.ingredient().amount();
+        } else return null;
+        return new OutputResource(resource, value(resource), amount);
     }
 
     private static @Nullable AsyncResourceValue value(Object resource) {
@@ -425,14 +457,26 @@ final class RecipeSearchCapture {
         return LoadedMekanismBridge.chemicalSearchValue(resource);
     }
 
-    private Set<AsyncResourceValue> resources(MachineRequirement requirement) {
-        return universe.getOrDefault(requirement.type().id(), Set.of());
-    }
-
     private record MatchingKey(ResourceLocation type, RecipeModifier.IOType direction, List<String> tags,
                                @Nullable Object chemical) { }
 
-    private record OutputPolicy(int slot, AsyncResourceValue resource, boolean largeStacks) { }
+    /** @author howxu <dev@howxu.cn> */
+    private record LiveKey(ResourceLocation type, List<Integer> occurrences) { }
+
+    /** Capture-local slot mapping; native storage never enters the worker snapshot.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record ResourcePort(Object storage, int[] pools, boolean largeStacks,
+                                Map<OutputPolicy, long[]> outputCapacities) { }
+    /** @author howxu <dev@howxu.cn> */
+    private record OutputPolicy(AsyncResourceValue resource, boolean largeStacks) { }
+    /** @author howxu <dev@howxu.cn> */
+    private record OutputResource(Object resource, AsyncResourceValue value, long amount) { }
+    /** @author howxu <dev@howxu.cn> */
+    private record PortKey(Kind kind, IOType direction, List<Integer> occurrences, @Nullable AsyncResourceValue output,
+                           @Nullable Object chemical) { }
+    /** @author howxu <dev@howxu.cn> */
+    private record CapturedPorts(List<Port> ports, boolean radioactiveRejected) { }
 
     private static Overlap overlap(MachineRecipe recipe) {
         Set<ResourceLocation> items = new HashSet<>();
@@ -449,6 +493,13 @@ final class RecipeSearchCapture {
         }
         return new Overlap(items, anyItem, hasItem, custom);
     }
+
+    private static ChemicalPredicate chemicalPredicate(LoadedChemicalRequirement requirement) {
+        return new ChemicalPredicate(requirement.ingredient().kind(), requirement.ingredient().id());
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record ChemicalPredicate(ChemicalIngredient.Kind kind, ResourceLocation id) { }
 
     private record ItemPredicate(Object ingredient, Object components) {}
 }

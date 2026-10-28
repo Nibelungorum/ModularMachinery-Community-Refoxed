@@ -30,6 +30,7 @@ import cn.howxu.mmcr.util.IOType;
 import com.google.gson.JsonPrimitive;
 import mekanism.common.registries.MekanismChemicals;
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
@@ -61,6 +62,24 @@ public final class RecipeSearchGameTest {
                     1, ItemStack.EMPTY, 1F, List.of(), components, 1F);
             compare(helper, inputs, List.of(requirement));
         }
+        BulkItemStorage secondInput = new BulkItemStorage(64L, null);
+        ItemStack secondSword = sword.copy();
+        secondSword.set(DataComponents.DAMAGE, 8);
+        secondInput.forceInsert(0, secondSword, 1L, false);
+        CapabilitySnapshot variants = new CapabilitySnapshot(List.of(new ItemBusCapability(input, IOType.INPUT),
+                new ItemBusCapability(secondInput, IOType.INPUT)));
+        for (int secondDamage : List.of(8, 9)) {
+            List<MachineRequirement> requirements = List.of(7, secondDamage).stream().map(damage ->
+                    (MachineRequirement) new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND_SWORD),
+                            1, ItemStack.EMPTY, 1F, List.of(), new DataComponentPredicateSet(Map.of(DataComponents.DAMAGE,
+                            ComponentPredicate.exact(new JsonPrimitive(damage)))), 1F)).toList();
+            compare(helper, variants, requirements);
+        }
+        BulkItemStorage tagInput = new BulkItemStorage(64L, null);
+        tagInput.forceInsert(0, new ItemStack(Items.OAK_LOG), 4L, false);
+        var logs = new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(ItemTags.LOGS), 1, ItemStack.EMPTY);
+        compare(helper, new CapabilitySnapshot(List.of(new ItemBusCapability(tagInput, IOType.INPUT))), List.of(logs));
+        compare(helper, inputs, List.of(logs));
         BulkItemStorage output = new BulkItemStorage(64L, null);
         CapabilitySnapshot outputs = new CapabilitySnapshot(List.of(new ItemBusCapability(output, IOType.OUTPUT)));
         var tool = new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, sword);

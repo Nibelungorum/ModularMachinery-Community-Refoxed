@@ -32,8 +32,11 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.common.crafting.ICustomIngredient;
+import net.neoforged.neoforge.common.crafting.IngredientType;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredientType;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -41,11 +44,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -132,10 +138,139 @@ class RecipeSearchCaptureTest {
         var recipes = new ArrayList<MachineRecipe>();
         for (int i = 0; i < 32; i++) recipes.add(recipe(List.of(output(Items.GOLD_INGOT, 1)), false).withId(MMCR.id("capture_" + i)));
         RecipeSearchSnapshot snapshot = capture(capabilities, recipes);
+        var ports = snapshot.candidates().getFirst().rules().getFirst().ports();
+        assertThat(snapshot.candidates()).allSatisfy(candidate ->
+                assertThat(candidate.rules().getFirst().ports()).isSameAs(ports));
         assertThat(storage.validityCalls).hasValue(1);
         assertThat(CompletableFuture.supplyAsync(() -> new RecipeSearchPlanner(snapshot).advance()).join())
                 .isInstanceOf(RecipeSearchPlanner.Match.class);
         assertThat(storage.validityCalls).hasValue(1);
+    }
+
+    @Test
+    void distinct_item_predicates_reuse_decoded_stacks_only_within_one_capture() {
+        var tested = new ArrayList<ItemStack>();
+        var recipes = new ArrayList<MachineRecipe>();
+        Thread owner = Thread.currentThread();
+        for (int i = 0; i < 32; i++) {
+            Ingredient ingredient = new Ingredient(new ICustomIngredient() {
+                public boolean test(ItemStack stack) {
+                    assertThat(Thread.currentThread()).isSameAs(owner);
+                    tested.add(stack);
+                    return stack.is(Items.IRON_INGOT);
+                }
+                public Stream<ItemStack> getItems() { return Stream.of(new ItemStack(Items.IRON_INGOT)); }
+                public boolean isSimple() { return false; }
+                public IngredientType<?> getType() { return null; }
+            });
+            recipes.add(recipe(List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ingredient, 1, ItemStack.EMPTY)),
+                    false).withId(MMCR.id("predicate_" + i)));
+        }
+        Slot[] slots = {new Slot(new ItemStack(Items.IRON_INGOT), 8L, 64L, null),
+                new Slot(new ItemStack(Items.GOLD_INGOT), 4L, 64L, null)};
+        var capabilities = capabilities(new ItemBusCapability(new GuardedStorage(slots, 0, 1), IOType.INPUT));
+        RecipeSearchSnapshot snapshot = capture(capabilities, recipes);
+        Set<ItemStack> decoded = Collections.newSetFromMap(new IdentityHashMap<>());
+        decoded.addAll(tested);
+        assertThat(tested).hasSize(recipes.size() * slots.length);
+        assertThat(decoded).hasSize(slots.length);
+        assertThat(snapshot.candidates()).allSatisfy(candidate -> assertThat(candidate.rules().getFirst().resources()).hasSize(1));
+        assertThat(CompletableFuture.supplyAsync(() -> new RecipeSearchPlanner(snapshot).advance()).join())
+                .isInstanceOf(RecipeSearchPlanner.Match.class);
+        assertThat(tested).hasSize(recipes.size() * slots.length);
+
+        tested.clear();
+        slots[0] = new Slot(new ItemStack(Items.GOLD_INGOT), 8L, 64L, null);
+        RecipeSearchSnapshot changed = capture(capabilities, recipes);
+        assertThat(tested).noneMatch(decoded::contains);
+        assertThat(CompletableFuture.supplyAsync(() -> new RecipeSearchPlanner(changed).advance()).join())
+                .isInstanceOf(RecipeSearchPlanner.NoMatch.class);
+    }
+
+    @Test
+    void distinct_fluid_predicates_reuse_decoded_stacks_only_within_one_capture() {
+        var tested = new ArrayList<FluidStack>();
+        var recipes = new ArrayList<MachineRecipe>();
+        Thread owner = Thread.currentThread();
+        for (int i = 0; i < 32; i++) {
+            FluidIngredient ingredient = new FluidIngredient() {
+                public boolean test(FluidStack stack) {
+                    assertThat(Thread.currentThread()).isSameAs(owner);
+                    tested.add(stack);
+                    return stack.getFluid() == Fluids.WATER;
+                }
+                protected Stream<FluidStack> generateStacks() { return Stream.of(new FluidStack(Fluids.WATER, 1)); }
+                public boolean isSimple() { return false; }
+                public FluidIngredientType<?> getType() { return null; }
+                public int hashCode() { return System.identityHashCode(this); }
+                public boolean equals(Object other) { return this == other; }
+            };
+            recipes.add(recipe(List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, ingredient,
+                    100, FluidStack.EMPTY, 1F, List.of())), false).withId(MMCR.id("fluid_predicate_" + i)));
+        }
+        LongFluidStorage storage = new LongFluidStorage(10_000L, null);
+        storage.forceInsert(0, new FluidStack(Fluids.WATER, 1), 1_000L, false);
+        var capabilities = capabilities(new FluidHatchCapability(storage, IOType.INPUT));
+        RecipeSearchSnapshot snapshot = capture(capabilities, recipes);
+        assertThat(tested).hasSize(recipes.size());
+        FluidStack decoded = tested.getFirst();
+        assertThat(tested).allMatch(stack -> stack == decoded);
+        assertThat(CompletableFuture.supplyAsync(() -> new RecipeSearchPlanner(snapshot).advance()).join())
+                .isInstanceOf(RecipeSearchPlanner.Match.class);
+        assertThat(tested).hasSize(recipes.size());
+        tested.clear();
+        capture(capabilities, recipes);
+        assertThat(tested).hasSize(recipes.size()).noneMatch(stack -> stack == decoded);
+    }
+
+    @Test
+    void repeated_candidates_reuse_slot_mapping_and_refresh_output_policies_on_the_next_capture() {
+        Slot[] slots = {new Slot(null, 0L, 64L, new ItemStack(Items.GOLD_INGOT))};
+        var storage = new GuardedStorage(slots, 0);
+        var capabilities = capabilities(new ItemBusCapability(storage, IOType.OUTPUT));
+        var recipes = new ArrayList<MachineRecipe>();
+        for (int i = 0; i < 32; i++) recipes.add(recipe(List.of(output(Items.GOLD_INGOT, 1)), false)
+                .withId(MMCR.id("mapping_" + i)));
+        RecipeSearchSnapshot snapshot = capture(capabilities, recipes);
+        assertThat(storage.reservationSlotCalls).hasValue(slots.length);
+        assertThat(storage.validityCalls).hasValue(slots.length);
+        assertThat(CompletableFuture.supplyAsync(() -> new RecipeSearchPlanner(snapshot).advance()).join())
+                .isInstanceOf(RecipeSearchPlanner.Match.class);
+
+        slots[0] = new Slot(null, 0L, 64L, new ItemStack(Items.IRON_INGOT));
+        RecipeSearchSnapshot changed = capture(capabilities, recipes);
+        assertThat(storage.reservationSlotCalls).hasValue(2 * slots.length);
+        assertThat(storage.validityCalls).hasValue(2 * slots.length);
+        assertThat(CompletableFuture.supplyAsync(() -> new RecipeSearchPlanner(changed).advance()).join())
+                .isInstanceOf(RecipeSearchPlanner.NoMatch.class);
+    }
+
+    @Test
+    void regular_input_layouts_are_shared_but_output_resources_and_occurrences_stay_distinct() {
+        Slot[] slots = {new Slot(new ItemStack(Items.IRON_INGOT), 8L, 64L, null),
+                new Slot(new ItemStack(Items.GOLD_INGOT), 8L, 64L, null), new Slot(null, 0L, 64L, null)};
+        var storage = new GuardedStorage(slots, 0, 1, 2);
+        var inputs = new ItemBusCapability(storage, IOType.INPUT);
+        var capabilities = capabilities(inputs, inputs, new ItemBusCapability(storage, IOType.OUTPUT));
+        var recipe = recipe(List.of(input(Items.IRON_INGOT, 1), input(Items.GOLD_INGOT, 2),
+                output(Items.IRON_INGOT, 1), output(Items.GOLD_INGOT, 1)), false);
+        var rules = capture(capabilities, List.of(recipe)).candidates().getFirst().rules();
+        assertThat(rules.get(0).ports()).isSameAs(rules.get(1).ports());
+        assertThat(rules.get(0).ports()).hasSize(6); // Both occurrences, including their empty slots.
+        assertThat(rules.get(2).ports()).isNotSameAs(rules.get(3).ports());
+        assertThat(rules.get(0).ports().get(0).pool()).isEqualTo(rules.get(0).ports().get(3).pool());
+        assertThat(rules.get(0).ports().get(0).sourceIndex()).isNotEqualTo(rules.get(0).ports().get(3).sourceIndex());
+        assertEquivalent(capabilities, recipe);
+    }
+
+    @Test
+    void output_values_are_in_the_universe_even_when_all_physical_slots_are_empty() {
+        var storage = new GuardedStorage(new Slot[]{new Slot(null, 0L, 64L, null)}, 0);
+        var capabilities = capabilities(new ItemBusCapability(storage, IOType.OUTPUT), new ItemBusCapability(storage, IOType.INPUT));
+        var recipe = recipe(List.of(output(Items.IRON_INGOT, 1), input(Items.IRON_INGOT, 1)), false);
+        var rules = capture(capabilities, List.of(recipe)).candidates().getFirst().rules();
+        assertThat(rules.get(1).resources()).containsExactly(rules.get(0).output());
+        assertEquivalent(capabilities, recipe);
     }
 
     private static void assertEquivalent(CapabilitySnapshot capabilities, MachineRecipe recipe) {
@@ -191,12 +326,13 @@ class RecipeSearchCaptureTest {
         private final Slot[] slots;
         private final int[] mapping;
         private final AtomicInteger validityCalls = new AtomicInteger();
+        private final AtomicInteger reservationSlotCalls = new AtomicInteger();
 
         GuardedStorage(Slot[] slots, int... mapping) { this.slots = slots; this.mapping = mapping; }
         private Slot slot(int index) { assertThat(Thread.currentThread()).isSameAs(owner); return slots[mapping[index]]; }
         public int getSlots() { assertThat(Thread.currentThread()).isSameAs(owner); return mapping.length; }
         public Object reservationIdentity() { return slots; }
-        public Object reservationSlot(int index) { return mapping[index]; }
+        public Object reservationSlot(int index) { reservationSlotCalls.incrementAndGet(); return mapping[index]; }
         public ItemStack getStackInSlot(int index) {
             Slot slot = slot(index);
             return slot.resource() == null ? ItemStack.EMPTY : slot.resource().copyWithCount((int) slot.amount());

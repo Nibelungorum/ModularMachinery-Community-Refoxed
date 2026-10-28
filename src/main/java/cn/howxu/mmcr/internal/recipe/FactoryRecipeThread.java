@@ -79,6 +79,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private long filteredCandidateCatalogVersion = Long.MIN_VALUE;
     private long filteredCandidateRecipeSetVersion = Long.MIN_VALUE;
     private List<MachineRecipe> filteredCandidates = List.of();
+    private @Nullable ResourceLocation filteredCandidatePool;
     private final long suppliedCandidateCatalogVersion;
     private final @Nullable ResourceLocation suppliedCandidatePool;
     private boolean suppliedCandidateCatalogCurrent = true;
@@ -138,25 +139,53 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public List<MachineRecipe> candidatesFor(List<MachineRecipe> candidates, long catalogVersion) {
-        List<MachineRecipe> machineCandidates = candidatesForMachine(controller, candidates).stream()
-                .map(this::resolveSearchCandidate).filter(Objects::nonNull).distinct().toList();
-        if (!coreThread || machineCandidates.isEmpty()) return machineCandidates;
-        if (filteredCandidateSource.equals(machineCandidates)
-                && filteredCandidateCatalogVersion == catalogVersion
-                && filteredCandidateRecipeSetVersion == recipeSetVersion) {
+        ResourceLocation pool = currentRecipePoolId();
+        if (pool == null) return List.of();
+        MachineRecipeCatalog catalog = currentRecipeCatalog();
+        List<MachineRecipe> sources = candidates == null ? catalog.recipes() : candidates;
+        // Validate actual ownership, not the caller's catalog hint; also observe mutable supplied lists.
+        if (Objects.equals(filteredCandidatePool, pool) && filteredCandidateCatalogVersion == catalog.version()
+                && filteredCandidateRecipeSetVersion == recipeSetVersion && sameSources(filteredCandidateSource, sources)) {
             return filteredCandidates;
         }
-        filteredCandidateSource = Collections.unmodifiableList(new ArrayList<>(machineCandidates));
-        filteredCandidateCatalogVersion = catalogVersion;
+        Map<ResourceLocation, List<MachineRecipe>> allowed = new HashMap<>();
+        if (coreThread) {
+            for (MachineRecipe source : recipeSet) {
+                MachineRecipe current = resolveSearchCandidate(source, catalog);
+                if (current != null) allowed.computeIfAbsent(current.id(), ignored -> new ArrayList<>()).add(current);
+            }
+        }
+        Map<ResourceLocation, List<MachineRecipe>> seen = new HashMap<>();
+        List<MachineRecipe> resolved = new ArrayList<>();
+        for (MachineRecipe source : sources) {
+            if (source == null || !Objects.equals(pool, source.recipePoolId())) continue;
+            MachineRecipe current = resolveSearchCandidate(source, catalog);
+            if (current == null || containsDefinition(seen, current)) continue;
+            seen.computeIfAbsent(current.id(), ignored -> new ArrayList<>()).add(current);
+            if (!coreThread || containsDefinition(allowed, current)) resolved.add(current);
+        }
+        filteredCandidateSource = Collections.unmodifiableList(new ArrayList<>(sources));
+        filteredCandidateCatalogVersion = catalog.version();
         filteredCandidateRecipeSetVersion = recipeSetVersion;
-        Set<MachineRecipe> allowed = recipeSet.stream().map(this::resolveSearchCandidate)
-                .filter(Objects::nonNull).collect(Collectors.toSet());
-        filteredCandidates = machineCandidates.stream().filter(allowed::contains).toList();
+        filteredCandidatePool = pool;
+        filteredCandidates = List.copyOf(resolved);
         return filteredCandidates;
     }
 
-    private @Nullable MachineRecipe resolveSearchCandidate(MachineRecipe source) {
-        MachineRecipeCatalog catalog = currentRecipeCatalog();
+    private static boolean sameSources(List<MachineRecipe> first, List<MachineRecipe> second) {
+        if (first.size() != second.size()) return false;
+        for (int index = 0; index < first.size(); index++) if (first.get(index) != second.get(index)) return false;
+        return true;
+    }
+
+    private static boolean containsDefinition(Map<ResourceLocation, List<MachineRecipe>> definitions, MachineRecipe recipe) {
+        for (MachineRecipe existing : definitions.getOrDefault(recipe.id(), List.of())) {
+            if (existing == recipe || existing.equals(recipe)) return true;
+        }
+        return false;
+    }
+
+    private @Nullable MachineRecipe resolveSearchCandidate(MachineRecipe source, MachineRecipeCatalog catalog) {
         if (catalog.version() != suppliedCandidateCatalogVersion) suppliedCandidateCatalogCurrent = false;
         if (sourceCatalogVersion != catalog.version()) {
             Map<ResourceLocation, MachineRecipe> sources = new HashMap<>();

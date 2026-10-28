@@ -96,6 +96,7 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.function.Predicate;
 
 /** Mekanism-present bridge implementation and loaded recipe handlers.
@@ -636,6 +637,17 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
         return matcher != null && matcher.matches(
                 NativeAsyncResourceValues.chemical(value).getChemicalHolder());
+    }
+
+    public static Set<AsyncResourceValue> matchingChemicalSearchResources(LoadedChemicalRequirement requirement,
+                                                                         Set<AsyncResourceValue> values) {
+        ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
+        if (matcher == null) return Set.of();
+        Set<AsyncResourceValue> matching = new HashSet<>();
+        for (AsyncResourceValue value : values) {
+            if (matcher.matches(NativeAsyncResourceValues.chemical(value).getChemicalHolder())) matching.add(value);
+        }
+        return Set.copyOf(matching);
     }
 
     public static boolean acceptsChemicalSearchPort(LoadedChemicalRequirement requirement, MachineCapability capability) {

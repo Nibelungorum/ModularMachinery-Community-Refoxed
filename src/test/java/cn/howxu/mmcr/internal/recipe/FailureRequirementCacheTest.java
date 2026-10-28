@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -228,6 +232,69 @@ class FailureRequirementCacheTest {
             assertThat(conversions).hasValue(2);
             assertThat(((ItemRequirement) first.getFirst()).stack().getCount()).isEqualTo(1);
             assertThat(((ItemRequirement) second.getFirst()).stack().getCount()).isEqualTo(2);
+        }
+    }
+
+    @Test
+    void empty_declared_outputs_do_not_enumerate_custom_output_matchers() {
+        try (var ignored = OutputRegistry.openTestScope()) {
+            AtomicInteger matches = new AtomicInteger();
+            AtomicReference<OutputType<TestOutput>> registered = new AtomicReference<>();
+            var id = MMCR.id("failure_empty_outputs");
+            OutputType<TestOutput> type = new OutputType.Definition<>(id,
+                    MapCodec.unit(() -> new TestOutput(registered.get(), 1F)),
+                    (output, chance) -> new TestOutput(output.outputType(), chance), (output, modifiers) -> output,
+                    output -> output, OutputType.Presentation.defaults(id), id.toString(),
+                    (output, tags) -> new ItemRequirement(IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT)),
+                    requirement -> { matches.incrementAndGet(); return false; });
+            registered.set(type);
+            OutputRegistry.register(type);
+            MachineRecipe recipe = recipe("failure_empty_outputs", List.of(input(1)), List.of(), List.of());
+            matches.set(0);
+            assertThat(recipe.runtimeRequirements(List.of())).hasSize(1);
+            assertThat(recipe.runtimeRequirements(List.of())).hasSize(1);
+            assertThat(matches).hasValue(0);
+        }
+    }
+
+    @Test
+    void native_chemical_and_heat_views_are_reused_but_replaced_delegates_stay_live() {
+        boolean chemicalNative = LoadedChemicalRequirement.supportsSearchSnapshot();
+        boolean heatNative = LoadedHeatRequirement.supportsSearchSnapshot();
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            if (RequirementHandlerRegistry.typeFor(LoadedChemicalRequirement.TYPE.id()) == null)
+                RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
+            if (RequirementHandlerRegistry.typeFor(LoadedHeatRequirement.TYPE.id()) == null)
+                RequirementHandlerRegistry.register(LoadedHeatRequirement.TYPE);
+            LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+            LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+            MachineRecipe recipe = recipe("failure_native_compat", List.of(
+                    LoadedChemicalRequirement.input(ChemicalIngredient.chemical(MMCR.id("test_chemical"), 10L)),
+                    LoadedHeatRequirement.minimumTemperature(400D)), List.of(), List.of());
+            FailureRequirementCache cache = new FailureRequirementCache();
+            cache.prepare(List.of(recipe), 1L);
+            List<MachineRequirement> first = cache.resolve(recipe);
+            assertThat(cache.resolve(recipe)).isSameAs(first);
+            AtomicInteger modifiers = new AtomicInteger();
+            LoadedHeatRequirement.installHandler(new RequirementHandler<>() {
+                @Override public RequirementPlan plan(LoadedHeatRequirement requirement,
+                        List<MachineCapability> capabilities, PlanningContext context) {
+                    return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+                }
+                @Override public LoadedHeatRequirement applyModifiers(LoadedHeatRequirement requirement, List<RecipeModifier> values) {
+                    return LoadedHeatRequirement.minimumTemperature(500D + modifiers.incrementAndGet());
+                }
+            });
+            var changed = cache.resolve(recipe);
+            var changedAgain = cache.resolve(recipe);
+            assertThat(changed).isNotSameAs(first).isNotSameAs(changedAgain);
+            assertThat(((LoadedHeatRequirement) changed.get(1)).heat().value()).isEqualTo(501D);
+            assertThat(((LoadedHeatRequirement) changedAgain.get(1)).heat().value()).isEqualTo(502D);
+        } finally {
+            if (chemicalNative) LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+            else LoadedChemicalRequirement.installUnavailableHandler();
+            if (heatNative) LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+            else LoadedHeatRequirement.installUnavailableHandler();
         }
     }
 
