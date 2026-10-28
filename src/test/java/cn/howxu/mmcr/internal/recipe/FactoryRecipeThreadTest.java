@@ -7,6 +7,11 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.capability.status.FailureReport;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
@@ -15,6 +20,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.RecipeSearchResult;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -72,6 +78,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FactoryRecipeThreadTest {
     private static final HolderLookup.Provider EMPTY_LOOKUP = HolderLookup.Provider.create(Stream.empty());
     private ServerThreadTestScope serverThreadScope;
+    private ConfigTestSupport.WorkModeScope workModeScope;
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -81,11 +88,16 @@ class FactoryRecipeThreadTest {
     @BeforeEach
     void installServerThread() throws Exception {
         serverThreadScope = ServerThreadTestScope.open();
+        workModeScope = ConfigTestSupport.openMachineWorkMode(MachineWorkMode.ASYNC);
     }
 
     @AfterEach
     void restoreServerThread() throws Exception {
-        if (serverThreadScope != null) serverThreadScope.close();
+        try {
+            if (workModeScope != null) workModeScope.close();
+        } finally {
+            if (serverThreadScope != null) serverThreadScope.close();
+        }
     }
 
     @Test
@@ -117,6 +129,65 @@ class FactoryRecipeThreadTest {
             assertThat(matchers).containsKey(INPUT_AVAILABLE);
             assertThat(matchers.get(INPUT_AVAILABLE).getFirst().test("virtual-resource")).isTrue();
             assertThat(matchers.get(INPUT_AVAILABLE).getFirst().test("other-resource")).isFalse();
+        }
+    }
+
+    @Test
+    void failure_reports_build_each_requirement_once_and_preserve_all_resource_reasons() {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            MatchingFixture fixture = countingWakeups();
+            FailureReport report = FailureReport.forRecipeSearch()
+                    .plus(failure(BuiltinFailureReasons.MISSING_INPUT, fixture.recipe().id()), 0F)
+                    .plus(failure(BuiltinFailureReasons.MISSING_INPUT, fixture.recipe().id()), 0F)
+                    .plus(failure(BuiltinFailureReasons.MISSING_OUTPUT, fixture.recipe().id()), 0F)
+                    .plus(failure(BuiltinFailureReasons.MISSING_INPUT, MMCR.id("unknown_failure_recipe")), 0F);
+
+            assertThat(fixture.apply(report)).isEqualTo(NO_MATCH);
+
+            assertThat(fixture.derivations()).hasValue(1);
+            assertThat(fixture.wakeups()).hasValue(1);
+            assertThat(fixture.lane().matchesAvailability(INPUT_AVAILABLE, "virtual-input")).isTrue();
+            assertThat(fixture.lane().matchesAvailability(INPUT_AVAILABLE, "other")).isFalse();
+            assertThat(fixture.lane().matchesAvailability(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY,
+                    "virtual-output")).isTrue();
+            assertThat(fixture.lane().searchFailureReason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT.id());
+
+            assertThat(fixture.apply(report)).isEqualTo(NO_MATCH);
+            assertThat(fixture.derivations()).hasValue(2);
+            assertThat(fixture.wakeups()).hasValue(2);
+        }
+    }
+
+    @Test
+    void unknown_or_absent_recipe_traces_and_empty_reports_do_not_build_unrelated_matchers() {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            MatchingFixture fixture = countingWakeups();
+            FailureReport report = FailureReport.forRecipeSearch()
+                    .plus(failure(BuiltinFailureReasons.MISSING_INPUT, MMCR.id("unknown_failure_recipe")), 0F)
+                    .plus(failure(BuiltinFailureReasons.MISSING_INPUT, null), 0F);
+
+            assertThat(fixture.apply(report)).isEqualTo(NO_MATCH);
+            assertThat(fixture.apply(FailureReport.forRecipeSearch())).isEqualTo(NO_MATCH);
+
+            assertThat(fixture.derivations()).hasValue(0);
+            assertThat(fixture.wakeups()).hasValue(0);
+            assertThat(fixture.lane().matchesAvailability(INPUT_AVAILABLE, "virtual-input")).isFalse();
+        }
+    }
+
+    @Test
+    void capture_exceptions_keep_conservative_wakeups_without_invoking_requirement_handlers() {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            MatchingFixture fixture = countingWakeups();
+            assertThat(fixture.lane().startSearchResult(fixture.context(), List.of(fixture.recipe()),
+                    fixture.context().snapshot().structure().version(),
+                    new FactoryRecipeThread.SearchResult(null, new IllegalStateException("capture failed"), false)))
+                    .isEqualTo(FAILED);
+
+            assertThat(fixture.derivations()).hasValue(0);
+            assertThat(fixture.wakeups()).hasValue(0);
+            assertThat(fixture.lane().matchesAvailability(INPUT_AVAILABLE, "virtual-input")).isTrue();
+            assertThat(fixture.lane().matchesAvailability(INPUT_AVAILABLE, "other")).isTrue();
         }
     }
 
@@ -555,6 +626,68 @@ class FactoryRecipeThreadTest {
         assertThat(lane.runtime().active()).isFalse();
         assertThat(lane.searchAndStartRecipe(List.of(recipe), 1L, current.structure().version())).isEqualTo(STARTED);
         assertThat(lane.hasFullSearchPending()).isFalse();
+    }
+
+    private static MatchingFixture countingWakeups() {
+        AtomicInteger derivations = new AtomicInteger();
+        AtomicInteger wakeups = new AtomicInteger();
+        AtomicReference<RequirementType<TestRequirement>> registered = new AtomicReference<>();
+        RequirementType<TestRequirement> type = new RequirementType.Definition<>(MMCR.id("counted_factory_wakeups"),
+                MapCodec.unit(() -> new TestRequirement(registered.get(), IOType.INPUT)), new RequirementHandler<>() {
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
+            }
+
+            @Override
+            public TestRequirement applyModifiers(TestRequirement requirement, List<RecipeModifier> modifiers) {
+                derivations.incrementAndGet();
+                return requirement;
+            }
+
+            @Override
+            public List<ResourceWakeup> resourceWakeups(TestRequirement requirement) {
+                wakeups.incrementAndGet();
+                return List.of(new ResourceWakeup(Set.of(BuiltinFailureReasons.MISSING_INPUT.id()),
+                                WakeupReason.INPUT_AVAILABLE, "virtual-input"::equals),
+                        new ResourceWakeup(Set.of(BuiltinFailureReasons.MISSING_OUTPUT.id()),
+                                WakeupReason.OUTPUT_CAPACITY, "virtual-output"::equals));
+            }
+        }, requirement -> requirement);
+        registered.set(type);
+        RequirementHandlerRegistry.register(type);
+        MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("counted_failure_recipe"), MMCR.id("test_cube"),
+                20, List.of(new TestRequirement(type, IOType.INPUT)), List.of(), List.of(),
+                0, 1, false, false, false, Set.of());
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRecipeThread lane = FactoryRecipeThread.simple(controller);
+        MachineRecipe unrelated = MachineRecipe.fromCanonical(MMCR.id("unrelated_failure_recipe"), MMCR.id("test_cube"),
+                20, List.of(new TestRequirement(type, IOType.INPUT)), List.of(), List.of(),
+                0, 1, false, false, false, Set.of());
+        FactorySearchContext context = new FactorySearchContext(controller.currentRuntimeSnapshot(), List.of(recipe, unrelated),
+                controller.componentRuntime().capabilitySnapshot(), controller.componentRuntime().modifierList(),
+                RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version(),
+                controller.resourceAvailabilityEpoch(), 1L, 0L);
+        return new MatchingFixture(lane, context, recipe, derivations, wakeups);
+    }
+
+    private static ExecutionStatus failure(FailureReason reason, ResourceLocation recipeId) {
+        ResourceLocation source = MMCR.id("factory_matcher_test");
+        return ExecutionStatus.blocked(reason.id(), source, FailureOccurrence.at(reason, source,
+                FailurePhase.REQUIREMENT_PLAN, recipeId, 0, Map.of()));
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record MatchingFixture(FactoryRecipeThread lane, FactorySearchContext context, MachineRecipe recipe,
+                                   AtomicInteger derivations, AtomicInteger wakeups) {
+        private RecipeThread.StartResult apply(FailureReport report) {
+            var snapshot = context.snapshot();
+            RecipeSearchResult result = RecipeSearchResult.failure(MMCR.id("test_cube"), snapshot.structure().version(),
+                    snapshot.capabilityVersion(), snapshot.modifierVersion(), report, 0F);
+            return lane.startSearchResult(context, context.orderedCandidates(), snapshot.structure().version(),
+                    new FactoryRecipeThread.SearchResult(result, null, false));
+        }
     }
 
     private record TestRequirement(RequirementType<TestRequirement> type, RecipeModifier.IOType io)
