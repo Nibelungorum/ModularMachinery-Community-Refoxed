@@ -107,6 +107,29 @@ class FactoryRecipeThreadTest {
     }
 
     @Test
+    void a_temporarily_missing_pool_does_not_rebind_a_core_lanes_supplied_sources() {
+        var fixture = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        AtomicReference<Identifier> selected = new AtomicReference<>(MMCR.id("test_cube"));
+        AtomicInteger poolReads = new AtomicInteger();
+        var controller = new MachineControllerBlockEntity(BlockPos.ZERO, fixture.getBlockState()) {
+            @Override public Identifier currentRecipePoolId() {
+                poolReads.incrementAndGet();
+                return selected.get();
+            }
+        };
+        var source = RecipeTestSupport.create(MMCR.id("candidate_temporary_pool"), MMCR.id("test_cube"), 20, List.of(), List.of());
+        var lane = FactoryRecipeThread.core(controller, "missing-pool", Set.of(source));
+        var sources = List.of(source);
+        assertThat(lane.candidatesFor(sources)).containsExactly(source);
+        selected.set(null);
+        poolReads.set(0);
+        assertThat(lane.candidatesFor(sources)).isEmpty();
+        assertThat(poolReads).hasValue(1);
+        selected.set(source.recipePoolId());
+        assertThat(lane.candidatesFor(sources)).containsExactly(source);
+    }
+
+    @Test
     void candidate_cache_avoids_deep_hashing_and_observes_mutable_source_lists() {
         try (var ignored = RequirementHandlerRegistry.openTestScope()) {
             var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));

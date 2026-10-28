@@ -139,8 +139,9 @@ public final class FactoryRecipeThread extends RecipeThread {
     }
 
     public List<MachineRecipe> candidatesFor(List<MachineRecipe> candidates, long catalogVersion) {
-        MachineRecipeCatalog catalog = currentRecipeCatalog();
         Identifier pool = currentRecipePoolId();
+        if (pool == null) return List.of();
+        MachineRecipeCatalog catalog = currentRecipeCatalog();
         List<MachineRecipe> sources = candidates == null ? catalog.recipes() : candidates;
         // Validate actual ownership, not the caller's catalog hint; also observe mutable supplied lists.
         if (Objects.equals(filteredCandidatePool, pool) && filteredCandidateCatalogVersion == catalog.version()
