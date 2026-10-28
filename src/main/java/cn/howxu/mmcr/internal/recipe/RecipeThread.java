@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import java.util.function.BooleanSupplier;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
@@ -164,18 +166,26 @@ public abstract class RecipeThread {
     protected boolean submitAsyncRecipeSearch(MachineAsyncCoordinator.TaskKey taskKey,
                                               AsyncRequirementPlanner.RecipeSearchRequest request,
                                               long catalogVersion, long searchId, String searchLaneId,
-                                              Runnable clearPendingSearch) {
+                                              BooleanSupplier ownsSearch, Runnable clearPendingSearch) {
         if (!(controller.getLevel() instanceof ServerLevel level)) return false;
-        AsyncRecipeSearch search = new AsyncRecipeSearch(request);
+        AsyncRecipeSearch search = new AsyncRecipeSearch(request,
+                new RecipeSearchContinuation(request.snapshotValues(), searchLaneId, catalogVersion, searchId));
         return MachineAsyncCoordinator.get(level).submitDetailed(taskKey,
-                new AsyncRecipeSearchContinuation(search, catalogVersion, searchId, searchLaneId),
+                search.continuation(),
                 (key, step) -> applyAsyncRecipeSearch(key, step, search, catalogVersion, searchId,
                         searchLaneId, clearPendingSearch),
                 new MachineAsyncCoordinator.TaskHooks(
-                        () -> isAsyncRecipeSearchCurrent(taskKey, request, catalogVersion, searchLaneId),
+                        () -> ownsSearch.getAsBoolean() && isAsyncRecipeSearchCurrent(taskKey, request, catalogVersion, searchLaneId),
                         (ignored, outcome) -> {
                             if (!(outcome instanceof MachineAsyncCoordinator.TaskOutcome.Succeeded)) {
+                                boolean current = ownsSearch.getAsBoolean()
+                                        && isAsyncRecipeSearchCurrent(taskKey, request, catalogVersion, searchLaneId);
                                 clearPendingSearch.run();
+                                if (current && outcome instanceof MachineAsyncCoordinator.TaskOutcome.Failed failed) {
+                                    MMCR.LOG.warn("Async recipe worker failed: controller={} lane={}",
+                                            controller.getBlockPos(), searchLaneId, failed.cause());
+                                    onStartSearchFailed(null);
+                                }
                             }
                         })) == MachineAsyncCoordinator.SubmissionResult.ACCEPTED;
     }
@@ -183,27 +193,39 @@ public abstract class RecipeThread {
     private MainThreadStep.Result applyAsyncRecipeSearch(MachineAsyncCoordinator.TaskKey taskKey, MainThreadStep step,
                                                           AsyncRecipeSearch search, long catalogVersion, long searchId,
                                                           String searchLaneId, Runnable clearPendingSearch) {
-        if (!(step instanceof MainThreadStep.FactorySearch completed)
-                || completed.searchId() != searchId || !searchLaneId.equals(completed.laneId())
-                || !isAsyncRecipeSearchCurrent(taskKey, search.request(), catalogVersion, searchLaneId)) {
+        if (!isAsyncRecipeSearchCurrent(taskKey, search.request(), catalogVersion, searchLaneId)) {
             clearPendingSearch.run();
-            return MainThreadStep.Result.success();
+            return MainThreadStep.Result.failure(new IllegalStateException("Recipe search became stale"));
+        }
+        if (step instanceof MainThreadStep.RecipeSearchProofStep proof && proof.searchId() == searchId
+                && proof.catalogVersion() == catalogVersion && searchLaneId.equals(proof.laneId())) {
+            RecipeSearchProof.Result evidence = search.request().prove(proof.request(), runtime);
+            if (!isAsyncRecipeSearchCurrent(taskKey, search.request(), catalogVersion, searchLaneId)) {
+                clearPendingSearch.run();
+                return MainThreadStep.Result.failure(new IllegalStateException("Recipe proof became stale"));
+            }
+            return MainThreadStep.Result.value(evidence);
+        }
+        if (!(step instanceof MainThreadStep.FactorySearch completed) || completed.searchId() != searchId
+                || completed.catalogVersion() != catalogVersion || !searchLaneId.equals(completed.laneId())) {
+            return MainThreadStep.Result.failure(new IllegalArgumentException("Unexpected recipe search step"));
         }
         clearPendingSearch.run();
-        AsyncRequirementPlanner.RecipeSearchResult result = search.result();
+        RecipeSearchPlanner.Outcome outcome = search.continuation().outcome();
+        AsyncRequirementPlanner.RecipeSearchResult result = outcome == null ? null : search.request().result(outcome);
         if (result == null || result.failure() != null || result.result() == null || !result.result().success()) {
             controller.clearPendingConflictStart();
-            if (result != null && result.failure() == null && result.result() != null) runtime.stopEnergyPrefetch();
+            if (!search.request().livePrefetchSearch() && result != null && result.failure() == null
+                    && result.result() != null) runtime.stopEnergyPrefetch();
             if (result == null || result.result() == null || result.failure() != null) {
+                if (result != null && result.failure() != null) {
+                    MMCR.LOG.warn("Async recipe search failed: controller={} lane={}",
+                            controller.getBlockPos(), searchLaneId, result.failure());
+                }
                 onStartSearchFailed(null);
             } else {
                 onRecipeSearchFailed(result.result());
             }
-            return MainThreadStep.Result.success();
-        }
-        if (result.requiresMainThreadReplan()) {
-            searchAndStartRecipe(search.request().candidates(), search.request().maxParallelism(),
-                    search.request().structureVersion());
             return MainThreadStep.Result.success();
         }
         if (controller.shouldDelayConflictProneStart(result.result())) return MainThreadStep.Result.success();
@@ -228,33 +250,17 @@ public abstract class RecipeThread {
                 && current.capabilityVersion() == captured.capabilityVersion()
                 && current.modifierVersion() == captured.modifierVersion()
                 && current.stateVersion() == captured.stateVersion()
+                && current.upgradeContentRevision() == captured.upgradeContentRevision()
+                && current.maxParallelism() == captured.maxParallelism()
+                && (request.snapshotValues().stamp().routing() < 0L || controller.componentRuntime().inputRoutingRevision()
+                        == request.snapshotValues().stamp().routing())
                 && currentMachine != null && capturedMachine != null
                 && currentMachine.registryName().equals(capturedMachine.registryName())
                 && currentCatalogVersion() == catalogVersion;
     }
 
-    private static final class AsyncRecipeSearch {
-        private final AsyncRequirementPlanner.RecipeSearchRequest request;
-        private volatile @Nullable AsyncRequirementPlanner.RecipeSearchResult result;
-
-        private AsyncRecipeSearch(AsyncRequirementPlanner.RecipeSearchRequest request) {
-            this.request = request;
-        }
-
-        private AsyncRequirementPlanner.RecipeSearchRequest request() { return request; }
-        private @Nullable AsyncRequirementPlanner.RecipeSearchResult result() { return result; }
-    }
-
-    private record AsyncRecipeSearchContinuation(AsyncRecipeSearch search, long catalogVersion, long searchId,
-                                                 String searchLaneId) implements AsyncContinuation {
-
-        @Override
-            public Yield advance(AsyncExecutionContext context) {
-                search.result = search.request().search();
-                return Yield.mainThread(new MainThreadStep.FactorySearch(searchLaneId, catalogVersion, searchId),
-                        ignored -> ignoredContext -> Yield.complete());
-            }
-        }
+    private record AsyncRecipeSearch(AsyncRequirementPlanner.RecipeSearchRequest request,
+                                     RecipeSearchContinuation continuation) {}
 
     private static List<MachineRecipe> candidatesForPool(List<MachineRecipe> candidates, ResourceLocation recipePoolId) {
         if (candidates == null || candidates.isEmpty()) return List.of();

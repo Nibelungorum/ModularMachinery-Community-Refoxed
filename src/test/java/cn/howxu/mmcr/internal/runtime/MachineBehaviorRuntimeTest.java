@@ -1011,7 +1011,7 @@ class MachineBehaviorRuntimeTest {
     }
 
     @Test
-    void factory_lane_uses_the_same_recipe_tick_callback() {
+    void factory_lane_uses_the_same_recipe_tick_callback() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
         controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
@@ -1020,8 +1020,10 @@ class MachineBehaviorRuntimeTest {
         runtime.ensureBaseLane(controller);
         MachineRecipe recipe = recipe("behavior_factory_recipe");
 
-        runtime.tick(List.of(recipe), 1, 0L);
-        runtime.tick(List.of(recipe), 1, 1L);
+        try (var mode = ConfigTestSupport.openMachineWorkMode(MachineWorkMode.SYNC)) {
+            runtime.tick(List.of(recipe), 1, 0L);
+            runtime.tick(List.of(recipe), 1, 1L);
+        }
 
         assertThat(calls).hasValue(1);
     }

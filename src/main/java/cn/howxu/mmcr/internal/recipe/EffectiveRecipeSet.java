@@ -4,9 +4,16 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 
+import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /** Immutable worker result for all effective candidates of one controller version key.
  * @author howxu <dev@howxu.cn>
@@ -31,28 +38,60 @@ public record EffectiveRecipeSet(Key key, List<EffectiveRecipe> recipes) {
 
     /** Controller-local cache shared by async searches for the same immutable input versions. */
     public static final class Cache {
-        private @org.jetbrains.annotations.Nullable Key key;
+        private @Nullable Key key;
+        private @Nullable ResourceLocation pool;
+        private long upgradeRevision;
+        private long maxParallelism;
+        private int laneLimit;
         private List<MachineRecipe> sources = List.of();
         private List<MachineModifier> modifiers = List.of();
-        private @org.jetbrains.annotations.Nullable EffectiveRecipeSet value;
+        private final Map<ResourceLocation, EffectiveRecipe> recipesById = new HashMap<>();
+        private final EffectiveRecipeResolver resolver = new EffectiveRecipeResolver();
+        private @Nullable EffectiveRecipeSet value;
 
         public synchronized EffectiveRecipeSet resolve(ControllerRuntimeSnapshot snapshot, long catalogVersion,
                                                        List<MachineRecipe> recipes,
                                                        List<MachineModifier> machineModifiers) {
             List<MachineRecipe> copiedRecipes = List.copyOf(recipes == null ? List.of() : recipes);
-            List<MachineModifier> copiedModifiers = List.copyOf(
-                    machineModifiers == null ? List.of() : machineModifiers);
+            prepare(snapshot, catalogVersion, copiedRecipes.isEmpty() ? pool : copiedRecipes.getFirst().recipePoolId(),
+                    machineModifiers);
+            if (copiedRecipes.equals(sources) && value != null) return value;
+            List<EffectiveRecipe> resolved = copiedRecipes.stream()
+                    .map(recipe -> resolveOne(snapshot, catalogVersion, recipe, machineModifiers)).toList();
+            sources = copiedRecipes;
+            value = new EffectiveRecipeSet(key, resolved);
+            return value;
+        }
+
+        public synchronized EffectiveRecipe resolveOne(ControllerRuntimeSnapshot snapshot, long catalogVersion,
+                                                        MachineRecipe recipe, List<MachineModifier> machineModifiers) {
+            prepare(snapshot, catalogVersion, recipe.recipePoolId(), machineModifiers);
+            EffectiveRecipe cached = recipesById.get(recipe.id());
+            if (cached != null && cached.source() == recipe) return cached;
+            EffectiveRecipe resolved = resolver.resolve(recipe, snapshot, modifiers);
+            // Only the current catalog owns long-lived entries; temporary pattern recipes cannot grow this map.
+            if (RecipeRegistry.getRecipe(recipe.id()) == recipe) recipesById.put(recipe.id(), resolved);
+            return resolved;
+        }
+
+        private void prepare(ControllerRuntimeSnapshot snapshot, long catalogVersion, @Nullable ResourceLocation requestedPool,
+                             List<MachineModifier> machineModifiers) {
+            List<MachineModifier> requestedModifiers = List.copyOf(machineModifiers == null ? List.of() : machineModifiers);
             Key requestedKey = new Key(snapshot.structure().version(), snapshot.capabilityVersion(),
                     snapshot.modifierVersion(), snapshot.stateVersion(), catalogVersion);
-            if (requestedKey.equals(key) && copiedRecipes.equals(sources)
-                    && copiedModifiers.equals(modifiers) && value != null) return value;
-            EffectiveRecipeSet resolved = EffectiveRecipeSet.resolve(snapshot, catalogVersion, copiedRecipes,
-                    copiedModifiers);
+            if (requestedKey.equals(key) && Objects.equals(pool, requestedPool)
+                    && upgradeRevision == snapshot.upgradeContentRevision()
+                    && maxParallelism == snapshot.maxParallelism() && laneLimit == snapshot.factory().laneLimit()
+                    && requestedModifiers.equals(modifiers)) return;
             key = requestedKey;
-            sources = copiedRecipes;
-            modifiers = copiedModifiers;
-            value = resolved;
-            return resolved;
+            pool = requestedPool;
+            upgradeRevision = snapshot.upgradeContentRevision();
+            maxParallelism = snapshot.maxParallelism();
+            laneLimit = snapshot.factory().laneLimit();
+            modifiers = requestedModifiers;
+            sources = List.of();
+            value = null;
+            recipesById.clear();
         }
     }
 }

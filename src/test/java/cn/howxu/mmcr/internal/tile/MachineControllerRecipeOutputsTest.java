@@ -16,6 +16,8 @@ import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -424,7 +426,9 @@ class MachineControllerRecipeOutputsTest {
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("factory_same_id_presentation"), MMCR.id("test_cube"),
                 20, List.of(), List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 3), 1F)),
                 List.of(), 0, 1, false, false, false, Set.of());
-        factory.tick(List.of(recipe), 1, 0L);
+        try (var mode = ConfigTestSupport.openMachineWorkMode(MachineWorkMode.SYNC)) {
+            factory.tick(List.of(recipe), 1, 0L);
+        }
         assertThat(factory.activeRuntimes()).as("Factory lane search result: %s", factory.threadSnapshots()).hasSize(1);
         CraftingRuntime lane = factory.activeRuntimes().getFirst();
         FactorySnapshot before = factory.snapshot();

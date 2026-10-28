@@ -16,6 +16,7 @@ import cn.howxu.mmcr.compat.extendedae_plus.MirrorPatternInterfaceGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.ChannelCardMenuGameTest;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticRecipeGameTest;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticTransportGameTest;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchGameTest;
 
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
@@ -89,6 +90,10 @@ public final class GameTestRegistry {
         register(event, "controller_placement_optional_vertical", 20, ControllerPlacementGameTest::optionalVerticalPlacementFollowsMeDrive);
         register(event, "controller_placement_required_vertical", 20, ControllerPlacementGameTest::requiredVerticalPlacementFollowsPitchSign);
         register(event, "controller_placement_without_player", 20, ControllerPlacementGameTest::placementWithoutPlayerUsesReferenceFallbacks);
+        register(event, "async_search_components_and_stack_limits", 20, RecipeSearchGameTest::componentPredicatesAndOutputStackLimits);
+        if (ModList.get().isLoaded("mekanism")) {
+            register(event, "async_search_chemical_and_heat", 20, RecipeSearchGameTest::chemicalAndHeatMatchNativeHandlers);
+        }
         register(event, "input_isolation_item_sources", 20, InputIsolationGameTest::itemSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_fluid_sources", 20, InputIsolationGameTest::fluidSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_combined_atomic", 20, InputIsolationGameTest::combinedInputSharesEnergyAndOutputAtomically);

@@ -1767,6 +1767,23 @@ class RecipeThreadTest {
     }
 
     @Test
+    void async_search_without_a_server_level_keeps_the_search_pending() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        MachineControllerBlockEntity controller = TestBootstrap.newController();
+        assertThat(controller.getLevel()).isNotInstanceOf(ServerLevel.class);
+        MachineRecipeThread thread = new MachineRecipeThread(controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_search_without_level"), MMCR.id("test_cube"),
+                20, List.of(), List.of());
+        thread.requestFullSearch();
+
+        assertThat(thread.searchAndStartAsyncRecipe(List.of(recipe), 1L,
+                controller.runtimeSnapshot().structure().version())).isEqualTo(RecipeThread.StartResult.DEFERRED);
+        assertThat(thread.hasFullSearchPending()).isTrue();
+        assertThat(thread.runtime().active()).isFalse();
+        assertThat(thread.runtime().failure()).isNull();
+    }
+
+    @Test
     void async_normal_controller_waits_for_worker_search_before_starting() {
         MachineControllerBlockEntity controller = normalController();
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("async_normal_search"), MMCR.id("test_cube"), 20,

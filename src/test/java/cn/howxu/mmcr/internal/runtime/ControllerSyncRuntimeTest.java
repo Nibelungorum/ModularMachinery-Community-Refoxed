@@ -40,6 +40,9 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.config.ServerConfig;
+import com.electronwill.nightconfig.core.CommentedConfig;
+import net.neoforged.fml.config.IConfigSpec;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -77,6 +80,11 @@ class ControllerSyncRuntimeTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+        CommentedConfig config = CommentedConfig.inMemory();
+        ServerConfig.SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
     }
 
     @AfterEach
@@ -328,7 +336,7 @@ class ControllerSyncRuntimeTest {
     }
 
     @Test
-    void factory_publishes_the_first_started_thread_on_the_first_tick() {
+    void sync_factory_publishes_the_first_started_threads_on_the_first_tick() {
         ResourceLocation machineId = MMCR.id("sync_factory_initial_threads");
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         BlockPos schedulerPos = controller.getBlockPos().offset(-1, 0, 0);
@@ -356,8 +364,15 @@ class ControllerSyncRuntimeTest {
                                 ItemStack.EMPTY)));
         RecipeRegistry.registerStatic(recipe);
 
-        controller.serverTick();
-        resolveSharedRequests(controller);
+        MachineWorkMode previous = ServerConfig.MACHINE_WORK_MODE.get();
+        ServerConfig.MACHINE_WORK_MODE.clearCache();
+        ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+        try {
+            controller.serverTick();
+            resolveSharedRequests(controller);
+        } finally {
+            ServerConfig.MACHINE_WORK_MODE.set(previous);
+        }
 
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(4);
     }

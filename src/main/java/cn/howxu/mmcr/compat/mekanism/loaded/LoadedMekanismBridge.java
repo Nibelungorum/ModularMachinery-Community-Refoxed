@@ -7,6 +7,8 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
@@ -615,6 +617,72 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
     public static RequirementHandler<LoadedHeatRequirement> heatHandler() {
         return new HeatHandler();
+    }
+
+    public static boolean isNativeChemicalHandler(RequirementHandler<?> handler) {
+        return handler instanceof ChemicalHandler;
+    }
+
+    public static boolean isNativeHeatHandler(RequirementHandler<?> handler) {
+        return handler instanceof HeatHandler;
+    }
+
+    public static boolean validChemicalSearch(LoadedChemicalRequirement requirement) {
+        return ChemicalMatcher.resolve(requirement.ingredient()) != null;
+    }
+
+    public static boolean matchesChemicalSearch(LoadedChemicalRequirement requirement,
+                                                 AsyncResourceValue value) {
+        ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
+        return matcher != null && matcher.matches(
+                NativeAsyncResourceValues.chemical(value).getChemicalHolder());
+    }
+
+    public static boolean acceptsChemicalSearchPort(LoadedChemicalRequirement requirement, MachineCapability capability) {
+        ChemicalHandlerPort port = chemicalPort(capability);
+        if (port == null) return false;
+        ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
+        boolean radioactive = matcher != null && matcher.exactHolder() != null
+                && matcher.exactHolder().value().isRadioactive();
+        return port.supportsRadioactivity(radioactive);
+    }
+
+    public static Object chemicalSearchOutput(LoadedChemicalRequirement requirement) {
+        ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
+        return matcher == null || matcher.exactHolder() == null ? null : new ChemicalStack(matcher.exactHolder(), 1L);
+    }
+
+    public static AsyncResourceValue chemicalSearchValue(Object resource) {
+        return resource instanceof ChemicalStack chemical && !chemical.isEmpty()
+                ? NativeAsyncResourceValues.chemical(chemical) : null;
+    }
+
+    /** Captured on the server thread; no tank, matcher or callback is retained in the search values.
+     * @author howxu <dev@howxu.cn>
+     */
+    public record ChemicalSearchPolicy(long inputLimit, long outputCapacity, boolean radioactiveRejected) { }
+
+    public static ChemicalSearchPolicy chemicalSearchPolicy(LoadedChemicalRequirement requirement, MachineCapability capability) {
+        ChemicalPort port = (ChemicalPort) capability;
+        IChemicalTank tank = port.chemicalTank();
+        if (requirement.io() == RecipeModifier.IOType.INPUT) {
+            return new ChemicalSearchPolicy(tank.extract(Long.MAX_VALUE, Action.SIMULATE,
+                    AutomationType.INTERNAL).getAmount(), 0L, false);
+        }
+        ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
+        if (matcher == null || matcher.exactHolder() == null) return new ChemicalSearchPolicy(0L, 0L, false);
+        ChemicalStack resource = new ChemicalStack(matcher.exactHolder(), 1L);
+        boolean attributes = tank.getAttributeValidator().process(resource);
+        long available = attributes && tank.isValid(resource)
+                ? Long.MAX_VALUE - tank.insert(resource.copyWithAmount(Long.MAX_VALUE), Action.SIMULATE,
+                AutomationType.INTERNAL).getAmount() : 0L;
+        return new ChemicalSearchPolicy(0L, available > 0L
+                ? RequirementHandlerSupport.saturatingAdd(tank.getStored(), available) : 0L,
+                !attributes && resource.isRadioactive());
+    }
+
+    public static boolean acceptsHeatSearchPort(MachineCapability capability) {
+        return capability instanceof HeatPort;
     }
 
     private static final class ChemicalHandler implements RequirementHandler<LoadedChemicalRequirement> {

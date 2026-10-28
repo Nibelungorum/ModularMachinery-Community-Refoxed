@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
@@ -587,7 +588,7 @@ class CraftingRuntimeStressTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"direct", "installed", "async-fallback"})
-    void stress_output_replacement_keeps_new_payment_inputs_and_contributions(String entry) {
+    void stress_output_replacement_keeps_new_payment_inputs_and_contributions(String entry) throws Exception {
         for (boolean throwAfterReplacement : new boolean[] {false, true}) {
             StressCapability oldInput = new StressCapability(IOType.INPUT, List.of("old"));
             StressCapability newInput = new StressCapability(IOType.INPUT, List.of("new"));
@@ -615,10 +616,12 @@ class CraftingRuntimeStressTest {
             switch (entry) {
                 case "direct" -> runtime.tick();
                 case "installed" -> {
-                    var installed = runtime.ensureInstalledProgram();
-                    assertThat(runtime.prepareInstalledTick(1L)).isTrue();
-                    assertThat(installed.tryAttempt(1L, 1L)).isTrue();
-                    installed.advance();
+                    try (var mode = ConfigTestSupport.openMachineWorkMode(MachineWorkMode.ASYNC)) {
+                        var installed = runtime.ensureInstalledProgram();
+                        assertThat(runtime.prepareInstalledTick(1L)).isTrue();
+                        assertThat(installed.tryAttempt(1L, 1L)).isTrue();
+                        installed.advance();
+                    }
                 }
                 case "async-fallback" -> {
                     assertThat(runtime.prepareAsyncTickPlan(controller.currentRuntimeSnapshot())).isNotNull();
