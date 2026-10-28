@@ -60,10 +60,16 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
         }
     }
 
-    /** Built-in item overlap ignores quantities/components, just as ItemRequirementHandler does. */
-    public record Overlap(Set<ResourceLocation> items, boolean anyItem, boolean hasItem, boolean customHandler) {
+    /** Native overlap ignores item quantities/components and compares lightning tiers by identity. */
+    public record Overlap(Set<ResourceLocation> items, boolean anyItem, boolean hasItem, boolean customHandler,
+                          Set<ResourceLocation> lightning) {
+        public Overlap(Set<ResourceLocation> items, boolean anyItem, boolean hasItem, boolean customHandler) {
+            this(items, anyItem, hasItem, customHandler, Set.of());
+        }
+
         public Overlap {
             items = Set.copyOf(items);
+            lightning = Set.copyOf(lightning);
         }
     }
 }

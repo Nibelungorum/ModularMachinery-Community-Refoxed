@@ -2,7 +2,9 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
@@ -13,6 +15,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningStorage;
+import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortBlockEntity;
@@ -106,15 +111,26 @@ public final class RecipeSearchGameTest {
         var energy = new LongEnergyStorage(100L, 100L, null);
         energy.setAmount(30L);
         double beforeHeat = heat.heatCapacitor().getHeat();
+        var lightning = new TestLightningStorage(2, 1_000L);
+        lightning.setContents(0, LightningTier.HIGH_VOLTAGE, 120L);
+        lightning.setContents(1, LightningTier.EXTREME_HIGH_VOLTAGE, 60L);
+        var lightningOutput = new TestLightningStorage(1, 100L);
         var capabilities = new CapabilitySnapshot(List.of(new ChemicalPortCapability(chemical),
-                new HeatPortCapability(heat), new HeatPortCapability(heatOutput), new EnergyHatchCapability(energy, IOType.INPUT)));
+                new HeatPortCapability(heat), new HeatPortCapability(heatOutput), new EnergyHatchCapability(energy, IOType.INPUT),
+                new LightningCapability(lightning, IOType.INPUT), new LightningCapability(lightningOutput, IOType.OUTPUT)));
         var oxygen = LoadedChemicalRequirement.input(ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 300L));
         compare(helper, capabilities, List.of(oxygen, oxygen, new EnergyRequirement(5L),
                 LoadedHeatRequirement.minimumTemperature(600D), LoadedHeatRequirement.outputHeat(10D)));
         compare(helper, capabilities, List.of(oxygen, LoadedHeatRequirement.minimumTemperature(900D)));
+        compare(helper, capabilities, List.of(oxygen, new EnergyRequirement(5L),
+                LoadedHeatRequirement.minimumTemperature(600D), LightningRequirement.input(LightningTier.HIGH_VOLTAGE, 30L),
+                LightningRequirement.input(LightningTier.EXTREME_HIGH_VOLTAGE, 20L),
+                LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 10L, 1F)));
+        compare(helper, capabilities, List.of(LightningRequirement.input(LightningTier.EXTREME_HIGH_VOLTAGE, 61L)));
         helper.assertTrue(chemical.chemicalTank().getStored() == 1_200L && energy.getAmountAsLong() == 30L
-                        && heat.heatCapacitor().getHeat() == beforeHeat,
-                "Chemical, heat and FE search must leave the original resources untouched");
+                        && heat.heatCapacitor().getHeat() == beforeHeat && lightning.amount(0) == 120L
+                        && lightning.amount(1) == 60L && lightningOutput.amount(0) == 0L,
+                "Chemical, heat, FE and lightning search must leave the original resources untouched");
         helper.succeed();
     }
 
@@ -142,6 +158,49 @@ public final class RecipeSearchGameTest {
                             && noMatch.failures().size() == 1
                             && noMatch.failures().getFirst().reasonId().equals(expected.failure().reason().id()),
                     "Native snapshot rejection must retain the synchronous failure kind: " + actual);
+        }
+    }
+
+    /** Runtime lightning storage for differential search checks.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class TestLightningStorage implements LightningStorage {
+        private final LightningTier[] tiers;
+        private final long[] amounts;
+        private final long capacity;
+
+        TestLightningStorage(int size, long capacity) {
+            tiers = new LightningTier[size];
+            amounts = new long[size];
+            this.capacity = capacity;
+        }
+
+        void setContents(int slot, LightningTier tier, long amount) { tiers[slot] = tier; amounts[slot] = amount; }
+        @Override public int size() { return tiers.length; }
+        @Override public Object identity() { return this; }
+        @Override public Object address(int slot) { return slot; }
+        @Override public Object key(LightningTier tier) { return tier; }
+        @Override public Object storedKey(int slot) { return tiers[slot]; }
+        @Override public long amount(int slot) { return amounts[slot]; }
+        @Override public long capacity(int slot, LightningTier tier) { return capacity; }
+        @Override public long extract(int slot, LightningTier tier, long amount, boolean simulate) {
+            throw new AssertionError("Search must not consume lightning");
+        }
+        @Override public long insert(LightningTier tier, long amount, boolean simulate) {
+            throw new AssertionError("Search must not produce lightning");
+        }
+        @Override public long reserveOutput(LightningTier tier, long amount, PlanningReservations reservations) {
+            long remaining = amount;
+            for (int slot = 0; slot < size() && remaining > 0L; slot++) {
+                Object current = reservations.nativeKey(this, slot, tiers[slot]);
+                long stored = reservations.nativeAmount(this, slot, amounts[slot]);
+                if (stored > 0L && current != tier) continue;
+                long moved = Math.min(remaining, Math.max(0L, capacity - stored));
+                if (moved > 0L && reservations.reserveNativeInsert(this, slot, tier, tiers[slot], amounts[slot], capacity, moved)) {
+                    remaining -= moved;
+                }
+            }
+            return amount - remaining;
         }
     }
 }

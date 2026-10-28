@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Candidate;
@@ -173,7 +174,8 @@ public final class RecipeSearchPlanner {
                 var right = chosen.overlap();
                 overlapping = left.hasItem() && right.hasItem() && (left.anyItem()
                         || !left.items().isEmpty() && right.anyItem()
-                        || left.items().stream().anyMatch(right.items()::contains));
+                        || left.items().stream().anyMatch(right.items()::contains))
+                        || left.lightning().stream().anyMatch(right.lightning()::contains);
             }
             if (!overlapping) continue;
             boolean inputWaiting;
@@ -334,7 +336,14 @@ public final class RecipeSearchPlanner {
     }
 
     private static boolean allowed(Rule rule, Scope scope, Port port) {
-        return !RequirementPlanner.isMaterialInput(rule.direction(), rule.type()) || scope.allows(port.sourceIndex());
+        // Lightning requirement IDs name tiers; both use the shared lightning capability ID.
+        return !(RequirementPlanner.isMaterialInput(rule.direction(), rule.type())
+                || rule.direction() == IOType.INPUT && lightning(rule)) || scope.allows(port.sourceIndex());
+    }
+
+    private static boolean lightning(Rule rule) {
+        return rule.type().equals(LightningTier.HIGH_VOLTAGE.requirementId())
+                || rule.type().equals(LightningTier.EXTREME_HIGH_VOLTAGE.requirementId());
     }
 
     private static long pair(int candidate, int earlier) { return (long) candidate << 32 | earlier & 0xffffffffL; }
