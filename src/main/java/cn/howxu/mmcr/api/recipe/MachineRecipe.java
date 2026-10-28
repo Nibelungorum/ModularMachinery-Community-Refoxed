@@ -89,6 +89,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final Identifier recipePoolId;
     private final int tickTime;
     private final List<MachineRequirement> requirements;
+    private volatile List<StageRequirement> cachedStageRequirements;
     private final int inputRequirementCount;
     private final List<MachineOutput> outputs;
     private final List<RecipeModifier> modifiers;
@@ -326,6 +327,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     private List<MachineRequirement> runtimeRequirementSource() {
+        if (outputs.isEmpty()) return requirements;
         List<MachineRequirement> source = new ArrayList<>(requirements);
         List<MachineRequirement> availableOutputRequirements = new ArrayList<>();
         for (MachineRequirement requirement : requirements) {
@@ -420,10 +422,13 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     public List<StageRequirement> stageRequirements() {
-        return requirements.stream()
-                .filter(StageRequirement.class::isInstance)
-                .map(StageRequirement.class::cast)
-                .toList();
+        List<StageRequirement> cached = cachedStageRequirements;
+        if (cached == null) {
+            cached = requirements.stream().filter(StageRequirement.class::isInstance)
+                    .map(StageRequirement.class::cast).toList();
+            cachedStageRequirements = cached;
+        }
+        return cached;
     }
 
     public Set<Identifier> requiredHostIds() {

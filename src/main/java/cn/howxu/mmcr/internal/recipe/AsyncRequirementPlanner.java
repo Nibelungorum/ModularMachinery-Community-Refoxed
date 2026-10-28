@@ -17,7 +17,6 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReport;
-import cn.howxu.mmcr.api.capability.status.FailureReasonRegistry;
 import cn.howxu.mmcr.api.capability.status.StatusSeverity;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
@@ -380,13 +379,10 @@ public final class AsyncRequirementPlanner {
                     MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT, MekanismFailureReasons.HEAT_OUTPUT_BLOCKED)) {
                 reasons.put(reason.id(), reason);
             }
-            for (RecipeSearchSnapshot.Candidate candidate : values.candidates()) {
-                if (candidate.staticFailure() != null) rememberReason(candidate.staticFailure());
-                candidate.rules().forEach(rule -> rememberReason(rule.failureReason()));
-            }
+            // Value-captured native rules use only the reasons above. Opaque extensions return
+            // their original ExecutionStatus through proofFailures, not through this native table.
         }
 
-        private void rememberReason(Identifier reason) { reasons.computeIfAbsent(reason, FailureReasonRegistry::resolve); }
         public ControllerRuntimeSnapshot snapshot() { return snapshot; }
         public long structureVersion() { return structureVersion; }
         public long maxParallelism() { return maxParallelism; }
@@ -420,8 +416,7 @@ public final class AsyncRequirementPlanner {
             float validity = 0F;
             for (RecipeSearchPlanner.Failure failure : ((RecipeSearchPlanner.NoMatch) outcome).failures()) {
                 RecipeSearchSnapshot.Candidate candidate = values.candidates().get(failure.candidateIndex());
-                Identifier type = candidate.rules().stream().filter(rule -> rule.index() == failure.requirementIndex())
-                        .map(RecipeSearchSnapshot.Rule::type).findFirst().orElse(MMCR.id("crafting_runtime"));
+                Identifier type = requirementType(candidate, failure.requirementIndex());
                 ExecutionStatus status = proofFailures.get(failure);
                 FailurePhase phase = failure.requirementIndex() >= 0 ? FailurePhase.REQUIREMENT_PLAN
                         : failure.reasonId().equals(BuiltinFailureReasons.LEVEL_INSUFFICIENT.id())
@@ -448,6 +443,14 @@ public final class AsyncRequirementPlanner {
             }
             return new RecipeSearchResult(cn.howxu.mmcr.api.recipe.RecipeSearchResult.failure(machineId,
                     structureVersion, snapshot.capabilityVersion(), snapshot.modifierVersion(), report, validity), null, false);
+        }
+
+        private static Identifier requirementType(RecipeSearchSnapshot.Candidate candidate, int index) {
+            List<RecipeSearchSnapshot.Rule> rules = candidate.rules();
+            if (index >= 0 && index < rules.size() && rules.get(index).index() == index) return rules.get(index).type();
+            // Opaque requirements can leave gaps in the captured rule indexes.
+            for (RecipeSearchSnapshot.Rule rule : rules) if (rule.index() == index) return rule.type();
+            return MMCR.id("crafting_runtime");
         }
 
         /** Main-thread-only compatibility boundary, limited to one candidate or one overlap pair. */
