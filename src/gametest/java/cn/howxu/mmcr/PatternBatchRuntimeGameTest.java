@@ -344,7 +344,10 @@ public final class PatternBatchRuntimeGameTest {
                 MachineRegistry.register(machine);
                 registered = true;
                 controller.setMachine(machine);
+                ServerConfig.MACHINE_WORK_MODE.clearCache();
                 ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);
+                helper.assertTrue(ServerConfig.machineWorkMode() == MachineWorkMode.SYNC,
+                        "The explicit production rounds require a synchronous test fixture");
                 SharedIoCoordinator.get(helper.getLevel()).beginExecutionRound(originalTime, true);
                 controller.serverTick();
                 helper.assertTrue(controller.currentStructureSnapshot().formed(), "Real fixture structure forms before admission");
@@ -442,6 +445,7 @@ public final class PatternBatchRuntimeGameTest {
                 SharedIoCoordinator.get(helper.getLevel()).cancel(controller.getBlockPos());
                 controller.releaseStructureClaims();
             } finally {
+                ServerConfig.MACHINE_WORK_MODE.clearCache();
                 ServerConfig.MACHINE_WORK_MODE.set(originalMode);
                 ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(originalTime);
                 RecipeRegistry.replaceDynamic(previousRecipes);

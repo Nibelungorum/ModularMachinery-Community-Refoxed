@@ -3093,6 +3093,108 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void catalog_membership_index_is_reused_for_permuted_sources_and_ordered_subsets() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        MachineRecipe first = itemInputRecipe("catalog_members_a", Items.IRON_INGOT);
+        MachineRecipe second = itemInputRecipe("catalog_members_b", Items.IRON_INGOT);
+        MachineRecipe third = itemInputRecipe("catalog_members_c", Items.IRON_INGOT);
+        RecipeRegistry.registerStaticBatch(List.of(first, second, third));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+
+        FactorySearchContext full = runtime.createSearchContext(controller.runtimeSnapshot(),
+                List.of(third, first, second), 1L, 0L);
+        FactorySearchContext subset = runtime.createSearchContext(controller.runtimeSnapshot(),
+                List.of(second, first), 1L, 1L);
+        FactorySearchContext repeated = runtime.createSearchContext(controller.runtimeSnapshot(),
+                List.of(second, first), 1L, 2L);
+        FactorySearchContext empty = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(), 1L, 3L);
+
+        assertThat(full.orderedCandidates()).isSameAs(RecipeRegistry.catalogForPool(first.recipePoolId()).orderedRecipes());
+        assertThat(subset.orderedCandidates()).containsExactly(first, second);
+        assertThat(repeated.orderedCandidates()).isSameAs(subset.orderedCandidates());
+        assertThat(empty.orderedCandidates()).isEmpty();
+        assertThat(runtime.catalogMembershipBuildCountForTesting()).isEqualTo(1);
+    }
+
+    @Test
+    void equal_nonidentical_catalog_members_still_use_the_input_index() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        MachineRecipe iron = itemInputRecipe("catalog_equal_iron", Items.IRON_INGOT);
+        MachineRecipe gold = itemInputRecipe("catalog_equal_gold", Items.GOLD_INGOT);
+        MachineRecipe diamond = itemInputRecipe("catalog_equal_diamond", Items.DIAMOND);
+        MachineRecipe equal = MachineRecipe.fromCanonical(iron.id(), iron.recipePoolId(), iron.tickTime(),
+                iron.requirements(), iron.machineOutputs(), iron.modifiers(), iron.priority(), iron.maxThreads(),
+                iron.doesCancelRecipeOnPerTickFailure(), iron.isParallelized(), iron.allowPartialOutputs(), iron.requiredHostIds());
+        assertThat(equal).isEqualTo(iron).isNotSameAs(iron);
+        RecipeRegistry.registerStaticBatch(List.of(iron, gold, diamond));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        setItem(input.itemStorage(), 0, new ItemStack(Items.GOLD_INGOT));
+
+        FactorySearchContext context = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(equal, gold), 1L, 0L);
+
+        assertThat(context.orderedCandidates()).containsExactly(gold);
+        assertThat(runtime.catalogMembershipBuildCountForTesting()).isEqualTo(1);
+    }
+
+    @Test
+    void same_id_different_definitions_and_unknown_ids_are_not_filtered_by_the_catalog_input_index() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        MachineRecipe registered = itemInputRecipe("catalog_foreign_definition", Items.IRON_INGOT);
+        MachineRecipe foreign = itemInputRecipe(registered.id().getPath(), Items.GOLD_INGOT);
+        MachineRecipe unknown = itemInputRecipe("catalog_foreign_unknown", Items.GOLD_INGOT);
+        assertThat(foreign).isNotEqualTo(registered);
+        RecipeRegistry.registerStatic(registered);
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+
+        FactorySearchContext changed = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(foreign), 1L, 0L);
+        FactorySearchContext missing = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(unknown), 1L, 1L);
+
+        assertThat(changed.orderedCandidates()).containsExactly(foreign);
+        assertThat(missing.orderedCandidates()).containsExactly(unknown);
+        assertThat(runtime.catalogMembershipBuildCountForTesting()).isEqualTo(1);
+    }
+
+    @Test
+    void catalog_membership_reload_rebuilds_the_index_and_does_not_accept_a_stale_same_id_definition() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        MachineRecipe original = itemInputRecipe("catalog_members_reload", Items.IRON_INGOT);
+        MachineRecipe replacement = itemInputRecipe(original.id().getPath(), Items.GOLD_INGOT);
+        RecipeRegistry.replaceDynamic(Map.of(original.id(), original));
+        FactoryRuntime runtime = new FactoryRuntime();
+        runtime.ensureBaseLane(controller);
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+        assertThat(runtime.createSearchContext(controller.runtimeSnapshot(), List.of(original), 1L, 0L)
+                .orderedCandidates()).containsExactly(original);
+        assertThat(runtime.catalogMembershipBuildCountForTesting()).isEqualTo(1);
+
+        RecipeRegistry.replaceDynamic(Map.of(replacement.id(), replacement));
+        FactorySearchContext current = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(replacement), 1L, 1L);
+        FactorySearchContext stale = runtime.createSearchContext(controller.runtimeSnapshot(), List.of(original), 1L, 2L);
+
+        assertThat(current.orderedCandidates()).isEmpty();
+        assertThat(stale.orderedCandidates()).containsExactly(original);
+        assertThat(runtime.catalogMembershipBuildCountForTesting()).isEqualTo(2);
+        setItem(input.itemStorage(), 0, new ItemStack(Items.GOLD_INGOT));
+        assertThat(runtime.createSearchContext(controller.runtimeSnapshot(), List.of(replacement), 1L, 3L)
+                .orderedCandidates()).containsExactly(replacement);
+        assertThat(runtime.catalogMembershipBuildCountForTesting()).isEqualTo(2);
+
+        runtime.discardForRecipePoolChange();
+        assertThat(runtime.createSearchContext(controller.runtimeSnapshot(), List.of(replacement), 1L, 4L)
+                .orderedCandidates()).containsExactly(replacement);
+        assertThat(runtime.catalogMembershipBuildCountForTesting()).isEqualTo(3);
+    }
+
+    @Test
     void candidate_context_cache_tracks_input_index_changes() {
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);

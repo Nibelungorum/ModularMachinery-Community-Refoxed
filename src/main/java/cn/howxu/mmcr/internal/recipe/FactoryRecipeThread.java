@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -73,6 +74,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private boolean searchGameTimeSet;
     private Map<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> failureResourceMatchers = Map.of();
     private List<MachineRecipe> failureCandidates = List.of();
+    private final FailureRequirementCache failureRequirements = new FailureRequirementCache();
     private List<MachineRecipe> filteredCandidateSource = List.of();
     private long filteredCandidateCatalogVersion = Long.MIN_VALUE;
     private long filteredCandidateRecipeSetVersion = Long.MIN_VALUE;
@@ -276,6 +278,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         resourceWakePending = false;
         failureResourceMatchers = Map.of();
         failureCandidates = List.of();
+        failureRequirements.clear();
     }
 
     public @Nullable Identifier searchFailureReason() {
@@ -376,7 +379,8 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     @Override
     protected void onRecipeSearchFailed(RecipeSearchResult result) {
-        super.onRecipeSearchFailed(result);
+        super.onStartSearchFailed(result.failure());
+        armSearchFailure();
         updateFailureResourceMatchers(failureCandidates, result.failureReport());
     }
 
@@ -684,6 +688,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private void updateFailureResourceMatchers(List<MachineRecipe> candidates, @Nullable FailureReport report) {
         EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers =
                 new EnumMap<>(ResourceAvailabilityNotifier.Reason.class);
+        failureRequirements.prepare(candidates, currentRecipeCatalog().version());
         if (report == null) {
             if (lastSearchFailureReason == null || BuiltinFailureReasons.RECIPE_SEARCH.id().equals(lastSearchFailureReason)
                     || BuiltinFailureReasons.UNKNOWN.id().equals(lastSearchFailureReason)) {
@@ -693,17 +698,23 @@ public final class FactoryRecipeThread extends RecipeThread {
                     matchers.put(reason, List.of(ignored -> true));
                 }
             } else {
-                for (MachineRecipe recipe : candidates) addRecipeMatchers(matchers, recipe, lastSearchFailureReason);
+                Set<Identifier> reasons = Set.of(lastSearchFailureReason);
+                for (MachineRecipe recipe : candidates) addRecipeMatchers(matchers, recipe, reasons);
             }
         } else {
+            Map<Identifier, Set<Identifier>> reasonsByRecipe = new HashMap<>();
             for (FailureReport.Candidate failure : report.candidates()) {
                 ExecutionStatus status = failure.status();
                 if (status.reason() == null || status.failure() == null) continue;
-                Set<Identifier> ids = status.failure().trace().frames().stream()
-                        .map(frame -> frame.recipeId()).filter(Objects::nonNull).collect(Collectors.toSet());
-                for (MachineRecipe recipe : candidates) {
-                    if (ids.contains(recipe.id())) addRecipeMatchers(matchers, recipe, status.reason().id());
+                for (var frame : status.failure().trace().frames()) {
+                    if (frame.recipeId() != null) reasonsByRecipe
+                            .computeIfAbsent(frame.recipeId(), ignored -> new HashSet<>())
+                            .add(status.reason().id());
                 }
+            }
+            for (MachineRecipe recipe : candidates) {
+                Set<Identifier> reasons = reasonsByRecipe.get(recipe.id());
+                if (reasons != null) addRecipeMatchers(matchers, recipe, reasons);
             }
         }
         failureResourceMatchers = matchers.entrySet().stream()
@@ -711,21 +722,26 @@ public final class FactoryRecipeThread extends RecipeThread {
                         entry -> List.copyOf(entry.getValue())));
     }
 
-    private static void addRecipeMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
-                                          MachineRecipe recipe, Identifier reason) {
-        if (BuiltinFailureReasons.MODULE_CONNECTION.id().equals(reason)) {
+    private void addRecipeMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
+                                   MachineRecipe recipe, Set<Identifier> reasons) {
+        if (reasons.contains(BuiltinFailureReasons.MODULE_CONNECTION.id())) {
             addMatcher(matchers, ResourceAvailabilityNotifier.Reason.MODULE_CONNECTION,
                     resource -> resource instanceof ModuleConnectionStatus);
         }
-        for (MachineRequirement requirement : recipe.runtimeRequirements()) {
-            addRequirementMatchers(matchers, requirement, reason);
+        for (MachineRequirement requirement : failureRequirements.resolve(recipe)) {
+            addRequirementMatchers(matchers, requirement, reasons);
         }
     }
 
     static void addRequirementMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
                                        MachineRequirement requirement, Identifier failureReason) {
+        addRequirementMatchers(matchers, requirement, Set.of(failureReason));
+    }
+
+    private static void addRequirementMatchers(EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers,
+                                               MachineRequirement requirement, Set<Identifier> failureReasons) {
         for (RequirementHandler.ResourceWakeup wakeup : RequirementHandlerRegistry.resourceWakeupsFor(requirement)) {
-            if (!wakeup.failureReasonIds().contains(failureReason)) continue;
+            if (Collections.disjoint(wakeup.failureReasonIds(), failureReasons)) continue;
             ResourceAvailabilityNotifier.Reason reason = ResourceAvailabilityNotifier.Reason.valueOf(
                     wakeup.reason().name());
             addMatcher(matchers, reason, wakeup.matcher());

@@ -110,6 +110,9 @@ public final class FactoryRuntime {
     private Set<Item> cachedIndexedInputItems = Set.of();
     private List<MachineRecipe> cachedIndexedCandidates = List.of();
     private @Nullable Identifier cachedCandidateRecipePoolId;
+    private @Nullable MachineRecipeCatalog cachedMembershipCatalog;
+    private Map<Identifier, MachineRecipe> catalogMembersById = Map.of();
+    private int catalogMembershipBuildCountForTesting;
     private final EffectiveRecipeSet.Cache effectiveRecipeCache = new EffectiveRecipeSet.Cache();
 
     public FactoryTickResult tick(List<MachineRecipe> candidates, long maxParallelism) {
@@ -999,6 +1002,8 @@ public final class FactoryRuntime {
         cachedIndexedInputItems = Set.of();
         cachedIndexedCandidates = List.of();
         cachedCandidateRecipePoolId = null;
+        cachedMembershipCatalog = null;
+        catalogMembersById = Map.of();
     }
 
     public void save(ValueOutput output) {
@@ -1114,18 +1119,15 @@ public final class FactoryRuntime {
     private List<MachineRecipe> orderedCandidates(List<MachineRecipe> candidates, MachineRecipeCatalog catalog) {
         if (candidates == null || candidates.isEmpty()) return List.of();
         if (candidates.equals(catalog.recipes())) return catalog.orderedRecipes();
-        if (candidates.size() == catalog.orderedRecipes().size()
-                && candidates.stream().allMatch(catalog.orderedRecipes()::contains)
-                && catalog.orderedRecipes().stream().allMatch(candidates::contains)) {
-            return catalog.orderedRecipes();
-        }
         if (cachedOrderedCandidateCatalogVersion == catalog.version()
                 && cachedOrderedCandidateSource.equals(candidates)) {
             return cachedOrderedCandidates;
         }
         List<MachineRecipe> ordered;
-        if (candidates.stream().allMatch(catalog.orderedRecipes()::contains)) {
-            ordered = catalog.orderedRecipes().stream().filter(candidates::contains).toList();
+        if (candidatesBelongToCatalog(candidates, catalog)) {
+            Set<Identifier> selected = candidates.stream().map(MachineRecipe::id).collect(Collectors.toSet());
+            ordered = catalog.orderedRecipes().stream().filter(recipe -> selected.contains(recipe.id())).toList();
+            if (ordered.size() == catalog.orderedRecipes().size()) ordered = catalog.orderedRecipes();
         } else {
             ordered = candidates.stream()
                     .sorted(Comparator.comparingInt(MachineRecipe::priority)
@@ -1135,8 +1137,8 @@ public final class FactoryRuntime {
         }
         cachedOrderedCandidateSource = List.copyOf(candidates);
         cachedOrderedCandidateCatalogVersion = catalog.version();
-        cachedOrderedCandidates = ordered;
-        return ordered;
+        cachedOrderedCandidates = List.copyOf(ordered);
+        return cachedOrderedCandidates;
     }
 
     private List<MachineRecipe> filterIndexedCandidates(List<MachineRecipe> ordered,
@@ -1166,9 +1168,21 @@ public final class FactoryRuntime {
         return filtered;
     }
 
-    private static boolean candidatesBelongToCatalog(List<MachineRecipe> candidates, MachineRecipeCatalog catalog) {
-        return candidates != null && candidates.stream().allMatch(catalog.orderedRecipes()::contains);
+    private boolean candidatesBelongToCatalog(List<MachineRecipe> candidates, MachineRecipeCatalog catalog) {
+        if (candidates == null) return false;
+        if (candidates.isEmpty()) return true;
+        if (cachedMembershipCatalog != catalog) {
+            Map<Identifier, MachineRecipe> members = new HashMap<>();
+            for (MachineRecipe recipe : catalog.orderedRecipes()) members.put(recipe.id(), recipe);
+            catalogMembersById = Map.copyOf(members);
+            cachedMembershipCatalog = catalog;
+            catalogMembershipBuildCountForTesting++;
+        }
+        return candidates.stream().allMatch(candidate -> candidate != null
+                && candidate.equals(catalogMembersById.get(candidate.id())));
     }
+
+    int catalogMembershipBuildCountForTesting() { return catalogMembershipBuildCountForTesting; }
 
     private @Nullable Set<Item> currentInputItems() {
         Set<Item> items = new LinkedHashSet<>();
