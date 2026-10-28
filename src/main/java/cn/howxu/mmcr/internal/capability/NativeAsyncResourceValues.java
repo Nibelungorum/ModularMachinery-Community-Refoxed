@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.capability;
 
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.DynamicOps;
@@ -62,6 +63,15 @@ public final class NativeAsyncResourceValues {
                 ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, value.resourceId()))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown chemical resource: " + value.resourceId()));
         return new ChemicalStack(chemical, 1L);
+    }
+
+    public static AsyncResourceValue lightning(LightningTier tier) {
+        return new AsyncResourceValue(tier.requirementId(), "");
+    }
+
+    public static LightningTier lightning(AsyncResourceValue value) {
+        if (!value.data().isEmpty()) throw new IllegalArgumentException("Lightning resources have no component data");
+        return LightningTier.fromId(value.resourceId());
     }
 
     private static String patch(DataComponentPatch patch) {

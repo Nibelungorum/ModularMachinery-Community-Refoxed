@@ -1,11 +1,18 @@
 package cn.howxu.mmcr.compat.ae2lt;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningViewFacet;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
+import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import org.junit.jupiter.api.AfterEach;
@@ -13,6 +20,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import static cn.howxu.mmcr.api.compat.ae2lt.LightningTier.HIGH_VOLTAGE;
 import static cn.howxu.mmcr.api.compat.ae2lt.LightningTier.EXTREME_HIGH_VOLTAGE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,8 +98,90 @@ class LightningPlanningTest {
         assertThat(handler.plan(LightningRequirement.input(HIGH_VOLTAGE, 1L), List.of(), new PlanningContext(1L, 0)).successful()).isFalse();
     }
 
+    @Test
+    void asyncSnapshotsPlanOnWorkersAndCommitAtomicallyAgainstChangedStorage() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            State state = new State();
+            state.amounts[0] = 4L;
+            state.amounts[1] = 4L;
+            var facet = new LightningCapability(new AsyncView(state), IOType.INPUT)
+                    .facet(AsyncPlanningFacet.class).orElseThrow();
+            var snapshot = facet.captureSnapshot();
+            var planner = facet.workerPlanner();
+            var request = new AsyncCapabilityRequest.Resource(LightningRecipeTypes.LIGHTNING, 1L,
+                    List.of(new AsyncResourceAction(NativeAsyncResourceValues.lightning(HIGH_VOLTAGE), 6L, false)));
+            var operation = CompletableFuture.supplyAsync(() -> planner.plan(snapshot, request).orElseThrow()).join();
+            assertThat(state.amounts).containsExactly(4L, 4L);
+
+            state.amounts[1] = 1L;
+            assertThat(facet.commit(operation).success()).isFalse();
+            assertThat(state.amounts).containsExactly(4L, 1L);
+
+            state.amounts[1] = 4L;
+            assertThat(facet.commit(operation).success()).isTrue();
+            assertThat(state.amounts).containsExactly(0L, 2L);
+            assertThat(facet.commit(operation).success()).isFalse();
+            assertThat(state.amounts).containsExactly(0L, 2L);
+        }
+    }
+
+    @Test
+    void asyncCommitsRejectWrongDirectionTierAndSlotWithoutMutation() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            State state = new State();
+            state.amounts[0] = 5L;
+            var facet = new LightningCapability(new AsyncView(state), IOType.INPUT)
+                    .facet(AsyncPlanningFacet.class).orElseThrow();
+            var value = NativeAsyncResourceValues.lightning(HIGH_VOLTAGE);
+            assertThat(value.resourceId()).isEqualTo(HIGH_VOLTAGE.requirementId());
+            assertThat(value.data()).isEmpty();
+            List<AsyncCapabilityOperation> invalid = List.of(
+                    new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0, value, 1L, true),
+                    new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 2, value, 1L, false),
+                    new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0,
+                            NativeAsyncResourceValues.lightning(EXTREME_HIGH_VOLTAGE), 1L, false),
+                    new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0,
+                            new AsyncResourceValue(HIGH_VOLTAGE.requirementId(), "unexpected data"), 1L, false));
+            for (var operation : invalid) assertThat(facet.commit(operation).success()).isFalse();
+            assertThat(state.amounts).containsExactly(5L, 0L);
+        }
+    }
+
     /** @author howxu <dev@howxu.cn> */
     private static final class State { private final long[] amounts = new long[2]; }
+    /** Two physical slots can contain the same lightning tier.
+     * @author howxu <dev@howxu.cn> */
+    private static final class AsyncView implements LightningStorage {
+        private final State state;
+        private AsyncView(State state) { this.state = state; }
+        @Override public int size() { return state.amounts.length; }
+        @Override public Object identity() { return state; }
+        @Override public Object address(int slot) { return slot; }
+        @Override public Object key(LightningTier tier) { return tier; }
+        @Override public Object storedKey(int slot) { return HIGH_VOLTAGE; }
+        @Override public long amount(int slot) { return state.amounts[slot]; }
+        @Override public long capacity(int slot, LightningTier tier) { return 10L; }
+        @Override public long extract(int slot, LightningTier tier, long amount, boolean simulate) {
+            if (storedKey(slot) != tier) return 0L;
+            long moved = Math.min(amount, amount(slot));
+            if (!simulate) state.amounts[slot] -= moved;
+            return moved;
+        }
+        @Override public long reserveOutput(LightningTier tier, long amount, PlanningReservations reservations) {
+            return 0L;
+        }
+        @Override public long insert(LightningTier tier, long amount, boolean simulate) {
+            long remaining = amount;
+            for (int slot = 0; slot < size() && remaining > 0L; slot++) {
+                if (storedKey(slot) != tier) continue;
+                long moved = Math.min(remaining, Math.max(0L, capacity(slot, tier) - state.amounts[slot]));
+                if (!simulate) state.amounts[slot] += moved;
+                remaining -= moved;
+            }
+            return amount - remaining;
+        }
+    }
+
     /** Two differently ordered projections can share one physical network identity.
      * @author howxu <dev@howxu.cn> */
     private static final class View implements LightningStorage {
