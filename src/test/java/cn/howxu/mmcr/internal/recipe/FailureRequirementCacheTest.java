@@ -2,7 +2,9 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -290,6 +292,80 @@ class FailureRequirementCacheTest {
             assertThat(changed).isNotSameAs(first).isNotSameAs(changedAgain);
             assertThat(((LoadedHeatRequirement) changed.get(1)).heat().value()).isEqualTo(501D);
             assertThat(((LoadedHeatRequirement) changedAgain.get(1)).heat().value()).isEqualTo(502D);
+        } finally {
+            if (chemicalNative) LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+            else LoadedChemicalRequirement.installUnavailableHandler();
+            if (heatNative) LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+            else LoadedHeatRequirement.installUnavailableHandler();
+        }
+    }
+
+    @Test
+    void outputOnlyChemicalAndHeatViewsAreCachedAndTrackBothNativeDelegates() {
+        boolean chemicalNative = LoadedChemicalRequirement.supportsSearchSnapshot();
+        boolean heatNative = LoadedHeatRequirement.supportsSearchSnapshot();
+        try (var ignored = RequirementHandlerRegistry.openTestScope(); var ignoredOutputs = OutputRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
+            RequirementHandlerRegistry.register(LoadedHeatRequirement.HEAT_TYPE);
+            OutputRegistry.register(LoadedChemicalOutput.TYPE);
+            OutputRegistry.register(LoadedHeatOutput.TYPE);
+            LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+            LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+            var chemical = new LoadedChemicalOutput(MMCR.id("test_chemical"), 10L, 1F);
+            var heat = new LoadedHeatOutput(200D);
+            MachineRecipe recipe = recipe("failure_native_outputs", List.of(), List.of(chemical, heat),
+                    List.of(new RecipeModifier("", IOType.OUTPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)));
+            assertThat(recipe.requirements()).isEmpty();
+            FailureRequirementCache cache = new FailureRequirementCache();
+            cache.prepare(List.of(recipe), 1L);
+            var first = cache.resolve(recipe);
+            assertThat(cache.resolve(recipe)).isSameAs(first);
+            assertThat(((LoadedChemicalRequirement) first.get(0)).ingredient().amount()).isEqualTo(20L);
+            assertThat(((LoadedHeatRequirement) first.get(1)).heat().value()).isEqualTo(400D);
+            assertThat(recipe.machineOutputs()).containsExactly(chemical, heat);
+
+            AtomicInteger heatModifiers = new AtomicInteger();
+            LoadedHeatRequirement.installHandler(new RequirementHandler<>() {
+                @Override public RequirementPlan plan(LoadedHeatRequirement requirement,
+                        List<MachineCapability> capabilities, PlanningContext context) {
+                    throw new AssertionError("Failure views must not plan resources");
+                }
+                @Override public LoadedHeatRequirement applyModifiers(LoadedHeatRequirement requirement, List<RecipeModifier> values) {
+                    return LoadedHeatRequirement.outputHeat(500D + heatModifiers.incrementAndGet());
+                }
+            });
+            var heatChanged = cache.resolve(recipe);
+            var heatChangedAgain = cache.resolve(recipe);
+            assertThat(heatChanged).isNotSameAs(first).isNotSameAs(heatChangedAgain);
+            assertThat(((LoadedHeatRequirement) heatChanged.get(1)).heat().value()).isEqualTo(501D);
+            assertThat(((LoadedHeatRequirement) heatChangedAgain.get(1)).heat().value()).isEqualTo(502D);
+
+            LoadedHeatRequirement.installHandler(LoadedMekanismBridge.heatHandler());
+            var restored = cache.resolve(recipe);
+            assertThat(cache.resolve(recipe)).isSameAs(restored);
+            AtomicInteger chemicalModifiers = new AtomicInteger();
+            LoadedChemicalRequirement.installHandler(new RequirementHandler<>() {
+                @Override public RequirementPlan plan(LoadedChemicalRequirement requirement,
+                        List<MachineCapability> capabilities, PlanningContext context) {
+                    throw new AssertionError("Failure views must not plan resources");
+                }
+                @Override public LoadedChemicalRequirement applyModifiers(LoadedChemicalRequirement requirement, List<RecipeModifier> values) {
+                    return LoadedChemicalRequirement.output(requirement.ingredient().id(), chemicalModifiers.incrementAndGet(), 1F);
+                }
+            });
+            var chemicalChanged = cache.resolve(recipe);
+            var chemicalChangedAgain = cache.resolve(recipe);
+            assertThat(chemicalChanged).isNotSameAs(restored).isNotSameAs(chemicalChangedAgain);
+            assertThat(((LoadedChemicalRequirement) chemicalChanged.get(0)).ingredient().amount()).isEqualTo(1L);
+            assertThat(((LoadedChemicalRequirement) chemicalChangedAgain.get(0)).ingredient().amount()).isEqualTo(2L);
+
+            LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+            var nativeAgain = cache.resolve(recipe);
+            assertThat(cache.resolve(recipe)).isSameAs(nativeAgain);
+            try (var clearedOutputs = OutputRegistry.openTestScope()) {
+                assertThatThrownBy(() -> cache.resolve(recipe)).isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("not registered canonically");
+            }
         } finally {
             if (chemicalNative) LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
             else LoadedChemicalRequirement.installUnavailableHandler();
