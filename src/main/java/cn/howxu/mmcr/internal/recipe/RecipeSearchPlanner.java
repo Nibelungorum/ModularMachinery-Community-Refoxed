@@ -5,6 +5,8 @@ import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
+import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Candidate;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Kind;
@@ -42,6 +44,7 @@ public final class RecipeSearchPlanner {
     private @Nullable RecipeSearchProof.Request waiting;
     private @Nullable Match selected;
     private @Nullable Outcome complete;
+    private @Nullable ResourceLocation compatibilityFailure;
 
     public RecipeSearchPlanner(RecipeSearchSnapshot snapshot) {
         this(snapshot, Math::random);
@@ -175,7 +178,8 @@ public final class RecipeSearchPlanner {
                 overlapping = left.hasItem() && right.hasItem() && (left.anyItem()
                         || !left.items().isEmpty() && right.anyItem()
                         || left.items().stream().anyMatch(right.items()::contains))
-                        || left.lightning().stream().anyMatch(right.lightning()::contains);
+                        || left.lightning().stream().anyMatch(right.lightning()::contains)
+                        || left.scalarInputs().stream().anyMatch(right.scalarInputs()::contains);
             }
             if (!overlapping) continue;
             boolean inputWaiting;
@@ -204,7 +208,8 @@ public final class RecipeSearchPlanner {
     private Failure failure(int index, Scope scope, Attempt attempt, boolean inputWaiting) {
         Candidate candidate = snapshot.candidates().get(index);
         Rule rule = attempt.failedRule() < 0 ? null : candidate.rules().get(attempt.failedRule());
-        ResourceLocation reason = rule == null ? BuiltinFailureReasons.RECIPE_SEARCH.id() : rule.failureReason();
+        ResourceLocation reason = attempt.reason() != null ? attempt.reason()
+                : rule == null ? BuiltinFailureReasons.RECIPE_SEARCH.id() : rule.failureReason();
         if (rule != null && rule.type().equals(MekanismPortFamilies.CHEMICAL) && rule.direction() == IOType.INPUT
                 && rule.ports().stream().noneMatch(port -> scope.allows(port.sourceIndex()))) reason = BuiltinFailureReasons.MISSING_INPUT.id();
         return new Failure(index, rule == null ? -1 : rule.index(), reason,
@@ -213,6 +218,7 @@ public final class RecipeSearchPlanner {
 
     private Attempt solve(int index, Scope scope, @Nullable IOType direction, boolean retainedOnly) {
         Candidate candidate = snapshot.candidates().get(index);
+        compatibilityFailure = null;
         Samples sampling = samples.computeIfAbsent(index, ignored -> new Samples());
         long upper = retainedOnly ? 1L : candidate.maximumParallelism();
         for (int ruleIndex = 0; ruleIndex < candidate.rules().size(); ruleIndex++) {
@@ -220,13 +226,15 @@ public final class RecipeSearchPlanner {
             if (!included(rule, direction, retainedOnly) || !sampling.produces(rule)) continue;
             if (!rule.valid()) return new Attempt(0L, ruleIndex);
             upper = Math.min(upper, independentMaximum(rule, scope, upper));
-            if (upper == 0L) return new Attempt(0L, ruleIndex);
-            if (rule.kind() == Kind.RESOURCE && rule.direction() == IOType.INPUT && rule.consumeChance() > 0F) {
+            if (upper == 0L) return new Attempt(0L, ruleIndex, compatibilityFailure);
+            if ((rule.kind() == Kind.RESOURCE || quantityScalar(rule) || rule.kind() == Kind.AIR)
+                    && rule.direction() == IOType.INPUT && rule.consumeChance() > 0F) {
                 sampling.consumed(rule, 0L, candidate.maximumParallelism());
             }
         }
         long lower = 0L;
         int failed = -1;
+        ResourceLocation failureReason = null;
         while (lower < upper) {
             long distance = upper - lower;
             long middle = lower + (distance >>> 1) + (distance & 1L);
@@ -238,6 +246,7 @@ public final class RecipeSearchPlanner {
                 if (included(rule, direction, retainedOnly) && sampling.produces(rule)
                         && !reserve(rule, scope, middle, state, sampling, candidate.maximumParallelism())) {
                     failure = ruleIndex;
+                    failureReason = compatibilityFailure;
                     break;
                 }
             }
@@ -247,7 +256,7 @@ public final class RecipeSearchPlanner {
                 upper = middle - 1L;
             }
         }
-        return new Attempt(lower, failed);
+        return new Attempt(lower, failed, failureReason);
     }
 
     private static boolean included(Rule rule, @Nullable IOType direction, boolean retainedOnly) {
@@ -263,6 +272,24 @@ public final class RecipeSearchPlanner {
                     ? requested : 0L;
         }
         if (rule.kind() == Kind.HEAT) return rule.ports().isEmpty() ? 0L : requested;
+        if (rule.kind() == Kind.AIR || rule.kind() == Kind.STRESS) {
+            working.reset(initial);
+            ResourceLocation failure = reserveCompatibility(rule, 1L, 1L, working);
+            if (failure != null) {
+                compatibilityFailure = failure;
+                return 0L;
+            }
+            long lower = 1L;
+            long upper = requested;
+            while (lower < upper) {
+                long distance = upper - lower;
+                long middle = lower + (distance >>> 1) + (distance & 1L);
+                working.reset(initial);
+                if (reserveCompatibility(rule, middle, middle, working) == null) lower = middle;
+                else upper = middle - 1L;
+            }
+            return lower;
+        }
         if (rule.amount() <= 0L) return requested;
         if (rule.kind() == Kind.SCALAR) {
             long lower = 0L;
@@ -288,6 +315,23 @@ public final class RecipeSearchPlanner {
 
     private boolean reserve(Rule rule, Scope scope, long parallelism, State state, Samples sampling, long requested) {
         if (rule.kind() == Kind.NOOP || rule.kind() == Kind.TEMPERATURE || rule.kind() == Kind.HEAT) return true;
+        compatibilityFailure = null;
+        if (rule.kind() == Kind.AIR || rule.kind() == Kind.STRESS) {
+            long consumed = rule.direction() == IOType.INPUT && rule.kind() == Kind.AIR
+                    ? sampling.consumed(rule, parallelism, requested) : parallelism;
+            compatibilityFailure = reserveCompatibility(rule, parallelism, consumed, state);
+            return compatibilityFailure == null;
+        }
+        if (quantityScalar(rule)) {
+            if (rule.direction() == IOType.INPUT) {
+                long available = 0L;
+                for (Port port : rule.ports()) available = SaturatingLong.add(available, state.amounts[port.pool()]);
+                if (available < SaturatingLong.multiply(rule.amount(), parallelism)) return false;
+                long batches = sampling.consumed(rule, parallelism, requested);
+                return reserveScalar(rule, batches, state);
+            }
+            return reserveScalar(rule, parallelism, state);
+        }
         if (rule.kind() == Kind.SCALAR) return reserveScalar(rule, parallelism, state);
         if (rule.direction() == IOType.INPUT && rule.consumeChance() <= 0F) return true;
         long batches = rule.direction() == IOType.INPUT ? sampling.consumed(rule, parallelism, requested) : parallelism;
@@ -309,6 +353,11 @@ public final class RecipeSearchPlanner {
         return rule.direction() == IOType.OUTPUT && rule.partial() && remaining < amount;
     }
 
+    private static @Nullable ResourceLocation reserveCompatibility(Rule rule, long parallelism, long consumed, State state) {
+        return rule.kind() == Kind.AIR ? CompatSearchValues.reserveAir(rule, parallelism, consumed, state.compatibility)
+                : CompatSearchValues.reserveStress(rule, parallelism, state.compatibility);
+    }
+
     private static boolean reserveScalar(Rule rule, long parallelism, State state) {
         long amount = SaturatingLong.multiply(rule.amount(), parallelism);
         if (amount == 0L) return true;
@@ -316,13 +365,18 @@ public final class RecipeSearchPlanner {
         for (Port port : rule.ports()) {
             boolean output = rule.direction() == IOType.OUTPUT;
             long available = output ? Math.max(0L, port.capacity() - state.amounts[port.pool()])
+                    : quantityScalar(rule) ? state.amounts[port.pool()]
                     : Math.min(state.amounts[port.pool()], SaturatingLong.multiply(port.transferLimit(), parallelism));
             long moved = Math.min(remaining, available);
             state.amounts[port.pool()] += output ? moved : -moved;
             remaining -= moved;
             if (remaining == 0L) return true;
         }
-        return rule.direction() == IOType.OUTPUT && rule.partial() && remaining < amount;
+        return rule.direction() == IOType.OUTPUT && rule.partial() && (quantityScalar(rule) || remaining < amount);
+    }
+
+    private static boolean quantityScalar(Rule rule) {
+        return rule.type().equals(ArsSourceIds.SOURCE) || rule.type().equals(BotaniaManaIds.MANA);
     }
 
     private static long resourceAvailable(Rule rule, Port port, State state) {
@@ -347,7 +401,9 @@ public final class RecipeSearchPlanner {
     }
 
     private static long pair(int candidate, int earlier) { return (long) candidate << 32 | earlier & 0xffffffffL; }
-    private record Attempt(long parallelism, int failedRule) {}
+    private record Attempt(long parallelism, int failedRule, @Nullable ResourceLocation reason) {
+        Attempt(long parallelism, int failedRule) { this(parallelism, failedRule, null); }
+    }
 
     private final class Samples {
         private final Map<Integer, Boolean> outputs = new HashMap<>();
@@ -359,6 +415,7 @@ public final class RecipeSearchPlanner {
         }
 
         long consumed(Rule rule, long parallelism, long requested) {
+            if (rule.consumeChance() <= 0F) return 0L;
             if (rule.consumeChance() >= 1F) return parallelism;
             if (requested > 1_024L) return Math.round(parallelism * (double) rule.consumeChance());
             int[] prefix = prefixes.computeIfAbsent(rule.index(), ignored -> {
@@ -375,8 +432,10 @@ public final class RecipeSearchPlanner {
     private static final class State {
         private final long[] amounts;
         private final AsyncResourceValue[] resources;
+        private final CompatSearchValues.Budget compatibility = new CompatSearchValues.Budget();
 
         void reset(State initial) {
+            compatibility.clear();
             System.arraycopy(initial.amounts, 0, amounts, 0, amounts.length);
             System.arraycopy(initial.resources, 0, resources, 0, resources.length);
         }

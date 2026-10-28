@@ -13,6 +13,10 @@ import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirementHandler;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
+import cn.howxu.mmcr.compat.botania.ManaRequirementHandler;
+import cn.howxu.mmcr.compat.botania.ManaOutput;
 import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
 import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
@@ -140,7 +144,7 @@ class FailureRequirementCacheTest {
     }
 
     @Test
-    void compatibility_requirements_keep_fresh_views_and_their_native_semantics() {
+    void compatibility_requirements_cache_only_stable_native_views() {
         try (var ignored = RequirementHandlerRegistry.openTestScope()) {
             for (IOType io : IOType.values()) {
                 List<String> tags = List.of("compat_wakeup");
@@ -165,11 +169,88 @@ class FailureRequirementCacheTest {
                     List<MachineRequirement> first = cache.resolve(recipe);
                     List<MachineRequirement> second = cache.resolve(recipe);
 
-                    assertThat(second).isNotSameAs(first).containsExactlyElementsOf(first);
+                    if (requirement instanceof AirRequirement || requirement instanceof StressRequirement) {
+                        assertThat(second).isSameAs(first);
+                    } else assertThat(second).isNotSameAs(first).containsExactlyElementsOf(first);
                     assertThat(first).containsExactlyElementsOf(recipe.runtimeRequirements());
                     assertThat(recipe.requirements()).containsExactly(requirement);
                 }
             }
+        }
+    }
+
+    @Test
+    void sourceAndManaOutputsCacheOnlyWhileBothCanonicalDelegatesRemainNative() {
+        boolean sourceNative = SourceRequirement.supportsSearchSnapshot();
+        boolean manaNative = ManaRequirement.supportsSearchSnapshot();
+        try (var ignored = RequirementHandlerRegistry.openTestScope(); var outputScope = OutputRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(SourceRequirement.TYPE);
+            RequirementHandlerRegistry.register(ManaRequirement.TYPE);
+            OutputRegistry.register(SourceOutput.TYPE);
+            OutputRegistry.register(ManaOutput.TYPE);
+            SourceRequirement.installHandler(new SourceRequirementHandler());
+            ManaRequirement.installHandler(new ManaRequirementHandler());
+            var recipe = recipe("failure_scalar_outputs", List.of(),
+                    List.of(new SourceOutput(12L), new ManaOutput(12L)),
+                    List.of(new RecipeModifier("", IOType.OUTPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)));
+            var cache = new FailureRequirementCache();
+            var first = cache.resolve(recipe);
+            assertThat(cache.resolve(recipe)).isSameAs(first);
+            assertThat(first).containsExactly(SourceRequirement.output(24L), ManaRequirement.output(24L));
+            SourceRequirement.installHandler((value, capabilities, context) -> {
+                throw new AssertionError("planning must not be called by failure views");
+            });
+            var replaced = cache.resolve(recipe);
+            assertThat(replaced).isNotSameAs(first);
+            assertThat(cache.resolve(recipe)).isNotSameAs(replaced);
+            SourceRequirement.installHandler(new SourceRequirementHandler());
+            var restored = cache.resolve(recipe);
+            assertThat(cache.resolve(recipe)).isSameAs(restored);
+            ManaRequirement.installHandler((value, capabilities, context) -> {
+                throw new AssertionError("planning must not be called by failure views");
+            });
+            assertThat(cache.resolve(recipe)).isNotSameAs(restored);
+            ManaRequirement.installHandler(new ManaRequirementHandler());
+            var nativeAgain = cache.resolve(recipe);
+            assertThat(cache.resolve(recipe)).isSameAs(nativeAgain);
+            try (var clearedOutputs = OutputRegistry.openTestScope()) {
+                assertThatThrownBy(() -> cache.resolve(recipe)).isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("not registered canonically");
+            }
+        } finally {
+            if (sourceNative) SourceRequirement.installHandler(new SourceRequirementHandler());
+            else SourceRequirement.installUnavailableHandler();
+            if (manaNative) ManaRequirement.installHandler(new ManaRequirementHandler());
+            else ManaRequirement.installUnavailableHandler();
+        }
+    }
+
+    @Test
+    void canonicalCompatibilityHandlerRemovalInvalidatesAllFourNativeViews() {
+        boolean sourceNative = SourceRequirement.supportsSearchSnapshot();
+        boolean manaNative = ManaRequirement.supportsSearchSnapshot();
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            SourceRequirement.installHandler(new SourceRequirementHandler());
+            ManaRequirement.installHandler(new ManaRequirementHandler());
+            List<MachineRequirement> values = List.of(SourceRequirement.input(12L), ManaRequirement.input(12L),
+                    AirRequirement.input(12L, 2F), StressRequirement.input(12D, 16D));
+            for (MachineRequirement value : values) {
+                if (RequirementHandlerRegistry.typeFor(value.type().id()) == null) RequirementHandlerRegistry.register(value.type());
+                var recipe = recipe("failure_registry_identity", List.of(value), List.of(), List.of());
+                var cache = new FailureRequirementCache();
+                var first = cache.resolve(recipe);
+                assertThat(cache.resolve(recipe)).isSameAs(first);
+                try (var removed = RequirementHandlerRegistry.openTestScope()) {
+                    // With the canonical type gone, fresh resolution rejects the declaration;
+                    // the cache must not hide that by returning its previously valid view.
+                    assertThatThrownBy(() -> cache.resolve(recipe)).isInstanceOf(RuntimeException.class);
+                }
+            }
+        } finally {
+            if (sourceNative) SourceRequirement.installHandler(new SourceRequirementHandler());
+            else SourceRequirement.installUnavailableHandler();
+            if (manaNative) ManaRequirement.installHandler(new ManaRequirementHandler());
+            else ManaRequirement.installUnavailableHandler();
         }
     }
 

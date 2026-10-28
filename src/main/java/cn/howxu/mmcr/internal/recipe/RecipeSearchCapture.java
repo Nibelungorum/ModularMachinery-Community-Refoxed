@@ -41,6 +41,22 @@ import cn.howxu.mmcr.api.recipe.requirement.StageRequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceFailureReasons;
+import cn.howxu.mmcr.compat.ars_nouveau.loaded.SourcePortCapability;
+import cn.howxu.mmcr.compat.botania.ManaRequirement;
+import cn.howxu.mmcr.compat.botania.ManaFailureReasons;
+import cn.howxu.mmcr.compat.botania.ManaPortCapability;
+import cn.howxu.mmcr.compat.create.CreateBridge;
+import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
+import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.create.loaded.StressPortCapability;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirFailureReasons;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
+import cn.howxu.mmcr.compat.pneumaticcraft.loaded.AirPortCapability;
+import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
 import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
 import cn.howxu.mmcr.compat.ae2lt.LightningFailureReasons;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
@@ -83,6 +99,10 @@ import java.util.stream.Collectors;
  */
 final class RecipeSearchCapture {
     private final List<MachineCapability> capabilities;
+    private final Map<Object, Integer> compatibilityIds = new IdentityHashMap<>();
+    private final Map<Integer, CompatSearchValues.AirPort> airPorts = new HashMap<>();
+    private final Map<Integer, CompatSearchValues.StressPort> stressPorts = new HashMap<>();
+    private double maximumRpm;
     private final @Nullable InputRoutingFacet routing;
     private final @Nullable InputRoutingIndex routingIndex;
     private final Set<Integer> routedSources;
@@ -145,6 +165,16 @@ final class RecipeSearchCapture {
             for (int index = 0; index < capabilities.size(); index++) {
                 MachineCapability capability = capabilities.get(index);
                 if (!needed.contains(capability.view().type().id())) continue;
+                if (PneumaticIds.AIR.equals(capability.view().type().id()) && capability instanceof AirPortCapability air) {
+                    airPorts.put(index, CompatSearchValues.airPort(compatibilityId(air.queryIdentity()), index, air.state()));
+                    continue;
+                }
+                if (CreateRecipeTypes.STRESS.equals(capability.view().type().id()) && capability instanceof StressPortCapability stress) {
+                    Object network = stress.networkIdentity();
+                    stressPorts.put(index, CompatSearchValues.stressPort(compatibilityId(stress),
+                            network == null ? -1 : compatibilityId(network), stress.state(), stress.stressEnabled(), true));
+                    continue;
+                }
                 AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElse(null);
                 if (facet == null) continue;
                 AsyncCapabilitySnapshot snapshot = facet.captureSnapshot();
@@ -166,6 +196,10 @@ final class RecipeSearchCapture {
                             outputCapacities.computeIfAbsent(storage, ignoredStorage -> new HashMap<>()));
                 }
             }
+        }
+        if (recipes.stream().flatMap(recipe -> recipe.requirements().stream())
+                .anyMatch(requirement -> requirement instanceof StressRequirement) && CreateBridge.get().available()) {
+            maximumRpm = CreateBridge.get().maxRpm();
         }
         List<Candidate> candidates = new ArrayList<>(recipes.size());
         for (EffectiveRecipe recipe : recipes) {
@@ -200,10 +234,15 @@ final class RecipeSearchCapture {
                 boolean live = liveMatches.computeIfAbsent(new LiveKey(requirement.type().id(), matching),
                         ignored -> matching.stream().anyMatch(occurrence -> {
                     AsyncCapabilitySnapshot snapshot = snapshots.get(occurrence);
-                    boolean shapeMatches = requirement instanceof EnergyRequirement ? snapshot instanceof AsyncCapabilitySnapshot.Scalar
+                    boolean shapeMatches = requirement instanceof AirRequirement ? airPorts.containsKey(occurrence)
+                            : requirement instanceof StressRequirement ? stressPorts.containsKey(occurrence)
+                            : requirement instanceof EnergyRequirement || requirement instanceof SourceRequirement
+                            || requirement instanceof ManaRequirement ? snapshot instanceof AsyncCapabilitySnapshot.Scalar
                             : requirement instanceof LoadedHeatRequirement ? snapshot instanceof AsyncCapabilitySnapshot.Heat
                             : snapshot instanceof AsyncCapabilitySnapshot.Resource;
-                    return !shapeMatches || snapshot instanceof AsyncCapabilitySnapshot.Resource && resourcePorts[occurrence] == null
+                    return !shapeMatches || requirement instanceof SourceRequirement && !(capabilities.get(occurrence) instanceof SourcePortCapability)
+                            || requirement instanceof ManaRequirement && !(capabilities.get(occurrence) instanceof ManaPortCapability)
+                            || snapshot instanceof AsyncCapabilitySnapshot.Resource && resourcePorts[occurrence] == null
                             || liveCapabilities[occurrence];
                 }));
                 if (live && !(requirement instanceof LevelRequirement) && !(requirement instanceof StageRequirement)) {
@@ -277,6 +316,34 @@ final class RecipeSearchCapture {
         Object nativeOutput = capturedOutput == null ? null : capturedOutput.resource();
         AsyncResourceValue outputValue = capturedOutput == null ? null : capturedOutput.value();
         ResourceLocation reason = (output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT).id();
+        if (requirement instanceof AirRequirement air) {
+            List<CompatSearchValues.AirPort> ports = new ArrayList<>();
+            Set<Integer> seen = new HashSet<>();
+            for (int occurrence : matching) {
+                var port = airPorts.get(occurrence);
+                if (seen.add(port.id())) ports.add(port);
+            }
+            return new Rule(index, requirement.type().id(), Kind.AIR, direction, air.airPerTick(), 0D,
+                    air.chance(), air.consumeChance(), output && partial, true, Set.of(), null, List.of(),
+                    (output ? AirFailureReasons.OUTPUT_BLOCKED : AirFailureReasons.INSUFFICIENT_AIR).id(),
+                    new CompatSearchValues.Air(air.minPressure(), ports));
+        }
+        if (requirement instanceof StressRequirement stress) {
+            List<CompatSearchValues.StressPort> ports = new ArrayList<>();
+            Set<Integer> seen = new HashSet<>();
+            for (int occurrence : matching) {
+                var port = stressPorts.get(occurrence);
+                if (!seen.add(port.id())) continue;
+                boolean accepts = !output || ((StressPortCapability) capabilities.get(occurrence))
+                        .acceptsGeneratedRpm(null, index, stress.rpm());
+                ports.add(new CompatSearchValues.StressPort(port.id(), port.network(), port.actualRpm(),
+                        port.theoreticalRpm(), port.baseContribution(), port.networkCapacity(), port.networkStress(),
+                        port.connected(), port.overstressed(), port.stressEnabled(), accepts));
+            }
+            return new Rule(index, requirement.type().id(), Kind.STRESS, direction, 0L, 0D,
+                    1F, 1F, false, true, Set.of(), null, List.of(), CreateFailureReasons.INSUFFICIENT_STRESS.id(),
+                    new CompatSearchValues.Stress(stress.stress(), stress.minRpm(), stress.rpm(), maximumRpm, ports));
+        }
         if (requirement instanceof ItemRequirement item) {
             kind = Kind.RESOURCE;
             amount = output ? capturedOutput == null ? 0L : capturedOutput.amount() : item.count();
@@ -310,6 +377,18 @@ final class RecipeSearchCapture {
             chance = lightning.chance();
             if (!output) accepted = Set.of(NativeAsyncResourceValues.lightning(lightning.tier()));
             reason = (output ? LightningFailureReasons.OUTPUT_BLOCKED : LightningFailureReasons.INPUT_MISSING).id();
+        } else if (requirement instanceof SourceRequirement source) {
+            kind = Kind.SCALAR;
+            amount = source.amount();
+            chance = source.chance();
+            consume = source.consumeChance();
+            reason = (output ? SourceFailureReasons.OUTPUT_BLOCKED : SourceFailureReasons.INPUT_MISSING).id();
+        } else if (requirement instanceof ManaRequirement mana) {
+            kind = Kind.SCALAR;
+            amount = mana.amount();
+            chance = mana.chance();
+            consume = mana.consumeChance();
+            reason = (output ? ManaFailureReasons.OUTPUT_BLOCKED : ManaFailureReasons.INPUT_MISSING).id();
         } else if (requirement instanceof EnergyRequirement energy) {
             kind = Kind.SCALAR;
             amount = energy.fePerTick();
@@ -371,7 +450,10 @@ final class RecipeSearchCapture {
                     return pools.size() - 1;
                 });
                 AsyncCapabilitySnapshot.Scalar scalar = (AsyncCapabilitySnapshot.Scalar) pools.get(pool);
-                ports.add(new Port(pool, occurrence, scalar.capacity(), scalar.transferLimit()));
+                if (!(requirement instanceof SourceRequirement || requirement instanceof ManaRequirement)
+                        || ports.stream().noneMatch(port -> port.pool() == pool)) {
+                    ports.add(new Port(pool, occurrence, scalar.capacity(), scalar.transferLimit()));
+                }
             } else if ((kind == Kind.HEAT || kind == Kind.TEMPERATURE) && snapshot instanceof AsyncCapabilitySnapshot.Heat) {
                 Object identity = capability.facet(AsyncPlanningFacet.class).orElseThrow().planningIdentity();
                 int pool = valueCells.computeIfAbsent(identity, ignored -> { pools.add(snapshot); return pools.size() - 1; });
@@ -436,6 +518,10 @@ final class RecipeSearchCapture {
         });
     }
 
+    private int compatibilityId(Object identity) {
+        return compatibilityIds.computeIfAbsent(identity, ignored -> compatibilityIds.size());
+    }
+
     private static boolean nativeHandler(MachineRequirement requirement) {
         Object handler = RequirementHandlerRegistry.handlerFor(requirement.type());
         return requirement instanceof ItemRequirement && handler instanceof ItemRequirementHandler
@@ -443,6 +529,14 @@ final class RecipeSearchCapture {
                 || requirement instanceof EnergyRequirement && handler instanceof EnergyRequirementHandler
                 || requirement instanceof LevelRequirement && handler instanceof LevelRequirementHandler
                 || requirement instanceof StageRequirement && handler instanceof StageRequirementHandler
+                || requirement instanceof AirRequirement && handler == requirement.type().handler()
+                    && PneumaticCraftBridge.get().available()
+                || requirement instanceof StressRequirement && handler == requirement.type().handler()
+                    && CreateBridge.get().available()
+                || requirement instanceof SourceRequirement && handler == requirement.type().handler()
+                    && SourceRequirement.supportsSearchSnapshot()
+                || requirement instanceof ManaRequirement && handler == requirement.type().handler()
+                    && ManaRequirement.supportsSearchSnapshot()
                 || requirement instanceof LightningRequirement && handler instanceof LightningRequirementHandler
                     && LightningBridge.get().available()
                 || requirement instanceof LoadedChemicalRequirement && handler == requirement.type().handler()
@@ -507,6 +601,7 @@ final class RecipeSearchCapture {
     private static Overlap overlap(MachineRecipe recipe) {
         Set<ResourceLocation> items = new HashSet<>();
         Set<ResourceLocation> lightning = new HashSet<>();
+        Set<ResourceLocation> scalarInputs = new HashSet<>();
         boolean anyItem = false;
         boolean hasItem = false;
         boolean custom = false;
@@ -514,12 +609,15 @@ final class RecipeSearchCapture {
             if (requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (!nativeHandler(requirement)) { custom = true; continue; }
             if (requirement instanceof LightningRequirement resource) lightning.add(resource.tier().requirementId());
+            if (requirement instanceof SourceRequirement || requirement instanceof ManaRequirement) {
+                scalarInputs.add(requirement.type().id());
+            }
             if (!(requirement instanceof ItemRequirement item) || item.item() == null) continue;
             hasItem = true;
             try { for (ItemStack stack : item.item().getItems()) items.add(BuiltInRegistries.ITEM.getKey(stack.getItem())); }
             catch (UnsupportedOperationException ignored) { anyItem = true; }
         }
-        return new Overlap(items, anyItem, hasItem, custom, lightning);
+        return new Overlap(items, anyItem, hasItem, custom, lightning, scalarInputs);
     }
 
     private static ChemicalPredicate chemicalPredicate(LoadedChemicalRequirement requirement) {

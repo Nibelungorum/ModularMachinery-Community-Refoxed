@@ -35,12 +35,21 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
         }
     }
 
-    public enum Kind { RESOURCE, SCALAR, TEMPERATURE, HEAT, NOOP }
+    public enum Kind { RESOURCE, SCALAR, AIR, STRESS, TEMPERATURE, HEAT, NOOP }
 
     public record Rule(int index, ResourceLocation type, Kind kind, IOType direction, long amount,
                        double heat, float chance, float consumeChance, boolean partial, boolean valid,
                        Set<AsyncResourceValue> resources, @Nullable AsyncResourceValue output,
-                       List<Port> ports, ResourceLocation failureReason) {
+                       List<Port> ports, ResourceLocation failureReason,
+                       @Nullable CompatSearchValues.Condition condition) {
+        public Rule(int index, ResourceLocation type, Kind kind, IOType direction, long amount,
+                    double heat, float chance, float consumeChance, boolean partial, boolean valid,
+                    Set<AsyncResourceValue> resources, @Nullable AsyncResourceValue output,
+                    List<Port> ports, ResourceLocation failureReason) {
+            this(index, type, kind, direction, amount, heat, chance, consumeChance, partial, valid,
+                    resources, output, ports, failureReason, null);
+        }
+
         public Rule {
             resources = Set.copyOf(resources);
             ports = List.copyOf(ports);
@@ -60,9 +69,14 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
         }
     }
 
-    /** Native overlap ignores item quantities/components and compares lightning tiers by identity. */
+    /** Native overlap compares item IDs, lightning tiers and the canonical Source/Mana input types. */
     public record Overlap(Set<ResourceLocation> items, boolean anyItem, boolean hasItem, boolean customHandler,
-                          Set<ResourceLocation> lightning) {
+                          Set<ResourceLocation> lightning, Set<ResourceLocation> scalarInputs) {
+        public Overlap(Set<ResourceLocation> items, boolean anyItem, boolean hasItem, boolean customHandler,
+                       Set<ResourceLocation> lightning) {
+            this(items, anyItem, hasItem, customHandler, lightning, Set.of());
+        }
+
         public Overlap(Set<ResourceLocation> items, boolean anyItem, boolean hasItem, boolean customHandler) {
             this(items, anyItem, hasItem, customHandler, Set.of());
         }
@@ -70,6 +84,7 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
         public Overlap {
             items = Set.copyOf(items);
             lightning = Set.copyOf(lightning);
+            scalarInputs = Set.copyOf(scalarInputs);
         }
     }
 }

@@ -25,6 +25,10 @@ import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.ae2lt.LightningFailureReasons;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceFailureReasons;
+import cn.howxu.mmcr.compat.botania.ManaFailureReasons;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirFailureReasons;
+import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
@@ -381,7 +385,14 @@ public final class AsyncRequirementPlanner {
                     MekanismFailureReasons.CHEMICAL_INPUT_MISSING, MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED,
                     MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED,
                     MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT, MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
-                    LightningFailureReasons.INPUT_MISSING, LightningFailureReasons.OUTPUT_BLOCKED)) {
+                    LightningFailureReasons.INPUT_MISSING, LightningFailureReasons.OUTPUT_BLOCKED,
+                    SourceFailureReasons.INPUT_MISSING, SourceFailureReasons.OUTPUT_BLOCKED,
+                    ManaFailureReasons.INPUT_MISSING, ManaFailureReasons.OUTPUT_BLOCKED,
+                    AirFailureReasons.MISSING_INTERFACE, AirFailureReasons.INSUFFICIENT_AIR,
+                    AirFailureReasons.INSUFFICIENT_PRESSURE, AirFailureReasons.OUTPUT_BLOCKED,
+                    CreateFailureReasons.MISSING_ROTATION, CreateFailureReasons.INSUFFICIENT_RPM,
+                    CreateFailureReasons.INSUFFICIENT_STRESS, CreateFailureReasons.INCOMPATIBLE_OUTPUT_RPM,
+                    CreateFailureReasons.INVALID_OUTPUT_RPM)) {
                 reasons.put(reason.id(), reason);
             }
             // Value-captured native rules use only the reasons above. Opaque extensions return

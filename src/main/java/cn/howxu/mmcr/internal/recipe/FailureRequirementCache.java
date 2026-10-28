@@ -14,7 +14,12 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
-import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
+import cn.howxu.mmcr.compat.botania.ManaRequirement;
+import cn.howxu.mmcr.compat.botania.ManaOutput;
+import cn.howxu.mmcr.compat.create.StressRequirement;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 
 import java.util.Collections;
@@ -45,9 +50,7 @@ final class FailureRequirementCache {
 
     List<MachineRequirement> resolve(MachineRecipe recipe) {
         Entry cached = requirements.get(recipe);
-        if (cached != null && (!cached.chemical() || LoadedChemicalRequirement.supportsSearchSnapshot())
-                && (!cached.heat() || LoadedHeatRequirement.supportsSearchSnapshot())
-                && cached.compatibilityTypes().stream().allMatch(type -> RequirementHandlerRegistry.handlerFor(type) == type.handler())
+        if (cached != null && cached.dependencies().stream().allMatch(FailureRequirementCache::stableRequirement)
                 && cached.outputTypes().stream().allMatch(type -> OutputRegistry.typeFor(type.id()) == type)) {
             return cached.requirements();
         }
@@ -61,14 +64,16 @@ final class FailureRequirementCache {
         boolean stableOutputs = recipe.machineOutputs().stream().allMatch(output ->
                 output instanceof MachineOutput.ItemOutput || output instanceof MachineOutput.FluidOutput
                 || output instanceof LoadedChemicalOutput && OutputRegistry.isCanonical(output)
-                || output instanceof LoadedHeatOutput && OutputRegistry.isCanonical(output));
-        if (stableRequirements && stableOutputs) requirements.put(recipe, new Entry(derived,
-                dependencies.stream().anyMatch(LoadedChemicalRequirement.class::isInstance),
-                dependencies.stream().anyMatch(LoadedHeatRequirement.class::isInstance),
-                dependencies.stream().filter(requirement -> requirement instanceof LoadedChemicalRequirement
-                        || requirement instanceof LoadedHeatRequirement).map(MachineRequirement::type).distinct().toList(),
-                recipe.machineOutputs().stream().filter(output -> output instanceof LoadedChemicalOutput
-                        || output instanceof LoadedHeatOutput).map(MachineOutput::outputType).distinct().toList()));
+                || output instanceof LoadedHeatOutput && OutputRegistry.isCanonical(output)
+                || output instanceof SourceOutput && OutputRegistry.isCanonical(output)
+                || output instanceof ManaOutput && OutputRegistry.isCanonical(output));
+        if (stableRequirements && stableOutputs) requirements.put(recipe, new Entry(derived, dependencies.stream().filter(requirement ->
+                        requirement instanceof SourceRequirement || requirement instanceof ManaRequirement
+                        || requirement instanceof AirRequirement || requirement instanceof StressRequirement
+                        || requirement instanceof LoadedChemicalRequirement || requirement instanceof LoadedHeatRequirement)
+                        .distinct().toList(),
+                recipe.machineOutputs().stream().filter(output -> !(output instanceof MachineOutput.ItemOutput)
+                        && !(output instanceof MachineOutput.FluidOutput)).map(MachineOutput::outputType).distinct().toList()));
         return derived;
     }
 
@@ -76,6 +81,12 @@ final class FailureRequirementCache {
         return requirement instanceof ItemRequirement || requirement instanceof FluidRequirement
                 || requirement instanceof EnergyRequirement || requirement instanceof LevelRequirement
                 || requirement instanceof StageRequirement
+                || requirement instanceof SourceRequirement && SourceRequirement.supportsSearchSnapshot()
+                    && RequirementHandlerRegistry.handlerFor(requirement.type()) == requirement.type().handler()
+                || requirement instanceof ManaRequirement && ManaRequirement.supportsSearchSnapshot()
+                    && RequirementHandlerRegistry.handlerFor(requirement.type()) == requirement.type().handler()
+                || (requirement instanceof AirRequirement || requirement instanceof StressRequirement)
+                    && RequirementHandlerRegistry.handlerFor(requirement.type()) == requirement.type().handler()
                 || requirement instanceof LoadedChemicalRequirement && LoadedChemicalRequirement.supportsSearchSnapshot()
                     && RequirementHandlerRegistry.handlerFor(requirement.type()) == requirement.type().handler()
                 || requirement instanceof LoadedHeatRequirement && LoadedHeatRequirement.supportsSearchSnapshot()
@@ -83,8 +94,8 @@ final class FailureRequirementCache {
     }
 
     /** @author howxu <dev@howxu.cn> */
-    private record Entry(List<MachineRequirement> requirements, boolean chemical, boolean heat,
-                         List<RequirementType<?>> compatibilityTypes, List<OutputType<?>> outputTypes) { }
+    private record Entry(List<MachineRequirement> requirements, List<MachineRequirement> dependencies,
+                         List<OutputType<?>> outputTypes) { }
 
     void clear() {
         requirements.clear();

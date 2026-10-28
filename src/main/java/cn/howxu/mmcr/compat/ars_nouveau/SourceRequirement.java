@@ -118,6 +118,11 @@ public record SourceRequirement(RecipeModifier.IOType io, long amount, float cha
         delegate = Objects.requireNonNull(handler, "handler");
     }
 
+    /** Whether the loaded delegate has the native, snapshot-safe planning semantics. */
+    public static boolean supportsSearchSnapshot() {
+        return delegate instanceof SourceRequirementHandler;
+    }
+
     public static void installUnavailableHandler() {
         delegate = UNAVAILABLE;
     }
