@@ -1,5 +1,33 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.capability.status.StatusSeverity;
+import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
+import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.Blocks;
+import com.mojang.serialization.MapCodec;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
@@ -76,6 +104,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies worker-safe requirement planning from native capability descriptors.
@@ -172,7 +201,7 @@ class AsyncRequirementPlannerTest {
     }
 
     @Test
-    void snapshot_search_keeps_routing_and_requires_recheck_instead_of_pooling_isolated_inputs() throws Exception {
+    void snapshot_search_rejects_insufficient_isolated_inputs_without_main_thread_proof() throws Exception {
         MachineRecipe recipe = searchRecipe("isolated", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 2, 1F)));
         CapabilitySnapshot capabilities = searchCapabilities(true);
         var request = captureSearch(recipe, capabilities);
@@ -180,8 +209,9 @@ class AsyncRequirementPlannerTest {
 
         assertThat(request.inputRouting()).isSameAs(capabilities.facets(InputRoutingFacet.class).getFirst());
         assertThat(result.failure()).isNull();
-        assertThat(result.result().success()).isTrue();
-        assertThat(result.requiresMainThreadReplan()).isTrue();
+        assertThat(result.result().success()).isFalse();
+        assertThat(result.result().failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(result.requiresMainThreadReplan()).isFalse();
         assertThat(new CraftingContext(capabilities).planStartResult(recipe, 1).successful()).isFalse();
     }
 
@@ -237,18 +267,28 @@ class AsyncRequirementPlannerTest {
         var result = CompletableFuture.supplyAsync(request::search).join();
         assertThat(result.failure()).isNull();
         assertThat(result.requiresMainThreadReplan()).isTrue();
+        var planner = request.newPlanner();
+        var proof = ((RecipeSearchPlanner.NeedsProof) CompletableFuture.supplyAsync(planner::advance).join()).request();
+        installCurrentServerForTesting();
+        try {
+            var evidence = request.prove(proof);
+            assertThat(evidence).isInstanceOf(RecipeSearchProof.Failure.class);
+            planner.acceptProof(evidence);
+        } finally { clearCurrentServerForTesting(); }
+        assertThat(CompletableFuture.supplyAsync(planner::advance).join()).isInstanceOf(RecipeSearchPlanner.Failed.class);
     }
 
     @Test
-    void probabilistic_inputs_are_pending_main_thread_proof_even_in_an_ordinary_group() throws Exception {
+    void probabilistic_inputs_are_planned_without_main_thread_proof() throws Exception {
         MachineRecipe recipe = searchRecipe("probability", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 0.5F)));
         var result = CompletableFuture.supplyAsync(captureSearch(recipe, searchCapabilities(false))::search).join();
         assertThat(result.failure()).isNull();
-        assertThat(result.requiresMainThreadReplan()).isTrue();
+        assertThat(result.result().success()).isTrue();
+        assertThat(result.requiresMainThreadReplan()).isFalse();
     }
 
     @Test
-    void probabilistic_outputs_are_not_worker_success_even_when_output_capacity_is_available() throws Exception {
+    void probabilistic_outputs_are_worker_success_when_output_capacity_is_available() throws Exception {
         MachineRecipe recipe = searchRecipe("output_probability", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 1F),
                 new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT), 0.5F, List.of())));
         CapabilitySnapshot materials = searchCapabilities(false);
@@ -257,7 +297,36 @@ class AsyncRequirementPlannerTest {
                 materials.additionalFacets());
         var result = CompletableFuture.supplyAsync(captureSearch(recipe, capabilities)::search).join();
         assertThat(result.failure()).isNull();
-        assertThat(result.requiresMainThreadReplan()).isTrue();
+        assertThat(result.result().success()).isTrue();
+        assertThat(result.requiresMainThreadReplan()).isFalse();
+    }
+
+    @Test
+    void prefetch_on_a_non_energy_capability_still_requires_one_live_candidate_proof() throws Exception {
+        AtomicInteger prefetchCalls = new AtomicInteger();
+        RecipeEnergyPrefetchFacet prefetch = new RecipeEnergyPrefetchFacet() {
+            @Override public String reservationKey() { return "unrelated-prefetch"; }
+            @Override public Optional<PrefetchPlan> planPrefetch(long amount) { prefetchCalls.incrementAndGet(); return Optional.empty(); }
+            @Override public void restoreReservation(long amount) { }
+            @Override public long releaseReservation(long amount) { return 0L; }
+        };
+        ItemBusCapability delegate = new ItemBusCapability(new BulkItemStorage(64L, null), IOType.INPUT);
+        MachineCapability unrelated = new MachineCapability() {
+            @Override public CapabilityType type() { return delegate.type(); }
+            @Override public CapabilityDirections directions() { return delegate.directions(); }
+            @Override public CapabilityView view() { return delegate.view(); }
+            @Override public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+            @Override public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) {
+                return type == RecipeEnergyPrefetchFacet.class ? Optional.of(type.cast(prefetch)) : delegate.facet(type);
+            }
+        };
+        var recipe = searchRecipe("unrelated_prefetch", List.of(new EnergyRequirement(5L)));
+        var request = captureSearch(recipe, new CapabilitySnapshot(List.of(unrelated,
+                new EnergyHatchCapability(new LongValueStorage(20L, 20L, null), IOType.INPUT))));
+        var outcome = CompletableFuture.supplyAsync(request.newPlanner()::advance).join();
+        assertThat(outcome).isInstanceOfSatisfying(RecipeSearchPlanner.NeedsProof.class, proof ->
+                assertThat(proof.request().reason()).isEqualTo(RecipeSearchProof.Reason.LIVE_CAPABILITY));
+        assertThat(prefetchCalls).hasValue(0);
     }
 
     @Test
@@ -296,9 +365,142 @@ class AsyncRequirementPlannerTest {
         var result = CompletableFuture.supplyAsync(request::search).join();
         assertThat(result.failure()).isNull();
         assertThat(result.result().recipe()).isSameAs(recipe);
-        assertThat(result.requiresMainThreadReplan()).isTrue();
+        assertThat(result.requiresMainThreadReplan()).isFalse();
         assertThat(matches).hasValue(capturedMatches);
         assertThat(itemQueries).hasValue(capturedItemQueries);
+    }
+
+    @Test
+    void level_failure_does_not_hide_the_actual_missing_input_failure() throws Exception {
+        TestBootstrap.registerType(new LevelType(MMCR.id("unavailable_type"), Component.literal("Search Test Level")));
+        TestBootstrap.registerLevel(new MachineLevel(MMCR.id("unavailable_level"), MMCR.id("unavailable_type"), 1,
+                new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
+        var recipe = searchRecipe("level_and_missing_input", List.of(searchInput(Ingredient.of(Items.GOLD_INGOT), 1, 1F),
+                LevelRequirement.input(MMCR.id("unavailable_type"), MMCR.id("unavailable_level"))));
+        CapabilitySnapshot capabilities = searchCapabilities(false);
+        var expected = new RecipeSearchTask(searchSnapshot(), MMCR.id("async_search_machine"), recipe.recipePoolId(),
+                1L, 1L, List.of(recipe), capabilities).compute();
+        var actual = CompletableFuture.supplyAsync(captureSearch(recipe, capabilities)::search).join().result();
+        assertThat(actual.success()).isFalse();
+        assertThat(actual.failure().reason()).isEqualTo(expected.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(actual.validity()).isEqualTo(expected.validity());
+    }
+
+    @Test
+    void failed_candidate_progress_retains_precedence_over_a_shallower_higher_priority_reason() throws Exception {
+        var shallow = searchRecipe("shallow_failure", List.of(searchInput(Ingredient.of(Items.GOLD_INGOT), 1, 1F),
+                searchInput(Ingredient.of(Items.IRON_INGOT), 1, 1F)));
+        var deep = searchRecipe("deep_failure", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 1F),
+                new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT))));
+        CapabilitySnapshot capabilities = searchCapabilities(false);
+        var recipes = List.of(shallow, deep);
+        var expected = new RecipeSearchTask(searchSnapshot(), MMCR.id("async_search_machine"), deep.recipePoolId(),
+                1L, 1L, recipes, capabilities).compute();
+        var actual = CompletableFuture.supplyAsync(captureSearch(recipes, capabilities)::search).join().result();
+        assertThat(actual.failure().reason()).isEqualTo(expected.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_OUTPUT);
+        assertThat(actual.validity()).isEqualTo(expected.validity());
+    }
+
+    @Test
+    void opaque_candidate_and_overlap_are_individual_main_thread_proofs_not_a_pool_search() throws Exception {
+        registerProbe();
+        AtomicInteger plans = new AtomicInteger(), overlaps = new AtomicInteger();
+        ProbeRequirement probe = new ProbeRequirement(plans, overlaps, Thread.currentThread());
+        var opaque = searchRecipe("a_opaque", List.of(probe, probe));
+        var nativeRecipe = searchRecipe("b_native", List.of(searchInput(Ingredient.of(Items.IRON_INGOT), 1, 1F)));
+        var request = captureSearch(List.of(opaque, nativeRecipe), searchCapabilities(false));
+        assertThat(plans).hasValue(0);
+        assertThat(overlaps).hasValue(0);
+        var planner = request.newPlanner();
+        var candidateProof = ((RecipeSearchPlanner.NeedsProof) CompletableFuture.supplyAsync(planner::advance).join()).request();
+        assertThatThrownBy(() -> CompletableFuture.supplyAsync(() -> request.prove(candidateProof)).join())
+                .hasRootCauseInstanceOf(IllegalStateException.class);
+        installCurrentServerForTesting();
+        try { planner.acceptProof(request.prove(candidateProof)); }
+        finally { clearCurrentServerForTesting(); }
+        int planned = plans.get();
+        assertThat(planned).isPositive();
+        var overlapProof = ((RecipeSearchPlanner.NeedsProof) CompletableFuture.supplyAsync(planner::advance).join()).request();
+        assertThat(overlapProof.kind()).isEqualTo(RecipeSearchProof.Kind.OVERLAP);
+        assertThat(plans).hasValue(planned);
+        assertThat(overlaps).hasValue(0);
+        installCurrentServerForTesting();
+        try { planner.acceptProof(request.prove(overlapProof)); }
+        finally { clearCurrentServerForTesting(); }
+        assertThat(overlaps).hasValue(1);
+        var outcome = CompletableFuture.supplyAsync(planner::advance).join();
+        assertThat(outcome).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class, match -> {
+            assertThat(match.candidateIndex()).isEqualTo(1);
+            assertThat(match.conflictProne()).isTrue();
+        });
+        assertThat(plans).hasValue(planned);
+    }
+
+    @Test
+    void opaque_failure_preserves_unregistered_custom_reason_and_diagnostics() throws Exception {
+        registerProbe();
+        var probe = new ProbeRequirement(new AtomicInteger(), new AtomicInteger(), Thread.currentThread());
+        var request = captureSearch(searchRecipe("opaque_diagnostic", List.of(probe)), searchCapabilities(false));
+        var planner = request.newPlanner();
+        var proof = ((RecipeSearchPlanner.NeedsProof) CompletableFuture.supplyAsync(planner::advance).join()).request();
+        installCurrentServerForTesting();
+        try { planner.acceptProof(request.prove(proof)); }
+        finally { clearCurrentServerForTesting(); }
+        var result = request.result(CompletableFuture.supplyAsync(planner::advance).join()).result();
+        assertThat(result.failure().reason()).isEqualTo(ProbeRequirement.REASON);
+        assertThat(result.failure().details()).containsEntry("proof", "candidate");
+    }
+
+    @Test
+    void opaque_error_preserves_the_synchronous_severity_and_validity() throws Exception {
+        registerProbe();
+        var probe = new ProbeRequirement(new AtomicInteger(), new AtomicInteger(), Thread.currentThread(), true);
+        var recipe = searchRecipe("opaque_error", List.of(probe));
+        var capabilities = searchCapabilities(false);
+        var expected = new RecipeSearchTask(searchSnapshot(), MMCR.id("async_search_machine"), recipe.recipePoolId(),
+                1L, 1L, List.of(recipe), capabilities).compute();
+        var request = captureSearch(recipe, capabilities);
+        var planner = request.newPlanner();
+        var proof = ((RecipeSearchPlanner.NeedsProof) CompletableFuture.supplyAsync(planner::advance).join()).request();
+        installCurrentServerForTesting();
+        try { planner.acceptProof(request.prove(proof)); }
+        finally { clearCurrentServerForTesting(); }
+        var result = request.result(CompletableFuture.supplyAsync(planner::advance).join()).result();
+        assertThat(result.failure().severity()).isEqualTo(expected.failure().severity()).isEqualTo(StatusSeverity.FAILURE);
+        assertThat(result.validity()).isEqualTo(expected.validity());
+    }
+
+    private static void registerProbe() {
+        if (RequirementHandlerRegistry.typeFor(ProbeRequirement.TYPE.id()) == null) RequirementHandlerRegistry.register(ProbeRequirement.TYPE);
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record ProbeRequirement(AtomicInteger plans, AtomicInteger overlaps, Thread owner, boolean error) implements MachineRequirement {
+        ProbeRequirement(AtomicInteger plans, AtomicInteger overlaps, Thread owner) { this(plans, overlaps, owner, false); }
+        static final FailureReason REASON = new FailureReason(MMCR.id("opaque_search_failure"), "gui.mmcr.failure.unknown", 0);
+        static final RequirementType<ProbeRequirement> TYPE = new RequirementType.Definition<>(MMCR.id("opaque_search"),
+                MapCodec.unit(() -> new ProbeRequirement(new AtomicInteger(), new AtomicInteger(), Thread.currentThread())),
+                new RequirementHandler<>() {
+                    @Override
+                    public RequirementPlan plan(ProbeRequirement requirement, List<MachineCapability> capabilities,
+                                                PlanningContext context) {
+                        assertThat(Thread.currentThread()).isSameAs(requirement.owner());
+                        requirement.plans().incrementAndGet();
+                        RequirementPlan plan = RequirementHandlerSupport.blockedPlan(requirement, context, REASON, Map.of("proof", "candidate"));
+                        if (!requirement.error()) return plan;
+                        ExecutionStatus failure = plan.failure();
+                        return new RequirementPlan(context.requirementIndex(), 0L, List.of(),
+                                new ExecutionStatus(failure.id(), StatusSeverity.FAILURE, failure.source(), failure.failure()));
+                    }
+                    @Override
+                    public boolean overlaps(ProbeRequirement requirement, MachineRequirement other) {
+                        assertThat(Thread.currentThread()).isSameAs(requirement.owner());
+                        requirement.overlaps().incrementAndGet();
+                        return true;
+                    }
+                }, requirement -> requirement);
+        @Override public RequirementType<ProbeRequirement> type() { return TYPE; }
+        @Override public RecipeModifier.IOType io() { return RecipeModifier.IOType.INPUT; }
     }
 
     private static AsyncRequirementPlanner.RecipeSearchRequest captureSearch(MachineRecipe recipe,

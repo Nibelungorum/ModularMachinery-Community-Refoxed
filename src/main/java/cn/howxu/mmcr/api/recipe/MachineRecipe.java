@@ -89,6 +89,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     private final Identifier recipePoolId;
     private final int tickTime;
     private final List<MachineRequirement> requirements;
+    private final int inputRequirementCount;
     private final List<MachineOutput> outputs;
     private final List<RecipeModifier> modifiers;
     private final int priority;
@@ -123,6 +124,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.recipePoolId = recipePoolId;
         this.tickTime = tickTime;
         this.requirements = MachineRequirement.copyList(requirements == null ? List.of() : requirements);
+        this.inputRequirementCount = countInputs(this.requirements);
         validateLevelRequirements(this.requirements);
         this.outputs = MachineOutput.copyList(outputs == null ? List.of() : outputs);
         LightningRecipeTypes.validateRecipeAmounts(runtimeRequirementSource());
@@ -160,6 +162,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
             if (requirement != null && !represented) newRequirements.add(requirement);
         }
         this.requirements = List.copyOf(newRequirements);
+        this.inputRequirementCount = countInputs(this.requirements);
         LightningRecipeTypes.validateRecipeAmounts(runtimeRequirementSource());
     }
 
@@ -168,6 +171,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.recipePoolId = recipe.recipePoolId;
         this.tickTime = recipe.tickTime;
         this.requirements = recipe.requirements;
+        this.inputRequirementCount = recipe.inputRequirementCount;
         this.outputs = recipe.outputs;
         this.modifiers = recipe.modifiers;
         this.priority = recipe.priority;
@@ -435,6 +439,10 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
     }
 
     public int inputRequirementCount() {
+        return inputRequirementCount;
+    }
+
+    private static int countInputs(List<MachineRequirement> requirements) {
         int count = 0;
         for (MachineRequirement requirement : requirements) {
             if (requirement.io() == RecipeModifier.IOType.INPUT

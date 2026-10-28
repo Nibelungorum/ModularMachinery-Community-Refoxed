@@ -90,6 +90,11 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
         delegate = Objects.requireNonNull(handler, "handler");
     }
 
+    /** True only for the built-in handler whose heat rules can be captured by value. */
+    public static boolean supportsSearchSnapshot() {
+        return delegate != UNAVAILABLE && LoadedMekanismBridge.isNativeHeatHandler(delegate);
+    }
+
     public static void installUnavailableHandler() {
         delegate = UNAVAILABLE;
     }

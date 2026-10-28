@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.api.capability.plan.InputRoutingIndex;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
@@ -33,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.IntPredicate;
 import java.util.stream.IntStream;
 import org.jetbrains.annotations.Nullable;
 
@@ -66,9 +68,14 @@ public final class RequirementPlanner {
                 || indexes == null || indexes.size() != requirements.size()) {
             throw new IllegalArgumentException("requirements, capabilities, context and matching indexes are required");
         }
-        if (context.inputScope() != null || context.inputRouting() == null) {
-            return fixed ? planFixedSingle(requirements, capabilities, context, indexes)
-                    : planSingle(requirements, capabilities, context, indexes);
+        InputRoutingIndex routing = context.inputRouting() == null ? null
+                : InputRoutingIndex.capture(context.inputRouting());
+        if (context.inputScope() != null || routing == null) {
+            IntPredicate allowed = context.inputScope() == null
+                    || context.inputScope().kind() == InputScope.Kind.LEGACY ? ignored -> true
+                    : routing == null ? ignored -> false : routing.allowed(context.inputScope());
+            return fixed ? planFixedSingle(requirements, capabilities, context, indexes, allowed)
+                    : planSingle(requirements, capabilities, context, indexes, allowed);
         }
         boolean materialInputs = requirements.stream().anyMatch(requirement -> requirement.type().capabilityIds()
                 .stream().anyMatch(id -> isMaterialInput(IOType.valueOf(requirement.io().name()), id)));
@@ -78,8 +85,9 @@ public final class RequirementPlanner {
         int completed = -1;
         for (InputScope scope : scopes) {
             PlanningContext scoped = context.forScope(scope, sampling);
-            PlanningResult result = fixed ? planFixedSingle(requirements, capabilities, scoped, indexes)
-                    : planSingle(requirements, capabilities, scoped, indexes);
+            IntPredicate allowed = routing.allowed(scope);
+            PlanningResult result = fixed ? planFixedSingle(requirements, capabilities, scoped, indexes, allowed)
+                    : planSingle(requirements, capabilities, scoped, indexes, allowed);
             if (result.successful()) return result;
             int progress = result.failureRequirementIndex() == null ? -1 : indexes.indexOf(result.failureRequirementIndex());
             if (bestFailure == null || progress > completed) {
@@ -92,7 +100,7 @@ public final class RequirementPlanner {
 
     private PlanningResult planSingle(List<MachineRequirement> requirements,
                                       List<MachineCapability> capabilities, PlanningContext context,
-                                      List<Integer> requirementIndexes) {
+                                      List<Integer> requirementIndexes, IntPredicate allowed) {
         if (requirements == null || capabilities == null || context == null) {
             throw new IllegalArgumentException("requirements, capabilities and context must not be null");
         }
@@ -110,8 +118,7 @@ public final class RequirementPlanner {
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             RequirementHandler<MachineRequirement> handler = handler(requirement.type());
-            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities,
-                    context.inputRouting(), context.inputScope());
+            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities, allowed);
             RequirementPlan requirementPlan = handler.plan(requirement, matching,
                     context.forRequirement(requirementIndexes.get(index), context.reservations()));
             if (!requirementPlan.successful()) {
@@ -176,7 +183,7 @@ public final class RequirementPlanner {
 
     private PlanningResult planFixedSingle(List<MachineRequirement> requirements,
                                            List<MachineCapability> capabilities, PlanningContext context,
-                                           List<Integer> requirementIndexes) {
+                                           List<Integer> requirementIndexes, IntPredicate allowed) {
         if (requirements == null || capabilities == null || context == null) {
             throw new IllegalArgumentException("requirements, capabilities and context must not be null");
         }
@@ -190,8 +197,7 @@ public final class RequirementPlanner {
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             int originalIndex = requirementIndexes.get(index);
-            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities,
-                    context.inputRouting(), context.inputScope());
+            List<MachineCapability> matching = matchingCapabilities(requirement, capabilities, allowed);
             PlanningContext requirementContext = context.forRequirement(originalIndex, feasibilityReservations);
             // Include every preceding callback's budget, but exclude this requirement's own reservation.
             // Its factory may reserve again, or may only create operations; neither changes feasibility.
@@ -304,17 +310,25 @@ public final class RequirementPlanner {
 
     public static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,
             List<MachineCapability> capabilities, @Nullable InputRoutingFacet routing, @Nullable InputScope scope) {
+        IntPredicate allowed = scope == null || scope.kind() == InputScope.Kind.LEGACY ? ignored -> true
+                : routing == null ? ignored -> false : InputRoutingIndex.capture(routing).allowed(scope);
+        return matchingCapabilities(requirement, capabilities, allowed);
+    }
+
+    private static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,
+            List<MachineCapability> capabilities, IntPredicate allowed) {
         var capabilityIds = requirement.type().capabilityIds();
         IOType direction = IOType.valueOf(requirement.io().name());
         return IntStream.range(0, capabilities.size())
-                .filter(index -> !isMaterialInput(direction, capabilities.get(index).view().type().id())
-                        || scope == null || scope.kind() == InputScope.Kind.LEGACY
-                        || routing != null && routing.allows(scope, index))
+                .filter(index -> {
+                    var view = capabilities.get(index).view();
+                    return (capabilityIds.contains(view.type().id())
+                            || MekanismPortFamilies.HEAT_TEMPERATURE.equals(requirement.type().id())
+                            && MekanismPortFamilies.HEAT.equals(view.type().id()))
+                            && view.directions().supports(direction)
+                            && (!isMaterialInput(direction, view.type().id()) || allowed.test(index));
+                })
                 .mapToObj(capabilities::get)
-                .filter(capability -> capabilityIds.contains(capability.view().type().id())
-                        || MekanismPortFamilies.HEAT_TEMPERATURE.equals(requirement.type().id())
-                        && MekanismPortFamilies.HEAT.equals(capability.view().type().id()))
-                .filter(capability -> capability.view().directions().supports(direction))
                 .filter(capability -> requirement.tags().isEmpty()
                         || requirement.tags().stream().anyMatch(capability.view()::matchesTag))
                 .toList();

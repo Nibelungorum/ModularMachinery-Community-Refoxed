@@ -1,5 +1,26 @@
 package cn.howxu.mmcr.compat.mekanism;
 
+import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
+import net.minecraft.core.BlockPos;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import java.util.Optional;
+import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.EffectiveRecipeSet;
+import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
@@ -723,6 +744,71 @@ class MekanismRecipeHandlerTest {
         return (RequirementHandler<LoadedHeatRequirement>) LoadedHeatRequirement.TEMPERATURE_TYPE.handler();
     }
 
+    @Test
+    void native_search_freezes_chemical_internal_admission_and_missing_port_reasons() throws Exception {
+        if (RequirementHandlerRegistry.typeFor(LoadedChemicalRequirement.TYPE.id()) == null) RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
+        LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+        var holder = registerChemical("search_admission");
+        var tank = new FakeChemicalTank(1_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        tank.setContents(ChemicalResource.of(holder), 600L, null);
+        var input = LoadedChemicalRequirement.input(ChemicalIngredient.chemical(holder.key().identifier(), 100L));
+        var output = LoadedChemicalRequirement.output(holder.key().identifier(), 100L, 1F);
+        assertNativeSearch(input, List.of(new FakeChemicalPort(tank, IOType.INPUT)));
+        tank.extractionAllowed = false;
+        assertNativeSearch(input, List.of(new FakeChemicalPort(tank, IOType.INPUT)));
+        tank.insertionAllowed = false;
+        assertNativeSearch(output, List.of(new FakeChemicalPort(tank, IOType.OUTPUT)));
+        assertNativeSearch(input, List.of());
+        assertNativeSearch(output, List.of());
+        ChemicalAttributeValidator rejectAttributes = new ChemicalAttributeValidator() {
+            @Override public boolean validate(IChemicalAttribute attribute) { return false; }
+            @Override public boolean process(Chemical chemical) { return false; }
+        };
+        assertNativeSearch(output, List.of(new FakeChemicalPort(new FakeChemicalTank(1_000L, rejectAttributes), IOType.OUTPUT)));
+        var radioactive = registerChemical("search_rejected_radiation", true);
+        assertNativeSearch(LoadedChemicalRequirement.output(radioactive.key().identifier(), 100L, 1F),
+                List.of(new FakeChemicalPort(new FakeChemicalTank(1_000L, rejectAttributes), IOType.OUTPUT, true)));
+        var a = new BlockPos(2, 0, 0);
+        var empty = new BlockPos(1, 0, 0);
+        tank.extractionAllowed = true;
+        var scoped = new CapabilitySnapshot(List.of(new FakeChemicalPort(tank, IOType.INPUT)), List.of(
+                new InputRoutingFacet(1L, List.of(new InputRoutingFacet.Source(0, a)),
+                        List.of(new InputRoutingFacet.Port(a, true), new InputRoutingFacet.Port(empty, true)))));
+        assertNativeSearch(LoadedChemicalRequirement.input(ChemicalIngredient.chemical(holder.key().identifier(), 700L)), scoped);
+        assertThat(tank.amount()).isEqualTo(600L);
+    }
+
+    private static void assertNativeSearch(LoadedChemicalRequirement requirement, List<MachineCapability> capabilities) throws Exception {
+        assertNativeSearch(requirement, new CapabilitySnapshot(capabilities));
+    }
+
+    private static void assertNativeSearch(LoadedChemicalRequirement requirement, CapabilitySnapshot snapshot) throws Exception {
+        Machine machine = new Machine() {
+            @Override public Identifier registryName() { return MMCR.id("chemical_search_oracle"); }
+            @Override public BlockArray pattern() { return null; }
+            @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(registryName()); }
+        };
+        var recipe = MachineRecipe.fromCanonical(MMCR.id("chemical_search_oracle"), machine.registryName(), 20,
+                List.of(requirement), List.of(), List.of(), 0, 1, false, true, false, Set.of());
+        var structure = new StructureSnapshot(machine, machine, null, null, Direction.NORTH, Direction.SOUTH,
+                1, true, 1L, null, null, null, false, true, Set.of());
+        var runtime = new ControllerRuntimeSnapshot(structure, 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
+                ModuleConnectionStatus.notRequired(), 0, null, null, List.of(), List.of(), List.of(), "", "", 0,
+                false, false, 0, 0, 16L);
+        var expected = new CraftingContext(snapshot).planStartResult(recipe, 16L);
+        AsyncRequirementPlanner.RecipeSearchRequest request;
+        try (var ignored = ServerThreadTestScope.open()) {
+            request = AsyncRequirementPlanner.captureRecipeSearch(runtime, List.of(recipe), 16L, snapshot,
+                    List.of(), 0L, new EffectiveRecipeSet.Cache());
+        }
+        var actual = CompletableFuture.supplyAsync(request::search).join();
+        assertThat(actual.requiresMainThreadReplan()).isFalse();
+        assertThat(actual.failure()).isNull();
+        assertThat(actual.result().success()).isEqualTo(expected.successful());
+        if (expected.successful()) assertThat(actual.result().planningResult().plan().parallelism()).isEqualTo(expected.plan().parallelism());
+        else assertThat(actual.result().failure().reason()).isEqualTo(expected.failure().reason());
+    }
+
     private static cn.howxu.mmcr.api.capability.plan.PlanningContext testContext() {
         return new PlanningContext(1, 0);
     }
@@ -761,6 +847,7 @@ class MekanismRecipeHandlerTest {
 
     private static final class FakeChemicalPort implements LoadedMekanismBridge.ChemicalPort {
         private final IChemicalTank tank;
+        private final ChemicalPortCapability nativePort;
         private final boolean radioactive;
         private final CapabilityView view;
 
@@ -770,6 +857,7 @@ class MekanismRecipeHandlerTest {
 
         private FakeChemicalPort(IChemicalTank tank, cn.howxu.mmcr.util.IOType ioType, boolean radioactive) {
             this.tank = tank;
+            this.nativePort = new ChemicalPortCapability(tank, ioType);
             this.radioactive = radioactive;
             this.view = new CapabilityView() {
                 @Override
@@ -782,6 +870,12 @@ class MekanismRecipeHandlerTest {
                     return CapabilityDirections.of(ioType);
                 }
             };
+        }
+
+        @Override
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) {
+            if (type == ResourceFacet.class || type == AsyncPlanningFacet.class) return nativePort.facet(type);
+            return LoadedMekanismBridge.ChemicalPort.super.facet(type);
         }
 
         @Override
@@ -813,6 +907,8 @@ class MekanismRecipeHandlerTest {
     private static final class FakeChemicalTank implements IChemicalTank {
         private final long capacity;
         private final ChemicalAttributeValidator attributeValidator;
+        private boolean extractionAllowed = true;
+        private boolean insertionAllowed = true;
         private ChemicalResource resource = ChemicalResource.EMPTY;
         private long amount;
 
@@ -852,6 +948,14 @@ class MekanismRecipeHandlerTest {
         @Override
         public boolean isValid(ChemicalResource resource) {
             return !resource.isEmpty();
+        }
+
+        @Override
+        public boolean isCurrentValidForExtraction(AutomationType automationType) { return extractionAllowed; }
+
+        @Override
+        public boolean isValidForInsertion(ChemicalResource resource, AutomationType automationType) {
+            return insertionAllowed && isValid(resource);
         }
 
         @Override

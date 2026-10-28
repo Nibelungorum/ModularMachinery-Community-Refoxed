@@ -195,6 +195,8 @@ class FactoryRuntimeTest {
 
     @BeforeEach
     void bootstrapCapabilities() throws Exception {
+        // Synthetic gameTime tests use synchronous execution; async lifecycle tests opt in explicitly.
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
         serverThreadScope = ServerThreadTestScope.open();
         TestBootstrap.bootstrapCapabilities();
     }
@@ -824,8 +826,45 @@ class FactoryRuntimeTest {
         assertThat(before.failure()).isEqualTo(blocked.factoryFailure());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void async_search_without_a_current_tick_or_resource_domain_does_not_search_synchronously(boolean missingDomain)
+            throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = asyncFactoryController(input);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        StructureClaimRegistry claims = StructureClaimRegistry.get(level);
+        assertThat(claims.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        installInlineFactoryCoordinator(level);
+        try {
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.ensureBaseLane(controller);
+            MachineRecipe recipe = inputRecipe("factory_ineligible_async_search");
+            RecipeRegistry.registerStatic(recipe);
+            setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+            if (missingDomain) claims.release(controller.getBlockPos());
+            factory.tick(List.of(recipe), 1L, level.getGameTime() + (missingDomain ? 0L : 1L));
+
+            assertThat(factory.searchAttemptsForTesting()).isZero();
+            assertThat(factory.activeRecipeCountFor(recipe.id())).isZero();
+            assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+
+            if (missingDomain) assertThat(claims.claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
+            resolveSharedRequests(controller);
+            assertThat(factory.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(recipe);
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            assertThat(input.itemStorage().amount(0)).isZero();
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
     @Test
-    void async_pending_start_is_not_active_before_shared_io_grants_it() {
+    void async_pending_start_is_not_active_before_shared_io_grants_it() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
@@ -835,7 +874,9 @@ class FactoryRuntimeTest {
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_async_pending_limit"), MMCR.id("test_cube"),
                 20, List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of());
 
-        runtime.tick(List.of(recipe), 1, 0L);
+        installInlineFactoryCoordinator(level);
+        runtime.tick(List.of(recipe), 1, level.getGameTime());
+        applyAsyncSearchWithoutGrant(controller);
 
         assertThat(runtime.activeLaneCount()).isZero();
         resolveSharedRequests(controller);
@@ -843,14 +884,17 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void recipe_pool_change_discards_pending_factory_starts() {
+    void recipe_pool_change_discards_pending_factory_starts() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
         runtime.setLaneLimit(2);
-        runtime.tick(List.of(recipe("factory_recipe_pool_pending_discard", 20)), 1, 0L);
+        installInlineFactoryCoordinator(level);
+        runtime.tick(List.of(recipe("factory_recipe_pool_pending_discard", 20)), 1, level.getGameTime());
+        applyAsyncSearchWithoutGrant(controller);
         assertThat(runtime.activeLaneCount()).isZero();
 
         runtime.discardForRecipePoolChange();
@@ -1440,8 +1484,9 @@ class FactoryRuntimeTest {
             setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 2));
             runtime.wakeSearches(Reason.INPUT_AVAILABLE, ItemResource.of(Items.IRON_INGOT));
             ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
-            runtime.tick(List.of(recipe), 1L, level.getGameTime() + 1L);
-            MachineAsyncCoordinator.get(level).pumpMainThreadSteps();
+            RuntimeTestFixtures.advanceGameTime(level);
+            runtime.tick(List.of(recipe), 1L, level.getGameTime());
+            applyAsyncSearchWithoutGrant(controller);
 
             assertThat(runtime.activeRuntimes()).isEmpty();
             assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(1);
@@ -1472,10 +1517,14 @@ class FactoryRuntimeTest {
                             new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)));
             RecipeRegistry.registerStatic(recipe);
             setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 2));
-            runtime.tick(List.of(recipe), 1L, level.getGameTime() + 1L);
-            MachineAsyncCoordinator.get(level).pumpMainThreadSteps();
-            assertThat(runtime.activeRuntimes()).isEmpty();
+            runtime.tick(List.of(recipe), 1L, level.getGameTime());
+            resolveSharedRequests(controller);
+            RuntimeTestFixtures.advanceGameTime(level);
+            runtime.tick(List.of(recipe), 1L, level.getGameTime());
+            applyAsyncSearchWithoutGrant(controller);
+            assertThat(runtime.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(recipe);
             assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(2);
+            assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
             runtime.setLaneLimit(1);
 
             resolveSharedRequests(controller);
@@ -1502,8 +1551,8 @@ class FactoryRuntimeTest {
             MachineRecipe recipe = inputRecipe("factory_old_lane_grant");
             RecipeRegistry.registerStatic(recipe);
             setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
-            runtime.tick(List.of(recipe), 1L, level.getGameTime() + 1L);
-            MachineAsyncCoordinator.get(level).pumpMainThreadSteps();
+            runtime.tick(List.of(recipe), 1L, level.getGameTime());
+            applyAsyncSearchWithoutGrant(controller);
             long searches = runtime.searchAttemptsForTesting();
             assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(1);
             runtime.clear();
@@ -1515,7 +1564,8 @@ class FactoryRuntimeTest {
             assertThat(runtime.searchAttemptsForTesting()).isEqualTo(searches);
             assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
 
-            runtime.tick(List.of(recipe), 1L, level.getGameTime() + 1L);
+            RuntimeTestFixtures.advanceGameTime(level);
+            runtime.tick(List.of(recipe), 1L, level.getGameTime());
             resolveSharedRequests(controller);
             assertThat(runtime.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(recipe);
             assertThat(input.itemStorage().amount(0)).isZero();
@@ -1539,8 +1589,8 @@ class FactoryRuntimeTest {
             MachineRecipe recipe = inputRecipe("factory_pause_pending");
             RecipeRegistry.registerStatic(recipe);
             setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
-            factory.tick(List.of(recipe), 1L, level.getGameTime() + 1L);
-            MachineAsyncCoordinator.get(level).pumpMainThreadSteps();
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
+            applyAsyncSearchWithoutGrant(controller);
             long searches = factory.searchAttemptsForTesting();
             factory.cancelAsyncState();
             factory.pause();
@@ -1551,7 +1601,8 @@ class FactoryRuntimeTest {
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(searches);
 
             factory.resume();
-            factory.tick(List.of(recipe), 1L, level.getGameTime() + 1L);
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
             resolveSharedRequests(controller);
 
             assertThat(factory.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(recipe);
@@ -1712,7 +1763,7 @@ class FactoryRuntimeTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void async_replan_and_capture_fallback_keep_stage_eligibility_and_prepare_only_the_legal_recipe(boolean captureFailure)
+    void async_capture_failure_retries_without_sync_fallback_and_only_prepares_the_legal_recipe(boolean captureFailure)
             throws Exception {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         ItemInputBusBlockEntity input = captureFailure ? new CaptureFailingInputBus(new BlockPos(1, 0, 0))
@@ -1738,11 +1789,19 @@ class FactoryRuntimeTest {
             tickAttachedFactory(controller);
 
             FactoryRuntime factory = controllerFactoryRuntime(controller);
+            if (captureFailure) {
+                assertThat(factory.activeRuntimes()).isEmpty();
+                assertThat(prepared).isEmpty();
+                assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+                assertThat(input.itemStorage().amount(1)).isEqualTo(1L);
+                factory.wakeSearches(Reason.INPUT_AVAILABLE, ItemResource.of(Items.GOLD_INGOT));
+                tickAttachedFactory(controller);
+            }
             assertThat(factory.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(legal);
             assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
             assertThat(input.itemStorage().amount(1)).isZero();
             assertThat(prepared).containsExactly(legal.id());
-            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(captureFailure ? 2L : 1L);
             factory.snapshot();
             assertThat(laneThreadSnapshots(factory).keySet()).allSatisfy(lane ->
                     assertThat(lane.isStartPending()).isFalse());
@@ -1809,7 +1868,7 @@ class FactoryRuntimeTest {
     }
 
     @Test
-    void async_capture_failure_retains_both_stage_and_resource_failures_for_gold_wakeup() throws Exception {
+    void async_capture_failure_preserves_conservative_wakeups_and_recovers_precise_resource_evidence() throws Exception {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         CaptureFailingInputBus input = new CaptureFailingInputBus(new BlockPos(1, 0, 0));
         List<Identifier> prepared = new ArrayList<>();
@@ -1837,6 +1896,14 @@ class FactoryRuntimeTest {
             FactoryRecipeThread lane = laneThreadSnapshots(factory).keySet().stream()
                     .filter(FactoryRecipeThread::isBaseThread).findFirst().orElseThrow();
             assertThat(lane.matchesAvailability(Reason.INPUT_AVAILABLE, ItemResource.of(Items.GOLD_INGOT))).isTrue();
+            assertThat(lane.matchesAvailability(Reason.INPUT_AVAILABLE, ItemResource.of(Items.IRON_INGOT))).isTrue();
+            // No synchronous search fabricated precise failures after the capture exception. A fresh worker
+            // search restores exact evidence, even while gold is still absent.
+            factory.wakeSearches(Reason.INPUT_AVAILABLE, ItemResource.of(Items.IRON_INGOT));
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRuntimes()).isEmpty();
+            assertThat(prepared).isEmpty();
+            assertThat(lane.matchesAvailability(Reason.INPUT_AVAILABLE, ItemResource.of(Items.GOLD_INGOT))).isTrue();
             assertThat(lane.matchesAvailability(Reason.INPUT_AVAILABLE, ItemResource.of(Items.IRON_INGOT))).isFalse();
 
             setItem(input.itemStorage(), 1, new ItemStack(Items.GOLD_INGOT));
@@ -1848,7 +1915,7 @@ class FactoryRuntimeTest {
             assertThat(input.itemStorage().amount(1)).isZero();
             assertThat(lane.isStartPending()).isFalse();
             assertThat(prepared).containsExactly(gold.id());
-            assertThat(factory.searchAttemptsForTesting()).isEqualTo(2L);
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(3L);
         } finally {
             SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
@@ -2080,6 +2147,7 @@ class FactoryRuntimeTest {
 
     @Test
     void pending_start_is_discarded_when_the_recipe_catalog_changes_before_resolution() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         MachineControllerBlockEntity controller = factoryController("test_cube");
         ServerLevel level = (ServerLevel) controller.getLevel();
         StructureClaimRegistry registry = StructureClaimRegistry.get(level);
@@ -2107,6 +2175,7 @@ class FactoryRuntimeTest {
 
     @Test
     void catalog_change_before_shared_tick_commit_stops_the_old_recipe_without_advancing_it() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         Identifier recipeId = MMCR.id("factory_reload_pending_tick_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
@@ -2139,6 +2208,7 @@ class FactoryRuntimeTest {
 
     @Test
     void catalog_change_after_shared_tick_commit_invalidates_before_async_continuation() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         Identifier recipeId = MMCR.id("factory_reload_async_tick_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(),
@@ -2237,6 +2307,7 @@ class FactoryRuntimeTest {
 
     @Test
     void async_catalog_invalidation_stops_the_old_recipe_before_retrying_the_current_catalog() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         Identifier machineId = MMCR.id("test_cube");
         Identifier recipeId = MMCR.id("factory_reload_completion_recipe");
         MachineRecipe oldRecipe = RecipeTestSupport.create(recipeId, machineId, 1,
@@ -2254,24 +2325,29 @@ class FactoryRuntimeTest {
         FactoryRuntime runtime = new FactoryRuntime();
         runtime.ensureBaseLane(controller);
 
-        runtime.tick(List.of(oldRecipe), 1, 0L);
+        runtime.tick(List.of(oldRecipe), 1, level.getGameTime());
         resolveSharedRequests(controller);
         assertThat(runtime.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(oldRecipe);
 
-        runtime.tick(List.of(oldRecipe), 1, 1L);
+        RuntimeTestFixtures.advanceGameTime(level);
+        runtime.tick(List.of(oldRecipe), 1, level.getGameTime());
         RecipeRegistry.replaceDynamic(Map.of(recipeId, newRecipe));
         resolveSharedRequests(controller);
 
         assertThat(runtime.activeRuntimes()).isEmpty();
-        runtime.tick(List.of(newRecipe), 1, 2L);
+        long retryAt = level.getGameTime() + 5L;
+        RuntimeTestFixtures.advanceGameTime(level);
+        runtime.tick(List.of(newRecipe), 1, level.getGameTime());
         assertThat(runtime.threadSnapshots().getFirst().failure()).isNotNull();
         assertThat(runtime.threadSnapshots().getFirst().failure().reason())
                 .isEqualTo(BuiltinFailureReasons.VERSION_INVALIDATED);
 
-        runtime.tick(List.of(newRecipe), 1, 6L);
+        while (level.getGameTime() < retryAt) RuntimeTestFixtures.advanceGameTime(level);
+        runtime.tick(List.of(newRecipe), 1, level.getGameTime());
         resolveSharedRequests(controller);
 
-        assertThat(runtime.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(newRecipe);
+        assertThat(runtime.activeRuntimes()).as("search attempts=%s, lanes=%s", runtime.searchAttemptsForTesting(),
+                runtime.threadSnapshots()).extracting(CraftingRuntime::recipe).containsExactly(newRecipe);
     }
 
     @Test
@@ -2938,6 +3014,7 @@ class FactoryRuntimeTest {
 
     @Test
     void context_pending_start_is_validated_against_the_context_versions() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
         MachineControllerBlockEntity controller = asyncFactoryController(input);
         setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 1));
@@ -3323,6 +3400,18 @@ class FactoryRuntimeTest {
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to access controller runtime", exception);
         }
+    }
+
+    /** Delivers the searched candidate through arbitration but leaves the start payment ungranted. */
+    private static void applyAsyncSearchWithoutGrant(MachineControllerBlockEntity controller) {
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        MachineAsyncCoordinator async = MachineAsyncCoordinator.get(level);
+        SharedIoCoordinator sharedIo = SharedIoCoordinator.get(level);
+        async.beginLevelTick(level.getGameTime());
+        sharedIo.beginLevelTick(level.getGameTime());
+        async.pumpMainThreadSteps();
+        sharedIo.resolve(controller.resourceDomain());
+        async.pumpMainThreadSteps();
     }
 
     private static void resolveSharedRequests(MachineControllerBlockEntity controller) {

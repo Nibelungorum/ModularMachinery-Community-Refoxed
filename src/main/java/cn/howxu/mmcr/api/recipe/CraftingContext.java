@@ -59,6 +59,7 @@ public final class CraftingContext {
     private CapabilitySnapshot snapshot;
     private @Nullable InputRoutingFacet inputRouting;
     private @Nullable InputScope inputScope;
+    private @Nullable RequirementHandlerSupport.Sampling sampling;
 
     public CraftingContext(CapabilitySnapshot snapshot) {
         this(snapshot, List.of());
@@ -69,6 +70,13 @@ public final class CraftingContext {
     }
 
     public CraftingContext(CapabilitySnapshot snapshot, List<RecipeModifier> modifiers, @Nullable InputScope scope) {
+        this(snapshot, modifiers, scope, null);
+    }
+
+    /** Shares one search proof's probability decisions across ordered scopes and feasibility checks. */
+    public CraftingContext(CapabilitySnapshot snapshot, List<RecipeModifier> modifiers, @Nullable InputScope scope,
+                           @Nullable RequirementHandlerSupport.Sampling sampling) {
+        this.sampling = sampling;
         if (snapshot == null) throw new IllegalArgumentException("snapshot must not be null");
         this.snapshot = snapshot;
         capabilities = snapshot.capabilities();
@@ -402,6 +410,7 @@ public final class CraftingContext {
         this.snapshot = snapshot;
         inputRouting = snapshot.facets(InputRoutingFacet.class).stream().findFirst().orElse(null);
         inputScope = null;
+        sampling = null;
         setModifiers(modifiers);
     }
 
@@ -570,7 +579,7 @@ public final class CraftingContext {
 
     private PlanningContext planningContext(long parallelism, Map<Integer, OutputPolicy> policies) {
         return new PlanningContext(parallelism, 0, false, new PlanningReservations(),
-                policies, inputRouting, inputScope, null);
+                policies, inputRouting, inputScope, sampling);
     }
 
     private PlanningResult planSelected(List<MachineRequirement> source, List<Integer> sourceIndexes,

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.MMCR;
+
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
@@ -162,9 +164,10 @@ public final class MachineRecipeThread extends RecipeThread {
     /** Starts one ordinary-controller candidate search from immutable main-thread captures. */
     public StartResult searchAndStartAsyncRecipe(List<MachineRecipe> candidates, long availableParallelism,
                                              long structureVersion) {
-        if (controller.activeWorkMode() != MachineWorkMode.ASYNC || !(controller.getLevel() instanceof ServerLevel level)) {
+        if (controller.activeWorkMode() != MachineWorkMode.ASYNC) {
             return searchAndStartRecipe(candidates, availableParallelism, structureVersion);
         }
+        if (!(controller.getLevel() instanceof ServerLevel level)) return StartResult.DEFERRED;
         if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
         if (hasPendingAsyncSearch()) return StartResult.PENDING;
         ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
@@ -177,7 +180,11 @@ public final class MachineRecipeThread extends RecipeThread {
                     controller.componentRuntime().capabilitySnapshot(),
                     controller.componentRuntime().modifierList(), catalogVersion, effectiveRecipeCache);
         } catch (RuntimeException exception) {
-            return searchAndStartRecipe(candidates, availableParallelism, structureVersion);
+            controller.clearPendingConflictStart();
+            MMCR.LOG.warn("Async recipe capture failed: controller={}", controller.getBlockPos(), exception);
+            onStartSearchFailed(null);
+            onFullSearchResult(StartResult.FAILED);
+            return StartResult.FAILED;
         }
         long searchId = ++nextAsyncSearchId;
         MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
@@ -185,7 +192,7 @@ public final class MachineRecipeThread extends RecipeThread {
         PendingAsyncSearch pending = new PendingAsyncSearch(request, taskKey, catalogVersion);
         pendingAsyncSearch = pending;
         if (submitAsyncRecipeSearch(taskKey, request, catalogVersion, searchId, asyncSearchLaneId(),
-                () -> clearPendingAsyncSearch(pending, false))) return StartResult.PENDING;
+                () -> pendingAsyncSearch == pending, () -> clearPendingAsyncSearch(pending, false))) return StartResult.PENDING;
         clearPendingAsyncSearch(pending, false);
         return StartResult.DEFERRED;
     }
@@ -258,6 +265,10 @@ public final class MachineRecipeThread extends RecipeThread {
                 && current.capabilityVersion() == captured.capabilityVersion()
                 && current.modifierVersion() == captured.modifierVersion()
                 && current.stateVersion() == captured.stateVersion()
+                && current.upgradeContentRevision() == captured.upgradeContentRevision()
+                && current.maxParallelism() == captured.maxParallelism()
+                && (pending.request().snapshotValues().stamp().routing() < 0L
+                    || controller.componentRuntime().inputRoutingRevision() == pending.request().snapshotValues().stamp().routing())
                 && currentMachine != null && capturedMachine != null
                 && currentMachine.registryName().equals(capturedMachine.registryName())
                 && currentRecipeCatalog().version() == pending.catalogVersion();

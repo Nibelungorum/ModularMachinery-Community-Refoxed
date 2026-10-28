@@ -86,6 +86,36 @@ class EffectiveRecipeResolverTest {
         assertThat(changed).isNotSameAs(first);
     }
 
+    @Test
+    void controller_cache_reuses_catalog_recipes_across_candidate_subsets_and_direct_limit_reads() {
+        var pool = MMCR.id("controller_tick");
+        MachineRecipe firstRecipe = MachineRecipe.fromCanonical(MMCR.id("effective_subset_a"), pool, 20,
+                List.of(), List.of(), List.of(), 0, 1, false, true, false, Set.of());
+        MachineRecipe secondRecipe = firstRecipe.withId(MMCR.id("effective_subset_b"));
+        RecipeRegistry.replaceDynamic(Map.of(firstRecipe.id(), firstRecipe, secondRecipe.id(), secondRecipe));
+        try {
+            long catalog = RecipeRegistry.catalogForPool(pool).version();
+            EffectiveRecipeSet.Cache cache = new EffectiveRecipeSet.Cache();
+            ControllerRuntimeSnapshot snapshot = snapshot(3L);
+            EffectiveRecipeSet first = cache.resolve(snapshot, catalog, List.of(firstRecipe, secondRecipe), List.of());
+            EffectiveRecipeSet subset = cache.resolve(snapshot, catalog, List.of(firstRecipe), List.of());
+            EffectiveRecipeSet last = cache.resolve(snapshot, catalog, List.of(firstRecipe, secondRecipe), List.of());
+            assertThat(first.recipes().get(0)).isSameAs(subset.recipes().getFirst());
+            assertThat(first.recipes().get(0)).isSameAs(last.recipes().get(0));
+            assertThat(first.recipes().get(1)).isSameAs(last.recipes().get(1));
+            assertThat(cache.resolveOne(snapshot, catalog, firstRecipe, List.of())).isSameAs(first.recipes().get(0));
+            ControllerRuntimeSnapshot larger = snapshot.withRuntimeState(snapshot.crafting(), snapshot.factory(),
+                    snapshot.capabilityPresentations(), 32L, snapshot.recipePresentation());
+            assertThat(cache.resolveOne(larger, catalog, firstRecipe, List.of()))
+                    .isNotSameAs(first.recipes().get(0))
+                    .extracting(EffectiveRecipe::parallelismLimit).isEqualTo(32L);
+            assertThat(cache.resolveOne(larger, catalog, firstRecipe.withId(firstRecipe.id()), List.of()))
+                    .isNotSameAs(cache.resolveOne(larger, catalog, firstRecipe, List.of()));
+        } finally {
+            RecipeRegistry.replaceDynamic(Map.of());
+        }
+    }
+
     private static ControllerRuntimeSnapshot snapshot(long modifierVersion) {
         return new ControllerRuntimeSnapshot(StructureSnapshot.empty(), 2L, modifierVersion, 4L,
                 Map.of(), Map.of(), Set.of(), ModuleConnectionStatus.disconnected(), 0,

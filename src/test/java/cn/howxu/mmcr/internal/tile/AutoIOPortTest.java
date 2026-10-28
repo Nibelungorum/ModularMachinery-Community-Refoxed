@@ -6,6 +6,8 @@ import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
+import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
+import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.RecipeTestSupport;
@@ -192,8 +194,10 @@ class AutoIOPortTest {
 
         FactoryRuntime factory = factoryRuntime(controller);
         factory.ensureBaseLane(controller);
-        factory.tick(List.of(RecipeTestSupport.create(MMCR.id("factory_port_ownership"), MMCR.id("test_cube"),
-                20, List.of(), List.of(), List.of(), 0, 1)), 1);
+        try (var mode = ConfigTestSupport.openMachineWorkMode(MachineWorkMode.SYNC)) {
+            factory.tick(List.of(RecipeTestSupport.create(MMCR.id("factory_port_ownership"), MMCR.id("test_cube"),
+                    20, List.of(), List.of(), List.of(), 0, 1)), 1);
+        }
 
         assertThat(controller.isPortUsedByActiveRecipe(source.getBlockPos())).isTrue();
         assertThat(source.ejectContents()).isFalse();

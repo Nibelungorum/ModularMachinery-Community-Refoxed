@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.async;
 
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchProof;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import java.util.List;
@@ -179,6 +180,15 @@ public interface MainThreadStep {
     }
 
     /** Marks that a worker finished pure factory planning for one lane. */
+    record RecipeSearchProofStep(String laneId, long catalogVersion, long searchId,
+                                 RecipeSearchProof.Request request) implements MainThreadStep {
+        @Override
+        public Kind kind() { return Kind.UNSUPPORTED_REQUIREMENT; }
+
+        @Override
+        public Result execute() { return Result.success(); }
+    }
+
     record FactorySearch(String laneId, long catalogVersion, long searchId) implements MainThreadStep {
         @Override
         public Kind kind() {

@@ -44,6 +44,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import net.minecraft.core.BlockPos;
@@ -62,6 +63,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -86,6 +88,12 @@ class AsyncFactoryExecutionTest {
     private ServerLevel level;
     private MinecraftServer previousServer;
     private boolean serverInstalled;
+    private ServerThreadTestScope serverThreadScope;
+
+    @BeforeEach
+    void installServerThread() throws Exception {
+        serverThreadScope = ServerThreadTestScope.open();
+    }
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
@@ -106,6 +114,7 @@ class AsyncFactoryExecutionTest {
             field.setAccessible(true);
             field.set(null, previousServer);
         }
+        if (serverThreadScope != null) serverThreadScope.close();
         if (level == null) return;
         MachineAsyncCoordinator.discard(level);
         SharedIoCoordinator.discard(level);

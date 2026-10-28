@@ -105,6 +105,11 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
         delegate = Objects.requireNonNull(handler, "handler");
     }
 
+    /** True only for the built-in handler whose resource rules can be captured by value. */
+    public static boolean supportsSearchSnapshot() {
+        return delegate != UNAVAILABLE && LoadedMekanismBridge.isNativeChemicalHandler(delegate);
+    }
+
     public static void installUnavailableHandler() {
         delegate = UNAVAILABLE;
     }

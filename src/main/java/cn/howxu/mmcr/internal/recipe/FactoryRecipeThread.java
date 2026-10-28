@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.MMCR;
+
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureReport;
@@ -521,14 +523,20 @@ public final class FactoryRecipeThread extends RecipeThread {
         failureCandidates = filtered;
         long epoch = controller.lifecycleEpoch();
         long coreVersion = recipeSetVersion;
-        SearchResult resolved = searchResult.requiresMainThreadReplan()
-                ? search(context, filtered, structureVersion) : searchResult;
+        // Unresolved legacy handles are not permission to traverse the pool on the server thread.
+        if (searchResult.requiresMainThreadReplan()) return StartResult.DEFERRED;
+        SearchResult resolved = searchResult;
         if (epoch != controller.lifecycleEpoch() || coreVersion != recipeSetVersion) return StartResult.CANCELLED;
         RecipeSearchResult result = resolved.result();
         if (resolved.failure() != null || result == null || !result.success()) {
             controller.clearPendingConflictStart();
-            if (result == null) onStartSearchFailed(null);
-            else onRecipeSearchFailed(result);
+            if (result == null) {
+                if (resolved.failure() != null) {
+                    MMCR.LOG.warn("Async factory recipe search failed: controller={} lane={}",
+                            controller.getBlockPos(), laneId(), resolved.failure());
+                }
+                onStartSearchFailed(null);
+            } else onRecipeSearchFailed(result);
             StartResult failure = resolved.failure() != null || result == null ? StartResult.FAILED : StartResult.NO_MATCH;
             onFullSearchResult(failure);
             return failure;
@@ -677,7 +685,14 @@ public final class FactoryRecipeThread extends RecipeThread {
         EnumMap<ResourceAvailabilityNotifier.Reason, List<Predicate<Object>>> matchers =
                 new EnumMap<>(ResourceAvailabilityNotifier.Reason.class);
         if (report == null) {
-            if (lastSearchFailureReason != null) {
+            if (lastSearchFailureReason == null || BuiltinFailureReasons.RECIPE_SEARCH.id().equals(lastSearchFailureReason)
+                    || BuiltinFailureReasons.UNKNOWN.id().equals(lastSearchFailureReason)) {
+                // A failed capture has no precise resource evidence. Preserve domain-local wakeups without
+                // invoking the handler which may itself have failed during capture.
+                for (ResourceAvailabilityNotifier.Reason reason : ResourceAvailabilityNotifier.Reason.values()) {
+                    matchers.put(reason, List.of(ignored -> true));
+                }
+            } else {
                 for (MachineRecipe recipe : candidates) addRecipeMatchers(matchers, recipe, lastSearchFailureReason);
             }
         } else {
