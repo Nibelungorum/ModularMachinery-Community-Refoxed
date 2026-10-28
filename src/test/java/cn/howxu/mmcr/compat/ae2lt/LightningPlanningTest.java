@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.compat.ae2lt;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
@@ -13,11 +18,14 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.core.BlockPos;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -212,6 +220,65 @@ class LightningPlanningTest {
         assertThat(new RequirementPlanner().plan(List.of(output), List.of(capability),
                 new PlanningContext(1, 0, false, reservations)).successful()).isFalse();
         assertThat(storage.amount(0)).isZero();
+    }
+
+    @Test
+    void async_snapshots_plan_on_workers_and_commit_atomically_against_changed_storage() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var storage = new LongResourceStorage<>(LightningTier.class, 2, 100L, tier -> false, null);
+            storage.setContents(0, HIGH, 40L);
+            storage.setContents(1, HIGH, 40L);
+            var facet = new LightningCapability(storage, IOType.INPUT).facet(AsyncPlanningFacet.class).orElseThrow();
+            var snapshot = facet.captureSnapshot();
+            var planner = facet.workerPlanner();
+            var request = new AsyncCapabilityRequest.Resource(LightningRecipeTypes.LIGHTNING, 1L,
+                    List.of(new AsyncResourceAction(NativeAsyncResourceValues.lightning(HIGH), 60L, false)));
+            var operation = CompletableFuture.supplyAsync(() -> planner.plan(snapshot, request).orElseThrow()).join();
+            assertThat(storage.amount(0)).isEqualTo(40L);
+            storage.setContents(1, HIGH, 10L);
+            try (var transaction = Transaction.openRoot()) {
+                assertThat(facet.commit(operation, transaction).success()).isFalse();
+                transaction.commit();
+            }
+            assertThat(storage.amount(0)).isEqualTo(40L);
+            assertThat(storage.amount(1)).isEqualTo(10L);
+            storage.setContents(1, HIGH, 40L);
+            try (var transaction = Transaction.openRoot()) {
+                assertThat(facet.commit(operation, transaction).success()).isTrue();
+            }
+            assertThat(storage.amount(0)).isEqualTo(40L);
+            assertThat(storage.amount(1)).isEqualTo(40L);
+            try (var transaction = Transaction.openRoot()) {
+                assertThat(facet.commit(operation, transaction).success()).isTrue();
+                transaction.commit();
+            }
+            assertThat(storage.amount(0)).isZero();
+            assertThat(storage.amount(1)).isEqualTo(20L);
+        }
+    }
+
+    @Test
+    void async_commits_reject_wrong_direction_tier_and_slot_without_mutation() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            var storage = storage(100L);
+            storage.setContents(0, HIGH, 50L);
+            var facet = new LightningCapability(storage, IOType.INPUT).facet(AsyncPlanningFacet.class).orElseThrow();
+            var value = NativeAsyncResourceValues.lightning(HIGH);
+            List<AsyncCapabilityOperation> invalid = List.of(
+                    new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0, value, 1L, true),
+                    new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 1, value, 1L, false),
+                    new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0,
+                            NativeAsyncResourceValues.lightning(EXTREME), 1L, false),
+                    new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0,
+                            new AsyncResourceValue(HIGH.requirementId(), "unexpected data"), 1L, false));
+            for (var operation : invalid) {
+                try (var transaction = Transaction.openRoot()) {
+                    assertThat(facet.commit(operation, transaction).success()).isFalse();
+                    transaction.commit();
+                }
+            }
+            assertThat(storage.amount(0)).isEqualTo(50L);
+        }
     }
 
     private static LongResourceStorage<LightningTier> storage(long capacity) {

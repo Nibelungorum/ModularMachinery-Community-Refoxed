@@ -22,6 +22,7 @@ import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.ae2lt.LightningFailureReasons;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
@@ -376,7 +377,8 @@ public final class AsyncRequirementPlanner {
                     BuiltinFailureReasons.RECIPE_SEARCH, MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH,
                     MekanismFailureReasons.CHEMICAL_INPUT_MISSING, MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED,
                     MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED,
-                    MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT, MekanismFailureReasons.HEAT_OUTPUT_BLOCKED)) {
+                    MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT, MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
+                    LightningFailureReasons.INPUT_MISSING, LightningFailureReasons.OUTPUT_BLOCKED)) {
                 reasons.put(reason.id(), reason);
             }
             // Value-captured native rules use only the reasons above. Opaque extensions return

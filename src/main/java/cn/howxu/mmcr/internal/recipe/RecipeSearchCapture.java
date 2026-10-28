@@ -15,6 +15,7 @@ import cn.howxu.mmcr.api.capability.plan.InputRoutingIndex;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
@@ -34,6 +35,10 @@ import cn.howxu.mmcr.api.recipe.requirement.StageRequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningFailureReasons;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirementHandler;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -294,6 +299,12 @@ final class RecipeSearchCapture {
                     ignored -> LoadedMekanismBridge.matchingChemicalSearchResources(chemical, resources.all(requirement.type().id())));
             if (valid) reason = (output ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED
                     : MekanismFailureReasons.CHEMICAL_INPUT_MISSING).id();
+        } else if (requirement instanceof LightningRequirement lightning) {
+            kind = Kind.RESOURCE;
+            amount = lightning.amount();
+            chance = lightning.chance();
+            if (!output) accepted = Set.of(NativeAsyncResourceValues.lightning(lightning.tier()));
+            reason = (output ? LightningFailureReasons.OUTPUT_BLOCKED : LightningFailureReasons.INPUT_MISSING).id();
         } else if (requirement instanceof EnergyRequirement energy) {
             kind = Kind.SCALAR;
             amount = energy.fePerTick();
@@ -405,6 +416,8 @@ final class RecipeSearchCapture {
                 || requirement instanceof EnergyRequirement && handler instanceof EnergyRequirementHandler
                 || requirement instanceof LevelRequirement && handler instanceof LevelRequirementHandler
                 || requirement instanceof StageRequirement && handler instanceof StageRequirementHandler
+                || requirement instanceof LightningRequirement && handler instanceof LightningRequirementHandler
+                    && LightningBridge.get().available()
                 || requirement instanceof LoadedChemicalRequirement && handler == requirement.type().handler()
                     && LoadedChemicalRequirement.supportsSearchSnapshot()
                 || requirement instanceof LoadedHeatRequirement && handler == requirement.type().handler()
@@ -425,6 +438,9 @@ final class RecipeSearchCapture {
             if (stack.isEmpty()) return null;
             resource = FluidResource.of(stack);
             amount = stack.getAmount();
+        } else if (requirement instanceof LightningRequirement lightning) {
+            resource = lightning.tier();
+            amount = lightning.amount();
         } else if (requirement instanceof LoadedChemicalRequirement chemical && LoadedChemicalRequirement.supportsSearchSnapshot()) {
             resource = LoadedMekanismBridge.chemicalSearchOutput(chemical);
             if (resource == null) return null;
@@ -434,6 +450,7 @@ final class RecipeSearchCapture {
     }
 
     private static @Nullable AsyncResourceValue value(Object resource) {
+        if (resource instanceof LightningTier tier) return NativeAsyncResourceValues.lightning(tier);
         if (resource instanceof ItemResource item) return item.isEmpty() ? null : NativeAsyncResourceValues.item(item);
         if (resource instanceof FluidResource fluid) return fluid.isEmpty() ? null : NativeAsyncResourceValues.fluid(fluid);
         return LoadedMekanismBridge.chemicalSearchValue(resource);
@@ -463,18 +480,20 @@ final class RecipeSearchCapture {
 
     private static Overlap overlap(MachineRecipe recipe) {
         Set<Identifier> items = new HashSet<>();
+        Set<Identifier> lightning = new HashSet<>();
         boolean anyItem = false;
         boolean hasItem = false;
         boolean custom = false;
         for (MachineRequirement requirement : recipe.requirements()) {
             if (requirement.io() != RecipeModifier.IOType.INPUT) continue;
             if (!nativeHandler(requirement)) { custom = true; continue; }
+            if (requirement instanceof LightningRequirement resource) lightning.add(resource.tier().requirementId());
             if (!(requirement instanceof ItemRequirement item) || item.item() == null) continue;
             hasItem = true;
             try { item.item().items().forEach(holder -> items.add(BuiltInRegistries.ITEM.getKey(holder.value()))); }
             catch (UnsupportedOperationException ignored) { anyItem = true; }
         }
-        return new Overlap(items, anyItem, hasItem, custom);
+        return new Overlap(items, anyItem, hasItem, custom, lightning);
     }
 
     private static ChemicalPredicate chemicalPredicate(LoadedChemicalRequirement requirement) {

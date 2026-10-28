@@ -4,6 +4,9 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -25,6 +28,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
+import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import com.google.gson.JsonPrimitive;
@@ -121,15 +125,26 @@ public final class RecipeSearchGameTest {
         var energy = new LongValueStorage(100L, 100L, null);
         energy.setAmount(30L);
         double beforeHeat = heat.heatCapacitor().getHeat();
+        var lightning = new LongResourceStorage<>(LightningTier.class, 2, 1_000L, ignored -> false, null);
+        lightning.setContents(0, LightningTier.HIGH_VOLTAGE, 120L);
+        lightning.setContents(1, LightningTier.EXTREME_HIGH_VOLTAGE, 60L);
+        var lightningOutput = new LongResourceStorage<>(LightningTier.class, 1, 100L, ignored -> false, null);
         var capabilities = new CapabilitySnapshot(List.of(new ChemicalPortCapability(chemical),
-                new HeatPortCapability(heat), new HeatPortCapability(heatOutput), new EnergyHatchCapability(energy, IOType.INPUT)));
+                new HeatPortCapability(heat), new HeatPortCapability(heatOutput), new EnergyHatchCapability(energy, IOType.INPUT),
+                new LightningCapability(lightning, IOType.INPUT), new LightningCapability(lightningOutput, IOType.OUTPUT)));
         var oxygen = LoadedChemicalRequirement.input(ChemicalIngredient.chemical(Identifier.parse("mekanism:oxygen"), 300L));
         compare(helper, capabilities, List.of(oxygen, oxygen, new EnergyRequirement(5L),
                 LoadedHeatRequirement.minimumTemperature(600D), LoadedHeatRequirement.outputHeat(10D)));
         compare(helper, capabilities, List.of(oxygen, LoadedHeatRequirement.minimumTemperature(900D)));
+        compare(helper, capabilities, List.of(oxygen, new EnergyRequirement(5L),
+                LoadedHeatRequirement.minimumTemperature(600D), LightningRequirement.input(LightningTier.HIGH_VOLTAGE, 30L),
+                LightningRequirement.input(LightningTier.EXTREME_HIGH_VOLTAGE, 20L),
+                LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 10L, 1F)));
+        compare(helper, capabilities, List.of(LightningRequirement.input(LightningTier.EXTREME_HIGH_VOLTAGE, 61L)));
         helper.assertTrue(chemical.chemicalTank().amountAsLong() == 1_200L && energy.amount() == 30L
-                        && heat.heatCapacitor().getHeat() == beforeHeat,
-                "Chemical, heat and FE search must leave the original resources untouched");
+                        && heat.heatCapacitor().getHeat() == beforeHeat && lightning.amount(0) == 120L
+                        && lightning.amount(1) == 60L && lightningOutput.amount(0) == 0L,
+                "Chemical, heat, FE and lightning search must leave the original resources untouched");
         helper.succeed();
     }
 
