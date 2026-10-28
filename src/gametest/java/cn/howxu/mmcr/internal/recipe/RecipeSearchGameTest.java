@@ -186,6 +186,9 @@ public final class RecipeSearchGameTest {
         @Override public long extract(int slot, LightningTier tier, long amount, boolean simulate) {
             throw new AssertionError("Search must not consume lightning");
         }
+        @Override public long insert(int slot, LightningTier tier, long amount, boolean simulate) {
+            throw new AssertionError("Search must not produce lightning");
+        }
         @Override public long insert(LightningTier tier, long amount, boolean simulate) {
             throw new AssertionError("Search must not produce lightning");
         }

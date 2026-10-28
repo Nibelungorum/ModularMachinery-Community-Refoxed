@@ -126,6 +126,23 @@ class LightningPlanningTest {
     }
 
     @Test
+    void asyncOutputCommitRevalidatesEachSlotWithoutMutation() throws Exception {
+        try (var ignored = ServerThreadTestScope.open()) {
+            State state = new State();
+            var facet = new LightningCapability(new AsyncView(state), IOType.OUTPUT)
+                    .facet(AsyncPlanningFacet.class).orElseThrow();
+            var snapshot = facet.captureSnapshot();
+            var planner = facet.workerPlanner();
+            var request = new AsyncCapabilityRequest.Resource(LightningRecipeTypes.LIGHTNING, 1L,
+                    List.of(new AsyncResourceAction(NativeAsyncResourceValues.lightning(HIGH_VOLTAGE), 16L, true)));
+            var operation = CompletableFuture.supplyAsync(() -> planner.plan(snapshot, request).orElseThrow()).join();
+            state.amounts[0] = 5L;
+            assertThat(facet.commit(operation).success()).isFalse();
+            assertThat(state.amounts).containsExactly(5L, 0L);
+        }
+    }
+
+    @Test
     void asyncCommitsRejectWrongDirectionTierAndSlotWithoutMutation() throws Exception {
         try (var ignored = ServerThreadTestScope.open()) {
             State state = new State();
@@ -170,6 +187,12 @@ class LightningPlanningTest {
         @Override public long reserveOutput(LightningTier tier, long amount, PlanningReservations reservations) {
             return 0L;
         }
+        @Override public long insert(int slot, LightningTier tier, long amount, boolean simulate) {
+            if (storedKey(slot) != tier) return 0L;
+            long moved = Math.min(amount, Math.max(0L, capacity(slot, tier) - state.amounts[slot]));
+            if (!simulate) state.amounts[slot] += moved;
+            return moved;
+        }
         @Override public long insert(LightningTier tier, long amount, boolean simulate) {
             long remaining = amount;
             for (int slot = 0; slot < size() && remaining > 0L; slot++) {
@@ -207,6 +230,12 @@ class LightningPlanningTest {
         @Override public long reserveOutput(LightningTier tier, long amount, PlanningReservations reservations) {
             long moved = Math.min(amount, outputCapacity(tier, reservations));
             return moved > 0L && reservations.reserveOutput(state, tier, moved) ? moved : 0L;
+        }
+        @Override public long insert(int slot, LightningTier tier, long amount, boolean simulate) {
+            if (storedKey(slot) != tier) return 0L;
+            long moved = Math.min(amount, Math.max(0L, 10L - state.amounts[slots[slot]]));
+            if (!simulate) state.amounts[slots[slot]] += moved;
+            return moved;
         }
         @Override public long insert(LightningTier tier, long amount, boolean simulate) {
             long moved = Math.min(amount, Math.max(0L, 10L - state.amounts[tier.ordinal()]));

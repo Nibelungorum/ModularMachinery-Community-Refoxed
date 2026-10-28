@@ -12,6 +12,7 @@ import appeng.api.storage.IStorageProvider;
 import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.helpers.externalstorage.GenericStackInv;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
@@ -93,6 +94,8 @@ public final class LightningInterfaceGameTest {
             var output = new OutputLightningStorage(new GenericStackInv(null, GenericStackInv.Mode.STORAGE, 0),
                     () -> network, IActionSource.empty(), () -> {}, false);
             var outputCapability = new LightningCapability(output, IOType.OUTPUT);
+            helper.assertTrue(outputCapability.facet(AsyncPlanningFacet.class).isEmpty(),
+                    "Network-first lightning output keeps live admission planning");
             var plan = new LightningRequirementHandler().plan(LightningRequirement.output(tier, 20L, 1F),
                     List.of(outputCapability), new PlanningContext(1L, 0));
             var prepared = plan.materialize(1L, new PlanningReservations(), null);

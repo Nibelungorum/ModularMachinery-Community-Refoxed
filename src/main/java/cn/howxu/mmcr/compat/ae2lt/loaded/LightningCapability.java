@@ -53,7 +53,7 @@ public final class LightningCapability implements MachineCapability, LightningVi
         this.storage = Objects.requireNonNull(storage, "storage");
         this.direction = Objects.requireNonNull(direction, "direction");
         asyncPlanning = new AsyncPlanningFacet() {
-            @Override public Object planningIdentity() { return storage.identity(); }
+            @Override public Object planningIdentity() { return storage; }
 
             @Override
             protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
@@ -88,7 +88,9 @@ public final class LightningCapability implements MachineCapability, LightningVi
 
     @Override
     public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
-        if (facetType == AsyncPlanningFacet.class) return Optional.of(facetType.cast(asyncPlanning));
+        if (facetType == AsyncPlanningFacet.class) {
+            return supportsAsyncSnapshots() ? Optional.of(facetType.cast(asyncPlanning)) : Optional.empty();
+        }
         return MachineCapability.super.facet(facetType);
     }
 
@@ -142,11 +144,11 @@ public final class LightningCapability implements MachineCapability, LightningVi
         } catch (IllegalArgumentException exception) {
             return failure(BuiltinFailureReasons.WRONG_RESOURCE_TYPE);
         }
-        long simulated = insert ? storage.insert(tier, resource.amount(), true)
+        long simulated = insert ? storage.insert(resource.slot(), tier, resource.amount(), true)
                 : storage.extract(resource.slot(), tier, resource.amount(), true);
         if (simulated != resource.amount()) return failure(insert
                 ? LightningFailureReasons.OUTPUT_BLOCKED : LightningFailureReasons.INPUT_MISSING);
-        long moved = insert ? storage.insert(tier, resource.amount(), false)
+        long moved = insert ? storage.insert(resource.slot(), tier, resource.amount(), false)
                 : storage.extract(resource.slot(), tier, resource.amount(), false);
         if (moved > 0L) committed.add(new AsyncCapabilityOperation.Resource(resource.capabilityId(), resource.slot(),
                 resource.resource(), moved, insert));
@@ -160,9 +162,17 @@ public final class LightningCapability implements MachineCapability, LightningVi
             var operation = committed.get(index);
             LightningTier tier = NativeAsyncResourceValues.lightning(operation.resource());
             long restored = operation.insert() ? storage.extract(operation.slot(), tier, operation.amount(), false)
-                    : storage.insert(tier, operation.amount(), false);
+                    : storage.insert(operation.slot(), tier, operation.amount(), false);
             if (restored != operation.amount()) throw new IllegalStateException("Unable to roll back lightning commit");
         }
+    }
+
+    private boolean supportsAsyncSnapshots() {
+        if (storage instanceof OutputLightningStorage) return false;
+        for (int slot = 0; slot < storage.size(); slot++) {
+            if (storage.storedKey(slot) != null && tier(slot) == null) return false;
+        }
+        return true;
     }
 
     private LightningTier tier(int slot) {

@@ -49,6 +49,11 @@ public class InventoryLightningStorage implements LightningStorage {
         if (accepted > 0L && inventory instanceof PatternReturnInventory) reservations.reserveOutput(inventory, key, accepted);
         return accepted;
     }
+    @Override public long insert(int slot, LightningTier tier, long amount, boolean simulate) {
+        AEKey key = key(tier);
+        if (inventory instanceof PatternReturnInventory returns) amount = Math.min(amount, returns.remainingCapacity(key));
+        return inventory.insert(slot, key, amount, simulate ? Actionable.SIMULATE : Actionable.MODULATE);
+    }
     @Override public long insert(LightningTier tier, long amount, boolean simulate) {
         if (inventory instanceof PatternReturnInventory returns) amount = Math.min(amount, returns.remainingCapacity(key(tier)));
         long accepted = 0L;

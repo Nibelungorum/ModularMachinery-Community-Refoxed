@@ -36,5 +36,6 @@ public final class NetworkLightningStorage implements LightningStorage {
                 simulate ? Actionable.SIMULATE : Actionable.MODULATE, source) : 0L;
     }
     @Override public long reserveOutput(LightningTier tier, long amount, PlanningReservations reservations) { return 0L; }
+    @Override public long insert(int slot, LightningTier tier, long amount, boolean simulate) { return 0L; }
     @Override public long insert(LightningTier tier, long amount, boolean simulate) { return 0L; }
 }

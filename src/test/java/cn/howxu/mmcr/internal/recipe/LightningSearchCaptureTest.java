@@ -120,6 +120,18 @@ class LightningSearchCaptureTest {
     }
 
     @Test
+    void reorderedViewsSharePhysicalCellsWithoutReusingTheWrongSnapshot() {
+        var storage = storage(1_000L);
+        storage.setContents(0, HIGH, 80L);
+        storage.setContents(1, EXTREME, 10L);
+        var reversed = new MappedStorage(storage, 1, 0);
+        var capabilities = capabilities(lightning(storage, IOType.INPUT), lightning(reversed, IOType.INPUT));
+        assertEquivalent(capabilities, recipe("reordered_shared", List.of(
+                LightningRequirement.input(HIGH, 50L), LightningRequirement.input(HIGH, 50L)), false));
+        assertEquivalent(capabilities, recipe("reordered_extreme", List.of(LightningRequirement.input(EXTREME, 7L)), false));
+    }
+
+    @Test
     void isolatedRoutingAppliesToTierRequirementsUsingTheSharedCapabilityId() {
         var first = storage(100L);
         var second = storage(100L);
@@ -186,6 +198,13 @@ class LightningSearchCaptureTest {
         var unavailable = capture(capabilities(lightning(storage(100L), IOType.INPUT)),
                 List.of(recipe("unavailable", List.of(LightningRequirement.input(HIGH, 1L)), false)));
         assertThat(unavailable.candidates().getFirst().proofReason()).isEqualTo(RecipeSearchProof.Reason.OPAQUE_REQUIREMENT);
+    }
+
+    @Test
+    void foreignKeysKeepTheLiveCapabilityProofBoundary() {
+        var output = recipe("foreign", List.of(LightningRequirement.output(HIGH, 1L, 1F)), false);
+        var snapshot = capture(capabilities(new LightningCapability(new ForeignStorage(), IOType.OUTPUT)), List.of(output));
+        assertThat(snapshot.candidates().getFirst().proofReason()).isEqualTo(RecipeSearchProof.Reason.LIVE_CAPABILITY);
     }
 
     @Test
@@ -317,9 +336,40 @@ class LightningSearchCaptureTest {
         @Override public long extract(int slot, LightningTier tier, long amount, boolean simulate) {
             throw new AssertionError("Search must not consume resources");
         }
+        @Override public long insert(int slot, LightningTier tier, long amount, boolean simulate) {
+            throw new AssertionError("Search must not produce resources");
+        }
         @Override public long insert(LightningTier tier, long amount, boolean simulate) {
             throw new AssertionError("Search must not produce resources");
         }
+    }
+
+    /** A reordered projection of the same physical slots.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class MappedStorage extends TestStorage {
+        private final TestStorage delegate;
+        private final int[] mapping;
+        MappedStorage(TestStorage delegate, int... mapping) {
+            super(mapping.length, delegate.capacity);
+            this.delegate = delegate;
+            this.mapping = mapping;
+        }
+        @Override public Object identity() { return delegate.identity(); }
+        @Override public Object address(int slot) { return delegate.address(mapping[slot]); }
+        @Override public Object storedKey(int slot) { return delegate.storedKey(mapping[slot]); }
+        @Override public long amount(int slot) { return delegate.amount(mapping[slot]); }
+        @Override public long capacity(int slot, LightningTier tier) { return delegate.capacity(mapping[slot], tier); }
+    }
+
+    /** A non-lightning AE key cannot be represented by AsyncResourceValue.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class ForeignStorage extends TestStorage {
+        private final Object foreign = new Object();
+        ForeignStorage() { super(1, 100L); }
+        @Override public Object storedKey(int slot) { checkThread(); return foreign; }
+        @Override public long amount(int slot) { checkThread(); return 1L; }
     }
 
     /** Output storage whose live admission policy cannot be represented by slot snapshots.

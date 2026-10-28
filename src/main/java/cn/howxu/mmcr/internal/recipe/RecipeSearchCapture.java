@@ -423,8 +423,10 @@ final class RecipeSearchCapture {
     }
 
     private int resourceCell(Object storage, AsyncCapabilitySnapshot.Resource snapshot, int slot) {
-        Object identity = storage instanceof NativeReservationAccess access ? access.reservationIdentity() : storage;
-        Object key = storage instanceof NativeReservationAccess access ? access.reservationSlot(slot) : slot;
+        Object identity = storage instanceof NativeReservationAccess access ? access.reservationIdentity()
+                : storage instanceof LightningStorage lightning ? lightning.identity() : storage;
+        Object key = storage instanceof NativeReservationAccess access ? access.reservationSlot(slot)
+                : storage instanceof LightningStorage lightning ? lightning.address(slot) : slot;
         Map<Object, Integer> cells = resourceCells.computeIfAbsent(identity, ignored -> new HashMap<>());
         return cells.computeIfAbsent(key, ignored -> {
             var value = snapshot.slots().get(slot);

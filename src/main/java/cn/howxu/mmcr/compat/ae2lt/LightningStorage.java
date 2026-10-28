@@ -16,5 +16,6 @@ public interface LightningStorage {
     long capacity(int slot, LightningTier tier);
     long extract(int slot, LightningTier tier, long amount, boolean simulate);
     long reserveOutput(LightningTier tier, long amount, PlanningReservations reservations);
+    long insert(int slot, LightningTier tier, long amount, boolean simulate);
     long insert(LightningTier tier, long amount, boolean simulate);
 }
