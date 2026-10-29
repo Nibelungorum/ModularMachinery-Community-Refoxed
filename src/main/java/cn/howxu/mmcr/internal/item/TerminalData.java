@@ -116,14 +116,8 @@ public record TerminalData(
     }
 
     public TerminalData withInventoryMode(TerminalInventoryMode inventoryMode) {
-        return switch (Objects.requireNonNull(inventoryMode, "inventoryMode")) {
-            case INVENTORY -> new TerminalData(controller, null, null, inventoryMode, selectedLevelType, selectedLevels, stage,
-                    previewEnabled, previewLayer);
-            case CONTAINER -> new TerminalData(controller, container, null, inventoryMode, selectedLevelType, selectedLevels, stage,
-                    previewEnabled, previewLayer);
-            case AE2 -> new TerminalData(controller, null, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
-                    previewEnabled, previewLayer);
-        };
+        return new TerminalData(controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
+                previewEnabled, previewLayer);
     }
 
     public TerminalData withSelectedLevel(ResourceLocation type, ResourceLocation level) {

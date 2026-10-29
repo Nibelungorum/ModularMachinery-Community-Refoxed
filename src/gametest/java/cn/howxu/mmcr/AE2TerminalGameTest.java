@@ -18,6 +18,7 @@ import appeng.core.definitions.AEItems;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorageResolver;
 import cn.howxu.mmcr.internal.item.TerminalData;
+import cn.howxu.mmcr.internal.item.TerminalAction;
 import cn.howxu.mmcr.internal.item.TerminalInventoryMode;
 import cn.howxu.mmcr.internal.item.TerminalService;
 import cn.howxu.mmcr.registry.ModDataComponents;
@@ -77,6 +78,21 @@ public class AE2TerminalGameTest {
             linked = linkViaMenu(helper, player, second, linked);
             helper.assertTrue(TerminalData.from(linked).equals(original.withAe2AccessPoint(second.getGlobalPos())),
                     "Native rebinding replaces only the access point in " + mode);
+            TerminalData rebound = TerminalData.from(linked);
+            player.setItemInHand(InteractionHand.MAIN_HAND, linked);
+            for (TerminalInventoryMode next : TerminalInventoryMode.values()) {
+                helper.assertTrue(TerminalService.execute(player, linked, TerminalAction.SET_INVENTORY_MODE,
+                                next.ordinal(), null, null).accepted(),
+                        "Server accepts switching the bound terminal to " + next);
+                TerminalData switched = TerminalData.from(linked);
+                helper.assertTrue(switched.inventoryMode() == next
+                                && second.getGlobalPos().equals(switched.ae2AccessPoint())
+                                && original.container().equals(switched.container()),
+                        "Switching inventory modes preserves both ME and container bindings");
+            }
+            helper.assertTrue(TerminalService.execute(player, linked, TerminalAction.SET_INVENTORY_MODE,
+                            mode.ordinal(), null, null).accepted() && TerminalData.from(linked).equals(rebound),
+                    "Returning to the original mode preserves all bound terminal settings");
             GridLinkables.get(linked.getItem()).unlink(linked);
             helper.assertTrue(TerminalData.from(linked).equals(original),
                     "Native unlink clears only the ME binding in " + mode);

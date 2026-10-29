@@ -8,6 +8,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,15 +83,25 @@ class TerminalDataTest {
         assertThat(decoded).isEqualTo(TerminalData.DEFAULT);
     }
 
-    @Test
-    void switching_to_inventory_clears_external_storage_bindings() {
-        TerminalData data = TerminalData.DEFAULT
+    @ParameterizedTest
+    @EnumSource(TerminalInventoryMode.class)
+    void switching_inventory_modes_preserves_bindings_and_other_settings(TerminalInventoryMode initialMode) {
+        TerminalData data = TerminalData.DEFAULT.withInventoryMode(initialMode)
+                .withController(GlobalPos.of(Level.OVERWORLD, BlockPos.ZERO))
                 .withContainer(GlobalPos.of(Level.OVERWORLD, new BlockPos(1, 64, 1)))
-                .withAe2AccessPoint(GlobalPos.of(Level.OVERWORLD, new BlockPos(2, 64, 2)));
+                .withAe2AccessPoint(GlobalPos.of(Level.OVERWORLD, new BlockPos(2, 64, 2)))
+                .withSelectedLevel(ResourceLocation.parse("test:coils"), ResourceLocation.parse("test:iron"))
+                .withStage(2).withPreview(true, -1);
 
-        TerminalData switched = data.withInventoryMode(TerminalInventoryMode.INVENTORY);
+        for (TerminalInventoryMode mode : TerminalInventoryMode.values()) {
+            TerminalData switched = data.withInventoryMode(mode);
 
-        assertThat(switched.container()).isNull();
-        assertThat(switched.ae2AccessPoint()).isNull();
+            assertThat(switched.inventoryMode()).isEqualTo(mode);
+            assertThat(switched).usingRecursiveComparison().ignoringFields("inventoryMode").isEqualTo(data);
+            var encoded = TerminalData.CODEC.encodeStart(JsonOps.INSTANCE, switched).getOrThrow();
+            TerminalData decoded = TerminalData.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow();
+            assertThat(decoded).isEqualTo(switched);
+            assertThat(decoded.withInventoryMode(initialMode)).isEqualTo(data);
+        }
     }
 }
