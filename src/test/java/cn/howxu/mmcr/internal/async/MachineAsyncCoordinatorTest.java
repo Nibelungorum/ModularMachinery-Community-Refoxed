@@ -81,6 +81,250 @@ class MachineAsyncCoordinatorTest {
     }
 
     @Test
+    void ordinary_workers_and_receipts_share_admission_across_coordinators_without_rejection() {
+        ManualExecutor executor = new ManualExecutor();
+        AtomicInteger submissions = new AtomicInteger();
+        WorkerAdmission workers = new WorkerAdmission(command -> {
+            submissions.incrementAndGet();
+            executor.execute(command);
+        }, 1);
+        var ordinary = MachineAsyncCoordinator.forTesting(workers);
+        var receipts = MachineAsyncCoordinator.forTesting(workers);
+        AtomicBoolean advanced = new AtomicBoolean();
+        assertThat(ordinary.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L), ignored -> {
+            advanced.set(true);
+            return AsyncContinuation.Yield.complete();
+        })).isTrue();
+        var first = new ExecutionIdentity(1L, 1L, "base", 1L);
+        var second = new ExecutionIdentity(2L, 1L, "base", 1L);
+        receipts.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(1L, 1L),
+                new Receipt(first, 1L, 1L, 0, 0L, true, null));
+        receipts.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(2L, 1L),
+                new Receipt(second, 1L, 1L, 0, 0L, true, null));
+        for (int index = 0; index < 100; index++) receipts.pumpReceiptDrains();
+        assertThat(submissions).hasValue(1);
+        assertThat(advanced).isFalse();
+        assertThat(receipts.pollReceiptAcknowledgement()).isNull();
+
+        executor.runNext();
+        assertThat(advanced).isTrue();
+        receipts.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(receipts.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(first, 1L, 1L));
+        assertThat(receipts.pollReceiptAcknowledgement()).isNull();
+        receipts.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(receipts.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(second, 1L, 1L));
+        assertThat(submissions).hasValue(3);
+        assertThat(executor.pendingTaskCount()).isZero();
+    }
+
+    @Test
+    void a_receipt_worker_holds_the_same_admission_as_an_ordinary_continuation() {
+        ManualExecutor executor = new ManualExecutor();
+        WorkerAdmission workers = new WorkerAdmission(executor, 1);
+        var receipts = MachineAsyncCoordinator.forTesting(workers);
+        var ordinary = MachineAsyncCoordinator.forTesting(workers);
+        var identity = new ExecutionIdentity(1L, 1L, "base", 1L);
+        receipts.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(1L, 1L),
+                new Receipt(identity, 1L, 1L, 0, 0L, true, null));
+        receipts.pumpReceiptDrains();
+        AtomicBoolean advanced = new AtomicBoolean();
+        assertThat(ordinary.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L), ignored -> {
+            advanced.set(true);
+            return AsyncContinuation.Yield.complete();
+        })).isTrue();
+        ordinary.completeTick();
+        assertThat(executor.pendingTaskCount()).isEqualTo(1);
+        assertThat(advanced).isFalse();
+        executor.runNext();
+        ordinary.completeTick();
+        executor.runNext();
+        ordinary.completeTick();
+        assertThat(advanced).isTrue();
+        assertThat(receipts.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(identity, 1L, 1L));
+    }
+
+    @Test
+    void a_busy_receipt_domain_rejoins_behind_its_peer_after_a_bounded_workset() throws Exception {
+        ManualExecutor executor = new ManualExecutor();
+        var coordinator = MachineAsyncCoordinator.forTesting(new WorkerAdmission(executor, 1));
+        var acknowledgements = new ReceiptAcknowledgements(false);
+        acknowledgements.release.countDown();
+        replaceReceiptField(coordinator, "receiptAcknowledgements", acknowledgements);
+        var hotDomain = new MachineAsyncCoordinator.ExecutionDomain(1L, 1L);
+        var coldDomain = new MachineAsyncCoordinator.ExecutionDomain(2L, 1L);
+        int budget = ServerConfig.asyncSharedIoWorksetEntries();
+        for (int index = 0; index <= budget; index++) {
+            coordinator.publishReceipt(hotDomain, new Receipt(new ExecutionIdentity(1L, 1L, "base", index + 1L),
+                    1L, 1L, 0, 0L, true, null));
+        }
+        var cold = new ExecutionIdentity(2L, 1L, "base", 1L);
+        for (int index = 0; index < 100; index++) {
+            coordinator.publishReceipt(coldDomain, new Receipt(cold, 1L, 1L, 0, 0L, true, null));
+        }
+        coordinator.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(acknowledgements.merged).hasSize(budget);
+        coordinator.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(acknowledgements.merged.getLast().identity()).isEqualTo(cold);
+        coordinator.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(acknowledgements.merged).hasSize(budget + 2);
+        assertThat(acknowledgements.merged.getLast().identity()).isEqualTo(
+                new ExecutionIdentity(1L, 1L, "base", budget + 1L));
+        assertThat(executor.pendingTaskCount()).isZero();
+        assertThat(receiptDrains(coordinator)).isEmpty();
+    }
+
+    @Test
+    void concurrent_publication_and_pumps_under_backpressure_preserve_the_later_terminal() throws Exception {
+        ManualExecutor executor = new ManualExecutor();
+        var coordinator = MachineAsyncCoordinator.forTesting(new WorkerAdmission(executor, 1));
+        var acknowledgements = new ReceiptAcknowledgements(false);
+        replaceReceiptField(coordinator, "receiptAcknowledgements", acknowledgements);
+        var domain = new MachineAsyncCoordinator.ExecutionDomain(1L, 1L);
+        var identity = new ExecutionIdentity(1L, 1L, "base", 1L);
+        coordinator.publishReceipt(domain, new Receipt(identity, 1L, 1L, 0, 0L, true, null));
+        coordinator.pumpReceiptDrains();
+        var worker = new FutureTask<Void>(() -> { executor.runNext(); return null; });
+        new Thread(worker).start();
+        try {
+            awaitReceiptLatch(acknowledgements.entered);
+            var publisher = new FutureTask<Void>(() -> {
+                for (long sequence = 2L; sequence <= 100L; sequence++) {
+                    coordinator.publishReceipt(domain, new Receipt(identity, 2L, sequence, 0, 0L, true, null));
+                    coordinator.pumpReceiptDrains();
+                }
+                return null;
+            });
+            new Thread(publisher).start();
+            for (int index = 0; index < 100; index++) coordinator.pumpReceiptDrains();
+            publisher.get(5, TimeUnit.SECONDS);
+            assertThat(executor.pendingTaskCount()).isZero();
+        } finally {
+            acknowledgements.release.countDown();
+        }
+        worker.get(5, TimeUnit.SECONDS);
+        assertThat(coordinator.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(identity, 1L, 1L));
+        coordinator.pumpReceiptDrains();
+        assertThat(executor.pendingTaskCount()).isEqualTo(1);
+        executor.runNext();
+        assertThat(coordinator.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(identity, 2L, 100L));
+        assertThat(acknowledgements.merged).hasSize(2);
+        assertThat(executor.pendingTaskCount()).isZero();
+        assertThat(receiptDrains(coordinator)).isEmpty();
+    }
+
+    @Test
+    void failed_terminal_ack_releases_admission_and_retries_on_the_next_pump() throws Exception {
+        ManualExecutor executor = new ManualExecutor();
+        var coordinator = MachineAsyncCoordinator.forTesting(new WorkerAdmission(executor, 1));
+        var acknowledgements = new ReceiptAcknowledgements(true);
+        acknowledgements.release.countDown();
+        replaceReceiptField(coordinator, "receiptAcknowledgements", acknowledgements);
+        var identity = new ExecutionIdentity(1L, 1L, "base", 1L);
+        coordinator.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(1L, 1L),
+                new Receipt(identity, 1L, 1L, 0, 0L, true, null));
+        coordinator.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(coordinator.pollReceiptAcknowledgement()).isNull();
+        assertThat(executor.pendingTaskCount()).isZero();
+        coordinator.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(coordinator.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(identity, 1L, 1L));
+        assertThat(receiptDrains(coordinator)).isEmpty();
+    }
+
+    @Test
+    void an_inline_ack_failure_waits_for_another_pump_instead_of_retrying_the_same_round() throws Exception {
+        var coordinator = MachineAsyncCoordinator.forTesting(Runnable::run);
+        var acknowledgements = new ReceiptAcknowledgements(true);
+        acknowledgements.release.countDown();
+        replaceReceiptField(coordinator, "receiptAcknowledgements", acknowledgements);
+        var identity = new ExecutionIdentity(1L, 1L, "base", 1L);
+        coordinator.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(1L, 1L),
+                new Receipt(identity, 1L, 1L, 0, 0L, true, null));
+        coordinator.pumpReceiptDrains();
+        assertThat(coordinator.pollReceiptAcknowledgement()).isNull();
+        assertThat(acknowledgements.merged).isEmpty();
+        coordinator.pumpReceiptDrains();
+        assertThat(coordinator.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(identity, 1L, 1L));
+        assertThat(acknowledgements.merged).hasSize(1);
+        assertThat(receiptDrains(coordinator)).isEmpty();
+    }
+
+    @Test
+    void a_failed_ordinary_continuation_releases_capacity_and_keeps_its_failure_outcome() {
+        ManualExecutor executor = new ManualExecutor();
+        WorkerAdmission workers = new WorkerAdmission(executor, 1);
+        var ordinary = MachineAsyncCoordinator.forTesting(workers);
+        var receipts = MachineAsyncCoordinator.forTesting(workers);
+        List<MachineAsyncCoordinator.TaskOutcome> outcomes = new ArrayList<>();
+        IllegalStateException failure = new IllegalStateException("continuation failure");
+        ordinary.submitDetailed(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L), ignored -> {
+            throw failure;
+        }, null, new MachineAsyncCoordinator.TaskHooks(() -> true, (key, outcome) -> outcomes.add(outcome)));
+        var identity = new ExecutionIdentity(1L, 1L, "base", 1L);
+        receipts.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(1L, 1L),
+                new Receipt(identity, 1L, 1L, 0, 0L, true, null));
+        receipts.pumpReceiptDrains();
+        executor.runNext();
+        ordinary.completeTick();
+        assertThat(outcomes).containsExactly(new MachineAsyncCoordinator.TaskOutcome.Failed(failure));
+        receipts.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(receipts.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(identity, 1L, 1L));
+        assertThat(executor.pendingTaskCount()).isZero();
+    }
+
+    @Test
+    void closing_a_queued_receipt_drain_releases_capacity_only_when_the_executor_consumes_it() throws Exception {
+        ManualExecutor executor = new ManualExecutor();
+        WorkerAdmission workers = new WorkerAdmission(executor, 1);
+        var closed = MachineAsyncCoordinator.forTesting(workers);
+        var live = MachineAsyncCoordinator.forTesting(workers);
+        var domain = new MachineAsyncCoordinator.ExecutionDomain(1L, 1L);
+        var identity = new ExecutionIdentity(1L, 1L, "base", 1L);
+        closed.publishReceipt(domain, new Receipt(identity, 1L, 1L, 0, 0L, true, null));
+        closed.pumpReceiptDrains();
+        closeReceiptCoordinator(closed);
+        assertThat(workers.tryExecute(() -> {})).isFalse();
+        live.publishReceipt(domain, new Receipt(identity, 1L, 2L, 0, 0L, true, null));
+        live.pumpReceiptDrains();
+        executor.runNext();
+        live.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(live.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(identity, 1L, 2L));
+        assertThat(closed.pollReceiptAcknowledgement()).isNull();
+        assertThat(receiptDrains(closed)).isEmpty();
+        assertThat(executor.pendingTaskCount()).isZero();
+    }
+
+    @Test
+    void cancellation_of_a_queued_ordinary_worker_does_not_leak_admission() throws Exception {
+        ManualExecutor executor = new ManualExecutor();
+        WorkerAdmission workers = new WorkerAdmission(executor, 1);
+        var closed = MachineAsyncCoordinator.forTesting(workers);
+        var live = MachineAsyncCoordinator.forTesting(workers);
+        closed.submit(new MachineAsyncCoordinator.TaskKey(BlockPos.ZERO, 1L), ignored -> {
+            throw new AssertionError("cancelled continuation must not execute");
+        });
+        closeReceiptCoordinator(closed);
+        var identity = new ExecutionIdentity(1L, 1L, "base", 1L);
+        live.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(1L, 1L),
+                new Receipt(identity, 1L, 1L, 0, 0L, true, null));
+        live.pumpReceiptDrains();
+        assertThat(executor.pendingTaskCount()).isEqualTo(1);
+        executor.runNext();
+        live.pumpReceiptDrains();
+        executor.runNext();
+        assertThat(live.pollReceiptAcknowledgement()).isEqualTo(new Acknowledgement(identity, 1L, 1L));
+        assertThat(executor.pendingTaskCount()).isZero();
+    }
+
+    @Test
     void running_receipts_reuse_the_lifecycle_slot_and_confirm_only_the_newest_valid_fact() throws Exception {
         ManualExecutor workers = new ManualExecutor();
         var coordinator = MachineAsyncCoordinator.forTesting(workers);
@@ -217,8 +461,6 @@ class MachineAsyncCoordinatorTest {
         var second = new ExecutionIdentity(1L, 1L, "base", 2L);
         coordinator.publishReceipt(domain, new Receipt(first, 1L, 1L, 0, 0L, true, null));
         coordinator.pumpReceiptDrains();
-        workers.runNext();
-        assertThat(coordinator.pollReceiptAcknowledgement().identity()).isEqualTo(first);
         var drains = new PausingReceiptDrains(receiptDrains(coordinator));
         replaceReceiptField(coordinator, "receiptDrains", drains);
         drains.pauseNextRead.set(true);
@@ -229,6 +471,8 @@ class MachineAsyncCoordinatorTest {
         new Thread(publisher).start();
         try {
             awaitReceiptLatch(drains.entered);
+            workers.runNext();
+            assertThat(coordinator.pollReceiptAcknowledgement().identity()).isEqualTo(first);
             coordinator.pumpReceiptDrains();
             assertThat(drains).isEmpty();
         } finally {
