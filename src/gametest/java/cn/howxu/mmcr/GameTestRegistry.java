@@ -384,6 +384,8 @@ public final class GameTestRegistry {
                 helper -> new TerminalAssemblyGameTest().storageResolverRejectsUnavailableContainerTargets(helper));
         register(event, "terminal_block_storage", 100,
                 helper -> new TerminalAssemblyGameTest().blockStorageAcceptsCompleteStacksAndRejectsPartialInsertions(helper));
+        register(event, "ae2_terminal_native_linking", 20,
+                helper -> new AE2TerminalGameTest().nativeMenuLinksAndRelinksWithoutChangingSettings(helper));
         register(event, "ae2_terminal_access_point", 100,
                 helper -> new AE2TerminalGameTest().boundAccessPointTransfersBuildAndDemolishMaterials(helper));
         register(event, "terminal_expandable_demolish_stage_two", 100, helper -> new TerminalAssemblyGameTest().demolishExpandableFormedStageTwoRemovesCompleteSnapshot(helper));

@@ -66,17 +66,6 @@ public final class TerminalService {
         return accepted(player, stack, "message.mmcr.terminal.container_bound");
     }
 
-    public static Result bindAe2AccessPoint(ServerPlayer player, ItemStack stack, GlobalPos target) {
-        if (!isHeldTerminal(player, stack)) return rejected(player, stack, "message.mmcr.terminal.not_held");
-        TerminalData data = TerminalData.from(stack);
-        if (data.inventoryMode() != TerminalInventoryMode.AE2
-                || AE2Bridge.get().resolveTerminalNetworkStorage(player, target).isEmpty()) {
-            return rejected(player, stack, "message.mmcr.terminal.invalid_ae2_access_point");
-        }
-        setData(stack, data.withAe2AccessPoint(target));
-        return accepted(player, stack, "message.mmcr.terminal.ae2_access_point_bound");
-    }
-
     public static void clear(ItemStack stack) {
         stack.set(ModDataComponents.TERMINAL_DATA.get(), TerminalData.from(stack).clear());
     }

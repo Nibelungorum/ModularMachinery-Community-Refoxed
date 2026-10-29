@@ -37,6 +37,9 @@ public interface AE2Bridge {
     default void registerMenus(BiConsumer<String, Supplier<? extends MenuType<?>>> registrar) {
     }
 
+    default void registerGridLinkables() {
+    }
+
     default boolean useMemoryCard(ItemStack stack, Level level, BlockPos pos, Player player) {
         return false;
     }

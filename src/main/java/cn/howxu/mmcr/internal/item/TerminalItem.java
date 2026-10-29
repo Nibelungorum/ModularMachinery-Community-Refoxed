@@ -67,12 +67,6 @@ public class TerminalItem extends Item {
                     ? InteractionResult.SUCCESS : InteractionResult.FAIL;
         }
         TerminalData data = TerminalData.from(context.getItemInHand());
-        if (data.inventoryMode() == TerminalInventoryMode.AE2) {
-            TerminalService.Result result = TerminalService.bindAe2AccessPoint(serverPlayer, context.getItemInHand(), target);
-            if (result.accepted()) serverPlayer.sendSystemMessage(Component.translatable(result.messageKey()));
-            return result.accepted()
-                    ? InteractionResult.SUCCESS : InteractionResult.PASS;
-        }
         if (data.inventoryMode() == TerminalInventoryMode.CONTAINER) {
             TerminalService.Result result = TerminalService.bindContainer(serverPlayer, context.getItemInHand(), target);
             if (result.accepted()) serverPlayer.sendSystemMessage(Component.translatable(result.messageKey()));

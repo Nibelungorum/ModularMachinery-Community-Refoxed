@@ -128,7 +128,7 @@
   "guide.mmcr_patchouli.entry.ae2.me_pattern.p1": "机器须成型、可运行且有满足请求的配方与资源。请求是否可启动，还受空闲线程、并行与配方线程上限影响。$(br2)完成产物进入样板提供器的回传存储，再由 AE2 原生回传逻辑送回网络以结算合成。网络无法接收时，应先解决回传阻塞。",
   "guide.mmcr_patchouli.entry.ae2.me_pattern.p2": "样板接口的界面提供样板和阻塞等设置；这些设置决定请求何时可继续，不会绕过机器结构、红石或资源条件。$(br2)需要调整多任务能力时，先区分$(l:mmcr:processing/factory)工厂线程$(/l)与$(l:mmcr:processing/parallel)单次并行$(/l)。合成停住时同时检查机器状态和 AE2 回传存储。",
   "guide.mmcr_patchouli.entry.ae2.terminal_storage.name": "终端使用 ME 库存",
-  "guide.mmcr_patchouli.entry.ae2.terminal_storage.p0": "在终端界面选择 ME 库存模式，再主手持终端潜行右键有效的 AE2 无线访问点绑定。机器控制器仍需另外绑定；普通容器不能充当无线访问点。",
+  "guide.mmcr_patchouli.entry.ae2.terminal_storage.p0": "打开 AE2 无线访问点界面，将终端放入绑定输入槽，再从输出槽取出。绑定只更新 ME 连接信息，其他设置保持不变；使用网络前需在终端界面选择 ME 库存模式。机器控制器仍需另外绑定。",
   "guide.mmcr_patchouli.entry.ae2.terminal_storage.p1": "无线访问点须已加载、处于活动状态且连到有库存的网络。搭建从该网络取结构材料，拆除向网络返还可回收物品。$(br2)ME 库存模式不会取消控制器的同维度与操作距离限制。材料不足、网络不可用或无法回收时，按提示处理；基本操作参见$(l:mmcr:tools/terminal)终端$(/l)。",
   "guide.mmcr_patchouli.entry.extendedae.interfaces.name": "扩展 ME 接口",
   "guide.mmcr_patchouli.entry.extendedae.interfaces.p0": "扩展输入接口提供更多配置与存储槽位，仍先在本地备料，再供机器消费。方向与$(l:mmcr:ae2/me_input)普通输入接口$(/l)相同。",
