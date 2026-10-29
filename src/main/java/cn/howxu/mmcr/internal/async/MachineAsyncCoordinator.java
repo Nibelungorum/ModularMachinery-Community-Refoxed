@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.runtime.RecipeExecutionState;
 import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Receipt;
 import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Acknowledgement;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
+import it.unimi.dsi.fastutil.HashCommon;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.jspecify.annotations.Nullable;
@@ -78,7 +79,12 @@ public final class MachineAsyncCoordinator {
      * Level-local immutable resource domain identity.
      * @author howxu <dev@howxu.cn>
      */
-    public record ExecutionDomain(long id, long generation) { }
+    public record ExecutionDomain(long id, long generation) {
+        @Override
+        public int hashCode() {
+            return Long.hashCode(HashCommon.mix(31L * id + generation));
+        }
+    }
 
     /** Coalesces only facts of the same execution; no world objects cross this boundary. */
     public void publishReceipt(ExecutionDomain domain, Receipt receipt) {

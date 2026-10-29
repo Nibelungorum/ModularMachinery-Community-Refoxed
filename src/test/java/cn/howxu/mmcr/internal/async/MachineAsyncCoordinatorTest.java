@@ -39,6 +39,59 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 class MachineAsyncCoordinatorTest {
 
     @Test
+    void equal_domain_instances_share_the_same_receipt_mailbox() {
+        Queue<Runnable> workers = new ArrayDeque<>();
+        var coordinator = MachineAsyncCoordinator.forTesting(workers::add);
+        var identity = new ExecutionIdentity(7L, 1L, "base", 1L);
+        var firstKey = new MachineAsyncCoordinator.ExecutionDomain(7L, 7L);
+        var equalKey = new MachineAsyncCoordinator.ExecutionDomain(7L, 7L);
+        assertThat(equalKey).isEqualTo(firstKey);
+        assertThat(equalKey.hashCode()).isEqualTo(firstKey.hashCode());
+        coordinator.publishReceipt(firstKey, new Receipt(identity, 1L, 1L, 1, 1L, false, null));
+        coordinator.publishReceipt(equalKey, new Receipt(identity, 1L, 2L, 2, 2L, true, null));
+        coordinator.pumpReceiptDrains();
+        assertThat(workers).hasSize(1);
+        workers.remove().run();
+        assertThat(coordinator.pollReceiptAcknowledgement())
+                .isEqualTo(new Acknowledgement(identity, 1L, 2L));
+        assertThat(coordinator.pollReceiptAcknowledgement()).isNull();
+    }
+
+    @Test
+    void domain_keys_preserve_equivalent_lookup_and_generation_isolation() {
+        Map<MachineAsyncCoordinator.ExecutionDomain, String> domains = new ConcurrentHashMap<>();
+        domains.put(new MachineAsyncCoordinator.ExecutionDomain(7L, 7L), "old");
+        domains.put(new MachineAsyncCoordinator.ExecutionDomain(7L, 8L), "replacement");
+        assertThat(domains.get(new MachineAsyncCoordinator.ExecutionDomain(7L, 7L))).isEqualTo("old");
+        assertThat(domains.get(new MachineAsyncCoordinator.ExecutionDomain(7L, 8L))).isEqualTo("replacement");
+        domains.remove(new MachineAsyncCoordinator.ExecutionDomain(7L, 7L));
+        assertThat(domains.get(new MachineAsyncCoordinator.ExecutionDomain(7L, 7L))).isNull();
+        assertThat(domains.get(new MachineAsyncCoordinator.ExecutionDomain(7L, 8L))).isEqualTo("replacement");
+    }
+
+    @Test
+    void many_correlated_domain_ids_deliver_every_terminal_once() {
+        Queue<Runnable> workers = new ArrayDeque<>();
+        var coordinator = MachineAsyncCoordinator.forTesting(workers::add);
+        List<ExecutionIdentity> expected = new ArrayList<>();
+        for (int index = 1; index <= 576; index++) {
+            var identity = new ExecutionIdentity(index, 1L, "base", 1L);
+            expected.add(identity);
+            coordinator.publishReceipt(new MachineAsyncCoordinator.ExecutionDomain(index, index),
+                    new Receipt(identity, 1L, 1L, 0, 0L, true, null));
+        }
+        coordinator.pumpReceiptDrains();
+        while (!workers.isEmpty()) workers.remove().run();
+        List<ExecutionIdentity> actual = new ArrayList<>();
+        Acknowledgement acknowledgement;
+        while ((acknowledgement = coordinator.pollReceiptAcknowledgement()) != null) {
+            actual.add(acknowledgement.identity());
+        }
+        assertThat(actual).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(coordinator.pollReceiptAcknowledgement()).isNull();
+    }
+
+    @Test
     void receipt_drain_coalesces_one_execution_and_retains_both_terminal_identities() {
         Queue<Runnable> workers = new ArrayDeque<>();
         var coordinator = MachineAsyncCoordinator.forTesting(workers::add);
