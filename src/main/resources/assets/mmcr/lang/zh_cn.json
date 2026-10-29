@@ -646,8 +646,6 @@
   "message.mmcr.port_tier.vacuum": "终极",
   "message.mmcr.terminal.controller_bound": "已选中机器控制器",
   "message.mmcr.terminal.container_bound": "已选中容器",
-  "message.mmcr.terminal.ae2_access_point_bound": "已选中 ME 无线访问点",
-  "message.mmcr.terminal.invalid_ae2_access_point": "所选方块不是可访问的 ME 无线访问点",
   "message.mmcr.terminal.cleared": "已清空终端数据",
   "message.mmcr.terminal.build.missing": "缺少搭建所需方块",
   "message.mmcr.terminal.build.none": "结构已成型",

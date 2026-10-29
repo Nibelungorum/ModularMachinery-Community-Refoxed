@@ -1,6 +1,9 @@
 package cn.howxu.mmcr;
 
 import appeng.api.config.Actionable;
+import appeng.api.features.GridLinkables;
+import appeng.menu.SlotSemantics;
+import appeng.menu.implementations.WirelessAccessPointMenu;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
@@ -25,6 +28,8 @@ import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ClientInformation;
@@ -32,6 +37,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -44,6 +52,61 @@ import net.minecraft.world.entity.Entity.RemovalReason;
  * @author howxu <dev@howxu.cn>
  */
 public class AE2TerminalGameTest {
+    public void nativeMenuLinksAndRelinksWithoutChangingSettings(GameTestHelper helper) {
+        BlockPos firstPos = new BlockPos(0, 0, 0);
+        BlockPos secondPos = new BlockPos(2, 0, 0);
+        helper.setBlock(firstPos, AEBlocks.WIRELESS_ACCESS_POINT.block().defaultBlockState());
+        helper.setBlock(secondPos, AEBlocks.WIRELESS_ACCESS_POINT.block().defaultBlockState());
+        var first = helper.getBlockEntity(firstPos, WirelessAccessPointBlockEntity.class);
+        var second = helper.getBlockEntity(secondPos, WirelessAccessPointBlockEntity.class);
+        ServerPlayer player = player(helper);
+        GlobalPos controller = GlobalPos.of(helper.getLevel().dimension(), helper.absolutePos(new BlockPos(0, 0, 2)));
+        for (TerminalInventoryMode mode : TerminalInventoryMode.values()) {
+            TerminalData original = TerminalData.DEFAULT.withInventoryMode(mode)
+                    .withController(controller).withContainer(controller)
+                    .withSelectedLevel(MMCR.id("test_level_type"), MMCR.id("test_level"))
+                    .withStage(2).withPreview(true, -1);
+            ItemStack terminal = new ItemStack(ModItems.TERMINAL.get());
+            terminal.set(ModDataComponents.TERMINAL_DATA.get(), original);
+            terminal.set(DataComponents.CUSTOM_NAME, Component.literal("Named test terminal"));
+            ItemStack linked = linkViaMenu(helper, player, first, terminal);
+            helper.assertTrue(TerminalData.from(linked).equals(original.withAe2AccessPoint(first.getGlobalPos())),
+                    "Native binding preserves all other settings in " + mode);
+            helper.assertTrue(TerminalData.from(terminal).equals(original),
+                    "Native menu links its output copy rather than mutating the original stack");
+            linked = linkViaMenu(helper, player, second, linked);
+            helper.assertTrue(TerminalData.from(linked).equals(original.withAe2AccessPoint(second.getGlobalPos())),
+                    "Native rebinding replaces only the access point in " + mode);
+            GridLinkables.get(linked.getItem()).unlink(linked);
+            helper.assertTrue(TerminalData.from(linked).equals(original),
+                    "Native unlink clears only the ME binding in " + mode);
+        }
+        var menu = new WirelessAccessPointMenu(1, player.getInventory(), first);
+        helper.assertFalse(menu.getSlots(SlotSemantics.MACHINE_INPUT).getFirst().mayPlace(new ItemStack(Items.STONE)),
+                "Native linking slot still rejects non-linkable items");
+        player.setRemoved(RemovalReason.DISCARDED);
+        helper.succeed();
+    }
+
+    private static ItemStack linkViaMenu(GameTestHelper helper, ServerPlayer player,
+                                        WirelessAccessPointBlockEntity accessPoint, ItemStack terminal) {
+        var menu = new WirelessAccessPointMenu(1, player.getInventory(), accessPoint);
+        var input = menu.getSlots(SlotSemantics.MACHINE_INPUT).getFirst();
+        var output = menu.getSlots(SlotSemantics.MACHINE_OUTPUT).getFirst();
+        helper.assertTrue(input.mayPlace(terminal), "Native access point accepts the MMCR terminal");
+        input.set(terminal);
+        helper.assertFalse(input.hasItem(), "Native binding consumes the input slot");
+        helper.assertTrue(output.hasItem(), "Native binding moves the linked terminal to the output slot");
+        ItemStack linked = output.remove(1);
+        helper.assertFalse(output.hasItem(), "Taking the linked terminal clears the output slot");
+        ItemStack expected = terminal.copy();
+        expected.set(ModDataComponents.TERMINAL_DATA.get(),
+                TerminalData.from(terminal).withAe2AccessPoint(accessPoint.getGlobalPos()));
+        helper.assertTrue(ItemStack.isSameItemSameComponents(linked, expected),
+                "Native binding preserves every item component except the ME connection");
+        return linked;
+    }
+
     public void boundAccessPointTransfersBuildAndDemolishMaterials(GameTestHelper helper) {
         BlockPos accessPointPos = new BlockPos(0, 0, 0);
         BlockPos chestPos = new BlockPos(2, 0, 0);
@@ -82,9 +145,21 @@ public class AE2TerminalGameTest {
             terminal.set(ModDataComponents.TERMINAL_DATA.get(), TerminalData.DEFAULT
                     .withInventoryMode(TerminalInventoryMode.AE2));
             player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
+            helper.assertTrue(StructureItemStorageResolver.resolve(player,
+                            TerminalData.from(terminal).withAe2AccessPoint(accessPoint)).isPresent(),
+                    "The powered ME network is usable before testing the removed binding interaction");
+            player.setPose(Pose.CROUCHING);
+            TerminalData original = TerminalData.from(terminal);
+            var hit = new BlockHitResult(accessPoint.pos().getCenter(), Direction.UP, accessPoint.pos(), false);
+            InteractionResult result = terminal.getItem().useOn(new UseOnContext(
+                    helper.getLevel(), player, InteractionHand.MAIN_HAND, terminal, hit));
+            helper.assertTrue(result == InteractionResult.PASS && TerminalData.from(terminal).equals(original),
+                    "Sneak-use on a usable access point no longer binds the ME connection");
+            player.setPose(Pose.STANDING);
 
-            helper.assertTrue(TerminalService.bindAe2AccessPoint(player, terminal, accessPoint).accepted(),
-                    "Shift-right-click binding accepts a powered wireless access point");
+            terminal = linkViaMenu(helper, player,
+                    helper.getBlockEntity(accessPointPos, WirelessAccessPointBlockEntity.class), terminal);
+            player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
             StructureItemStorage storage = StructureItemStorageResolver.resolve(player, TerminalData.from(terminal))
                     .orElseThrow(() -> new AssertionError("Bound ME network resolves to terminal storage"));
             helper.assertTrue(storage.source().extractAll(List.of(new ItemStack(Items.IRON_INGOT))),

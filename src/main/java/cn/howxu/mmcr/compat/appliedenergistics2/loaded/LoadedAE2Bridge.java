@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
 import appeng.api.AECapabilities;
+import appeng.api.features.GridLinkables;
 import appeng.api.ids.AEComponents;
 import appeng.api.implementations.items.IMemoryCard;
 import appeng.api.implementations.items.MemoryCardMessages;
@@ -29,6 +30,7 @@ import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
+import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -108,6 +110,11 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     public void registerMenus(BiConsumer<String, Supplier<? extends MenuType<?>>> registrar) {
         AE2MenuTypes.register(registrar);
         contributor.registerMenus(registrar);
+    }
+
+    @Override
+    public void registerGridLinkables() {
+        GridLinkables.register(ModItems.TERMINAL.get(), new TerminalGridLinkableHandler());
     }
 
     @Override

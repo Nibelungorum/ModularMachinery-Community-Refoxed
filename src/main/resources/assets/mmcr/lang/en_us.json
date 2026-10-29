@@ -645,8 +645,6 @@
   "message.mmcr.port_tier.vacuum": "vacuum",
   "message.mmcr.terminal.controller_bound": "Machine controller selected",
   "message.mmcr.terminal.container_bound": "Container selected",
-  "message.mmcr.terminal.ae2_access_point_bound": "ME wireless access point selected",
-  "message.mmcr.terminal.invalid_ae2_access_point": "Selected block is not an accessible ME wireless access point",
   "message.mmcr.terminal.cleared": "Terminal data cleared",
   "message.mmcr.terminal.build.missing": "Missing required structure blocks",
   "message.mmcr.terminal.build.none": "Structure already formed",

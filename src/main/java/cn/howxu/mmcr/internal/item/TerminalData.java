@@ -93,8 +93,8 @@ public record TerminalData(
                 selectedLevelType, selectedLevels, stage, previewEnabled, previewLayer);
     }
 
-    public TerminalData withAe2AccessPoint(GlobalPos ae2AccessPoint) {
-        return new TerminalData(controller, container, Objects.requireNonNull(ae2AccessPoint, "ae2AccessPoint"), inventoryMode,
+    public TerminalData withAe2AccessPoint(@Nullable GlobalPos ae2AccessPoint) {
+        return new TerminalData(controller, container, ae2AccessPoint, inventoryMode,
                 selectedLevelType, selectedLevels, stage, previewEnabled, previewLayer);
     }
 

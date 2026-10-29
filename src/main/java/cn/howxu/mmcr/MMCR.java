@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
 import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
 import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
@@ -49,8 +50,10 @@ public class MMCR {
         ModEventRegistration.register(modBus, modContainer);
         modBus.addListener((FMLConstructModEvent event) ->
                 StartupContentRegistration.registerProductionForModStartup(NeoForge.EVENT_BUS));
-        modBus.addListener((FMLCommonSetupEvent event) ->
-                StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS));
+        modBus.addListener((FMLCommonSetupEvent event) -> {
+            StartupContentRegistration.completeProductionForModStartup(NeoForge.EVENT_BUS);
+            event.enqueueWork(() -> AE2Bridge.get().registerGridLinkables());
+        });
     }
 
     public static Identifier id(String path) {
