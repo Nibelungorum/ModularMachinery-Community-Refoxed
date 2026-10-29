@@ -39,6 +39,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestRes
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
+import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.event.SharedIoEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
@@ -52,6 +53,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -71,6 +73,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -237,6 +240,12 @@ public final class PatternBatchRuntimeGameTest {
                             && request.inputs()[0].get(AEFluidKey.of(Fluids.WATER)) == 0L && fixture.returnedItems() == 0L,
                     "Payment owns the entire long batch and source constraint, but output is deferred");
             if (reload) fixture.reloadPaid();
+            if (reload && !factory) {
+                fixture.round(false);
+                helper.assertTrue(fixture.activeRuntime().tickCount() == 0 && !fixture.workers.isEmpty(),
+                        "Restored execution remains backpressured while terminal receipts await their worker");
+                fixture.drainReceiptWorkers();
+            }
             for (int round = 0; round < 8; round++) fixture.round();
             helper.assertTrue(fixture.returnedItems() == Math.multiplyExact(3L, copies)
                             && fixture.returnedFluids() == Math.multiplyExact(100L, copies),
@@ -271,6 +280,8 @@ public final class PatternBatchRuntimeGameTest {
         private final MachineControllerRuntime runtime;
         private final PatternInterfaceBlockEntity host;
         private final MachineRecipe recipe;
+        private final ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        private final MachineAsyncCoordinator previousAsync;
         private final AtomicInteger hooks = new AtomicInteger();
         private final List<Long> tickParallelisms = new ArrayList<>();
         private final List<Long> finishParallelisms = new ArrayList<>();
@@ -340,6 +351,8 @@ public final class PatternBatchRuntimeGameTest {
             } catch (ReflectiveOperationException exception) {
                 throw new AssertionError(exception);
             }
+            previousAsync = MachineAsyncCoordinator.get(helper.getLevel());
+            replaceAsyncCoordinator(MachineAsyncCoordinator.forTesting(workers::addLast));
             try {
                 MachineRegistry.register(machine);
                 registered = true;
@@ -430,12 +443,37 @@ public final class PatternBatchRuntimeGameTest {
             helper.assertTrue(activeRuntime().requiresPatternRequest(), "Paid reload retains request-only provenance");
         }
 
+        @SuppressWarnings("unchecked")
+        private void replaceAsyncCoordinator(MachineAsyncCoordinator coordinator) {
+            try {
+                var field = MachineAsyncCoordinator.class.getDeclaredField("COORDINATORS");
+                field.setAccessible(true);
+                synchronized (MachineAsyncCoordinator.class) {
+                    ((Map<ServerLevel, MachineAsyncCoordinator>) field.get(null)).put(helper.getLevel(), coordinator);
+                }
+            } catch (ReflectiveOperationException exception) {
+                throw new AssertionError("Cannot install controlled receipt worker", exception);
+            }
+        }
+
+        private void drainReceiptWorkers() {
+            MachineAsyncCoordinator.get(helper.getLevel()).pumpReceiptDrains();
+            while (!workers.isEmpty()) workers.removeFirst().run();
+            SharedIoCoordinator.get(helper.getLevel()).drainReceiptAcknowledgements(helper.getLevel());
+        }
+
         private void round() {
+            round(true);
+        }
+
+        private void round(boolean runReceiptWorkers) {
             long next = helper.getLevel().getGameTime() + 1L;
             ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(next);
             SharedIoCoordinator.get(helper.getLevel()).beginExecutionRound(next, true);
             controller.serverTick();
             SharedIoEvents.completeLevelTick(helper.getLevel());
+            // SYNC execution still publishes asynchronous receipts. Advance their real worker/ACK boundary explicitly.
+            if (runReceiptWorkers) drainReceiptWorkers();
         }
 
         @Override public void close() {
@@ -444,12 +482,21 @@ public final class PatternBatchRuntimeGameTest {
                 runtime.factoryRuntime().clear();
                 SharedIoCoordinator.get(helper.getLevel()).cancel(controller.getBlockPos());
                 controller.releaseStructureClaims();
+                drainReceiptWorkers();
             } finally {
-                ServerConfig.MACHINE_WORK_MODE.clearCache();
-                ServerConfig.MACHINE_WORK_MODE.set(originalMode);
-                ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(originalTime);
-                RecipeRegistry.replaceDynamic(previousRecipes);
-                if (registered) removeMachine();
+                try {
+                    ServerConfig.MACHINE_WORK_MODE.clearCache();
+                    ServerConfig.MACHINE_WORK_MODE.set(originalMode);
+                    ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(originalTime);
+                    RecipeRegistry.replaceDynamic(previousRecipes);
+                    if (registered) removeMachine();
+                } finally {
+                    try {
+                        MachineAsyncCoordinator.discard(helper.getLevel());
+                    } finally {
+                        replaceAsyncCoordinator(previousAsync);
+                    }
+                }
             }
         }
 
