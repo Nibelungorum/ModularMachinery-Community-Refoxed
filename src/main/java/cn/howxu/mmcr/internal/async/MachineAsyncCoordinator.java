@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executor;
@@ -49,7 +50,9 @@ public final class MachineAsyncCoordinator {
     private static final ThreadPoolExecutor WORKERS = new ThreadPoolExecutor(WORKER_COUNT, WORKER_COUNT,
             0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(ServerConfig.asyncWorkerQueueCapacity()),
             WORKER_THREAD_FACTORY, new ThreadPoolExecutor.AbortPolicy());
-    private final Executor executor;
+    private static final WorkerAdmission WORKER_ADMISSION = new WorkerAdmission(WORKERS,
+            ServerConfig.asyncWorkerQueueCapacity());
+    private final WorkerAdmission workers;
     private final @Nullable Runnable beforePendingMainStep;
     private final @Nullable Runnable afterTerminationDrainForTesting;
     private final int mainStepBudget;
@@ -65,6 +68,8 @@ public final class MachineAsyncCoordinator {
     private int nextBatchOffset;
     private boolean completingFence;
     private final Map<ExecutionDomain, ReceiptDrain> receiptDrains = new ConcurrentHashMap<>();
+    private final ConcurrentLinkedDeque<ReceiptDrain> readyReceiptDrains = new ConcurrentLinkedDeque<>();
+    private final AtomicBoolean pumpingReceipts = new AtomicBoolean();
     private final Map<ExecutionIdentity, Acknowledgement> receiptAcknowledgements = new ConcurrentHashMap<>();
     private final Object receiptLifecycle = new Object();
     private volatile boolean closed;
@@ -101,24 +106,34 @@ public final class MachineAsyncCoordinator {
                     drain.mailboxes.put(receipt.identity(), mailbox);
                 }
                 drain.offer(mailbox, receipt);
+                enqueueReceiptDrain(drain, false);
                 return;
             }
         }
     }
 
-    /** One outstanding executor segment per domain. Rejected work stays dirty until the next pump. */
+    /** One outstanding executor segment per domain; saturation retains its FIFO turn for the next pump. */
     public void pumpReceiptDrains() {
-        if (closed) return;
-        for (ReceiptDrain drain : receiptDrains.values()) {
-            synchronized (drain) {
-                // No CHM remapping callback ever acquires a drain monitor: removal has only drain -> bin order.
-                if (receiptDrains.get(drain.domain) != drain) continue;
-                if (!drain.queued.get() && drain.mailboxes.isEmpty()) {
-                    receiptDrains.remove(drain.domain, drain);
-                    continue;
+        if (closed || !pumpingReceipts.compareAndSet(false, true)) return;
+        try {
+            // Capture a FIFO round without scanning the queue; inline completion must not retry in this pump.
+            ReceiptDrain last = readyReceiptDrains.peekLast();
+            if (last == null) return;
+            int remaining = ServerConfig.asyncWorkerQueueCapacity();
+            ReceiptDrain drain;
+            do {
+                drain = readyReceiptDrains.pollFirst();
+                if (drain == null) return;
+                synchronized (drain) {
+                    drain.waiting = false;
+                    if (closed || receiptDrains.get(drain.domain) != drain || drain.queued.get()
+                            || drain.dirtyHead == null) continue;
+                    drain.queued.set(true);
                 }
-            }
-            scheduleReceiptDrain(drain);
+                if (!scheduleReceiptDrain(drain)) return;
+            } while (drain != last && --remaining > 0);
+        } finally {
+            pumpingReceipts.set(false);
         }
     }
 
@@ -129,18 +144,30 @@ public final class MachineAsyncCoordinator {
         return null;
     }
 
-    private void scheduleReceiptDrain(ReceiptDrain drain) {
-        synchronized (drain) {
-            if (closed || receiptDrains.get(drain.domain) != drain || drain.dirtyHead == null || drain.queued.get()) return;
-            drain.queued.set(true);
-        }
+    /** Caller holds the drain monitor, including while linking its sole pending-domain marker. */
+    private void enqueueReceiptDrain(ReceiptDrain drain, boolean first) {
+        if (closed || drain.waiting || drain.queued.get() || drain.dirtyHead == null
+                || receiptDrains.get(drain.domain) != drain) return;
+        drain.waiting = true;
+        if (first) readyReceiptDrains.addFirst(drain);
+        else readyReceiptDrains.addLast(drain);
+    }
+
+    private boolean scheduleReceiptDrain(ReceiptDrain drain) {
+        boolean submitted = false;
         try {
-            executor.execute(drain);
+            submitted = workers.tryExecute(drain);
         } catch (RuntimeException exception) {
-            synchronized (drain) {
-                drain.queued.set(false);
+            // Unexpected executor failure remains retryable, just like shutdown rejection.
+        } finally {
+            if (!submitted) {
+                synchronized (drain) {
+                    drain.queued.set(false);
+                    enqueueReceiptDrain(drain, true);
+                }
             }
         }
+        return submitted;
     }
 
     private void drainReceipts(ReceiptDrain drain) {
@@ -192,8 +219,11 @@ public final class MachineAsyncCoordinator {
         } finally {
             synchronized (drain) {
                 drain.queued.set(false);
+                // No CHM remapping callback acquires a drain monitor: removal is only drain -> bin.
+                if (drain.mailboxes.isEmpty()) receiptDrains.remove(drain.domain, drain);
+                else enqueueReceiptDrain(drain, false);
             }
-            if (!failed) scheduleReceiptDrain(drain);
+            if (!failed) pumpReceiptDrains();
         }
     }
 
@@ -221,6 +251,7 @@ public final class MachineAsyncCoordinator {
         private ReceiptMailbox dirtyHead;
         private ReceiptMailbox dirtyTail;
         private int dirtyCount;
+        private boolean waiting;
         private final AtomicBoolean queued = new AtomicBoolean();
 
         private ReceiptDrain(ExecutionDomain domain) {
@@ -277,7 +308,14 @@ public final class MachineAsyncCoordinator {
     private MachineAsyncCoordinator(Executor executor, @Nullable Runnable beforePendingMainStep,
                                     @Nullable Runnable afterTerminationDrainForTesting, int mainStepBudget,
                                     boolean autoResetBudgetForTesting) {
-        this.executor = executor;
+        this(new WorkerAdmission(executor, Integer.MAX_VALUE), beforePendingMainStep,
+                afterTerminationDrainForTesting, mainStepBudget, autoResetBudgetForTesting);
+    }
+
+    private MachineAsyncCoordinator(WorkerAdmission workers, @Nullable Runnable beforePendingMainStep,
+                                    @Nullable Runnable afterTerminationDrainForTesting, int mainStepBudget,
+                                    boolean autoResetBudgetForTesting) {
+        this.workers = workers;
         this.beforePendingMainStep = beforePendingMainStep;
         this.afterTerminationDrainForTesting = afterTerminationDrainForTesting;
         this.mainStepBudget = mainStepBudget;
@@ -286,11 +324,15 @@ public final class MachineAsyncCoordinator {
 
     public static synchronized MachineAsyncCoordinator get(ServerLevel level) {
         return COORDINATORS.computeIfAbsent(level, ignored -> new MachineAsyncCoordinator(
-                WORKERS, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), false));
+                WORKER_ADMISSION, null, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), false));
     }
 
     public static MachineAsyncCoordinator forTesting(Executor executor) {
         return new MachineAsyncCoordinator(executor);
+    }
+
+    static MachineAsyncCoordinator forTesting(WorkerAdmission workers) {
+        return new MachineAsyncCoordinator(workers, null, null, ServerConfig.asyncMainThreadStepsPerLevelTick(), true);
     }
 
     static MachineAsyncCoordinator forTesting(Executor executor, Runnable beforePendingMainStep) {
@@ -512,7 +554,7 @@ public final class MachineAsyncCoordinator {
         if (!taskActive(batch, task)) return true;
         batch.runningWorkers.incrementAndGet();
         try {
-            executor.execute(() -> {
+            if (workers.tryExecute(() -> {
                 try {
                     if (!task.terminationRequested.get()) handleYield(batch, task,
                             continuation.advance(new AsyncExecutionContext(task.key)));
@@ -522,12 +564,12 @@ public final class MachineAsyncCoordinator {
                     batch.runningWorkers.decrementAndGet();
                     signalProgress();
                 }
-            });
-            return true;
+            })) return true;
         } catch (RuntimeException exception) {
-            batch.runningWorkers.decrementAndGet();
-            return false;
+            // Leave the segment waiting for a later admission attempt.
         }
+        batch.runningWorkers.decrementAndGet();
+        return false;
     }
 
     private void admitWaitingWorkers(TickBatch batch) {
@@ -738,10 +780,12 @@ public final class MachineAsyncCoordinator {
                 drain.dirtyHead = null;
                 drain.dirtyTail = null;
                 drain.dirtyCount = 0;
+                drain.waiting = false;
                 receiptDrains.remove(drain.domain, drain);
             }
         }
         receiptDrains.clear();
+        readyReceiptDrains.clear();
         for (TickBatch batch : batches.values()) {
             for (Task task : List.copyOf(batch.tasks.values())) {
                 requestTermination(batch, task, new TaskOutcome.Cancelled("level unloaded"));

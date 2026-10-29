@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.storage.CapabilityStorage;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickContext;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
@@ -39,6 +40,7 @@ import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.util.IOType;
 import com.sun.management.ThreadMXBean;
 import net.minecraft.core.BlockPos;
@@ -90,6 +92,70 @@ class ComponentRuntimeTest {
         assertThat(runtime.components()).containsExactlyElementsOf(components);
         assertThat(runtime.capabilities()).isEmpty();
         assertThat(runtime.capabilityVersion()).isEqualTo(version);
+    }
+
+    @Test
+    void input_routing_preserves_first_custom_provider_and_observes_dynamic_changes() {
+        ComponentRuntime runtime = new ComponentRuntime();
+        RoutingCapability first = new RoutingCapability();
+        RoutingCapability second = new RoutingCapability();
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(first, second)), "routing")));
+        InputRoutingFacet builtin = runtime.inputRouting();
+        InputRoutingFacet custom = new InputRoutingFacet(7, List.of(),
+                List.of(new InputRoutingFacet.Port(new BlockPos(1, 0, 0), false)));
+        second.routing = custom;
+        assertThat(runtime.inputRouting()).isSameAs(custom);
+
+        first.routing = new InputRoutingFacet(7, List.of(), List.of());
+        assertThat(runtime.inputRouting()).isSameAs(first.routing);
+        first.routing = null;
+        assertThat(runtime.inputRouting()).isSameAs(custom);
+        second.routing = null;
+        assertThat(runtime.inputRouting()).isSameAs(builtin);
+        int reads = first.routingReads + second.routingReads;
+        runtime.clear();
+        assertThat(runtime.inputRouting().inputPorts()).isEmpty();
+        assertThat(first.routingReads + second.routingReads).isEqualTo(reads);
+    }
+
+    @Test
+    void builtin_input_routing_matches_snapshot_and_replaces_the_index_after_port_removal() {
+        var input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        var fluid = RuntimeTestFixtures.fluidInput(new BlockPos(2, 0, 0));
+        var energy = RuntimeTestFixtures.energyInput(new BlockPos(3, 0, 0));
+        ComponentRuntime runtime = RuntimeTestFixtures.controller(
+                ResourceLocation.fromNamespaceAndPath("mmcr", "test_cube"), input, fluid, energy).componentRuntime();
+        InputRoutingFacet routing = runtime.capabilitySnapshot().facets(InputRoutingFacet.class).getFirst();
+        assertThat(runtime.inputRouting()).isSameAs(routing);
+        Set<BlockPos> positions = runtime.inputSourcePositions(routing);
+        assertThat(positions).contains(input.getBlockPos(), fluid.getBlockPos());
+
+        runtime.replaceComponents(runtime.components().subList(1, runtime.components().size()));
+        InputRoutingFacet replacement = runtime.inputRouting();
+        assertThat(replacement).isNotSameAs(routing);
+        assertThat(replacement).isSameAs(runtime.capabilitySnapshot().facets(InputRoutingFacet.class).getFirst());
+        assertThat(runtime.inputSourcePositions(replacement)).doesNotContain(input.getBlockPos()).contains(fluid.getBlockPos());
+        assertThat(positions).contains(input.getBlockPos());
+    }
+
+    @Test
+    void input_position_index_is_shared_immutable_and_keyed_by_routing_identity_not_revision() {
+        ComponentRuntime runtime = new ComponentRuntime();
+        BlockPos first = new BlockPos(1, 0, 0);
+        BlockPos second = new BlockPos(2, 0, 0);
+        InputRoutingFacet routing = new InputRoutingFacet(7, List.of(), List.of(
+                new InputRoutingFacet.Port(first, false), new InputRoutingFacet.Port(second, true)));
+        Set<BlockPos> positions = runtime.inputSourcePositions(routing);
+        assertThat(positions).containsExactlyInAnyOrder(first, second);
+        assertThat(runtime.inputSourcePositions(routing)).isSameAs(positions);
+        assertThatThrownBy(() -> positions.clear()).isInstanceOf(UnsupportedOperationException.class);
+
+        InputRoutingFacet replacement = new InputRoutingFacet(7, List.of(),
+                List.of(new InputRoutingFacet.Port(second, false)));
+        assertThat(runtime.inputSourcePositions(replacement)).containsExactly(second);
+        assertThat(positions).containsExactlyInAnyOrder(first, second);
+        runtime.clear();
+        assertThat(runtime.inputSourcePositions(runtime.inputRouting())).isEmpty();
     }
 
     @Test
@@ -1713,6 +1779,27 @@ class ComponentRuntimeTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class RoutingCapability implements MachineCapability {
+        private final TestCapability delegate = new TestCapability("routing");
+        private InputRoutingFacet routing;
+        private int routingReads;
+
+        @Override public CapabilityType type() { return delegate.type(); }
+        @Override public CapabilityDirections directions() { return delegate.directions(); }
+        @Override public CapabilityView view() { return delegate.view(); }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+
+        @Override
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+            if (facetType == InputRoutingFacet.class) {
+                routingReads++;
+                return Optional.ofNullable(routing).map(facetType::cast);
+            }
+            return delegate.facet(facetType);
+        }
     }
 
     /** @author howxu <dev@howxu.cn> */

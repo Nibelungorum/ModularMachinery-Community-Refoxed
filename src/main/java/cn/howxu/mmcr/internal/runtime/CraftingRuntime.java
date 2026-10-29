@@ -156,6 +156,10 @@ public final class CraftingRuntime {
     private @Nullable ActiveMachineRecipe activeRecipe;
     private @Nullable CraftingPlan startPlan;
     private @Nullable InputScope activeInputScope;
+    private @Nullable InputScope checkedInputScope;
+    private @Nullable InputRoutingFacet checkedInputRouting;
+    private boolean inputScopeSourcesValid;
+    private int inputScopeValidationCountForTesting;
     private @Nullable CraftingPlan finishPlan;
     private List<MachineRequirement> effectiveRequirements = List.of();
     private List<MachineOutput> effectiveOutputs = List.of();
@@ -1213,7 +1217,7 @@ public final class CraftingRuntime {
         requiresPatternRequest = pendingExactPatternStart;
         activeRecipe.setParallelism(prepared.plan().parallelism());
         startPlan = prepared.plan();
-        activeInputScope = prepared.plan().inputScope();
+        setActiveInputScope(prepared.plan().inputScope());
         finishPlan = null;
         effectiveRequirements = MachineRequirement.copyList(prepared.effective().requirements().stream()
                 .map(MachineRequirement::copyOf).toList());
@@ -1538,7 +1542,7 @@ public final class CraftingRuntime {
         activeRecipe = acceptedRecipe;
         activeRecipe.setParallelism(plan.parallelism());
         startPlan = plan;
-        activeInputScope = plan.inputScope();
+        setActiveInputScope(plan.inputScope());
         requiresPatternRequest = false;
         finishPlan = null;
         effectiveRequirements = executionRequirements;
@@ -1975,7 +1979,7 @@ public final class CraftingRuntime {
         releaseActivePrefetches(true);
         if (activeRecipe != completingRecipe || ledger != payment) return status;
         activeRecipe = null;
-        activeInputScope = null;
+        setActiveInputScope(null);
         startPlan = null;
         finishPlan = null;
         preparedAsyncFinishContext = null;
@@ -2402,7 +2406,7 @@ public final class CraftingRuntime {
         restartRule = null;
         restartProgramAuthorized = false;
         activeRecipe = null;
-        activeInputScope = null;
+        setActiveInputScope(null);
         startPlan = null;
         finishPlan = null;
         preparedAsyncFinishContext = null;
@@ -2493,7 +2497,7 @@ public final class CraftingRuntime {
             return;
         }
         activeRecipe = restored;
-        activeInputScope = InputScope.legacy();
+        setActiveInputScope(InputScope.legacy());
         cancelInstalledProgram();
         startPlan = null;
         finishPlan = null;
@@ -2627,7 +2631,7 @@ public final class CraftingRuntime {
                 restoredLedger);
         if (activeRecipe == loaded.recipe() && ledger == restoredLedger) {
             requiresPatternRequest = restoredPatternRequest;
-            activeInputScope = restoredScope;
+            setActiveInputScope(restoredScope);
             if (restoredUpgradeContentRevision != Long.MIN_VALUE) {
                 upgradeContentRevision = restoredUpgradeContentRevision;
             }
@@ -2678,13 +2682,34 @@ public final class CraftingRuntime {
         }
     }
 
+    private void setActiveInputScope(@Nullable InputScope scope) {
+        activeInputScope = scope;
+        checkedInputScope = null;
+        checkedInputRouting = null;
+    }
+
     private boolean inputScopeSourcesCurrent() {
         if (activeInputScope == null || activeInputScope.kind() == InputScope.Kind.LEGACY) return true;
-        InputRoutingFacet routing = components.capabilitySnapshot().facets(InputRoutingFacet.class).stream()
-                .findFirst().orElse(null);
-        return routing != null && activeInputScope.sources().stream().allMatch(position ->
-                routing.inputPorts().stream().anyMatch(port -> port.position().equals(position)));
+        // Resolve custom providers live even on a memo hit; their facet presence may change without rebinding.
+        InputRoutingFacet routing = components.inputRouting();
+        if (checkedInputScope == activeInputScope && checkedInputRouting == routing) return inputScopeSourcesValid;
+        Set<BlockPos> positions = components.inputSourcePositions(routing);
+        boolean valid = true;
+        List<BlockPos> sources = activeInputScope.sources();
+        for (int index = 0; index < sources.size(); index++) {
+            if (!positions.contains(sources.get(index))) {
+                valid = false;
+                break;
+            }
+        }
+        checkedInputScope = activeInputScope;
+        checkedInputRouting = routing;
+        inputScopeSourcesValid = valid;
+        inputScopeValidationCountForTesting++;
+        return valid;
     }
+
+    int inputScopeValidationCountForTesting() { return inputScopeValidationCountForTesting; }
 
     private void failLoad() {
         invalidate();
@@ -2718,7 +2743,7 @@ public final class CraftingRuntime {
         if (recipe != null && recipe.getRecipe().doesCancelRecipeOnPerTickFailure()) {
             cancelInstalledProgram();
             activeRecipe = null;
-            activeInputScope = null;
+            setActiveInputScope(null);
             startPlan = null;
             finishPlan = null;
             clearEffectiveRecipe();
@@ -2752,7 +2777,7 @@ public final class CraftingRuntime {
         failure = failure(reason, phase, Map.of());
         releaseActivePrefetches();
         activeRecipe = null;
-        activeInputScope = null;
+        setActiveInputScope(null);
         startPlan = null;
         finishPlan = null;
         preparedAsyncFinishContext = null;
@@ -3026,7 +3051,7 @@ public final class CraftingRuntime {
         activeRecipe = new ActiveMachineRecipe(prepared.recipe().source(), prepared.plan().parallelism(), prepared.effective());
         requiresPatternRequest = pendingExactPatternStart;
         activeRecipe.setParallelism(prepared.plan().parallelism());
-        activeInputScope = prepared.plan().inputScope();
+        setActiveInputScope(prepared.plan().inputScope());
         effectiveRequirements = MachineRequirement.copyList(prepared.effective().requirements());
         effectiveOutputs = MachineOutput.copyList(prepared.effective().outputs());
         captureInputState(effectiveRequirements, prepared.plan());
