@@ -12,6 +12,7 @@ import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
@@ -224,6 +225,143 @@ class CraftingRuntimeTest {
         ItemStack result = item(output.itemStorage(), 0);
         assertThat(result.getItem()).isEqualTo(Items.IRON_NUGGET);
         assertThat(result.getCount()).isEqualTo(1);
+    }
+
+    @Test
+    void stable_installed_scope_checks_reuse_membership_validation() {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity second = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe("runtime_scope_memo", 4, List.of()), 1).isCrafting()).isTrue();
+        assertThat(runtime.activeInputScope().sources()).containsExactly(first.getBlockPos(), second.getBlockPos());
+        InstalledRecipeProgram installed = runtime.ensureInstalledProgram();
+        assertThat(installed).isNotNull();
+        assertThat(installed.current()).isTrue();
+        int validations = runtime.inputScopeValidationCountForTesting();
+        for (int index = 0; index < 100; index++) {
+            assertThat(runtime.versionsCurrent()).isTrue();
+            assertThat(installed.current()).isTrue();
+        }
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations);
+
+        runtime.invalidate();
+        assertThat(runtime.start(recipe("runtime_scope_memo_restart", 4, List.of()), 1).isCrafting()).isTrue();
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(runtime.inputScopeValidationCountForTesting()).isGreaterThan(validations);
+    }
+
+    @Test
+    void loading_into_a_used_runtime_revalidates_the_restored_scope() {
+        var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        MachineRecipe recipe = recipe("runtime_scope_memo_restore", 4, List.of());
+        RecipeRegistry.registerStatic(recipe);
+        assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+        assertThat(runtime.versionsCurrent()).isTrue();
+        InputScope scope = runtime.activeInputScope();
+        int validations = runtime.inputScopeValidationCountForTesting();
+        TagValueOutput saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+        runtime.save(saved);
+        runtime.load(TagValueInput.create(ProblemReporter.DISCARDING, lookup, saved.buildResult()), null);
+        assertThat(runtime.active()).isTrue();
+        assertThat(runtime.activeInputScope()).isEqualTo(scope).isNotSameAs(scope);
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations + 1);
+    }
+
+    @Test
+    void scope_identity_changes_recheck_membership_without_a_routing_change() throws Exception {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe("runtime_scope_identity", 4, List.of()), 1).isCrafting()).isTrue();
+        assertThat(runtime.versionsCurrent()).isTrue();
+        int validations = runtime.inputScopeValidationCountForTesting();
+        Field scope = CraftingRuntime.class.getDeclaredField("activeInputScope");
+        scope.setAccessible(true);
+        scope.set(runtime, new InputScope(InputScope.Kind.ISOLATED, List.of(new BlockPos(99, 0, 0))));
+        assertThat(runtime.versionsCurrent()).isFalse();
+        assertThat(runtime.versionsCurrent()).isFalse();
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations + 1);
+        scope.set(runtime, new InputScope(InputScope.Kind.ISOLATED, List.of(input.getBlockPos())));
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations + 2);
+        scope.set(runtime, InputScope.legacy());
+        assertThat(runtime.versionsCurrent()).isTrue();
+        scope.set(runtime, null);
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations + 2);
+    }
+
+    @Test
+    void equal_revision_dynamic_routing_rechecks_every_source_and_caches_invalid_results() {
+        ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        ItemInputBusBlockEntity second = RuntimeTestFixtures.itemInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+        RoutingCapability capability = new RoutingCapability(first.getBlockPos(), second.getBlockPos());
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(null, new TickCapabilityHost(capability), BlockPos.ZERO, BlockPos.ZERO,
+                (String) null));
+        controller.componentRuntime().replaceComponents(components);
+        InputRoutingFacet builtin = (InputRoutingFacet) controller.componentRuntime().capabilitySnapshot().additionalFacets().getFirst();
+        capability.routing = new InputRoutingFacet(builtin.revision(), builtin.sources(), capability.routing.inputPorts());
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(recipe("runtime_dynamic_scope", 4, List.of()), 1).isCrafting()).isTrue();
+        assertThat(runtime.versionsCurrent()).isTrue();
+        int validations = runtime.inputScopeValidationCountForTesting();
+        int reads = capability.routingReads;
+        long version = controller.componentRuntime().capabilityVersion();
+        InputRoutingFacet original = capability.routing;
+        for (int index = 0; index < 10; index++) assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(capability.routingReads).isEqualTo(reads + 10);
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations);
+
+        capability.routing = new InputRoutingFacet(original.revision(), List.of(),
+                List.of(new InputRoutingFacet.Port(first.getBlockPos(), false)));
+        assertThat(controller.componentRuntime().capabilityVersion()).isEqualTo(version);
+        assertThat(runtime.versionsCurrent()).isFalse();
+        assertThat(runtime.versionsCurrent()).isFalse();
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations + 1);
+        capability.routing = original;
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations + 2);
+        capability.routing = null;
+        assertThat(runtime.versionsCurrent()).isTrue();
+        assertThat(runtime.inputScopeValidationCountForTesting()).isEqualTo(validations + 3);
+    }
+
+    @Test
+    void recipe_tick_routing_change_invalidates_a_memoized_scope_before_resource_payment() {
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(2, 0, 0));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, energy);
+        RoutingCapability capability = new RoutingCapability(input.getBlockPos(), energy.getBlockPos());
+        List<ProcessingComponent> components = new ArrayList<>(controller.componentRuntime().components());
+        components.add(new ProcessingComponent(null, new TickCapabilityHost(capability), BlockPos.ZERO, BlockPos.ZERO,
+                (String) null));
+        controller.componentRuntime().replaceComponents(components);
+        InputRoutingFacet builtin = (InputRoutingFacet) controller.componentRuntime().capabilitySnapshot().additionalFacets().getFirst();
+        capability.routing = new InputRoutingFacet(builtin.revision(), builtin.sources(), capability.routing.inputPorts());
+        AtomicInteger callbacks = new AtomicInteger();
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder().recipeTick(context -> {
+            callbacks.incrementAndGet();
+            capability.routing = new InputRoutingFacet(builtin.revision(), List.of(), List.of());
+        }).build()));
+        energy.energyStorage().setAmount(100L);
+        CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+        assertThat(runtime.start(energyRecipe("runtime_callback_scope", 4, 10), 1).isCrafting()).isTrue();
+        InstalledRecipeProgram installed = runtime.ensureInstalledProgram();
+        assertThat(installed).isNotNull();
+        assertThat(installed.current()).isTrue();
+        long amount = energy.energyStorage().getAmountAsLong();
+        runtime.tick();
+        assertThat(callbacks).hasValue(1);
+        assertThat(runtime.tickCount()).isZero();
+        assertThat(energy.energyStorage().getAmountAsLong()).isEqualTo(amount);
+        assertThat(installed.current()).isFalse();
     }
 
     @ParameterizedTest
@@ -3645,6 +3783,32 @@ class CraftingRuntimeTest {
                                 null, null, Map.of())), false);
             }
             return CapabilityTickResult.empty();
+        }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class RoutingCapability implements MachineCapability {
+        private final MachineCapability delegate = RuntimeTestFixtures.itemInput(BlockPos.ZERO).capabilities().getFirst();
+        private InputRoutingFacet routing;
+        private int routingReads;
+
+        private RoutingCapability(BlockPos... positions) {
+            routing = new InputRoutingFacet(7, List.of(), Stream.of(positions)
+                    .map(position -> new InputRoutingFacet.Port(position, false)).toList());
+        }
+
+        @Override public CapabilityType type() { return delegate.type(); }
+        @Override public CapabilityDirections directions() { return delegate.directions(); }
+        @Override public CapabilityView view() { return delegate.view(); }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+
+        @Override
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> facetType) {
+            if (facetType == InputRoutingFacet.class) {
+                routingReads++;
+                return Optional.ofNullable(routing).map(facetType::cast);
+            }
+            return delegate.facet(facetType);
         }
     }
 

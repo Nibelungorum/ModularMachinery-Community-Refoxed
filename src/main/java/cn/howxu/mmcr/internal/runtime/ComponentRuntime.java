@@ -48,6 +48,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -73,7 +74,7 @@ public final class ComponentRuntime {
                     Map.of("raw_reason_id", "operation_failed_without_status")));
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
-    private List<MachineCapability> tickFacetCandidates = List.of();
+    private List<MachineCapability> customFacetCandidates = List.of();
     private List<CapabilityIdentity> capabilityIdentity = List.of();
     private List<CapabilityPresentationSegment> capabilityPresentationSegments = List.of();
     private Map<BlockPos, List<Integer>> capabilitySourceIndices = Map.of();
@@ -84,6 +85,8 @@ public final class ComponentRuntime {
     private long stateVersion;
     private long inputIsolationChangeVersion;
     private InputRoutingFacet inputRouting = new InputRoutingFacet(0L, List.of(), List.of());
+    private @Nullable InputRoutingFacet indexedInputRouting;
+    private Set<BlockPos> inputSourcePositions = Set.of();
     private Map<BlockPos, Boolean> inputIsolationSettings = Map.of();
     private Map<BlockPos, IOPortBlockEntity> inputPortHosts = Map.of();
     private Set<BlockPos> legacyCapabilitySources = Set.of();
@@ -161,10 +164,12 @@ public final class ComponentRuntime {
         this.capabilities = nextCapabilities;
         inputPortHosts = immutableMap(nextInputPorts);
         legacyCapabilitySources = Set.copyOf(nextLegacySources);
-        // These closed built-in capabilities cannot expose TickFacet. Custom facet queries may change dynamically.
-        tickFacetCandidates = nextCapabilities.stream().filter(capability -> capability.getClass() != ItemBusCapability.class
+        // These closed built-ins expose neither TickFacet nor InputRoutingFacet. Custom queries remain live.
+        customFacetCandidates = nextCapabilities.stream().filter(capability -> capability.getClass() != ItemBusCapability.class
                 && capability.getClass() != FluidHatchCapability.class
                 && capability.getClass() != EnergyHatchCapability.class).toList();
+        indexedInputRouting = null;
+        inputSourcePositions = Set.of();
         this.capabilityIdentity = nextIdentity;
         capabilityPresentationSegments = List.copyOf(nextSegments);
         capabilitySourceIndices = nextSources;
@@ -197,6 +202,26 @@ public final class ComponentRuntime {
 
     public CapabilitySnapshot capabilitySnapshot() {
         return new CapabilitySnapshot(capabilities, List.of(inputRouting));
+    }
+
+    /** Resolves the same first facet as a snapshot without collecting all matches. */
+    InputRoutingFacet inputRouting() {
+        for (int index = 0; index < customFacetCandidates.size(); index++) {
+            InputRoutingFacet routing = customFacetCandidates.get(index).facet(InputRoutingFacet.class).orElse(null);
+            if (routing != null) return routing;
+        }
+        return inputRouting;
+    }
+
+    /** Routing values are immutable; every lane shares this controller's current position index. */
+    Set<BlockPos> inputSourcePositions(InputRoutingFacet routing) {
+        if (indexedInputRouting != routing) {
+            Set<BlockPos> positions = new HashSet<>();
+            for (InputRoutingFacet.Port port : routing.inputPorts()) positions.add(port.position());
+            inputSourcePositions = Collections.unmodifiableSet(positions);
+            indexedInputRouting = routing;
+        }
+        return inputSourcePositions;
     }
 
     public long inputRoutingRevision() {
@@ -244,7 +269,7 @@ public final class ComponentRuntime {
 
     /** Candidate membership is refreshed on every replacement; custom facets are queried live. */
     public boolean hasTickFacets() {
-        for (MachineCapability capability : tickFacetCandidates) {
+        for (MachineCapability capability : customFacetCandidates) {
             if (capability.facet(TickFacet.class).isPresent()) return true;
         }
         return false;
