@@ -34,6 +34,7 @@ import java.util.Set;
 
 import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MachinePortAppearanceTest {
 
@@ -56,6 +57,42 @@ class MachinePortAppearanceTest {
         component.linkControllerAppearance(new BlockPos(4, 64, 0), MMCR.id("block/second"));
 
         assertThat(component.appearanceBaseTexture()).isEqualTo(MMCR.id("block/basic_casing"));
+    }
+
+    @Test
+    void controller_membership_snapshots_are_reused_and_remain_immutable_after_link_changes() {
+        IOPortBlockEntity port = itemInputBus();
+        BlockPos first = new BlockPos(1, 0, 0);
+        BlockPos second = new BlockPos(2, 0, 0);
+        port.linkControllerAppearance(first, null);
+        Set<BlockPos> original = port.linkedControllerPositions();
+
+        assertThat(port.linkedControllerPositions()).isSameAs(original);
+        port.linkControllerAppearance(first, MMCR.id("block/changed"));
+        assertThat(port.linkedControllerPositions()).isSameAs(original);
+        port.linkControllerAppearance(second, null);
+        Set<BlockPos> shared = port.linkedControllerPositions();
+        assertThat(shared).containsExactlyInAnyOrder(first, second);
+        assertThat(original).containsExactly(first);
+        assertThatThrownBy(() -> shared.clear()).isInstanceOf(UnsupportedOperationException.class);
+
+        port.unlinkControllerAppearance(first);
+        assertThat(port.linkedControllerPositions()).containsExactly(second);
+        assertThat(shared).containsExactlyInAnyOrder(first, second);
+        port.resetAppearanceSource();
+        assertThat(port.linkedControllerPositions()).isEmpty();
+        assertThat(shared).containsExactlyInAnyOrder(first, second);
+    }
+
+    @Test
+    void link_snapshot_is_published_before_reentrant_appearance_notification() {
+        TrackingAppearanceBlockEntity component = new TrackingAppearanceBlockEntity();
+        BlockPos owner = new BlockPos(1, 0, 0);
+        component.onChanged = () -> assertThat(component.linkedControllerPositions()).containsExactly(owner);
+        component.linkControllerAppearance(owner, null);
+
+        component.onChanged = () -> assertThat(component.linkedControllerPositions()).isEmpty();
+        component.unlinkControllerAppearance(owner);
     }
 
     @Test
@@ -101,11 +138,17 @@ class MachinePortAppearanceTest {
                 HolderLookup.Provider.create(Stream.empty()));
         source.saveAdditional(output);
         IOPortBlockEntity restored = itemInputBus();
+        BlockPos previousOwner = new BlockPos(9, 64, 0);
+        restored.linkControllerAppearance(previousOwner, null);
+        Set<BlockPos> previous = restored.linkedControllerPositions();
 
         restored.loadAdditional(TagValueInput.create(
                 ProblemReporter.DISCARDING,
                 HolderLookup.Provider.create(Stream.empty()),
                 output.buildResult()));
+
+        assertThat(previous).containsExactly(previousOwner);
+        assertThat(restored.linkedControllerPositions()).isSameAs(restored.linkedControllerPositions());
 
         assertThat(restored.linkedControllerPositions()).containsExactlyInAnyOrder(first, second);
         assertThat(restored.linkedControllerPos()).isEqualTo(first);
@@ -158,8 +201,12 @@ class MachinePortAppearanceTest {
         validController.setLevel(level);
         port.linkControllerAppearance(invalid, invalidTexture);
         port.linkControllerAppearance(valid, validTexture);
+        Set<BlockPos> beforeMaintenance = port.linkedControllerPositions();
 
         port.serverTick();
+
+        assertThat(beforeMaintenance).containsExactlyInAnyOrder(invalid, valid);
+        assertThat(port.linkedControllerPositions()).isSameAs(port.linkedControllerPositions());
 
         assertThat(port.linkedControllerPositions()).containsExactly(valid);
         assertThat(port.linkedControllerPos()).isEqualTo(valid);
@@ -215,6 +262,7 @@ class MachinePortAppearanceTest {
 
     private static final class TrackingAppearanceBlockEntity extends LinkedAppearanceBlockEntity {
         private int modelDataUpdates;
+        private Runnable onChanged;
 
         private TrackingAppearanceBlockEntity() {
             super(ModBlockEntities.BES.get("item_input_bus").get(), BlockPos.ZERO,
@@ -224,6 +272,12 @@ class MachinePortAppearanceTest {
         @Override
         public void requestModelDataUpdate() {
             modelDataUpdates++;
+        }
+
+        @Override
+        public void setChanged() {
+            if (onChanged != null) onChanged.run();
+            super.setChanged();
         }
     }
 

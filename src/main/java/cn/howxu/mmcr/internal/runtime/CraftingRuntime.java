@@ -119,6 +119,7 @@ public final class CraftingRuntime {
     private long lastInstalledPreparationGameTime = Long.MIN_VALUE;
     private long lastInstalledAttemptGameTime = Long.MIN_VALUE;
     private boolean installedPreparationReady;
+    private int installedLightweightTicksForTesting;
     private int programCompileCountForTesting;
     private int installedPlanningContextBuildCountForTesting;
     private @Nullable EffectiveRecipe cachedEffectiveRecipe;
@@ -166,7 +167,7 @@ public final class CraftingRuntime {
     private @Nullable List<MachineRequirement> cachedPerTickSource;
     private @Nullable Set<Integer> cachedPerTickConsumed;
     private @Nullable Set<Integer> cachedPerTickRetained;
-    private @Nullable List<ActivePrefetch> cachedPerTickPrefetches;
+    private boolean cachedPerTickHasPrefetches;
     private List<MachineRequirement> cachedPerTickRequirements = List.of();
     private @Nullable List<MachineRequirement> cachedPublicRequirementSource;
     private List<MachineRequirement> cachedPublicRequirements = List.of();
@@ -379,6 +380,8 @@ public final class CraftingRuntime {
         long gameTime = capabilityGameTime();
         if (preparedInstalledRound == roundId && preparedInstalledGameTime == gameTime) return installedPreparationReady;
         installedPreparationReady = false;
+        boolean callbackFree = asyncTickPreparation == null && capabilityTickFailure == null
+                && !installedBehavior.hasRecipeTick() && components.tickFacetsKnownAbsent();
         discardAsyncTickPreparation();
         if (lastInstalledPreparationGameTime == gameTime) return false;
         lastInstalledPreparationGameTime = gameTime;
@@ -386,7 +389,7 @@ public final class CraftingRuntime {
         preparedInstalledGameTime = gameTime;
         if (!beginTickAttempt()) return false;
         // A custom capability may expose its facet on the next live query, including at BEFORE_RECIPE.
-        if (needsRecipeTickContext(installedBehavior) || components.hasTickFacets()) {
+        if (!callbackFree && (needsRecipeTickContext(installedBehavior) || components.hasTickFacets())) {
             ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
             if (!prepareAsyncTickContext(snapshot)) return false;
             if (!executeTickPhase(CapabilityTickPhase.BEFORE_RECIPE, asyncTickPreparation) || !execution.current()) return false;
@@ -403,8 +406,10 @@ public final class CraftingRuntime {
         } else if (capabilityTickFailure != null) {
             handleCapabilityTickResult(CapabilityTickResult.empty());
         }
-        // attemptCurrent includes the installed program's full live validation.
-        installedPreparationReady = tickAttempt != null && tickAttempt.installed() == execution && attemptCurrent(tickAttempt);
+        // The initial current() is reusable only across this callback-free main-thread preparation.
+        // Post admission still validates again; never carry this observation across the BE→Post interval.
+        installedPreparationReady = tickAttempt != null && tickAttempt.installed() == execution
+                && (callbackFree ? attemptBound(tickAttempt) : attemptCurrent(tickAttempt));
         return installedPreparationReady;
     }
 
@@ -423,11 +428,11 @@ public final class CraftingRuntime {
         return installedPreparationReady && preparedInstalledRound == roundId && preparedInstalledGameTime == gameTime;
     }
 
-    boolean advanceInstalled(InstalledRecipeProgram execution) {
+    boolean advanceInstalled(InstalledRecipeProgram execution, boolean currentValidated) {
         if (attemptExecuting || tickAttempt != null && !installedPreparationReady) return false;
         attemptExecuting = true;
         try {
-            return advanceInstalledAttempt(execution);
+            return advanceInstalledAttempt(execution, currentValidated);
         } finally {
             installedPreparationReady = false;
             discardAsyncTickPreparation();
@@ -435,14 +440,14 @@ public final class CraftingRuntime {
         }
     }
 
-    private boolean advanceInstalledAttempt(InstalledRecipeProgram execution) {
+    private boolean advanceInstalledAttempt(InstalledRecipeProgram execution, boolean currentValidated) {
         if (finishPending()) {
             if (!execution.finishAttemptReady()) return false;
             finish();
             installedCompletion.run();
             return execution.ledger().state().outputPaid();
         }
-        if (!execution.current() || errorPaused()) return false;
+        if ((!currentValidated && !execution.current()) || errorPaused()) return false;
         if (controller.activeWorkMode() == MachineWorkMode.SYNC) {
             long round = controller.getLevel() instanceof ServerLevel level
                     ? SharedIoCoordinator.get(level).executionRoundId() : 0L;
@@ -457,6 +462,19 @@ public final class CraftingRuntime {
         // executeContinuous immediately checks live versions before any handler/storage operation.
         if (!attemptBound(attempt) || attempt.installed() != execution
                 || payment.state().phase() != RecipeCommitLedger.Phase.READY) return false;
+        ExecutionStatus previousFailure = failure;
+        if (canAdvanceWithoutEffects(execution, recipe)) {
+            // No native operation or callback lies between the fresh admission and this grant.
+            recipe.applyTickGrant(true, false, currentGameTime());
+            payment.settleNoEffectsTick(recipe.getTick());
+            installedLightweightTicksForTesting++;
+            installedPreparationReady = false;
+            status = CraftingStatus.working();
+            flushAsyncScreenText();
+            installedCompletion.run();
+            syncInstalledProgress(recipe, payment, previousFailure);
+            return true;
+        }
         long sequence = payment.state().sequence();
         try (Transaction transaction = Transaction.openRoot()) {
             ExecutionStatus rejected = execution.executeContinuous(transaction);
@@ -483,9 +501,25 @@ public final class CraftingRuntime {
         }
         if (execution.finishAttemptReady()) finish();
         installedCompletion.run();
-        controller.syncRecipeRuntimeFailure(this);
+        syncInstalledProgress(recipe, payment, previousFailure);
         return true;
     }
+
+    private boolean canAdvanceWithoutEffects(InstalledRecipeProgram execution, ActiveMachineRecipe recipe) {
+        return !recipe.needsFinishCommit() && !recipe.isFinishPending() && failure == null
+                && capabilityTickFailure == null && asyncTickPreparation == null && activePrefetches.isEmpty()
+                && !installedBehavior.hasRecipeTick() && components.tickFacetsKnownAbsent()
+                && execution.hasNoContinuousRequirements() && perTickRequirements().isEmpty();
+    }
+
+    private void syncInstalledProgress(ActiveMachineRecipe recipe, RecipeCommitLedger payment,
+                                       @Nullable ExecutionStatus previousFailure) {
+        if (activeRecipe == recipe && ledger == payment && !recipe.isFinishPending()
+                && failure == null && previousFailure == null) controller.syncRecipeRuntimeProgress(this);
+        else controller.syncRecipeRuntimeFailure(this);
+    }
+
+    int installedLightweightTicksForTesting() { return installedLightweightTicksForTesting; }
 
     private boolean errorPaused() { return ledger.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED; }
 
@@ -597,6 +631,7 @@ public final class CraftingRuntime {
     }
 
     private boolean consumePaidPrefetch(RecipeCommitLedger payment) {
+        if (activePrefetches.isEmpty()) return true;
         TickAttempt attempt = tickAttempt;
         try {
             ExecutionStatus rejected = consumePrefetchedEnergy();
@@ -1677,6 +1712,7 @@ public final class CraftingRuntime {
 
     public CapabilityTickResult handleCapabilityTickResult(CapabilityTickResult result) {
         if (result == null) throw new IllegalArgumentException("result must not be null");
+        boolean recovered = false;
         if (result.failure() != null) {
             capabilityTickFailure = result.failure();
             waiting(result.failure());
@@ -1684,8 +1720,9 @@ public final class CraftingRuntime {
             capabilityTickFailure = null;
             failure = null;
             status = active() ? CraftingStatus.working() : CraftingStatus.IDLE;
+            recovered = true;
         }
-        if (result.failure() != null || result.stateChanged()) controller.syncRecipeRuntimeFailure(this);
+        if (recovered || result.failure() != null || result.stateChanged()) controller.syncRecipeRuntimeFailure(this);
         return result;
     }
 
@@ -2132,10 +2169,9 @@ public final class CraftingRuntime {
 
     public boolean versionsCurrent() {
         if (!active()) return true;
-        StructureSnapshot structure = controller.currentStructureSnapshot();
         ComponentRuntime components = controller.componentRuntime();
         MachineRecipe recipe = activeRecipe.getRecipe();
-        return structureVersion == structure.version()
+        return structureVersion == controller.currentStructureVersion()
                 && capabilityVersion == components.capabilityVersion()
                 && inputScopeSourcesCurrent()
                 && recipeBelongsToMachine(recipe)
@@ -2784,7 +2820,7 @@ public final class CraftingRuntime {
     private @Nullable ExecutionStatus consumePrefetchedEnergy() {
         long remaining = Math.min(prefetchedEnergyPerTick, prefetchedEnergyRemaining);
         if (remaining <= 0L) return null;
-        List<ActivePrefetch> next = new ArrayList<>(activePrefetches.size());
+        List<ActivePrefetch> next = activePrefetches.size() == 1 ? activePrefetches : new ArrayList<>(activePrefetches.size());
         try (Transaction transaction = Transaction.openRoot()) {
             for (ActivePrefetch prefetch : activePrefetches) {
                 long consumed = Math.min(remaining, prefetch.remaining());
@@ -2794,7 +2830,9 @@ public final class CraftingRuntime {
                         return result == null || result.status() == null ? missingInputStatus() : result.status();
                     }
                 }
-                next.add(new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(), prefetch.remaining() - consumed));
+                ActivePrefetch updated = new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(), prefetch.remaining() - consumed);
+                if (activePrefetches.size() == 1) next = List.of(updated);
+                else next.add(updated);
                 remaining -= consumed;
             }
             prefetchJournal.updateSnapshots(transaction);
@@ -2924,8 +2962,9 @@ public final class CraftingRuntime {
     }
 
     private List<MachineRequirement> perTickRequirements() {
+        boolean hasPrefetches = !activePrefetches.isEmpty();
         if (cachedPerTickSource == effectiveRequirements && cachedPerTickConsumed == consumedAtStart
-                && cachedPerTickRetained == retainedInputs && cachedPerTickPrefetches == activePrefetches) {
+                && cachedPerTickRetained == retainedInputs && cachedPerTickHasPrefetches == hasPrefetches) {
             return cachedPerTickRequirements;
         }
         List<MachineRequirement> requirements = new ArrayList<>();
@@ -2933,7 +2972,7 @@ public final class CraftingRuntime {
         for (int index = 0; index < source.size(); index++) {
             MachineRequirement requirement = source.get(index);
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
-                if (!activePrefetches.isEmpty() && requirement instanceof EnergyRequirement) continue;
+                if (hasPrefetches && requirement instanceof EnergyRequirement) continue;
                 if (consumedAtStart.contains(index)) continue;
                 if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
                         RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
@@ -2952,7 +2991,7 @@ public final class CraftingRuntime {
         cachedPerTickSource = effectiveRequirements;
         cachedPerTickConsumed = consumedAtStart;
         cachedPerTickRetained = retainedInputs;
-        cachedPerTickPrefetches = activePrefetches;
+        cachedPerTickHasPrefetches = hasPrefetches;
         cachedPerTickRequirements = List.copyOf(requirements);
         return cachedPerTickRequirements;
     }

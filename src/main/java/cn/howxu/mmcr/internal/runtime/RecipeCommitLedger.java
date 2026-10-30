@@ -56,6 +56,11 @@ public final class RecipeCommitLedger extends SnapshotJournal<RecipeCommitLedger
                 tick, finalTickPaid, false);
     }
 
+    /** Equivalent to a committed empty resource transaction followed by a non-final grant. */
+    void settleNoEffectsTick(int tick) {
+        state = new State(Phase.READY, state.sequence() + 1L, state.paidAttempts() + 1L, tick, false, false);
+    }
+
     public void markOutputPaid(TransactionContext transaction) {
         updateSnapshots(transaction);
         state = new State(Phase.TERMINAL, state.sequence() + 1, state.paidAttempts(),

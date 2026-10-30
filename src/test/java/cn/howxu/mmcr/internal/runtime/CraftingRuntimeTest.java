@@ -2092,6 +2092,105 @@ class CraftingRuntimeTest {
         assertThat(energy.energyStorage().getAmountAsLong()).isZero();
     }
 
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void empty_installed_intermediate_ticks_use_the_lightweight_path_but_finish_normally(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        try {
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            assertThat(runtime.start(recipe("installed_no_effects", 4, List.of()), 1).isCrafting()).isTrue();
+            InstalledRecipeProgram installed = runtime.ensureInstalledProgram();
+            assertThat(installed).isNotNull();
+            RecipeCommitLedger ordinary = new RecipeCommitLedger();
+            // Start admission can itself have sequence facts; compare from the same persisted ledger.
+            TagValueOutput initial = TagValueOutput.createWithoutContext(ProblemReporter.DISCARDING);
+            runtime.ledger().save(initial);
+            assertThat(ordinary.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                    HolderLookup.Provider.create(Stream.empty()), initial.buildResult()), 0, false)).isTrue();
+            for (int tick = 1; tick <= 3; tick++) {
+                LevelStub.setGameTime(controller.getLevel(), tick);
+                if (mode != MachineWorkMode.SYNC) assertThat(runtime.prepareInstalledTick(tick)).isTrue();
+                assertThat(installed.tryAttempt(tick, tick)).isTrue();
+                assertThat(installed.advance()).isTrue();
+                try (Transaction transaction = Transaction.openRoot()) {
+                    ordinary.markResourcePaid(tick - 1, false, transaction);
+                    transaction.commit();
+                }
+                ordinary.settleTick(tick, false);
+                assertThat(runtime.tickCount()).isEqualTo(tick);
+                assertThat(runtime.ledger().state()).isEqualTo(ordinary.state());
+                assertThat(runtime.installedLightweightTicksForTesting()).isEqualTo(tick);
+                assertThat(runtime.finishPending()).isFalse();
+            }
+            LevelStub.setGameTime(controller.getLevel(), 4);
+            if (mode != MachineWorkMode.SYNC) assertThat(runtime.prepareInstalledTick(4)).isTrue();
+            assertThat(installed.tryAttempt(4, 4)).isTrue();
+            assertThat(installed.advance()).isTrue();
+            assertThat(runtime.active()).isFalse();
+            assertThat(installed.ledger().state().outputPaid()).isTrue();
+            assertThat(runtime.installedLightweightTicksForTesting()).isEqualTo(3);
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void empty_installed_recipes_with_tick_callbacks_keep_the_general_path(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        try {
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+            AtomicInteger callbacks = new AtomicInteger();
+            controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                    .recipeTick(context -> callbacks.incrementAndGet()).build()));
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            assertThat(runtime.start(recipe("installed_empty_callback", 4, List.of()), 1L).isCrafting()).isTrue();
+            InstalledRecipeProgram installed = runtime.ensureInstalledProgram();
+            assertThat(installed).isNotNull();
+            for (int tick = 1; tick <= 3; tick++) {
+                LevelStub.setGameTime(controller.getLevel(), tick);
+                if (mode != MachineWorkMode.SYNC) assertThat(runtime.prepareInstalledTick(tick)).isTrue();
+                assertThat(installed.tryAttempt(tick, tick)).isTrue();
+                assertThat(installed.advance()).isTrue();
+                assertThat(installed.tryAttempt(tick, tick)).isFalse();
+                assertThat(runtime.tickCount()).isEqualTo(tick);
+                assertThat(callbacks).hasValue(tick);
+                assertThat(runtime.installedLightweightTicksForTesting()).isZero();
+            }
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        }
+    }
+
+    @Test
+    void empty_installed_recipes_with_custom_tick_facets_preserve_failure_and_recovery() {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SEMI_SYNC);
+        try {
+            MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+            var capability = new FailOnceTickCapability(CapabilityTickPhase.AFTER_INPUTS, false);
+            controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(null,
+                    new TickCapabilityHost(capability), BlockPos.ZERO, BlockPos.ZERO, (String) null)));
+            RuntimeTestFixtures.republish(controller);
+            CraftingRuntime runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            assertThat(runtime.start(recipe("installed_empty_custom_tick", 4, List.of()), 1L).isCrafting()).isTrue();
+            InstalledRecipeProgram installed = runtime.ensureInstalledProgram();
+            assertThat(installed).isNotNull();
+            for (int tick = 1; tick <= 2; tick++) {
+                LevelStub.setGameTime(controller.getLevel(), tick);
+                assertThat(runtime.prepareInstalledTick(tick)).isTrue();
+                assertThat(installed.tryAttempt(tick, tick)).isTrue();
+                assertThat(installed.advance()).isTrue();
+                assertThat(runtime.tickCount()).isEqualTo(tick);
+                assertThat(runtime.installedLightweightTicksForTesting()).isZero();
+                if (tick == 1) assertThat(runtime.failure()).isNotNull();
+                else assertThat(runtime.failure()).isNull();
+            }
+        } finally {
+            ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        }
+    }
+
     @Test
     void context_free_sync_ticks_keep_the_resource_trace_without_callback_contexts() {
         assertContextFreeTickTrace(false);

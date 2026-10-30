@@ -92,11 +92,13 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
             input.child(ENERGY_CACHE_KEY).ifPresent(energyBuffer()::load);
         } finally {
             endLoadingAdditional();
+            resetPendingWake();
         }
     }
 
     @Override
     public void clearRemoved() {
+        resetPendingWake();
         super.clearRemoved();
         GridHelper.onFirstTick(this, blockEntity -> {
             if (blockEntity.getLevel() != null) {
@@ -107,12 +109,14 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
 
     @Override
     public void onChunkUnloaded() {
+        resetPendingWake();
         super.onChunkUnloaded();
         mainNode.destroy();
     }
 
     @Override
     public void setRemoved() {
+        resetPendingWake();
         super.setRemoved();
         mainNode.destroy();
     }
@@ -126,6 +130,8 @@ public abstract class FluxInterfaceBlockEntity extends IOPortBlockEntity impleme
     protected final void wakeNode() {
         mainNode.ifPresent((grid, node) -> grid.getTickManager().alertDevice(node));
     }
+
+    protected void resetPendingWake() { }
 
     protected abstract FluxEnergyBuffer energyBuffer();
 

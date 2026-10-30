@@ -75,6 +75,7 @@ public final class FactoryRuntime {
     private final ArrayDeque<LaneTickObservation> availableTickObservations = new ArrayDeque<>();
     private int tickObservationBuildCountForTesting;
     private int accountingUpdatesForTesting;
+    private int failureAggregationsForTesting;
     private Runnable currentFinishCallback = NO_FINISH_CALLBACK;
     private List<MachineRecipe> currentFinishCandidates = List.of();
     private final Set<FactoryRecipeThread> patternStartReservations = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -1329,6 +1330,8 @@ public final class FactoryRuntime {
 
     int accountingUpdatesForTesting() { return accountingUpdatesForTesting; }
 
+    int failureAggregationsForTesting() { return failureAggregationsForTesting; }
+
     int tickObservationBuildCountForTesting() { return tickObservationBuildCountForTesting; }
 
     public int activeRecipeCountFor(Identifier recipeId) {
@@ -1447,6 +1450,13 @@ public final class FactoryRuntime {
         laneThreadSnapshots.remove(lane);
     }
 
+    /** Progress is immediately visible without changing lane membership, quotas or failure aggregation. */
+    public boolean markLaneProgressChanged(CraftingRuntime runtime) {
+        if (!lanesByRuntime.containsKey(runtime)) return false;
+        factoryStateEpoch++;
+        return true;
+    }
+
     public void markLaneRuntimeChanged(CraftingRuntime runtime) {
         if (runtime == null) return;
         FactoryRecipeThread lane = lanesByRuntime.get(runtime);
@@ -1467,9 +1477,10 @@ public final class FactoryRuntime {
         return failure;
     }
 
-    private void recomputeFailureIfDirty() {
+    public void recomputeFailureIfDirty() {
         if (!failureDirty) return;
         failureDirty = false;
+        failureAggregationsForTesting++;
         ExecutionStatus next = null;
         if (!laneFailures.isEmpty()) {
             for (FactoryRecipeThread lane : lanes) {

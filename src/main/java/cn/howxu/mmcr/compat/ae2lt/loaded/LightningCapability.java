@@ -25,6 +25,7 @@ import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.ae2lt.LightningFailureReasons;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -38,7 +39,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /** Internal ME-only lightning resource operations; deliberately exposes no adjacent transfer facet.
  * @author howxu <dev@howxu.cn> */
-public final class LightningCapability implements MachineCapability, ResourceFacet<LightningTier>, OperationFacet {
+public final class LightningCapability implements MachineCapability, ResourceFacet<LightningTier>, OperationFacet, FixedExecutionFacets {
     private final IOPortBlockEntity host;
     private final ResourceStorage<LightningTier> storage;
     private final IOType ioType;

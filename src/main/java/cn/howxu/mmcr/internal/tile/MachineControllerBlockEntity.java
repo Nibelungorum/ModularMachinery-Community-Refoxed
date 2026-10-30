@@ -210,6 +210,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private @Nullable PktMachineStatePayload cachedStatePacket;
     private boolean clientStateBaseline;
     private @Nullable ExecutionStatus lastFailure;
+    private @Nullable ServerLevel queuedRuntimeStateLevel;
     private @Nullable Identifier selectedRecipePoolId;
     private @Nullable List<Identifier> immutableRecipePoolIds;
     private @Nullable Identifier validatedRecipePoolId;
@@ -680,6 +681,15 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return runtime.currentStructureSnapshot();
     }
 
+    /** Raw execution metadata, independent of presentation snapshot invalidation. */
+    public long currentStructureVersion() {
+        return runtime.structureVersion();
+    }
+
+    public boolean executionStructureCurrent(long version) {
+        return runtime.executionStructureCurrent(version);
+    }
+
     private StructureWorkSnapshot structureWorkSnapshot() {
         return runtime.structureWorkSnapshot();
     }
@@ -772,13 +782,34 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (!runtime.factoryRuntime().contains(recipeRuntime)) return;
         runtime.factoryRuntime().markLaneRuntimeChanged(recipeRuntime);
+        syncRecipeRuntimeState();
+    }
+
+    /** Progress only: lifecycle, failure and quota changes still use syncRecipeRuntimeFailure. */
+    public void syncRecipeRuntimeProgress(CraftingRuntime recipeRuntime) {
+        if (recipeRuntime == runtime.craftingRuntime()) {
+            syncCraftingFailure();
+            if (!runtime.factoryRuntime().contains(recipeRuntime)) {
+                syncRuntimeStateIfChanged();
+                markRuntimePersistenceChanged();
+                return;
+            }
+        }
+        if (!runtime.factoryRuntime().markLaneProgressChanged(recipeRuntime)) return;
+        syncRecipeRuntimeState();
+    }
+
+    private void syncRecipeRuntimeState() {
         if (level instanceof ServerLevel serverLevel
-                && (MachineAsyncCoordinator.get(serverLevel).isCompletingFence()
-                || ASYNC_RUNTIME_STATE_BATCH_LEVELS.contains(serverLevel))) {
-            ASYNC_RUNTIME_STATE_SYNC_QUEUE.computeIfAbsent(serverLevel, ignored -> ConcurrentHashMap.newKeySet()).add(this);
+                && (queuedRuntimeStateLevel == serverLevel || ASYNC_RUNTIME_STATE_BATCH_LEVELS.contains(serverLevel)
+                || MachineAsyncCoordinator.get(serverLevel).isCompletingFence())) {
+            if (queuedRuntimeStateLevel != serverLevel) {
+                queuedRuntimeStateLevel = serverLevel;
+                ASYNC_RUNTIME_STATE_SYNC_QUEUE.computeIfAbsent(serverLevel, ignored -> ConcurrentHashMap.newKeySet()).add(this);
+            }
             return;
         }
-        runtime.factoryRuntime().recomputeFailure();
+        runtime.factoryRuntime().recomputeFailureIfDirty();
         syncRuntimeStateIfChanged();
         markRuntimePersistenceChanged();
     }
@@ -797,13 +828,21 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public static void flushQueuedAsyncRuntimeState(ServerLevel level) {
-        Set<MachineControllerBlockEntity> controllers = ASYNC_RUNTIME_STATE_SYNC_QUEUE.remove(level);
+        Set<MachineControllerBlockEntity> controllers = removeQueuedAsyncRuntimeState(level);
         if (controllers == null) return;
         for (MachineControllerBlockEntity controller : controllers) {
-            controller.runtime.factoryRuntime().recomputeFailure();
+            controller.runtime.factoryRuntime().recomputeFailureIfDirty();
             controller.syncRuntimeStateIfChanged();
             controller.markRuntimePersistenceChanged();
         }
+    }
+
+    private static @Nullable Set<MachineControllerBlockEntity> removeQueuedAsyncRuntimeState(ServerLevel level) {
+        Set<MachineControllerBlockEntity> controllers = ASYNC_RUNTIME_STATE_SYNC_QUEUE.remove(level);
+        if (controllers != null) for (MachineControllerBlockEntity controller : controllers) {
+            if (controller.queuedRuntimeStateLevel == level) controller.queuedRuntimeStateLevel = null;
+        }
+        return controllers;
     }
 
     private void markRuntimePersistenceChanged() {
@@ -1265,7 +1304,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public static void clearFormedControllerIndex(ServerLevel level) {
-        ASYNC_RUNTIME_STATE_SYNC_QUEUE.remove(level);
+        removeQueuedAsyncRuntimeState(level);
         ASYNC_RUNTIME_STATE_BATCH_LEVELS.remove(level);
         Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX.remove(level);
         if (byChunk == null) return;
@@ -4661,9 +4700,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public List<Identifier> supportedRecipePoolIds() {
-        StructureSnapshot snapshot = runtime.currentStructureSnapshot();
-        Machine machine = snapshot.machine() == null
-                ? snapshot.configuredMachine() : snapshot.machine();
+        Machine machine = runtime.recipeMachine();
         // Only registry-owned immutable snapshots are trusted; overrides may return mutable lists.
         List<Identifier> pools = MachineRegistry.recipePoolsForMachine(machine);
         if (immutableRecipePoolIds != pools) {

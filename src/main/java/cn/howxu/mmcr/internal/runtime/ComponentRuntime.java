@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.facet.TickFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
@@ -25,6 +26,7 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.modifier.ModifierTarget;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -74,7 +76,8 @@ public final class ComponentRuntime {
                     Map.of("raw_reason_id", "operation_failed_without_status")));
     private List<ProcessingComponent> components = List.of();
     private List<MachineCapability> capabilities = List.of();
-    private List<MachineCapability> customFacetCandidates = List.of();
+    private List<MachineCapability> inputRoutingCandidates = List.of();
+    private List<MachineCapability> tickFacetCandidates = List.of();
     private List<CapabilityIdentity> capabilityIdentity = List.of();
     private List<CapabilityPresentationSegment> capabilityPresentationSegments = List.of();
     private Map<BlockPos, List<Integer>> capabilitySourceIndices = Map.of();
@@ -164,10 +167,11 @@ public final class ComponentRuntime {
         this.capabilities = nextCapabilities;
         inputPortHosts = immutableMap(nextInputPorts);
         legacyCapabilitySources = Set.copyOf(nextLegacySources);
-        // These closed built-ins expose neither TickFacet nor InputRoutingFacet. Custom queries remain live.
-        customFacetCandidates = nextCapabilities.stream().filter(capability -> capability.getClass() != ItemBusCapability.class
-                && capability.getClass() != FluidHatchCapability.class
-                && capability.getClass() != EnergyHatchCapability.class).toList();
+        // Only verified fixed providers may skip queries. Unknown providers remain live and ordered.
+        inputRoutingCandidates = nextCapabilities.stream()
+                .filter(capability -> mayExposeExecutionFacet(capability, InputRoutingFacet.class)).toList();
+        tickFacetCandidates = nextCapabilities.stream()
+                .filter(capability -> mayExposeExecutionFacet(capability, TickFacet.class)).toList();
         indexedInputRouting = null;
         inputSourcePositions = Set.of();
         this.capabilityIdentity = nextIdentity;
@@ -206,8 +210,8 @@ public final class ComponentRuntime {
 
     /** Resolves the same first facet as a snapshot without collecting all matches. */
     InputRoutingFacet inputRouting() {
-        for (int index = 0; index < customFacetCandidates.size(); index++) {
-            InputRoutingFacet routing = customFacetCandidates.get(index).facet(InputRoutingFacet.class).orElse(null);
+        for (int index = 0; index < inputRoutingCandidates.size(); index++) {
+            InputRoutingFacet routing = inputRoutingCandidates.get(index).facet(InputRoutingFacet.class).orElse(null);
             if (routing != null) return routing;
         }
         return inputRouting;
@@ -267,9 +271,20 @@ public final class ComponentRuntime {
         stateVersion++;
     }
 
+    private static boolean mayExposeExecutionFacet(MachineCapability capability, Class<? extends CapabilityFacet> facet) {
+        boolean fixed = capability instanceof FixedExecutionFacets || capability.getClass() == ItemBusCapability.class
+                || capability.getClass() == FluidHatchCapability.class || capability.getClass() == EnergyHatchCapability.class;
+        return !fixed || capability.view().facets().contains(facet);
+    }
+
+    /** Only verified fixed providers can guarantee that later live queries cannot expose a tick facet. */
+    boolean tickFacetsKnownAbsent() {
+        return tickFacetCandidates.isEmpty();
+    }
+
     /** Candidate membership is refreshed on every replacement; custom facets are queried live. */
     public boolean hasTickFacets() {
-        for (MachineCapability capability : customFacetCandidates) {
+        for (MachineCapability capability : tickFacetCandidates) {
             if (capability.facet(TickFacet.class).isPresent()) return true;
         }
         return false;

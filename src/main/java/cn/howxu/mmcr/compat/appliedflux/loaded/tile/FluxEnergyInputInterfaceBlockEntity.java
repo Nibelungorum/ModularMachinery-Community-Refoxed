@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.appliedflux.loaded.tile;
 
+import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.ticking.IGridTickable;
 import appeng.api.networking.ticking.TickRateModulation;
@@ -15,6 +16,7 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -31,6 +33,11 @@ public final class FluxEnergyInputInterfaceBlockEntity extends FluxInterfaceBloc
             }, () -> network() != null);
     private final CapabilitySnapshot capabilitySnapshot = new CapabilitySnapshot(List.of(capability));
     private final InputTicker ticker = new InputTicker();
+    private Level alertedLevel;
+    private IGrid alertedGrid;
+    private IGridNode alertedNode;
+    private long alertedTick;
+    private long wakeGeneration;
 
     public FluxEnergyInputInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
         super(pos, state, kind);
@@ -59,13 +66,41 @@ public final class FluxEnergyInputInterfaceBlockEntity extends FluxInterfaceBloc
 
     @Override
     protected void onNetworkChanged() {
+        resetPendingWake();
         wakeNode();
     }
 
     private void onEnergyChanged() {
         notifyStorageChanged();
         notifyControllerOfInputChange();
-        wakeNode();
+        wakeForEnergyChange();
+    }
+
+    private void wakeForEnergyChange() {
+        Level currentLevel = getLevel();
+        if (currentLevel == null) {
+            wakeNode();
+            return;
+        }
+        long gameTime = currentLevel.getGameTime();
+        mainNode.ifPresent((grid, node) -> {
+            if (alertedLevel == currentLevel && alertedTick == gameTime && alertedGrid == grid && alertedNode == node) return;
+            long generation = wakeGeneration;
+            if (grid.getTickManager().alertDevice(node) && generation == wakeGeneration && getLevel() == currentLevel) {
+                alertedLevel = currentLevel;
+                alertedTick = gameTime;
+                alertedGrid = grid;
+                alertedNode = node;
+            }
+        });
+    }
+
+    @Override
+    protected void resetPendingWake() {
+        wakeGeneration++;
+        alertedLevel = null;
+        alertedGrid = null;
+        alertedNode = null;
     }
 
     private final class InputTicker implements IGridTickable {
@@ -76,6 +111,7 @@ public final class FluxEnergyInputInterfaceBlockEntity extends FluxInterfaceBloc
 
         @Override
         public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
+            resetPendingWake();
             return FluxEnergyTicker.input(node.isActive(), ticksSinceLastCall, buffer, network());
         }
     }

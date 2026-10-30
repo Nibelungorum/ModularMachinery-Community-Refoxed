@@ -47,9 +47,12 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -93,6 +96,145 @@ class FluxRuntimeBoundaryTest {
         } finally {
             if (serverThreadScope != null) serverThreadScope.close();
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void requirement_classification_is_reused_across_real_prefetch_debits(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        Fixture fixture = new Fixture(4);
+        assertThat(fixture.start(false)).isTrue();
+        assertThat(fixture.runtime.ensureInstalledProgram()).isNotNull();
+        List<?> requirements = tickRequirements(fixture.runtime);
+        assertThat(requirements).hasSize(1);
+        for (int tick = 1; tick <= 3; tick++) {
+            assertThat(fixture.attempt(mode, tick).advance()).isTrue();
+            assertThat(fixture.runtime.tickCount()).isEqualTo(tick);
+            assertThat(tickRequirements(fixture.runtime)).isSameAs(requirements);
+            assertThat(fixture.first.buffer.reserved() + fixture.second.buffer.reserved()).isEqualTo(5L * (4 - tick));
+        }
+        fixture.runtime.invalidate();
+    }
+
+    @Test
+    void requirement_classification_rebuilds_when_prefetch_ends_even_with_the_same_requirement_source() throws Exception {
+        Fixture fixture = new Fixture(4);
+        assertThat(fixture.start(false)).isTrue();
+        List<?> prefetched = tickRequirements(fixture.runtime);
+        Method release = CraftingRuntime.class.getDeclaredMethod("releaseActivePrefetches");
+        release.setAccessible(true);
+        release.invoke(fixture.runtime);
+        List<?> ordinary = tickRequirements(fixture.runtime);
+        assertThat(ordinary).isNotSameAs(prefetched).hasSize(3);
+        assertThat(tickRequirements(fixture.runtime)).isSameAs(ordinary);
+        assertThat(fixture.first.buffer.reserved() + fixture.second.buffer.reserved()).isZero();
+        assertThat(fixture.first.buffer.amount() + fixture.second.buffer.amount()).isEqualTo(20L);
+        fixture.runtime.invalidate();
+        assertThat(tickRequirements(fixture.runtime)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void single_prefetch_publishes_payment_before_notification_and_finishes_without_reextracting(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        Fixture fixture = new Fixture(3);
+        ObservedFlux energy = new ObservedFlux("single", 15L);
+        startSinglePrefetch(fixture, energy, 3);
+        AtomicReference<CompoundTag> checkpoint = new AtomicReference<>();
+        energy.notification.set(() -> {
+            checkpoint.set(save(fixture.runtime));
+            assertThat(allocations(checkpoint.get())).containsEntry("single", 10L);
+            assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.RESOURCE_PAID);
+        });
+        for (int tick = 1; tick <= 3; tick++) {
+            assertThat(fixture.attempt(mode, tick).advance()).isTrue();
+            assertThat(energy.buffer.amount()).isEqualTo(5L * (3 - tick));
+            assertThat(energy.buffer.reserved()).isEqualTo(energy.buffer.amount());
+        }
+        assertThat(checkpoint.get()).isNotNull();
+        assertThat(energy.consumeCalls).isEqualTo(3);
+        assertThat(energy.networkCommits).isEqualTo(1);
+        assertThat(fixture.output.itemStorage().amount(0)).isEqualTo(1L);
+        assertThat(fixture.runtime.ledger().state().outputPaid()).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,SYNC", "true,SYNC", "false,SEMI_SYNC", "true,SEMI_SYNC", "false,ASYNC", "true,ASYNC"})
+    void single_prefetch_rejected_or_partial_debit_rolls_back_and_cannot_replay(boolean partial, MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        Fixture fixture = new Fixture(3);
+        ObservedFlux energy = new ObservedFlux("single", 15L);
+        startSinglePrefetch(fixture, energy, 3);
+        if (partial) energy.consumeLimit = 2L;
+        else energy.rejectConsumption = true;
+
+        assertThat(fixture.attempt(mode).advance()).isFalse();
+
+        assertThat(fixture.runtime.tickCount()).isZero();
+        assertThat(allocations(save(fixture.runtime))).containsEntry("single", 15L);
+        assertThat(energy.buffer.amount()).isEqualTo(15L);
+        assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+        CraftingRuntime restored = new CraftingRuntime(fixture.controller, fixture.controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, LOOKUP, save(fixture.runtime)), null);
+        restored.tick();
+        restored.finish();
+        assertThat(restored.tickCount()).isZero();
+        assertThat(energy.consumeCalls).isEqualTo(1);
+        assertThat(energy.buffer.amount()).isEqualTo(15L);
+        restored.invalidate();
+        assertThat(energy.buffer.reserved()).isZero();
+        assertThat(energy.buffer.idleExcess()).isEqualTo(15L);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"cancel,SYNC", "cancel,SEMI_SYNC", "cancel,ASYNC", "throw,SYNC", "throw,SEMI_SYNC", "throw,ASYNC",
+            "cancel_throw,SYNC", "cancel_throw,SEMI_SYNC", "cancel_throw,ASYNC"})
+    void single_prefetch_notification_cannot_grant_progress_after_cancellation_or_throw(String action, MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        Fixture fixture = new Fixture(3);
+        ObservedFlux energy = new ObservedFlux("single", 15L);
+        startSinglePrefetch(fixture, energy, 3);
+        energy.notification.set(() -> {
+            assertThat(allocations(save(fixture.runtime))).containsEntry("single", 10L);
+            if (action.startsWith("cancel")) fixture.runtime.invalidate();
+            if (action.endsWith("throw")) throw new IllegalStateException("single allocation notification");
+        });
+        assertThat(fixture.attempt(mode).advance()).isFalse();
+        assertThat(fixture.runtime.tickCount()).isZero();
+        assertThat(energy.consumeCalls).isEqualTo(1);
+        assertThat(energy.buffer.amount()).isEqualTo(10L);
+        assertThat(fixture.output.itemStorage().amount(0)).isZero();
+        if (action.startsWith("cancel")) {
+            assertThat(fixture.runtime.active()).isFalse();
+            assertThat(energy.buffer.reserved()).isZero();
+            assertThat(energy.releaseCalls).isEqualTo(1);
+        } else {
+            assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+            assertThat(allocations(save(fixture.runtime))).containsEntry("single", 10L);
+        }
+        fixture.runtime.invalidate();
+        assertThat(energy.releaseCalls).isEqualTo(1);
+    }
+
+    private static List<?> tickRequirements(CraftingRuntime runtime) throws Exception {
+        Method method = CraftingRuntime.class.getDeclaredMethod("perTickRequirements");
+        method.setAccessible(true);
+        return (List<?>) method.invoke(runtime);
+    }
+
+    private static void startSinglePrefetch(Fixture fixture, ObservedFlux energy, int duration) {
+        List<ProcessingComponent> components = new ArrayList<>(fixture.controller.componentRuntime().components());
+        components.removeIf(component -> component.getContainer() instanceof TestCapabilityHost);
+        components.add(new ProcessingComponent(null, new TestCapabilityHost(List.of(energy)),
+                BlockPos.ZERO, BlockPos.ZERO, (String) null));
+        fixture.controller.componentRuntime().replaceComponents(components);
+        RuntimeTestFixtures.republish(fixture.controller);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("single_prefetch_boundary"), MACHINE, duration,
+                List.of(new EnergyRequirement(5L)), List.of(new ItemStack(Items.IRON_NUGGET)));
+        RecipeRegistry.registerStatic(recipe);
+        fixture.runtime.start(recipe, 1L);
+        assertThat(fixture.runtime.active()).isTrue();
+        assertThat(allocations(save(fixture.runtime))).containsExactly(Map.entry("single", 5L * duration));
     }
 
     @ParameterizedTest
@@ -481,6 +623,7 @@ class FluxRuntimeBoundaryTest {
         private int releaseCalls;
         private long released;
         private boolean rejectConsumption;
+        private long consumeLimit = Long.MAX_VALUE;
 
         private ObservedFlux(String key, long exactAmount) {
             network.setAmount(100L);
@@ -512,8 +655,10 @@ class FluxRuntimeBoundaryTest {
         }
         @Override public CapabilityResult consumeReservation(long amount, TransactionContext transaction) {
             consumeCalls++;
-            CapabilityResult result = delegate.consumeReservation(amount, transaction);
-            return result.success() && rejectConsumption ? missing.consumeReservation(1L, transaction) : result;
+            long debited = Math.min(amount, consumeLimit);
+            CapabilityResult result = delegate.consumeReservation(debited, transaction);
+            return result.success() && (rejectConsumption || debited < amount)
+                    ? missing.consumeReservation(1L, transaction) : result;
         }
     }
 

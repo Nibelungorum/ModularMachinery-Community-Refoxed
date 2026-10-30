@@ -33,6 +33,10 @@ import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.internal.recipe.FactorySearchContext;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
+import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
+import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
+import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
@@ -64,6 +68,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -140,6 +145,58 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void fixed_execution_facets_use_independent_ordered_candidates_without_unrelated_live_queries() {
+        ComponentRuntime runtime = new ComponentRuntime();
+        FixedFacetCapability neither = new FixedFacetCapability(Set.of());
+        FixedFacetCapability tickOnly = new FixedFacetCapability(Set.of(TickFacet.class));
+        FixedFacetCapability routeOnly = new FixedFacetCapability(Set.of(InputRoutingFacet.class));
+        RoutingCapability dynamic = new RoutingCapability();
+        dynamic.routing = new InputRoutingFacet(3L, List.of(), List.of());
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(
+                List.of(neither, tickOnly, routeOnly, dynamic)), "fixed")));
+        int neitherQueries = neither.executionQueries;
+        int tickQueries = tickOnly.executionQueries;
+        int dynamicQueries = dynamic.routingReads;
+
+        assertThat(runtime.inputRouting()).isSameAs(routeOnly.routing);
+        assertThat(neither.executionQueries).isEqualTo(neitherQueries);
+        assertThat(tickOnly.executionQueries).isEqualTo(tickQueries);
+        assertThat(dynamic.routingReads).isEqualTo(dynamicQueries);
+        int routeQueries = routeOnly.executionQueries;
+        assertThat(runtime.hasTickFacets()).isTrue();
+        assertThat(routeOnly.executionQueries).isEqualTo(routeQueries);
+        assertThat(neither.executionQueries).isEqualTo(neitherQueries);
+        assertThat(runtime.tickFacetsKnownAbsent()).isFalse();
+
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(neither, dynamic)), "dynamic")));
+        assertThat(runtime.inputRouting()).isSameAs(dynamic.routing);
+        assertThat(runtime.tickFacetsKnownAbsent()).isFalse();
+        dynamic.routing = null;
+        assertThat(runtime.inputRouting()).isNotNull().isNotSameAs(routeOnly.routing);
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(neither)), "fixed_only")));
+        assertThat(runtime.tickFacetsKnownAbsent()).isTrue();
+        neitherQueries = neither.executionQueries;
+        assertThat(runtime.hasTickFacets()).isFalse();
+        runtime.inputRouting();
+        assertThat(neither.executionQueries).isEqualTo(neitherQueries);
+    }
+
+    @Test
+    void fixed_execution_membership_does_not_cache_dynamic_energy_prefetch_availability() {
+        ComponentRuntime runtime = new ComponentRuntime();
+        AtomicBoolean available = new AtomicBoolean();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(new FluxEnergyBuffer(),
+                "fixed_execution", null, available::get);
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(List.of(capability)), "energy")));
+        assertThat(runtime.tickFacetsKnownAbsent()).isTrue();
+        assertThat(runtime.capabilitySnapshot().facets(RecipeEnergyPrefetchFacet.class)).isEmpty();
+        available.set(true);
+        assertThat(runtime.capabilitySnapshot().facets(RecipeEnergyPrefetchFacet.class)).containsExactly(capability);
+        available.set(false);
+        assertThat(runtime.capabilitySnapshot().facets(RecipeEnergyPrefetchFacet.class)).isEmpty();
+    }
+
+    @Test
     void input_position_index_is_shared_immutable_and_keyed_by_routing_identity_not_revision() {
         ComponentRuntime runtime = new ComponentRuntime();
         BlockPos first = new BlockPos(1, 0, 0);
@@ -191,6 +248,7 @@ class ComponentRuntimeTest {
         ProcessingComponent component = component(new TestCapabilityHost(List.of(capability)), "tick");
         runtime.replaceComponents(List.of(component));
         long version = runtime.capabilityVersion();
+        assertThat(runtime.tickFacetsKnownAbsent()).isFalse();
         CraftingRuntime crafting = new CraftingRuntime(controller, runtime);
         for (int index = 0; index < 10; index++) {
             assertThat(runtime.hasTickFacets()).isFalse();
@@ -214,6 +272,7 @@ class ComponentRuntimeTest {
         assertThat(runtime.hasTickFacets()).isTrue();
         runtime.clear();
         assertThat(runtime.hasTickFacets()).isFalse();
+        assertThat(runtime.tickFacetsKnownAbsent()).isTrue();
         int reads = capability.tickFacetReads;
         crafting.tickIdle();
         assertThat(capability.tickFacetReads).isEqualTo(reads);
@@ -1780,6 +1839,31 @@ class ComponentRuntimeTest {
 
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class FixedFacetCapability implements MachineCapability, FixedExecutionFacets, TickFacet {
+        private final TestCapability delegate = new TestCapability("fixed_execution");
+        private final InputRoutingFacet routing = new InputRoutingFacet(1L, List.of(), List.of());
+        private final CapabilityView view;
+        private int executionQueries;
+
+        private FixedFacetCapability(Set<Class<? extends CapabilityFacet>> facets) {
+            view = CapabilityFactories.view(delegate.type(), delegate.directions(), facets);
+        }
+
+        @Override public CapabilityType type() { return delegate.type(); }
+        @Override public CapabilityDirections directions() { return delegate.directions(); }
+        @Override public CapabilityView view() { return view; }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) { return delegate.prepare(request); }
+        @Override public CapabilityTickResult plan(CapabilityTickContext context) { return CapabilityTickResult.empty(); }
+
+        @Override
+        public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) {
+            if (type == TickFacet.class || type == InputRoutingFacet.class) executionQueries++;
+            if (type == InputRoutingFacet.class && view.facets().contains(type)) return Optional.of(type.cast(routing));
+            return MachineCapability.super.facet(type);
+        }
     }
 
     /** @author howxu <dev@howxu.cn> */
