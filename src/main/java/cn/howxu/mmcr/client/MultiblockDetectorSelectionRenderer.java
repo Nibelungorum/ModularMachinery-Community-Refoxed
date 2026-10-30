@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -29,6 +30,8 @@ public final class MultiblockDetectorSelectionRenderer {
 
     private static final int GREEN = 0xFF00FF00;
     private static final int MASK_GREEN = 0x6600FF00;
+    private static final int CONTROLLER_RED = 0x66FF0000;
+    private static final int CONTROLLER_YELLOW = 0x66FFFF00;
     private static final float LINE_WIDTH = 4.0F;
 
     private MultiblockDetectorSelectionRenderer() {}
@@ -42,6 +45,11 @@ public final class MultiblockDetectorSelectionRenderer {
         if (detector.isEmpty()) return;
 
         MultiblockDetectorSelection selection = MultiblockDetectorItem.selection(detector);
+        Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
+        if (selection.controllerPos() != null && selection.controllerFace() != null) {
+            event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.debugFilledBox(),
+                    (pose, buffer) -> renderControllerFaces(pose, buffer, camera, selection));
+        }
         if (selection.firstPos() == null || selection.secondPos() == null) return;
 
         BlockPos first = selection.firstPos();
@@ -52,7 +60,6 @@ public final class MultiblockDetectorSelectionRenderer {
         double maxX = Math.max(first.getX(), second.getX()) + 1.0D;
         double maxY = Math.max(first.getY(), second.getY()) + 1.0D;
         double maxZ = Math.max(first.getZ(), second.getZ()) + 1.0D;
-        Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
 
         event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.lines(), (pose, buffer) ->
                 renderBoxEdges(pose, buffer, camera, minX, minY, minZ, maxX, maxY, maxZ));
@@ -92,8 +99,24 @@ public final class MultiblockDetectorSelectionRenderer {
         line(pose, buffer, camera, maxX, maxY, minZ, maxX, maxY, maxZ);
     }
 
+    static void renderControllerFaces(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
+            MultiblockDetectorSelection selection) {
+        BlockPos pos = selection.controllerPos();
+        if (pos == null || selection.controllerFace() == null) return;
+        // Keep the overlay just outside the block and any coincident export-region mask.
+        double padding = 0.002D;
+        renderBoxFaces(pose, buffer, camera, pos.getX() - padding, pos.getY() - padding, pos.getZ() - padding,
+                pos.getX() + 1.0D + padding, pos.getY() + 1.0D + padding, pos.getZ() + 1.0D + padding,
+                selection.controllerFace());
+    }
+
     private static void renderBoxFaces(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
             double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+        renderBoxFaces(pose, buffer, camera, minX, minY, minZ, maxX, maxY, maxZ, null);
+    }
+
+    private static void renderBoxFaces(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
+            double minX, double minY, double minZ, double maxX, double maxY, double maxZ, Direction selectedFace) {
         float x1 = (float) (minX - camera.x());
         float y1 = (float) (minY - camera.y());
         float z1 = (float) (minZ - camera.z());
@@ -103,21 +126,25 @@ public final class MultiblockDetectorSelectionRenderer {
 
         // This is always one six-face shell (24 vertices), never a mesh per selected block. The native
         // debugFilledBox GPU pipeline performs back-face culling and viewport clipping for large regions.
-        face(pose, buffer, x1, y2, z1, x2, y2, z1, x2, y1, z1, x1, y1, z1);
-        face(pose, buffer, x2, y2, z2, x1, y2, z2, x1, y1, z2, x2, y1, z2);
-        face(pose, buffer, x1, y2, z2, x1, y2, z1, x1, y1, z1, x1, y1, z2);
-        face(pose, buffer, x2, y2, z1, x2, y2, z2, x2, y1, z2, x2, y1, z1);
-        face(pose, buffer, x1, y2, z2, x2, y2, z2, x2, y2, z1, x1, y2, z1);
-        face(pose, buffer, x1, y1, z1, x2, y1, z1, x2, y1, z2, x1, y1, z2);
+        face(pose, buffer, faceColor(Direction.NORTH, selectedFace), x1, y2, z1, x2, y2, z1, x2, y1, z1, x1, y1, z1);
+        face(pose, buffer, faceColor(Direction.SOUTH, selectedFace), x2, y2, z2, x1, y2, z2, x1, y1, z2, x2, y1, z2);
+        face(pose, buffer, faceColor(Direction.WEST, selectedFace), x1, y2, z2, x1, y2, z1, x1, y1, z1, x1, y1, z2);
+        face(pose, buffer, faceColor(Direction.EAST, selectedFace), x2, y2, z1, x2, y2, z2, x2, y1, z2, x2, y1, z1);
+        face(pose, buffer, faceColor(Direction.UP, selectedFace), x1, y2, z2, x2, y2, z2, x2, y2, z1, x1, y2, z1);
+        face(pose, buffer, faceColor(Direction.DOWN, selectedFace), x1, y1, z1, x2, y1, z1, x2, y1, z2, x1, y1, z2);
     }
 
-    private static void face(PoseStack.Pose pose, VertexConsumer buffer,
+    private static int faceColor(Direction face, Direction selectedFace) {
+        return selectedFace == null ? MASK_GREEN : face == selectedFace ? CONTROLLER_RED : CONTROLLER_YELLOW;
+    }
+
+    private static void face(PoseStack.Pose pose, VertexConsumer buffer, int color,
             float x1, float y1, float z1, float x2, float y2, float z2,
             float x3, float y3, float z3, float x4, float y4, float z4) {
-        buffer.addVertex(pose, x1, y1, z1).setColor(MASK_GREEN);
-        buffer.addVertex(pose, x2, y2, z2).setColor(MASK_GREEN);
-        buffer.addVertex(pose, x3, y3, z3).setColor(MASK_GREEN);
-        buffer.addVertex(pose, x4, y4, z4).setColor(MASK_GREEN);
+        buffer.addVertex(pose, x1, y1, z1).setColor(color);
+        buffer.addVertex(pose, x2, y2, z2).setColor(color);
+        buffer.addVertex(pose, x3, y3, z3).setColor(color);
+        buffer.addVertex(pose, x4, y4, z4).setColor(color);
     }
 
     private static void line(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
