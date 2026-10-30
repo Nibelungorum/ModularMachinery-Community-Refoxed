@@ -26,6 +26,7 @@ import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.InstalledRecipeProgram;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.internal.runtime.RecipeCommitLedger;
+import cn.howxu.mmcr.internal.runtime.RecipeExecutionState;
 import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Acknowledgement;
 import cn.howxu.mmcr.internal.runtime.RecipeExecutionState.Receipt;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
@@ -116,6 +117,225 @@ class SharedIoCoordinatorTest {
         } finally {
             if (serverThreadScope != null) serverThreadScope.close();
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {19, 20, 21, 60})
+    void worker_progress_mirroring_uses_effective_duration_without_delaying_local_progress(int duration) throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, duration);
+        RecipeExecutionState confirmed = drainAndGetConfirmedState(fixture);
+        int steps = Math.min(duration - 1, 20);
+        for (int step = 1; step <= steps; step++) {
+            advanceInstalledStep(fixture);
+            assertThat(fixture.runtime().tickCount()).isEqualTo(step);
+            assertThat(fixture.shared().receiptsForTesting(fixture.runtime(), "base").getFirst().tick()).isEqualTo(step);
+            drainReceiptWorkers(fixture);
+            assertThat(confirmed.confirmedTick()).isEqualTo(duration <= 20 ? step : step / 20 * 20);
+            fixture.shared().resolvePost(fixture.level());
+            MachineAsyncCoordinator.get(fixture.level()).pumpReceiptDrains();
+            assertThat(fixture.workers()).isEmpty();
+        }
+        if (duration <= 21) {
+            advanceInstalledStep(fixture);
+            drainReceiptWorkers(fixture);
+            assertThat(fixture.runtime().active()).isFalse();
+            assertThat(confirmed.terminal()).isTrue();
+            assertThat(confirmed.confirmedTick()).isEqualTo(duration);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
+    void resource_free_post_grants_need_only_one_live_domain_validation(MachineWorkMode mode) throws Exception {
+        InstalledFixture fixture = installedFixture(mode, 60, 0L);
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        tickInstalledController(fixture.runtime(), fixture);
+        var domain = fixture.controller().resourceDomain();
+        long before = fixture.input().energyStorage().getAmountAsLong();
+        CountingDomainMap domains = countDomainLookups(StructureClaimRegistry.get(fixture.level()));
+
+        assertThat(resolveInstalledDomain(fixture, domain)).isEqualTo(1);
+
+        assertThat(domains.lookups).hasValue(1);
+        assertThat(fixture.runtime().tickCount()).isEqualTo(1);
+        assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before);
+        assertThat(resolveInstalledDomain(fixture, domain)).isZero();
+        assertThat(domains.lookups).hasValue(1);
+    }
+
+    @Test
+    void cancellation_mirrors_unpublished_progress_immediately() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 60);
+        RecipeExecutionState confirmed = drainAndGetConfirmedState(fixture);
+        advanceInstalledStep(fixture);
+        drainReceiptWorkers(fixture);
+        assertThat(confirmed.confirmedTick()).isZero();
+
+        fixture.runtime().invalidate();
+        fixture.shared().resolvePost(fixture.level());
+        drainReceiptWorkers(fixture);
+
+        assertThat(confirmed.terminal()).isTrue();
+        assertThat(confirmed.confirmedTick()).isEqualTo(1);
+        assertThat(confirmed.confirmedPaidAttempts()).isEqualTo(fixture.program().ledger().state().paidAttempts());
+    }
+
+    @Test
+    void failure_recovery_and_backward_progress_bypass_the_long_mirror_period() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 60);
+        RecipeExecutionState confirmed = drainAndGetConfirmedState(fixture);
+        fixture.input().energyStorage().setAmount(0L);
+        advanceInstalledStep(fixture);
+        drainReceiptWorkers(fixture);
+        assertThat(confirmed.failure()).isNotNull();
+        fixture.input().energyStorage().setAmount(1_000L);
+        advanceInstalledStep(fixture);
+        drainReceiptWorkers(fixture);
+        assertThat(confirmed.failure()).isNull();
+        assertThat(confirmed.confirmedTick()).isEqualTo(1);
+        advanceInstalledStep(fixture);
+        advanceInstalledStep(fixture);
+        drainReceiptWorkers(fixture);
+        assertThat(confirmed.confirmedTick()).isEqualTo(1);
+
+        fixture.runtime().activeRecipe().setTick(0);
+        advanceInstalledStep(fixture);
+        drainReceiptWorkers(fixture);
+
+        assertThat(confirmed.confirmedTick()).isEqualTo(1);
+        assertThat(confirmed.confirmedPaidAttempts()).isEqualTo(fixture.program().ledger().state().paidAttempts());
+    }
+
+    @Test
+    void a_long_game_time_jump_publishes_only_the_latest_running_fact() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 60, 0L);
+        RecipeExecutionState confirmed = drainAndGetConfirmedState(fixture);
+        advanceInstalledStep(fixture);
+        drainReceiptWorkers(fixture);
+        assertThat(confirmed.confirmedTick()).isZero();
+        for (int skipped = 0; skipped < 100; skipped++) RuntimeTestFixtures.advanceGameTime(fixture.level());
+
+        advanceInstalledStep(fixture);
+        MachineAsyncCoordinator.get(fixture.level()).pumpReceiptDrains();
+
+        assertThat(fixture.workers()).hasSize(1);
+        drainReceiptWorkers(fixture);
+        assertThat(confirmed.confirmedTick()).isEqualTo(2);
+        assertThat(fixture.runtime().tickCount()).isEqualTo(2);
+        assertThat(fixture.workers()).isEmpty();
+    }
+
+    @Test
+    void revision_replacement_mirrors_unpublished_progress_in_the_same_game_tick() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 60, 0L);
+        RecipeExecutionState confirmed = drainAndGetConfirmedState(fixture);
+        advanceInstalledStep(fixture);
+        drainReceiptWorkers(fixture);
+        assertThat(confirmed.confirmedTick()).isZero();
+        Receipt previous = fixture.shared().receiptsForTesting(fixture.runtime(), "base").getFirst();
+        InstalledRecipeProgram replacement = new InstalledRecipeProgram(fixture.program().identity(),
+                fixture.program().program(), fixture.runtime());
+        // A compiled replacement is the live owner binding before the coordinator swaps delivery revision.
+        Field installedField = CraftingRuntime.class.getDeclaredField("installedProgram");
+        installedField.setAccessible(true);
+        installedField.set(fixture.runtime(), replacement);
+
+        assertThat(fixture.shared().replaceExecution(replacement,
+                fixture.shared().controllerPermit(fixture.controller().getBlockPos()),
+                previous.installedRevision(), 2L)).isTrue();
+        drainReceiptWorkers(fixture);
+
+        assertThat(confirmed.confirmedTick()).isEqualTo(1);
+        assertThat(confirmed.consumedSequence()).isGreaterThan(previous.sequence());
+        assertThat(fixture.shared().receiptsForTesting(fixture.runtime(), "base").getFirst().installedRevision())
+                .isGreaterThan(previous.installedRevision());
+        assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
+        assertThat(replacement.current()).isTrue();
+    }
+
+    @Test
+    void acknowledged_slot_reuse_starts_a_new_mirror_period_and_rejects_the_old_ack() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 60, 0L);
+        RecipeExecutionState previous = drainAndGetConfirmedState(fixture);
+        for (int step = 0; step < 5; step++) advanceInstalledStep(fixture);
+        fixture.runtime().invalidate();
+        fixture.shared().resolvePost(fixture.level());
+        Receipt terminal = fixture.shared().receiptsForTesting(fixture.runtime(), "base").getFirst();
+        drainReceiptWorkers(fixture);
+        fixture.shared().drainReceiptAcknowledgements(fixture.level());
+        assertThat(previous.terminal()).isTrue();
+        assertThat(previous.confirmedTick()).isEqualTo(5);
+        assertThat(fixture.shared().reserveExecution(fixture.runtime(), "base")).isTrue();
+        assertThat(fixture.runtime().start(fixture.recipe(), 1L).isCrafting()).isTrue();
+        InstalledRecipeProgram replacement = fixture.runtime().ensureInstalledProgram();
+        assertThat(fixture.shared().install(replacement,
+                fixture.shared().controllerPermit(fixture.controller().getBlockPos()))).isTrue();
+        RecipeExecutionState current = drainAndGetConfirmedState(fixture);
+        assertThat(current.confirmedTick()).isZero();
+        assertThat(current.failure()).isNull();
+
+        for (int step = 1; step <= 20; step++) {
+            advanceInstalledStep(fixture);
+            drainReceiptWorkers(fixture);
+            assertThat(fixture.runtime().tickCount()).isEqualTo(step);
+            assertThat(current.confirmedTick()).isEqualTo(step < 20 ? 0 : 20);
+        }
+        assertThat(fixture.shared().acknowledgeReceipt(new Acknowledgement(terminal.identity(),
+                terminal.installedRevision(), terminal.sequence()))).isFalse();
+        assertThat(replacement.current()).isTrue();
+    }
+
+    @Test
+    void detaching_an_installed_controller_still_publishes_terminal_facts_without_charging() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 60, 0L);
+        RecipeExecutionState confirmed = drainAndGetConfirmedState(fixture);
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        tickInstalledController(fixture.runtime(), fixture);
+        fixture.controller().setLevel(null);
+
+        assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
+        drainReceiptWorkers(fixture);
+
+        assertThat(confirmed.terminal()).isTrue();
+        assertThat(fixture.runtime().tickCount()).isZero();
+    }
+
+    @Test
+    void changed_effective_duration_uses_short_mirroring_without_waiting_for_the_original_period() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 60);
+        RecipeExecutionState confirmed = drainAndGetConfirmedState(fixture);
+        fixture.runtime().activeRecipe().setTotalTick(20);
+        advanceInstalledStep(fixture);
+        drainReceiptWorkers(fixture);
+        assertThat(confirmed.confirmedTick()).isEqualTo(1);
+    }
+
+    private void advanceInstalledStep(InstalledFixture fixture) {
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        tickInstalledController(fixture.runtime(), fixture);
+        fixture.shared().resolvePost(fixture.level());
+    }
+
+    private static void drainReceiptWorkers(InstalledFixture fixture) {
+        MachineAsyncCoordinator.get(fixture.level()).pumpReceiptDrains();
+        while (!fixture.workers().isEmpty()) fixture.workers().removeFirst().run();
+    }
+
+    private static RecipeExecutionState drainAndGetConfirmedState(InstalledFixture fixture) throws Exception {
+        drainReceiptWorkers(fixture);
+        var drainsField = MachineAsyncCoordinator.class.getDeclaredField("receiptDrains");
+        drainsField.setAccessible(true);
+        Map<?, ?> drains = (Map<?, ?>) drainsField.get(MachineAsyncCoordinator.get(fixture.level()));
+        Object drain = drains.values().iterator().next();
+        var mailboxesField = drain.getClass().getDeclaredField("mailboxes");
+        mailboxesField.setAccessible(true);
+        Object mailbox = ((Map<?, ?>) mailboxesField.get(drain)).get(fixture.runtime().installedProgram().identity());
+        var stateField = mailbox.getClass().getDeclaredField("state");
+        stateField.setAccessible(true);
+        return (RecipeExecutionState) stateField.get(mailbox);
     }
 
     @ParameterizedTest
@@ -1295,6 +1515,30 @@ class SharedIoCoordinatorTest {
         assertThat(secondRuntime.tickCount()).isEqualTo(2);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
+    void invalid_candidate_is_terminated_without_consuming_the_valid_lanes_only_budget(MachineWorkMode mode) {
+        InstalledFixture fixture = installedFixture(mode, 40, 7L, 1);
+        CraftingRuntime second = attachSecondInstalledController(fixture);
+        ExecutionIdentity invalid = fixture.runtime().installedProgram().identity();
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        tickInstalledController(fixture.runtime(), fixture);
+        tickInstalledController(second, fixture);
+        fixture.controller().componentRuntime().replaceComponents(List.of());
+        long before = fixture.input().energyStorage().getAmountAsLong();
+
+        assertThat(fixture.shared().resolvePost(fixture.level())).isEqualTo(1);
+
+        assertThat(fixture.runtime().tickCount()).isZero();
+        assertThat(second.tickCount()).isEqualTo(1);
+        assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L);
+        assertThat(fixture.shared().receiptsForTesting(fixture.runtime(), "base"))
+                .filteredOn(receipt -> receipt.identity().equals(invalid)).singleElement()
+                .satisfies(receipt -> assertThat(receipt.terminal()).isTrue());
+        assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
+    }
+
     private CraftingRuntime attachSecondInstalledController(InstalledFixture fixture) {
         return attachInstalledController(fixture, new BlockPos(10, 0, 0), fixture.input(), true);
     }
@@ -1514,7 +1758,7 @@ class SharedIoCoordinatorTest {
         input.energyStorage().setAmount(1_000L);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("installed_shared_" + mode.name().toLowerCase()),
                 MMCR.id("test_cube"), duration,
-                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, energy)), finishOutput
+                energy == 0L ? List.of() : List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, energy)), finishOutput
                         ? List.of(new MachineOutput.ItemOutput(new ItemStack(Items.IRON_NUGGET), 1.0F)) : List.of());
         assertThat(shared.reserveExecution(runtime, "base")).isTrue();
         runtime.start(recipe, 1L);

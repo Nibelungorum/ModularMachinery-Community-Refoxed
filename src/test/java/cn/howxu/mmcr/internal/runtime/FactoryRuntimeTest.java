@@ -458,6 +458,50 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void progress_notification_refreshes_projection_without_dirtying_failure_or_accounting() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        MachineControllerBlockEntity controller = asyncFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        FactoryRuntime runtime = controllerFactoryRuntime(controller);
+        runtime.ensureBaseLane(controller);
+        runtime.setLaneLimit(4);
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_progress_notification"), MMCR.id("test_cube"),
+                40, List.of(), List.of(), List.of(), 0, 4);
+        runtime.tick(List.of(recipe), 1L, 0L);
+        FactorySnapshot before = runtime.snapshot();
+        int accounting = runtime.accountingUpdatesForTesting();
+        int aggregations = runtime.failureAggregationsForTesting();
+        CraftingRuntime lane = runtime.activeRuntimes().getFirst();
+        lane.activeRecipe().setTick(lane.tickCount() + 1);
+
+        assertThat(runtime.markLaneProgressChanged(lane)).isTrue();
+        controller.syncRecipeRuntimeProgress(lane);
+
+        assertThat(runtime.failureAggregationsForTesting()).isEqualTo(aggregations);
+        var dirtyField = FactoryRuntime.class.getDeclaredField("failureDirty");
+        dirtyField.setAccessible(true);
+        assertThat(dirtyField.getBoolean(runtime)).isFalse();
+        assertThat(runtime.accountingUpdatesForTesting()).isEqualTo(accounting);
+        assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(4);
+        FactorySnapshot after = runtime.snapshot();
+        assertThat(after.lanes().getFirst().tick()).isEqualTo(before.lanes().getFirst().tick() + 1);
+        for (int index = 1; index < 4; index++) {
+            assertThat(after.lanes().get(index)).isSameAs(before.lanes().get(index));
+        }
+
+        ExecutionStatus blocked = ExecutionStatus.blocked(MMCR.id("progress_recovery"), MMCR.id("test"),
+                FailureOccurrence.at(BuiltinFailureReasons.PER_TICK, MMCR.id("test"), FailurePhase.PER_TICK,
+                        recipe.id(), null, Map.of()));
+        lane.handleCapabilityTickResult(new CapabilityTickResult(List.of(), blocked, false));
+        assertThat(runtime.failure()).isEqualTo(blocked);
+        // Recovery may happen during BE preparation, before Post observes previousFailure.
+        lane.handleCapabilityTickResult(CapabilityTickResult.empty());
+        controller.syncRecipeRuntimeProgress(lane);
+        assertThat(runtime.failure()).isNull();
+        assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(4);
+    }
+
+    @Test
     void cancelling_one_attached_lane_updates_recipe_limits_once_without_recounting_other_lanes() {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
         MachineControllerBlockEntity controller = asyncFactoryController(

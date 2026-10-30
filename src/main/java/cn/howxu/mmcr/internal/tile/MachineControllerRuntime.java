@@ -312,6 +312,20 @@ public final class MachineControllerRuntime {
         return structure.snapshot();
     }
 
+    long structureVersion() {
+        return structure.version();
+    }
+
+    boolean executionStructureCurrent(long version) {
+        return structure.formed() && structure.structureAreaLoaded() && structure.version() == version;
+    }
+
+    /** Execution metadata must not require a structure presentation projection. */
+    @Nullable Machine recipeMachine() {
+        Machine found = structure.foundMachine();
+        return found == null ? structure.machine() : found;
+    }
+
     public void beginUpdateBatch() {
         if (snapshotBatchDepth++ == 0) snapshotBuildCountForTesting = 0;
     }

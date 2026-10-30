@@ -36,6 +36,7 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -533,10 +534,9 @@ public final class SharedIoCoordinator {
                                    MachineControllerBlockEntity controller) {
         InstalledRecipeProgram execution = slot.execution;
         VersionStamp versions = execution.program().versions();
-        return controller.getLevel() == level && !controller.isRemoved() && owner.active()
-                && execution.current() && controller.lifecycleEpoch() == execution.identity().lifecycleEpoch()
-                && controller.currentStructureSnapshot().formed() && controller.currentStructureSnapshot().structureAreaLoaded()
-                && controller.currentStructureSnapshot().version() == versions.structure()
+        if (controller.getLevel() != level || controller.isRemoved() || !owner.active()
+                || !execution.current() || controller.lifecycleEpoch() != execution.identity().lifecycleEpoch()) return false;
+        return controller.executionStructureCurrent(versions.structure())
                 && controller.componentRuntime().capabilityVersion() == versions.capability()
                 && owner.activeRecipe().effectiveExecutionRevision() == versions.effective()
                 // current() already checks the live recipe pool/catalog and captured resource domain.
@@ -569,33 +569,48 @@ public final class SharedIoCoordinator {
                 || slot.waiting || gameTime < slot.retryAt
                 || (mode == MachineWorkMode.SYNC) != sync
                 || sync && slot.synchronousRound != executionRoundId) return false;
-        if (!validExecution(slot, level, owner, controller)) {
+        if (controller.isRemoved() || controller.getLevel() != level) {
             terminateExecution(slot);
             return false;
         }
-        if (execution.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED) return false;
-        if (owner.finishPending() && !execution.finishAttemptReady()) return false;
-        return currentPermit(controller, slot.permit, level);
+        if (execution.ledger().state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED
+                || owner.finishPending() && !execution.finishRetryReady()) {
+            // Blocked lifecycle work still observes invalidation, but ordinary selection is metadata-only.
+            if (!validExecution(slot, level, owner, controller)) terminateExecution(slot);
+            return false;
+        }
+        return true;
     }
 
     private boolean attemptExecution(ExecutionSlot slot, ServerLevel level) {
         InstalledRecipeProgram execution = slot.execution;
-        slot.lane.lastAttemptRound = executionRoundId;
-        slot.lane.lastAttemptTime = level.getGameTime();
-        if (!execution.tryAttempt(executionRoundId, level.getGameTime())) return false;
-        remainingRequests--;
-        installedAttempts++;
+        CraftingRuntime owner = execution.owner();
+        MachineControllerBlockEntity controller = owner.controller();
+        MachineWorkMode mode = controller.activeWorkMode();
+        long sourceRevision = controller.componentRuntime().capabilityContentRevision();
         DomainBucket bucket = domains.get(slot.domain);
         if (bucket != null) bucket.removePending(slot);
+        if (!currentPermit(controller, slot.permit, level)) return false;
+        // Full admission happens once, after permit/world queries and before any claim or budget charge.
+        if (!validExecution(slot, level, owner, controller)) {
+            terminateExecution(slot);
+            return false;
+        }
+        slot.lane.lastAttemptRound = executionRoundId;
+        slot.lane.lastAttemptTime = level.getGameTime();
+        if (!execution.tryQualifiedAttempt(executionRoundId, level.getGameTime())) return false;
+        remainingRequests--;
+        installedAttempts++;
         // SYNC cursors already advanced in grant order, independently of the actual BE order.
-        if (execution.owner().controller().activeWorkMode() != MachineWorkMode.SYNC) {
+        if (mode != MachineWorkMode.SYNC) {
             domainCursor = slot.domain;
             if (bucket != null) bucket.markAttempted(RequestType.TICK, slot.lane.key);
         }
-        long sourceRevision = execution.owner().controller().componentRuntime().capabilityContentRevision();
         boolean advanced = false;
         try {
-            advanced = execution.advance();
+            // Only local cursor bookkeeping separates qualification and advancement. Native/callback
+            // boundaries inside the runtime retain their own fresh live checks.
+            advanced = execution.advanceQualified();
         } catch (RuntimeException exception) {
             // The runtime handles ordinary rejection itself. An escaped callback/notification error
             // must neither abort other lanes nor replay an uncertain resource/lifecycle phase.
@@ -657,14 +672,28 @@ public final class SharedIoCoordinator {
     private void publishExecution(ExecutionSlot slot, boolean terminal) {
         RecipeCommitLedger.State state = slot.ledger.state();
         boolean ownsCurrentState = slot.acceptedOwner.ledger() == slot.ledger;
-        ExecutionStatus failure = ownsCurrentState ? slot.acceptedOwner.failure()
-                : slot.receipt == null ? null : slot.receipt.failure();
-        slot.receipt = new Receipt(slot.identity, slot.revision,
-                slot.receipt == null ? 0L : slot.receipt.sequence() + 1L,
-                slot.recipe.getTick(),
-                state.paidAttempts(), terminal, failure);
+        ExecutionStatus failure = ownsCurrentState ? slot.acceptedOwner.failure() : slot.observedFailure;
+        int tick = slot.recipe.getTick();
+        boolean urgent = terminal || slot.receipt == null || slot.lastMirrorRevision != slot.revision
+                || !Objects.equals(failure, slot.observedFailure) || tick < slot.observedTick;
+        // Observe every attempt, including skipped mirrors: a regression is relative to local progress.
+        slot.observedTick = tick;
+        slot.observedPaidAttempts = state.paidAttempts();
+        slot.observedFailure = failure;
+        slot.receiptSequence++;
         ServerLevel level = slot.level.get();
-        if (level != null) MachineAsyncCoordinator.get(level).publishReceipt(slot.receiptDomain, slot.receipt);
+        long gameTime = level == null ? Long.MIN_VALUE : level.getGameTime();
+        boolean due = slot.recipe.getTotalTick() <= 20
+                ? gameTime != slot.lastMirrorGameTime
+                : gameTime < slot.lastMirrorGameTime || gameTime - slot.lastMirrorGameTime >= 20L;
+        if (!urgent && !due) return;
+        slot.receipt = new Receipt(slot.identity, slot.revision, slot.receiptSequence,
+                tick, state.paidAttempts(), terminal, failure);
+        if (level != null) {
+            MachineAsyncCoordinator.get(level).publishReceipt(slot.receiptDomain, slot.receipt);
+            slot.lastMirrorGameTime = gameTime;
+            slot.lastMirrorRevision = slot.revision;
+        }
     }
 
     private void terminateExecution(ExecutionSlot slot) {
@@ -817,7 +846,10 @@ public final class SharedIoCoordinator {
         if (records == null) return List.of();
         List<Receipt> result = new ArrayList<>(2);
         for (LaneRecords lane : records) for (ExecutionSlot slot : lane.slots) {
-            if (slot.receipt != null && slot.receipt.identity().laneId().equals(laneId)) result.add(slot.receipt);
+            if (slot.receipt != null && slot.receipt.identity().laneId().equals(laneId)) {
+                result.add(slot.acceptedOwner == null ? slot.receipt : new Receipt(slot.identity, slot.revision,
+                        slot.receiptSequence, slot.observedTick, slot.observedPaidAttempts, false, slot.observedFailure));
+            }
         }
         return List.copyOf(result);
     }
@@ -875,6 +907,12 @@ public final class SharedIoCoordinator {
         private WeakReference<ServerLevel> level;
         private long revision;
         private Receipt receipt;
+        private long receiptSequence = -1L;
+        private int observedTick;
+        private long observedPaidAttempts;
+        private ExecutionStatus observedFailure;
+        private long lastMirrorGameTime = Long.MIN_VALUE;
+        private long lastMirrorRevision = Long.MIN_VALUE;
         private boolean waiting;
         private long retryAt;
         private long sourceRevision;
@@ -886,6 +924,12 @@ public final class SharedIoCoordinator {
         private ExecutionSlot(LaneRecords lane) { this.lane = lane; }
 
         private void resetExecutionState() {
+            receiptSequence = -1L;
+            observedTick = 0;
+            observedPaidAttempts = 0L;
+            observedFailure = null;
+            lastMirrorGameTime = Long.MIN_VALUE;
+            lastMirrorRevision = Long.MIN_VALUE;
             waiting = false;
             retryAt = 0L;
             sourceRevision = 0L;

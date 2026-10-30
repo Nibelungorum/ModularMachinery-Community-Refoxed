@@ -3201,6 +3201,32 @@ class MachineControllerBlockEntityTest {
         assertThat(craftingRuntime.active()).isFalse();
     }
 
+    @Test
+    void recipe_pool_lookup_does_not_rebuild_an_invalidated_structure_projection() throws Exception {
+        ResourceLocation machineId = MMCR.id("pool_without_structure_projection");
+        ResourceLocation pool = MMCR.id("pool_without_structure_projection_recipes");
+        MachineControllerBlockEntity controller = recipePoolController(machineId, pool);
+        CraftingRuntime crafting = controllerRuntime(controller).craftingRuntime();
+        MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("raw_structure_validation"), pool, 40, List.of(), List.of());
+        assertThat(crafting.start(recipe, 1L).isCrafting()).isTrue();
+        var previous = controller.currentStructureSnapshot();
+        var structureField = MachineControllerRuntime.class.getDeclaredField("structure");
+        structureField.setAccessible(true);
+        StructureRuntime structure = (StructureRuntime) structureField.get(controllerRuntime(controller));
+        var cacheField = StructureRuntime.class.getDeclaredField("cachedSnapshot");
+        cacheField.setAccessible(true);
+        structure.setDirty(!previous.dirty());
+
+        assertThat(controller.currentRecipePoolId()).isEqualTo(pool);
+        assertThat(controller.supportedRecipePoolIds()).containsExactly(pool);
+        assertThat(crafting.versionsCurrent()).isTrue();
+        assertThat(controller.currentStructureVersion()).isEqualTo(previous.version());
+        assertThat(controller.executionStructureCurrent(previous.version()))
+                .isEqualTo(previous.formed() && previous.structureAreaLoaded());
+        assertThat(cacheField.get(structure)).isSameAs(previous);
+        assertThat(controller.currentStructureSnapshot()).isNotSameAs(previous);
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void mutable_recipe_pool_override_observes_in_place_removal_and_discards_old_work(boolean unmodifiableView) {

@@ -119,9 +119,17 @@ public final class InstalledRecipeProgram {
 
     /** The coordinator may charge a finish-only attempt only after the existing retry gate opens. */
     public boolean finishAttemptReady() {
-        return ledger.state().phase() == RecipeCommitLedger.Phase.WAITING_FINISH
-                && ledger.state().finalTickPaid() && owner.finishPending() && finishReady() && owner.shouldRetryFinish();
+        return finishRetryReady() && current();
     }
+
+    /** Cheap phase/retry selection only; callers must still validate the live binding before execution. */
+    public boolean finishRetryReady() {
+        return ledger.state().phase() == RecipeCommitLedger.Phase.WAITING_FINISH
+                && ledger.state().finalTickPaid() && owner.finishPending() && !ledger.state().outputPaid()
+                && owner.shouldRetryFinish();
+    }
+
+    boolean hasNoContinuousRequirements() { return continuousRequirements.isEmpty(); }
 
     CraftingContext planningContext() { return planningContext; }
 
@@ -129,8 +137,18 @@ public final class InstalledRecipeProgram {
     @Nullable List<MachineRequirement> finishRequirements() { return finishRequirements; }
 
     public boolean tryAttempt(long roundId, long gameTime) {
+        return tryAttempt(roundId, gameTime, false);
+    }
+
+    /** Coordinator-only claim immediately after full live admission, without an external call in between. */
+    public boolean tryQualifiedAttempt(long roundId, long gameTime) {
+        return tryAttempt(roundId, gameTime, true);
+    }
+
+    private boolean tryAttempt(long roundId, long gameTime, boolean currentValidated) {
         if (lastAttemptRound == roundId || lastAttemptGameTime == gameTime
-                || ledger.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED || !current()
+                || ledger.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED
+                || !currentValidated && !current()
                 || !owner.finishPending() && owner.controller().activeWorkMode() != MachineWorkMode.SYNC
                 && !owner.installedPreparationCurrent(roundId, gameTime)
                 || !owner.claimInstalledAttempt(gameTime)) return false;
@@ -183,7 +201,10 @@ public final class InstalledRecipeProgram {
     }
 
     /** One already-qualified, already-charged attempt; never calls tryAttempt again. */
-    public boolean advance() { return !cancelled && owner.advanceInstalled(this); }
+    public boolean advance() { return !cancelled && owner.advanceInstalled(this, false); }
+
+    /** Same main-thread admission, with no intervening external call. */
+    public boolean advanceQualified() { return !cancelled && owner.advanceInstalled(this, true); }
 
     public void cancel() {
         if (cancelled) return;

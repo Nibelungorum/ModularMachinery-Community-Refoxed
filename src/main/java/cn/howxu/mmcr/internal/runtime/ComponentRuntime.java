@@ -269,6 +269,11 @@ public final class ComponentRuntime {
         stateVersion++;
     }
 
+    /** Only closed built-ins can guarantee that later live queries cannot expose a tick facet. */
+    boolean tickFacetsKnownAbsent() {
+        return customFacetCandidates.isEmpty();
+    }
+
     /** Candidate membership is refreshed on every replacement; custom facets are queried live. */
     public boolean hasTickFacets() {
         for (MachineCapability capability : customFacetCandidates) {

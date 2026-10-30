@@ -43,6 +43,26 @@ class RecipeCommitLedgerTest {
     }
 
     @Test
+    void no_effects_intermediate_grants_match_native_empty_grants_and_reload() {
+        RecipeCommitLedger ordinary = new RecipeCommitLedger();
+        RecipeCommitLedger lightweight = new RecipeCommitLedger();
+        for (int tick = 1; tick <= 4; tick++) {
+            RecipeCommitLedger.State previous = lightweight.state();
+            ordinary.beginNativeExecution();
+            ordinary.markResourcePaid(tick - 1, false);
+            ordinary.settleTick(tick, false);
+            lightweight.settleNoEffectsTick(tick);
+
+            assertThat(lightweight.state()).isEqualTo(ordinary.state());
+            assertThat(previous.tick()).isEqualTo(tick - 1);
+            assertThat(save(lightweight)).isEqualTo(save(ordinary));
+            RecipeCommitLedger restored = new RecipeCommitLedger();
+            assertThat(load(restored, save(lightweight), tick, false)).isTrue();
+            assertThat(restored.state()).isEqualTo(lightweight.state());
+        }
+    }
+
+    @Test
     void repeated_settlement_reuses_state_without_changing_payment_facts() {
         LongValueStorage storage = chargedStorage(null);
         RecipeCommitLedger ledger = new RecipeCommitLedger();

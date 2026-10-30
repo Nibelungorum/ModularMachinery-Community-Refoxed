@@ -190,6 +190,7 @@ class ComponentRuntimeTest {
         ProcessingComponent component = component(new TestCapabilityHost(List.of(capability)), "tick");
         runtime.replaceComponents(List.of(component));
         long version = runtime.capabilityVersion();
+        assertThat(runtime.tickFacetsKnownAbsent()).isFalse();
         CraftingRuntime crafting = new CraftingRuntime(controller, runtime);
         for (int index = 0; index < 10; index++) {
             assertThat(runtime.hasTickFacets()).isFalse();
@@ -213,6 +214,7 @@ class ComponentRuntimeTest {
         assertThat(runtime.hasTickFacets()).isTrue();
         runtime.clear();
         assertThat(runtime.hasTickFacets()).isFalse();
+        assertThat(runtime.tickFacetsKnownAbsent()).isTrue();
         int reads = capability.tickFacetReads;
         crafting.tickIdle();
         assertThat(capability.tickFacetReads).isEqualTo(reads);

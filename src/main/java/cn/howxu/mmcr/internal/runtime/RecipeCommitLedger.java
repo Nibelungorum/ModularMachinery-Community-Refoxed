@@ -58,6 +58,11 @@ public final class RecipeCommitLedger {
                 tick, finalTickPaid, false);
     }
 
+    /** Equivalent to an empty native batch followed by a non-final grant, with no external boundary. */
+    void settleNoEffectsTick(int tick) {
+        state = new State(Phase.READY, state.sequence() + 2L, state.paidAttempts() + 1L, tick, false, false);
+    }
+
     public void markOutputPaid() {
         boolean alreadyPaid = state.outputPaid();
         state = new State(Phase.TERMINAL, state.sequence() + 1, state.paidAttempts(),
