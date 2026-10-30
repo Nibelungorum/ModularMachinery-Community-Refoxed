@@ -12,6 +12,7 @@ import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -30,6 +31,8 @@ import org.joml.Vector3f;
 public final class MultiblockDetectorSelectionRenderer {
 
     private static final int GREEN = 0xFF00FF00;
+    private static final int CONTROLLER_RED = 0x66FF0000;
+    private static final int CONTROLLER_YELLOW = 0x66FFFF00;
     private MultiblockDetectorSelectionRenderer() {}
 
     @SubscribeEvent
@@ -43,6 +46,14 @@ public final class MultiblockDetectorSelectionRenderer {
         if (detector.isEmpty()) return;
 
         MultiblockDetectorSelection selection = MultiblockDetectorItem.selection(detector);
+        Vec3 camera = event.getCamera().getPosition();
+        PoseStack poseStack = event.getPoseStack();
+        MultiBufferSource.BufferSource buffer = minecraft.renderBuffers().bufferSource();
+        if (selection.controllerPos() != null && selection.controllerFace() != null) {
+            // In 1.21.1 debugFilledBox uses TRIANGLE_STRIP, not independent quads.
+            renderControllerFaces(poseStack.last(), buffer.getBuffer(RenderType.debugQuads()), camera, selection);
+            buffer.endBatch(RenderType.debugQuads());
+        }
         if (selection.firstPos() == null || selection.secondPos() == null) return;
 
         BlockPos first = selection.firstPos();
@@ -53,9 +64,6 @@ public final class MultiblockDetectorSelectionRenderer {
         double maxX = Math.max(first.getX(), second.getX()) + 1.0D;
         double maxY = Math.max(first.getY(), second.getY()) + 1.0D;
         double maxZ = Math.max(first.getZ(), second.getZ()) + 1.0D;
-        Vec3 camera = event.getCamera().getPosition();
-        PoseStack poseStack = event.getPoseStack();
-        MultiBufferSource.BufferSource buffer = minecraft.renderBuffers().bufferSource();
 
         renderBoxEdges(poseStack.last(), buffer.getBuffer(RenderType.lines()), camera,
                 minX, minY, minZ, maxX, maxY, maxZ);
@@ -94,6 +102,41 @@ public final class MultiblockDetectorSelectionRenderer {
         line(pose, buffer, camera, maxX, minY, minZ, maxX, minY, maxZ);
         line(pose, buffer, camera, minX, maxY, minZ, minX, maxY, maxZ);
         line(pose, buffer, camera, maxX, maxY, minZ, maxX, maxY, maxZ);
+    }
+
+    static void renderControllerFaces(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
+            MultiblockDetectorSelection selection) {
+        BlockPos pos = selection.controllerPos();
+        Direction selectedFace = selection.controllerFace();
+        if (pos == null || selectedFace == null) return;
+        // Keep the overlay just outside the block and any coincident export-region mask.
+        double padding = 0.002D;
+        float x1 = (float) (pos.getX() - padding - camera.x());
+        float y1 = (float) (pos.getY() - padding - camera.y());
+        float z1 = (float) (pos.getZ() - padding - camera.z());
+        float x2 = (float) (pos.getX() + 1.0D + padding - camera.x());
+        float y2 = (float) (pos.getY() + 1.0D + padding - camera.y());
+        float z2 = (float) (pos.getZ() + 1.0D + padding - camera.z());
+
+        face(pose, buffer, faceColor(Direction.NORTH, selectedFace), x1, y2, z1, x2, y2, z1, x2, y1, z1, x1, y1, z1);
+        face(pose, buffer, faceColor(Direction.SOUTH, selectedFace), x2, y2, z2, x1, y2, z2, x1, y1, z2, x2, y1, z2);
+        face(pose, buffer, faceColor(Direction.WEST, selectedFace), x1, y2, z2, x1, y2, z1, x1, y1, z1, x1, y1, z2);
+        face(pose, buffer, faceColor(Direction.EAST, selectedFace), x2, y2, z1, x2, y2, z2, x2, y1, z2, x2, y1, z1);
+        face(pose, buffer, faceColor(Direction.UP, selectedFace), x1, y2, z2, x2, y2, z2, x2, y2, z1, x1, y2, z1);
+        face(pose, buffer, faceColor(Direction.DOWN, selectedFace), x1, y1, z1, x2, y1, z1, x2, y1, z2, x1, y1, z2);
+    }
+
+    private static int faceColor(Direction face, Direction selectedFace) {
+        return face == selectedFace ? CONTROLLER_RED : CONTROLLER_YELLOW;
+    }
+
+    private static void face(PoseStack.Pose pose, VertexConsumer buffer, int color,
+            float x1, float y1, float z1, float x2, float y2, float z2,
+            float x3, float y3, float z3, float x4, float y4, float z4) {
+        buffer.addVertex(pose, x1, y1, z1).setColor(color);
+        buffer.addVertex(pose, x2, y2, z2).setColor(color);
+        buffer.addVertex(pose, x3, y3, z3).setColor(color);
+        buffer.addVertex(pose, x4, y4, z4).setColor(color);
     }
 
     private static void renderBoxFaces(PoseStack poseStack, VertexConsumer buffer, Vec3 camera,

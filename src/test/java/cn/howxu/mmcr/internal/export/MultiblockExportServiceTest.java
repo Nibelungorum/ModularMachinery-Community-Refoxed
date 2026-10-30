@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -33,6 +34,20 @@ class MultiblockExportServiceTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void both_formats_use_the_selected_controllers_full_block_id() {
+        var controllerId = ResourceLocation.parse("custom:machines/crusher");
+        var entries = List.of(
+                new MultiblockExportService.SnapshotEntry(new BlockPos(1, 0, 0),
+                        ResourceLocation.parse("minecraft:stone"), false),
+                new MultiblockExportService.SnapshotEntry(BlockPos.ZERO, controllerId, false, true));
+
+        assertThat(MultiblockExportService.renderJava(entries, Direction.SOUTH))
+                .contains("var id = ResourceLocation.parse(\"custom:machines/crusher\");");
+        assertThat(MultiblockExportService.renderKubeJS(entries, Direction.SOUTH))
+                .contains("event.createStructure(\"custom:machines/crusher\")");
     }
 
     @Test

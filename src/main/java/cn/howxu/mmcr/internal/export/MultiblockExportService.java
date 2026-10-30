@@ -67,7 +67,7 @@ public final class MultiblockExportService {
                 .append("public class ExportedStructure {").append(lineSeparator)
                 .append(lineSeparator)
                 .append("    public static void register(RegisterMachineStructuresEvent event) {").append(lineSeparator)
-                .append("        var id = ResourceLocation.parse(\"mmcr:exported_structure\");").append(lineSeparator)
+                .append("        var id = ResourceLocation.parse(\"").append(prepared.controllerId()).append("\");").append(lineSeparator)
                 .append("        var structure = Structures").append(lineSeparator)
                 .append("                .structure()").append(lineSeparator)
                 .append("                .fullStructure(s -> s").append(lineSeparator)
@@ -97,7 +97,7 @@ public final class MultiblockExportService {
         String lineSeparator = System.lineSeparator();
         StringBuilder out = new StringBuilder("MMCREvents.server(event => {").append(lineSeparator)
                 .append("    const api = event.getAPI()").append(lineSeparator)
-                .append("    const structure = event.createStructure(\"mmcr_kubejs:exported_structure\")").append(lineSeparator);
+                .append("    const structure = event.createStructure(\"").append(prepared.controllerId()).append("\")").append(lineSeparator);
         appendLayers(out, prepared, null, "        ");
         for (Map.Entry<PredicateKey, Character> symbol : prepared.symbols().entrySet()) {
             if (symbol.getValue() == 'C') continue;
@@ -324,7 +324,11 @@ public final class MultiblockExportService {
 
     private record RenderedEntry(BlockPos pos, PredicateKey predicate, boolean controller) {}
 
-    private record PreparedExport(List<RenderedEntry> rendered, LinkedHashMap<PredicateKey, Character> symbols) {}
+    private record PreparedExport(List<RenderedEntry> rendered, LinkedHashMap<PredicateKey, Character> symbols) {
+        private ResourceLocation controllerId() {
+            return rendered.stream().filter(RenderedEntry::controller).findFirst().orElseThrow().predicate().blockId();
+        }
+    }
 
     private static final class ExportThreadFactory implements ThreadFactory {
         @Override
