@@ -142,7 +142,7 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
-    void factory_rotates_directional_state_with_the_corrected_controller_facing() {
+    void factory_preserves_compiled_directional_states_with_an_asymmetric_structure() {
         ResourceLocation machineId = MMCR.id("directional_preview");
         BlockState southFacing = Blocks.DISPENSER.defaultBlockState()
                 .setValue(DirectionalBlock.FACING, Direction.SOUTH);
@@ -152,11 +152,15 @@ class StructurePreviewSchemaFactoryTest {
         MachineStructureStage stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
 
-        StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, machineId, Direction.EAST);
+        for (Direction facing : Direction.values()) {
+            StructurePreviewSchema schema = new StructurePreviewSchemaFactory().create(stage, machineId, facing);
+            BlockPos position = BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), facing);
+            BlockPredicate.OfBlockState expected = (BlockPredicate.OfBlockState)
+                    BlockArrayCache.get(pattern, facing).pattern().get(position);
 
-        assertThat(schema.stateAt(BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), Direction.EAST)))
-                .extracting(state -> state.getValue(DirectionalBlock.FACING))
-                .isEqualTo(Direction.SOUTH);
+            assertThat(schema.stateAt(BlockPos.ZERO).getValue(MachineControllerBlock.FACING)).isEqualTo(facing);
+            assertThat(schema.stateAt(position)).isEqualTo(expected.state());
+        }
     }
 
     @Test
@@ -659,6 +663,36 @@ class StructurePreviewSchemaFactoryTest {
             expectedPattern.pattern().forEach((position, predicate) -> {
                 if (predicate instanceof BlockPredicate.OfBlockState state) {
                     assertThat(schema.stateAt(position)).isEqualTo(state.state());
+                }
+            });
+        }
+    }
+
+    @Test
+    void asymmetric_exported_structure_keeps_controller_facing_consistent_with_the_template() {
+        BlockArray pattern = BlockArray.builder()
+                .pattern("XXX", "XXX", "XXX", "XXX", "XXX", "XXX", "XXX")
+                .pattern("XXX", "XXX", "XXX", "XCX", "XXX", "XXX", "XXX")
+                .pattern("XXX", "XXX", "   ", "   ", "   ", "XXX", "XXX")
+                .pattern("XXX", "XXX", " X ", " X ", " X ", "XXX", "XXX")
+                .pattern("XXX", "XXX", "   ", "   ", "   ", "XXX", "XXX")
+                .set('X', new BlockPredicate.OfBlock(Blocks.BRICKS))
+                .set('C', new BlockPredicate.OfBlock(ModBlocks.controllerFor(MMCR.id("test_cube")).get()))
+                .controller('C').build();
+        DynamicMachine machine = new DynamicMachine(MMCR.id("asymmetric_export_preview"), "machine.preview", pattern);
+        StructurePreviewSchemaFactory factory = new StructurePreviewSchemaFactory();
+
+        assertThat(factory.create(machine).stateAt(BlockPos.ZERO).getValue(MachineControllerBlock.FACING))
+                .isEqualTo(Direction.SOUTH);
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            StructurePreviewSchema schema = factory.create(machine.structureStages().getFirst(), machine.registryName(), facing);
+
+            assertThat(schema.stateAt(BlockPos.ZERO).getValue(MachineControllerBlock.FACING)).isEqualTo(facing);
+            assertThat(schema.states().keySet()).containsExactlyInAnyOrderElementsOf(
+                    BlockArrayCache.get(pattern, facing).pattern().keySet());
+            schema.states().forEach((position, state) -> {
+                if (!position.equals(BlockPos.ZERO)) {
+                    assertThat(state).isEqualTo(Blocks.BRICKS.defaultBlockState());
                 }
             });
         }

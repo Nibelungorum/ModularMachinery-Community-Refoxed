@@ -101,8 +101,6 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Map<BlockPredicate, Boolean> interfaceCache = new HashMap<>();
         int levelRank = highestSharedLevelRank(stage);
         Map<BlockPos, BlockPredicate> pattern = rotatedPattern.pattern();
-        boolean hasController = hasController(pattern);
-        Direction correctedFacing = hasController ? correctedControllerFacing(pattern) : null;
         for (var entry : pattern.entrySet()) {
             BlockPos position = entry.getKey().immutable();
             ResourceLocation levelSlot = rotatedLevelSlots.get(entry.getKey());
@@ -112,7 +110,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                             : entry.getValue().preferredState().orElse(null)
                             : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
             if (state == null) continue;
-            states.put(position, orientState(position, state, facing, hasController, correctedFacing));
+            states.put(position, orientState(position, state, facing));
             List<SingleBlockModifierReplacement> replacements = rotatedModifierReplacements.get(position);
             int mask = acceptsInterface(entry.getValue(), interfaceCache) ? PreviewHighlights.INTERFACE : 0;
             if (levelSlot != null) mask |= PreviewHighlights.LEVEL;
@@ -215,53 +213,10 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         return Rotation.NONE;
     }
 
-    private static BlockState orientState(BlockPos position, BlockState state, Direction facing,
-                                          boolean hasController, Direction correctedFacing) {
-        if (!hasController) return state;
+    private static BlockState orientState(BlockPos position, BlockState state, Direction facing) {
         if (state.getBlock() instanceof MachineControllerBlock && position.equals(BlockPos.ZERO)) {
-            if (facing.getAxis().isVertical()) {
-                return state.setValue(MachineControllerBlock.FACING, facing);
-            }
-            Direction controllerFacing = correctedFacing == null ? facing : correctedFacing;
-            return state.setValue(MachineControllerBlock.FACING, controllerFacing);
+            return state.setValue(MachineControllerBlock.FACING, facing);
         }
-        if (correctedFacing == null || !facing.getAxis().isHorizontal()) return state;
-        return state.rotate(rotationBetween(facing, correctedFacing));
-    }
-
-    private static boolean hasController(Map<BlockPos, BlockPredicate> pattern) {
-        return isController(pattern.get(BlockPos.ZERO));
-    }
-
-    private static boolean isController(BlockPredicate predicate) {
-        return switch (predicate) {
-            case null -> false;
-            case BlockPredicate.OfBlock block -> block.block() instanceof MachineControllerBlock;
-            case BlockPredicate.OfBlockState state -> state.state().getBlock() instanceof MachineControllerBlock;
-            case BlockPredicate.DeferredBlock deferred -> deferred.supplier().get() instanceof MachineControllerBlock;
-            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(StructurePreviewSchemaFactory::isController);
-            default -> false;
-        };
-    }
-
-    private static Direction correctedControllerFacing(Map<BlockPos, BlockPredicate> pattern) {
-        int x = 0;
-        int z = 0;
-        for (BlockPos other : pattern.keySet()) {
-            x += other.getX();
-            z += other.getZ();
-        }
-        if (Math.abs(x) == Math.abs(z) && x == 0) return null;
-        Direction interior = Math.abs(x) > Math.abs(z)
-                ? (x < 0 ? Direction.WEST : Direction.EAST)
-                : (z < 0 ? Direction.NORTH : Direction.SOUTH);
-        return interior.getOpposite();
-    }
-
-    private static Rotation rotationBetween(Direction source, Direction target) {
-        for (Rotation rotation : Rotation.values()) {
-            if (rotation.rotate(source) == target) return rotation;
-        }
-        return Rotation.NONE;
+        return state;
     }
 }
