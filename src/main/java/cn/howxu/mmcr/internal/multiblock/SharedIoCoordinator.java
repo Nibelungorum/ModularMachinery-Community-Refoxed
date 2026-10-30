@@ -465,6 +465,7 @@ public final class SharedIoCoordinator {
                     || domain.generation() != versions.domainGeneration()) return false;
             slot.reservedOwner = null;
             slot.acceptedOwner = owner;
+            slot.controller = controller;
             slot.identity = execution.identity();
             slot.ledger = execution.ledger();
             slot.recipe = owner.activeRecipe();
@@ -526,8 +527,7 @@ public final class SharedIoCoordinator {
     private boolean validExecution(ExecutionSlot slot, ServerLevel level) {
         InstalledRecipeProgram execution = slot.execution;
         if (execution == null) return false;
-        CraftingRuntime owner = execution.owner();
-        return validExecution(slot, level, owner, owner.controller());
+        return validExecution(slot, level, slot.acceptedOwner, slot.controller);
     }
 
     private boolean validExecution(ExecutionSlot slot, ServerLevel level, CraftingRuntime owner,
@@ -549,8 +549,8 @@ public final class SharedIoCoordinator {
             terminateExecution(slot);
             return false;
         }
-        CraftingRuntime owner = execution.owner();
-        MachineControllerBlockEntity controller = owner.controller();
+        CraftingRuntime owner = slot.acceptedOwner;
+        MachineControllerBlockEntity controller = slot.controller;
         return eligibleExecution(slot, level, sync, owner, controller, controller.activeWorkMode());
     }
 
@@ -584,8 +584,8 @@ public final class SharedIoCoordinator {
 
     private boolean attemptExecution(ExecutionSlot slot, ServerLevel level) {
         InstalledRecipeProgram execution = slot.execution;
-        CraftingRuntime owner = execution.owner();
-        MachineControllerBlockEntity controller = owner.controller();
+        CraftingRuntime owner = slot.acceptedOwner;
+        MachineControllerBlockEntity controller = slot.controller;
         MachineWorkMode mode = controller.activeWorkMode();
         long sourceRevision = controller.componentRuntime().capabilityContentRevision();
         DomainBucket bucket = domains.get(slot.domain);
@@ -604,7 +604,7 @@ public final class SharedIoCoordinator {
         // SYNC cursors already advanced in grant order, independently of the actual BE order.
         if (mode != MachineWorkMode.SYNC) {
             domainCursor = slot.domain;
-            if (bucket != null) bucket.markAttempted(RequestType.TICK, slot.lane.key);
+            if (bucket != null) bucket.markInstalledAttempt(slot);
         }
         boolean advanced = false;
         try {
@@ -895,6 +895,8 @@ public final class SharedIoCoordinator {
         private final LaneRecords lane;
         private CraftingRuntime reservedOwner;
         private CraftingRuntime acceptedOwner;
+        private MachineControllerBlockEntity controller;
+        private DomainBucket.ControllerCandidates pendingController;
         private ExecutionIdentity identity;
         private RecipeCommitLedger ledger;
         private boolean pendingAcceptance;
@@ -941,6 +943,8 @@ public final class SharedIoCoordinator {
             domain = null;
             receiptDomain = null;
             level = null;
+            controller = null;
+            pendingController = null;
         }
     }
 
@@ -978,6 +982,7 @@ public final class SharedIoCoordinator {
         DomainBucket bucket = domains.computeIfAbsent(key, ignored -> new DomainBucket());
         bucket.requests.get(requestType(request))
                 .computeIfAbsent(request.laneKey(), ignored -> new ArrayDeque<>()).add(request);
+        bucket.requestCount++;
         requestsByController.computeIfAbsent(request.laneKey().controllerPos(),
                 ignored -> Collections.newSetFromMap(new IdentityHashMap<>())).add(request);
     }
@@ -1368,6 +1373,11 @@ public final class SharedIoCoordinator {
         private boolean pendingAdditions;
         private long pendingRound = Long.MIN_VALUE;
         private long pendingTime = Long.MIN_VALUE;
+        private long controllerLayoutVersion;
+        private long cursorControllerLayoutVersion = Long.MIN_VALUE;
+        private LaneKey tickCursor;
+        private int tickControllerStart;
+        private int requestCount;
         private final EnumMap<RequestType, Long2ObjectOpenHashMap<String>> controllerLaneCursors = new EnumMap<>(RequestType.class);
         private int nextType;
         private boolean worksetInFlight;
@@ -1409,8 +1419,7 @@ public final class SharedIoCoordinator {
 
         private Object nextLiveWork(Set<Request> attempted, Set<Request> eligible, ServerLevel level,
                                     SharedIoCoordinator coordinator) {
-            if (requests.get(RequestType.START).isEmpty() && requests.get(RequestType.TICK).isEmpty()
-                    && requests.get(RequestType.FINISH).isEmpty()) {
+            if (requestCount == 0) {
                 ExecutionSlot execution = nextInstalled(level, coordinator);
                 if (execution != null) nextType = (RequestType.TICK.ordinal() + 1) % REQUEST_TYPES.length;
                 return execution;
@@ -1464,6 +1473,24 @@ public final class SharedIoCoordinator {
             controllerLaneCursors.get(type).put(lane.controllerPos().asLong(), lane.laneId());
         }
 
+        private void markInstalledAttempt(ExecutionSlot slot) {
+            LaneKey key = slot.lane.key;
+            markAttempted(RequestType.TICK, key);
+            ControllerCandidates controller = slot.pendingController;
+            // World queries during admission may have changed or rebuilt either selection buffer.
+            // Warm only from a still-current position; key cursors remain authoritative on fallback.
+            if (controller == null || controllersChanged || controller.changed
+                    || controller.index >= pendingInstalled.size() || pendingInstalled.get(controller.index) != controller
+                    || slot.pendingIndex >= controller.ordered.size() || controller.ordered.get(slot.pendingIndex) != slot
+                    || controller.orderedLaneIds.get(slot.pendingIndex) != key.laneId()) return;
+            tickCursor = key;
+            cursorControllerLayoutVersion = controllerLayoutVersion;
+            tickControllerStart = controller.index + 1;
+            controller.tickLaneCursor = key.laneId();
+            controller.cursorLaneLayoutVersion = controller.laneLayoutVersion;
+            controller.tickLaneStart = slot.pendingIndex + 1;
+        }
+
         private void putInstalled(ExecutionSlot slot) {
             LaneKey key = slot.lane.key;
             installed.put(key, slot);
@@ -1484,6 +1511,7 @@ public final class SharedIoCoordinator {
             pendingTime = gameTime;
             pendingAdditions = false;
             if (controllersChanged) {
+                controllerLayoutVersion++;
                 pendingInstalled.clear();
                 for (ControllerCandidates controller : installedByController.values()) pendingInstalled.add(controller);
                 controllersChanged = false;
@@ -1540,13 +1568,7 @@ public final class SharedIoCoordinator {
             preparePending(coordinator.executionRoundId, level.getGameTime());
             if (pendingControllers.isEmpty()) return null;
             LaneKey cursor = cursors.get(RequestType.TICK);
-            int low = 0, high = pendingInstalled.size();
-            if (cursor != null) while (low < high) {
-                int middle = (low + high) >>> 1;
-                if (compareControllers(pendingInstalled.get(middle).position, cursor.controllerPos()) <= 0) low = middle + 1;
-                else high = middle;
-            }
-            int index = pendingControllers.nextSetBit(low);
+            int index = pendingControllers.nextSetBit(afterController(cursor));
             if (index < 0) index = pendingControllers.nextSetBit(0);
             while (index >= 0) {
                 ControllerCandidates controller = pendingInstalled.get(index);
@@ -1556,8 +1578,8 @@ public final class SharedIoCoordinator {
                 while (laneIndex >= 0) {
                     ExecutionSlot slot = controller.ordered.get(laneIndex);
                     // Reuse only this slot's callback-free selection reads, never a prior attempt's live result.
-                    CraftingRuntime owner = slot.execution.owner();
-                    MachineControllerBlockEntity machineController = owner.controller();
+                    CraftingRuntime owner = slot.acceptedOwner;
+                    MachineControllerBlockEntity machineController = slot.controller;
                     MachineWorkMode mode = machineController.activeWorkMode();
                     if (mode == MachineWorkMode.SYNC) {
                         controller.pending.clear();
@@ -1575,6 +1597,19 @@ public final class SharedIoCoordinator {
             return null;
         }
 
+        private int afterController(LaneKey cursor) {
+            if (tickCursor == cursor && cursorControllerLayoutVersion == controllerLayoutVersion) return tickControllerStart;
+            int low = 0, high = pendingInstalled.size();
+            if (cursor != null) while (low < high) {
+                int middle = (low + high) >>> 1;
+                if (compareControllers(pendingInstalled.get(middle).position, cursor.controllerPos()) <= 0) low = middle + 1;
+                else high = middle;
+            }
+            tickCursor = cursor;
+            cursorControllerLayoutVersion = controllerLayoutVersion;
+            return tickControllerStart = low;
+        }
+
         /** Membership-sorted buffers and reusable per-round eligibility bits. @author howxu <dev@howxu.cn> */
         private static final class ControllerCandidates {
             private final BlockPos position;
@@ -1586,12 +1621,17 @@ public final class SharedIoCoordinator {
             private boolean changed = true;
             private long round = Long.MIN_VALUE;
             private long time = Long.MIN_VALUE;
+            private long laneLayoutVersion;
+            private long cursorLaneLayoutVersion = Long.MIN_VALUE;
+            private String tickLaneCursor;
+            private int tickLaneStart;
 
             private ControllerCandidates(BlockPos position) { this.position = position; }
 
             private void prepare(long round, long time) {
                 if (!changed && this.round == round && this.time == time) return;
                 if (changed) {
+                    laneLayoutVersion++;
                     ordered.clear();
                     orderedLaneIds.clear();
                     // A retired logical lane can be renamed before its old receipt is ACKed.
@@ -1607,6 +1647,7 @@ public final class SharedIoCoordinator {
                 pending.clear();
                 for (int index = 0; index < ordered.size(); index++) {
                     ExecutionSlot slot = ordered.get(index);
+                    slot.pendingController = this;
                     slot.pendingIndex = index;
                     if (slot.lane.lastAttemptRound != round && slot.lane.lastAttemptTime != time
                             && !(slot.consumedRound == round && slot.consumedTime == time)) pending.set(index);
@@ -1614,13 +1655,16 @@ public final class SharedIoCoordinator {
             }
 
             private int after(String cursor) {
+                if (tickLaneCursor == cursor && cursorLaneLayoutVersion == laneLayoutVersion) return tickLaneStart;
                 int low = 0, high = ordered.size();
                 if (cursor != null) while (low < high) {
                     int middle = (low + high) >>> 1;
                     if (orderedLaneIds.get(middle).compareTo(cursor) <= 0) low = middle + 1;
                     else high = middle;
                 }
-                return low;
+                tickLaneCursor = cursor;
+                cursorLaneLayoutVersion = laneLayoutVersion;
+                return tickLaneStart = low;
             }
         }
 
@@ -1628,7 +1672,7 @@ public final class SharedIoCoordinator {
             NavigableMap<LaneKey, ArrayDeque<Request>> lanes = requests.get(requestType(request));
             ArrayDeque<Request> queue = lanes.get(request.laneKey());
             if (queue == null) return;
-            queue.removeFirstOccurrence(request);
+            if (queue.removeFirstOccurrence(request)) requestCount--;
             if (queue.isEmpty()) lanes.remove(request.laneKey());
         }
 

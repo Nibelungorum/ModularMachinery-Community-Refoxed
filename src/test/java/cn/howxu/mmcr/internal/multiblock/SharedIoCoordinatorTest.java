@@ -40,6 +40,7 @@ import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongConsumer;
 import java.util.function.LongSupplier;
@@ -71,6 +72,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -252,6 +254,9 @@ class SharedIoCoordinatorTest {
                 .isGreaterThan(previous.installedRevision());
         assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
         assertThat(replacement.current()).isTrue();
+        Object slot = ((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(fixture.runtime());
+        assertThat(schedulingField(slot, "controller")).isSameAs(fixture.controller());
+        assertThat(schedulingField(slot, "acceptedOwner")).isSameAs(replacement.owner());
     }
 
     @Test
@@ -272,6 +277,9 @@ class SharedIoCoordinatorTest {
         assertThat(fixture.shared().install(replacement,
                 fixture.shared().controllerPermit(fixture.controller().getBlockPos()))).isTrue();
         RecipeExecutionState current = drainAndGetConfirmedState(fixture);
+        Object slot = ((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(fixture.runtime());
+        assertThat(schedulingField(slot, "controller")).isSameAs(fixture.controller());
+        assertThat(schedulingField(slot, "acceptedOwner")).isSameAs(replacement.owner());
         assertThat(current.confirmedTick()).isZero();
         assertThat(current.failure()).isNull();
 
@@ -577,6 +585,8 @@ class SharedIoCoordinatorTest {
         controllersField.setAccessible(true);
         Object candidates = ((Map<?, ?>) controllersField.get(bucket)).values().iterator().next();
         CountingCandidateList<Object> ordered = countCandidateList(candidates, "ordered", reads);
+        AtomicInteger laneKeyReads = new AtomicInteger();
+        countCandidateList(candidates, "orderedLaneIds", laneKeyReads);
         CountingIterationSet<Object> executionChanges = countSetIterations(fixture.shared(), "changedExecutionDomains");
         CountingIterationSet<Object> requestChanges = countSetIterations(fixture.shared(), "changedRequestDomains");
         fixture.input().energyStorage().setAmount(7L * lanes.size() * 4);
@@ -586,6 +596,7 @@ class SharedIoCoordinatorTest {
         for (CraftingRuntime lane : lanes) assertThat(lane.tickCount()).isEqualTo(1);
         assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L * lanes.size());
         assertThat(reads.get()).isLessThanOrEqualTo(12 * lanes.size());
+        assertThat(laneKeyReads.get()).isLessThanOrEqualTo(2 * lanes.size());
         int consumedLookups = reads.get();
         assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
         assertThat(reads).hasValue(consumedLookups);
@@ -597,8 +608,10 @@ class SharedIoCoordinatorTest {
             fixture.shared().markControllerEligible(fixture.controller(), fixture.level().getGameTime());
             for (CraftingRuntime lane : lanes) assertThat(lane.prepareInstalledTick(fixture.shared().executionRoundId())).isTrue();
             reads.set(0);
+            laneKeyReads.set(0);
             assertThat(fixture.shared().resolvePost(fixture.level())).isEqualTo(lanes.size());
             assertThat(reads.get()).isLessThanOrEqualTo(12 * lanes.size());
+            assertThat(laneKeyReads.get()).isLessThanOrEqualTo(2 * lanes.size());
             for (CraftingRuntime lane : lanes) assertThat(lane.tickCount()).isEqualTo(round + 2);
             assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L * lanes.size() * (round + 2));
         }
@@ -663,6 +676,211 @@ class SharedIoCoordinatorTest {
             assertThat(fixture.input().energyStorage().getAmountAsLong()).isZero();
             for (CraftingRuntime lane : lanes) assertThat(lane.tickCount()).isEqualTo(1);
         }
+    }
+
+    @Test
+    void ordinal_lookups_reuse_positions_but_follow_external_cursor_changes() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 100);
+        CraftingRuntime second = attachSecondInstalledController(fixture);
+        Object bucket = schedulingBucket(fixture.shared());
+        invokeScheduling(bucket, "preparePending", new Class<?>[]{long.class, long.class},
+                fixture.shared().executionRoundId(), fixture.level().getGameTime());
+        AtomicInteger controllerReads = new AtomicInteger();
+        countCandidateList(bucket, "pendingInstalled", controllerReads);
+        SharedIoCoordinator.LaneKey cursor = new SharedIoCoordinator.LaneKey(fixture.controller().getBlockPos(), "base");
+        assertThat(invokeScheduling(bucket, "afterController", new Class<?>[]{SharedIoCoordinator.LaneKey.class}, cursor))
+                .isEqualTo(1);
+        controllerReads.set(0);
+        for (int repeat = 0; repeat < 16; repeat++) {
+            assertThat(invokeScheduling(bucket, "afterController", new Class<?>[]{SharedIoCoordinator.LaneKey.class}, cursor))
+                    .isEqualTo(1);
+        }
+        assertThat(controllerReads).hasValue(0);
+        SharedIoCoordinator.LaneKey removedCursor = new SharedIoCoordinator.LaneKey(new BlockPos(5, 0, 0), "missing");
+        assertThat(invokeScheduling(bucket, "afterController", new Class<?>[]{SharedIoCoordinator.LaneKey.class}, removedCursor))
+                .isEqualTo(1);
+        assertThat(invokeScheduling(bucket, "afterController", new Class<?>[]{SharedIoCoordinator.LaneKey.class},
+                new SharedIoCoordinator.LaneKey(second.controller().getBlockPos(), "base"))).isEqualTo(2);
+    }
+
+    @Test
+    void live_slot_binding_is_cleared_without_erasing_its_terminal_receipt() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 1);
+        Object slot = ((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(fixture.runtime());
+        assertThat(schedulingField(slot, "controller")).isSameAs(fixture.controller());
+        assertThat(schedulingField(slot, "acceptedOwner")).isSameAs(fixture.runtime());
+        completeInstalledFixture(fixture);
+        assertThat(schedulingField(slot, "controller")).isNull();
+        assertThat(schedulingField(slot, "pendingController")).isNull();
+        assertThat(schedulingField(slot, "acceptedOwner")).isNull();
+        assertThat(fixture.shared().receiptsForTesting(fixture.runtime(), "base"))
+                .singleElement().satisfies(receipt -> assertThat(receipt.terminal()).isTrue());
+    }
+
+    @Test
+    void ordinary_request_count_tracks_actual_removal_and_retained_failures() throws Exception {
+        SharedIoCoordinator coordinator = new SharedIoCoordinator(8, 8);
+        var domain = domain(A);
+        AtomicBoolean succeeds = new AtomicBoolean();
+        var request = tick(domain, A, 1L, succeeds::get, () -> true, () -> 1L);
+        coordinator.enqueue(request);
+        coordinator.enqueue(request);
+        Object bucket = schedulingBucket(coordinator);
+        assertThat(schedulingField(bucket, "requestCount")).isEqualTo(2);
+        invokeScheduling(bucket, "remove", new Class<?>[]{SharedIoCoordinator.Request.class}, request);
+        var absent = tick(domain, A, 1L, () -> true, () -> true, () -> 1L);
+        invokeScheduling(bucket, "remove", new Class<?>[]{SharedIoCoordinator.Request.class}, absent);
+        assertThat(schedulingField(bucket, "requestCount")).isEqualTo(1);
+        assertThat(coordinator.resolve(domain)).isZero();
+        assertThat(schedulingField(bucket, "requestCount")).isEqualTo(1);
+        succeeds.set(true);
+        assertThat(coordinator.resolve(domain)).isEqualTo(1);
+        invokeScheduling(bucket, "remove", new Class<?>[]{SharedIoCoordinator.Request.class}, request);
+        assertThat(schedulingField(bucket, "requestCount")).isEqualTo(0);
+        assertThat(coordinator.pendingRequestCountForTesting()).isZero();
+    }
+
+    @Test
+    void controller_ordinal_is_invalidated_by_real_membership_rebuilds() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 100);
+        CraftingRuntime second = attachSecondInstalledController(fixture);
+        Object bucket = schedulingBucket(fixture.shared());
+        Object slot = ((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(second);
+        SharedIoCoordinator.LaneKey cursor = new SharedIoCoordinator.LaneKey(second.controller().getBlockPos(), "base");
+        Class<?>[] lookup = {SharedIoCoordinator.LaneKey.class};
+        prepareSchedulingBucket(bucket, 1L);
+        assertThat(invokeScheduling(bucket, "afterController", lookup, cursor)).isEqualTo(2);
+        invokeScheduling(bucket, "removeInstalled", new Class<?>[]{slot.getClass()}, slot);
+        prepareSchedulingBucket(bucket, 2L);
+        assertThat(invokeScheduling(bucket, "afterController", lookup, cursor)).isEqualTo(1);
+        invokeScheduling(bucket, "putInstalled", new Class<?>[]{slot.getClass()}, slot);
+        prepareSchedulingBucket(bucket, 3L);
+        assertThat(invokeScheduling(bucket, "afterController", lookup, cursor)).isEqualTo(2);
+    }
+
+    @Test
+    void lane_ordinals_match_key_order_through_random_membership_and_cursor_changes() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 100, 0L);
+        List<Object> slots = new ArrayList<>();
+        for (String name : List.of("lane-1", "lane-10", "lane-2", "factory-0", "z")) {
+            CraftingRuntime lane = installSchedulingLane(fixture, name);
+            slots.add(((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(lane));
+        }
+        Object bucket = schedulingBucket(fixture.shared());
+        prepareSchedulingBucket(bucket, 1L);
+        Object controller = schedulingField(slots.getFirst(), "pendingController");
+        Random random = new Random(7261L);
+        String cursor = "lane-2";
+        for (int step = 0; step < 600; step++) {
+            if (step % 3 == 0) {
+                Object slot = slots.get(random.nextInt(slots.size()));
+                String action = random.nextBoolean() ? "putInstalled" : "removeInstalled";
+                invokeScheduling(bucket, action, new Class<?>[]{slot.getClass()}, slot);
+                prepareSchedulingBucket(bucket, step + 2L);
+            }
+            if (step % 4 == 0) cursor = "lane-" + random.nextInt(14);
+            if (step % 17 == 0) cursor = null;
+            List<?> keys = new ArrayList<>(((Map<?, ?>) schedulingField(controller, "lanes")).keySet());
+            int expected = 0;
+            if (cursor != null) for (Object key : keys) if (((String) key).compareTo(cursor) <= 0) expected++;
+            assertThat(invokeScheduling(controller, "after", new Class<?>[]{String.class}, cursor))
+                    .as("upper bound after membership/cursor change %s", step).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void dirty_membership_does_not_prime_an_old_selected_position() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 100, 0L);
+        CraftingRuntime lane = installSchedulingLane(fixture, "lane-2");
+        Object slot = ((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(lane);
+        Object bucket = schedulingBucket(fixture.shared());
+        prepareSchedulingBucket(bucket, 1L);
+        Object controller = schedulingField(slot, "pendingController");
+        invokeScheduling(controller, "after", new Class<?>[]{String.class}, "base");
+        installSchedulingLane(fixture, "lane-10");
+        invokeScheduling(bucket, "markInstalledAttempt", new Class<?>[]{slot.getClass()}, slot);
+        assertThat(schedulingField(controller, "tickLaneCursor")).isEqualTo("base");
+        prepareSchedulingBucket(bucket, 2L);
+        assertThat(invokeScheduling(controller, "after", new Class<?>[]{String.class}, "lane-2")).isEqualTo(3);
+    }
+
+    @Test
+    void ordinary_attempt_and_commit_cursors_override_warmed_installed_ordinals() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 100);
+        CraftingRuntime second = attachSecondInstalledController(fixture);
+        Object bucket = schedulingBucket(fixture.shared());
+        prepareSchedulingBucket(bucket, 1L);
+        Object slot = ((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(fixture.runtime());
+        invokeScheduling(bucket, "markInstalledAttempt", new Class<?>[]{slot.getClass()}, slot);
+        Class<?> type = Class.forName(SharedIoCoordinator.class.getName() + "$RequestType");
+        Object tick = type.getEnumConstants()[1];
+        SharedIoCoordinator.LaneKey other = new SharedIoCoordinator.LaneKey(second.controller().getBlockPos(), "ordinary");
+        invokeScheduling(bucket, "markAttempted", new Class<?>[]{type, SharedIoCoordinator.LaneKey.class}, tick, other);
+        Object cursor = ((Map<?, ?>) schedulingField(bucket, "cursors")).get(tick);
+        assertThat(invokeScheduling(bucket, "afterController", new Class<?>[]{SharedIoCoordinator.LaneKey.class}, cursor))
+                .isEqualTo(2);
+        var request = tick(fixture.controller().resourceDomain(), fixture.controller().getBlockPos(),
+                1L, () -> true, () -> true, () -> 1L);
+        invokeScheduling(bucket, "markCommitted", new Class<?>[]{SharedIoCoordinator.Request.class}, request);
+        cursor = ((Map<?, ?>) schedulingField(bucket, "cursors")).get(tick);
+        assertThat(invokeScheduling(bucket, "afterController", new Class<?>[]{SharedIoCoordinator.LaneKey.class}, cursor))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void retained_live_request_then_empty_queue_preserve_installed_payment_and_progress() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40, 7L, 2);
+        AtomicBoolean succeeds = new AtomicBoolean();
+        AtomicInteger attempts = new AtomicInteger();
+        fixture.shared().enqueue(new SharedIoCoordinator.TickRequest(fixture.controller().resourceDomain(),
+                new SharedIoCoordinator.LaneKey(fixture.controller().getBlockPos(), ""), 1L, 0L,
+                () -> { attempts.incrementAndGet(); return succeeds.get(); }, () -> true, () -> 1L, () -> 0L));
+        Object bucket = schedulingBucket(fixture.shared());
+        long before = fixture.input().energyStorage().getAmountAsLong();
+        for (int tick = 1; tick <= 2; tick++) {
+            succeeds.set(tick == 2);
+            RuntimeTestFixtures.advanceGameTime(fixture.level());
+            RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+            tickInstalledController(fixture.runtime(), fixture);
+            assertThat(fixture.shared().resolvePost(fixture.level())).isEqualTo(tick);
+            assertThat(attempts).hasValue(tick);
+            assertThat(schedulingField(bucket, "requestCount")).isEqualTo(tick == 1 ? 1 : 0);
+            assertThat(fixture.runtime().tickCount()).isEqualTo(tick);
+            assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L * tick);
+            assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
+            assertThat(fixture.runtime().tickCount()).isEqualTo(tick);
+            assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(before - 7L * tick);
+        }
+    }
+
+    private CraftingRuntime installSchedulingLane(InstalledFixture fixture, String name) {
+        CraftingRuntime lane = new CraftingRuntime(fixture.controller(), fixture.controller().componentRuntime());
+        lane.bindRecipeLane(name, () -> { });
+        assertThat(fixture.shared().reserveExecution(lane, name)).isTrue();
+        assertThat(lane.start(fixture.recipe(), 1L).isCrafting()).isTrue();
+        assertThat(fixture.shared().install(lane.ensureInstalledProgram(),
+                fixture.shared().controllerPermit(fixture.controller().getBlockPos()))).isTrue();
+        return lane;
+    }
+
+    private static void prepareSchedulingBucket(Object bucket, long time) throws Exception {
+        invokeScheduling(bucket, "preparePending", new Class<?>[]{long.class, long.class}, time, time);
+    }
+
+    private static Object schedulingBucket(SharedIoCoordinator coordinator) throws Exception {
+        return ((Map<?, ?>) schedulingField(coordinator, "domains")).values().iterator().next();
+    }
+
+    private static Object schedulingField(Object owner, String name) throws Exception {
+        Field field = owner.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(owner);
+    }
+
+    private static Object invokeScheduling(Object owner, String name, Class<?>[] types, Object... arguments) throws Exception {
+        Method method = owner.getClass().getDeclaredMethod(name, types);
+        method.setAccessible(true);
+        return method.invoke(owner, arguments);
     }
 
     /** Counts actual candidate index reads while retaining its ordering. @author howxu <dev@howxu.cn> */
