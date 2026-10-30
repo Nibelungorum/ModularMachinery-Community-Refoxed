@@ -26,6 +26,7 @@ import cn.howxu.mmcr.compat.ae2lt.LightningFailureReasons;
 import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.ae2lt.LightningStorage;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -40,7 +41,7 @@ import java.util.stream.IntStream;
 /** Internal ME-only operations; deliberately exposes no adjacent transfer facet.
  * @author howxu <dev@howxu.cn>
  */
-public final class LightningCapability implements MachineCapability, LightningViewFacet, OperationFacet {
+public final class LightningCapability implements MachineCapability, LightningViewFacet, OperationFacet, FixedExecutionFacets {
     private final IOPortBlockEntity host;
     private final LightningStorage storage;
     private final IOType direction;

@@ -31,6 +31,7 @@ import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalHandlerPort;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalOutputAdmission;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -61,7 +62,7 @@ import java.util.Set;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class MEChemicalCapability implements ChemicalHandlerPort, ChemicalViewFacet, OperationFacet, TransferFacet, SyncFacet, PresentationFacet {
+public final class MEChemicalCapability implements ChemicalHandlerPort, ChemicalViewFacet, OperationFacet, TransferFacet, SyncFacet, PresentationFacet, FixedExecutionFacets {
     private static final CapabilityType TYPE = new CapabilityType(MekanismRecipeTypes.CHEMICAL);
     private final IOPortBlockEntity host;
     private final IChemicalHandler handler;

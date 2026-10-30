@@ -41,6 +41,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
             MachineAppearanceSpec.defaults().formedPortTextureSource();
     private MachineAppearanceSpec.TextureSource appearanceSource = DEFAULT_APPEARANCE_SOURCE;
     private final TreeMap<BlockPos, MachineAppearanceSpec.TextureSource> linkedControllers = new TreeMap<>(BlockPos::compareTo);
+    private Set<BlockPos> linkedControllerPositions = Set.of();
     private int controllerLinkCheckCounter;
 
     protected LinkedAppearanceBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
@@ -61,7 +62,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     }
 
     public Set<BlockPos> linkedControllerPositions() {
-        return Set.copyOf(linkedControllers.keySet());
+        return linkedControllerPositions;
     }
 
     public void linkControllerAppearanceSource(BlockPos controllerPos, @Nullable MachineAppearanceSpec.TextureSource source) {
@@ -142,6 +143,7 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
                     sourceBlock.isBlank() ? DEFAULT_APPEARANCE_SOURCE.blockId() : ResourceLocation.parse(sourceBlock),
                     overrideTexture.isBlank() ? null : ResourceLocation.parse(overrideTexture)));
         }
+        linkedControllerPositions = Set.copyOf(linkedControllers.keySet());
         appearanceSource = resolveLinkedAppearance(this.linkedControllers);
     }
 
@@ -205,6 +207,9 @@ public abstract class LinkedAppearanceBlockEntity extends BlockEntity {
     }
 
     private void refreshLinkedAppearance() {
+        if (!linkedControllerPositions.equals(linkedControllers.keySet())) {
+            linkedControllerPositions = Set.copyOf(linkedControllers.keySet());
+        }
         MachineAppearanceSpec.TextureSource resolved = linkedControllers.isEmpty()
                 ? DEFAULT_APPEARANCE_SOURCE
                 : resolveLinkedAppearance(linkedControllers);

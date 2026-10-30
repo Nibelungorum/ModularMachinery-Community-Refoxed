@@ -183,7 +183,7 @@ public final class CraftingRuntime {
     private @Nullable List<MachineRequirement> cachedPerTickSource;
     private @Nullable Set<Integer> cachedPerTickConsumed;
     private @Nullable Set<Integer> cachedPerTickRetained;
-    private @Nullable List<ActivePrefetch> cachedPerTickPrefetches;
+    private boolean cachedPerTickHasPrefetches;
     private List<MachineRequirement> cachedPerTickRequirements = List.of();
     private List<Integer> cachedPerTickRequirementIndexes = List.of();
     private @Nullable List<MachineRequirement> cachedPublicRequirementSource;
@@ -3392,7 +3392,7 @@ public final class CraftingRuntime {
         }
         long remaining = Math.min(prefetchedEnergyPerTick - prefetchedEnergyTickConsumed, prefetchedEnergyRemaining);
         if (remaining <= 0L) return null;
-        List<ActivePrefetch> updated = new ArrayList<>(owned);
+        List<ActivePrefetch> updated = owned.size() == 1 ? owned : new ArrayList<>(owned);
         for (int index = 0; index < updated.size() && remaining > 0L; index++) {
             if (!prefetchConsumptionCurrent(consumingRecipe, payment, attempt, lifecycle, owned)) return missingInputStatus();
             ActivePrefetch prefetch = updated.get(index);
@@ -3422,9 +3422,8 @@ public final class CraftingRuntime {
                     payment.pauseAfterCommitFailure();
                 } else {
                     if (moved > 0L) {
-                        updated.set(index, new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(),
-                                prefetch.remaining() - moved, prefetch.batchAmount()));
-                        activePrefetches = List.copyOf(updated);
+                        activePrefetches = replacePrefetchAllocation(updated, index, new ActivePrefetch(
+                                prefetch.reservationKey(), prefetch.facet(), prefetch.remaining() - moved, prefetch.batchAmount()));
                         owned = activePrefetches;
                         prefetchedEnergyRemaining -= moved;
                         prefetchedEnergyTickConsumed += moved;
@@ -3438,10 +3437,9 @@ public final class CraftingRuntime {
                 return result == null || result.status() == null
                         ? failure(BuiltinFailureReasons.MISSING_INPUT, FailurePhase.PER_TICK, Map.of()) : result.status();
             }
-            updated.set(index, new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(),
-                    prefetch.remaining() - consumed, prefetch.batchAmount()));
             // Publish each successful debit before visiting the next allocation, which may fail.
-            activePrefetches = List.copyOf(updated);
+            activePrefetches = replacePrefetchAllocation(updated, index, new ActivePrefetch(
+                    prefetch.reservationKey(), prefetch.facet(), prefetch.remaining() - consumed, prefetch.batchAmount()));
             owned = activePrefetches;
             prefetchedEnergyRemaining -= consumed;
             prefetchedEnergyTickConsumed += consumed;
@@ -3453,6 +3451,13 @@ public final class CraftingRuntime {
         }
         if (remaining > 0L) return missingInputStatus();
         return null;
+    }
+
+    private static List<ActivePrefetch> replacePrefetchAllocation(List<ActivePrefetch> working, int index,
+                                                                 ActivePrefetch allocation) {
+        if (working.size() == 1) return List.of(allocation);
+        working.set(index, allocation);
+        return List.copyOf(working);
     }
 
     private boolean prefetchConsumptionCurrent(ActiveMachineRecipe recipe, RecipeCommitLedger payment,
@@ -3696,8 +3701,9 @@ public final class CraftingRuntime {
     }
 
     private List<MachineRequirement> perTickRequirements() {
+        boolean hasPrefetches = !activePrefetches.isEmpty();
         if (cachedPerTickSource == effectiveRequirements && cachedPerTickConsumed == consumedAtStart
-                && cachedPerTickRetained == retainedInputs && cachedPerTickPrefetches == activePrefetches) {
+                && cachedPerTickRetained == retainedInputs && cachedPerTickHasPrefetches == hasPrefetches) {
             return cachedPerTickRequirements;
         }
         List<MachineRequirement> requirements = new ArrayList<>();
@@ -3706,7 +3712,7 @@ public final class CraftingRuntime {
         for (int index = 0; index < source.size(); index++) {
             MachineRequirement requirement = source.get(index);
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
-                if (!activePrefetches.isEmpty() && requirement instanceof EnergyRequirement) continue;
+                if (hasPrefetches && requirement instanceof EnergyRequirement) continue;
                 if (consumedAtStart.contains(index)) continue;
                 // Startup probability is already decided; retained one-shot resources only remain conditions.
                 if (retainedInputs.contains(index) && requirement instanceof SourceRequirement sourceInput
@@ -3741,7 +3747,7 @@ public final class CraftingRuntime {
         cachedPerTickSource = effectiveRequirements;
         cachedPerTickConsumed = consumedAtStart;
         cachedPerTickRetained = retainedInputs;
-        cachedPerTickPrefetches = activePrefetches;
+        cachedPerTickHasPrefetches = hasPrefetches;
         cachedPerTickRequirements = List.copyOf(requirements);
         cachedPerTickRequirementIndexes = List.copyOf(indexes);
         return cachedPerTickRequirements;

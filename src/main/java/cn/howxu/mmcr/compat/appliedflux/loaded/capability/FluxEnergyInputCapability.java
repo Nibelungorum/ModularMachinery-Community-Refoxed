@@ -27,6 +27,7 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,7 +44,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
  * @author howxu <dev@howxu.cn>
  */
 public final class FluxEnergyInputCapability implements MachineCapability, ScalarFacet, ValueFacet<LongValueStorage>,
-        OperationFacet, PresentationFacet, PersistenceFacet, SyncFacet, RecipeEnergyPrefetchFacet {
+        OperationFacet, PresentationFacet, PersistenceFacet, SyncFacet, RecipeEnergyPrefetchFacet, FixedExecutionFacets {
     private final FluxEnergyBuffer buffer;
     private final String reservationKey;
     private final ExactPrefetchBridge prefetchBridge;
