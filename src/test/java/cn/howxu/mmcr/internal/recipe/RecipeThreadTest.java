@@ -340,7 +340,6 @@ class RecipeThreadTest {
                 RuntimeTestFixtures.beginLevelTick(level, true);
                 controller.serverTick();
                 SharedIoCoordinator.get(level).executeInstalled(level);
-                SharedIoCoordinator.get(level).executeInstalled(level);
                 assertThat(thread.tickPendingForTesting()).isFalse();
                 if (tick == 1) {
                     assertThat(thread.runtime().tickCount()).isEqualTo(1);
@@ -387,6 +386,64 @@ class RecipeThreadTest {
             assertThat(output.itemStorage().amount(0)).isEqualTo(13L);
             assertThat(factory ? controllerFactorySearchAttempts(controller) : normalSearchAttempts(controller))
                     .isEqualTo(beforeSearch);
+            assertReceiptWorkersOnly(MachineAsyncCoordinator.get(level), workers);
+        } finally {
+            MachineAsyncCoordinator.discard(level);
+            SharedIoCoordinator.discard(level);
+            StructureClaimRegistry.discard(level);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"ASYNC", "SEMI_SYNC"})
+    void installed_item_recipe_restarts_in_one_post_without_receipt_workers(MachineWorkMode mode) throws Exception {
+        TestBootstrap.bootstrapCapabilities();
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        var output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        var controller = controllerWithPorts(input, output);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        var workers = new ArrayDeque<Runnable>();
+        installCoordinator(level, MachineAsyncCoordinator.forTesting(workers::add));
+        try {
+            Field threadField = MachineControllerBlockEntity.class.getDeclaredField("normalRecipeThread");
+            threadField.setAccessible(true);
+            var thread = (MachineRecipeThread) threadField.get(controller);
+            var recipe = RecipeTestSupport.create(MMCR.id("installed_item_restart_single_post"),
+                    controller.currentRecipePoolId(), 2,
+                    List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY),
+                            new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, new ItemStack(Items.DIAMOND, 9))),
+                    List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 9), 1F)));
+            RecipeRegistry.registerStatic(recipe);
+            try (Transaction transaction = Transaction.openRoot()) {
+                input.itemStorage().insert(0, ItemResource.of(Items.IRON_INGOT), 4L, transaction);
+                transaction.commit();
+            }
+            assertThat(thread.runtime().start(recipe, 1L).isCrafting()).isTrue();
+            thread.rememberStartedRecipe();
+            var completed = thread.runtime().ensureInstalledProgram();
+            long searches = normalSearchAttempts(controller);
+            for (int tick = 1; tick <= 2; tick++) {
+                RuntimeTestFixtures.advanceGameTime(level);
+                RuntimeTestFixtures.beginLevelTick(level, true);
+                controller.serverTick();
+                SharedIoEvents.completeLevelTick(level);
+            }
+            assertThat(completed.ledger().state().outputPaid()).isTrue();
+            assertThat(thread.runtime().active()).isTrue();
+            assertThat(thread.isStartPending()).isFalse();
+            assertThat(thread.runtime().tickCount()).isZero();
+            assertThat(thread.runtime().installedProgram()).isNotSameAs(completed);
+            assertThat(controller.currentRuntimeSnapshot().crafting().status().isCrafting()).isTrue();
+            assertThat(normalSearchAttempts(controller)).isEqualTo(searches);
+            assertThat(input.itemStorage().amount(0)).isEqualTo(2L);
+            assertThat(output.itemStorage().amount(0)).isEqualTo(9L);
+            // A repeated Post must not tick the replacement or repeat either payment.
+            SharedIoEvents.completeLevelTick(level);
+            assertThat(thread.runtime().tickCount()).isZero();
+            assertThat(input.itemStorage().amount(0)).isEqualTo(2L);
+            assertThat(output.itemStorage().amount(0)).isEqualTo(9L);
             assertReceiptWorkersOnly(MachineAsyncCoordinator.get(level), workers);
         } finally {
             MachineAsyncCoordinator.discard(level);

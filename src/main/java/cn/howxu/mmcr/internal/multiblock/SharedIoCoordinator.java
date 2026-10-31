@@ -1196,7 +1196,12 @@ public final class SharedIoCoordinator {
                 DomainKey key = selection.domain;
                 Object next = selection.work;
                 if (next instanceof ExecutionSlot slot) {
-                    if (attemptExecution(slot, level)) progress++;
+                    RecipeCommitLedger payment = slot.ledger;
+                    if (attemptExecution(slot, level)) {
+                        progress++;
+                        // Completion can retire/reuse the slot before returning; keep the paid ledger.
+                        if (payment.state().outputPaid()) includeSpawnedSuccessors(key, RequestType.START, eligible);
+                    }
                     continue;
                 }
                 DomainBucket bucket = domains.get(key);
@@ -1279,11 +1284,14 @@ public final class SharedIoCoordinator {
     }
 
     private void includeSpawnedSuccessors(DomainKey key, Request request, Set<Request> eligible) {
-        DomainBucket bucket = domains.get(key);
-        if (bucket == null) return;
         RequestType successor = request instanceof TickRequest ? RequestType.FINISH
                 : request instanceof FinishRequest ? RequestType.START : null;
-        if (successor == null) return;
+        if (successor != null) includeSpawnedSuccessors(key, successor, eligible);
+    }
+
+    private void includeSpawnedSuccessors(DomainKey key, RequestType successor, Set<Request> eligible) {
+        DomainBucket bucket = domains.get(key);
+        if (bucket == null) return;
         bucket.requests.get(successor).values().forEach(eligible::addAll);
         changedRequestDomains.add(key);
     }
