@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
@@ -11,6 +14,11 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.RotatedPillarBlock;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +39,68 @@ class MachineLevelBuilderJSTest {
     void beginRegistration() {
         StructureRegistration.resetCollector();
         StructureRegistration.prepare(Set.of());
+        MachineLevelRegistry.installSnapshot(List.of(), List.of());
+    }
+
+    @AfterEach
+    void cleanup() {
+        StructureRegistration.resetCollector();
+        MachineLevelRegistry.installSnapshot(List.of(), List.of());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void missing_type_is_checked_at_freeze_and_can_be_added_after_failure(boolean runtimeLevel) {
+        var typeId = Identifier.parse("test:forward_type");
+        var levelId = Identifier.parse("test:forward_level");
+        var type = new LevelType(typeId, Component.translatable("level.test.forward_type"));
+        // A published type must not hide a missing definition in this collector.
+        MachineLevelRegistry.installSnapshot(List.of(type), List.of());
+        var earlyCollector = StructureRegistration.current();
+        if (runtimeLevel) {
+            earlyCollector.registerLevel(new MachineLevel(levelId, typeId, 0,
+                    new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                    ItemStack.EMPTY, ModifierDefinition.EMPTY));
+        } else {
+            new MachineLevelBuilderJS(levelId).type(typeId).state("minecraft:copper_block").register();
+        }
+        var collector = StructureRegistration.prepare(Set.of());
+        var levelsBefore = collector.levels();
+        var declarationsBefore = collector.levelDeclarations();
+
+        assertThatThrownBy(collector::freeze).hasMessageContaining(levelId.toString())
+                .hasMessageContaining("unknown machine level type").hasMessageContaining(typeId.toString());
+        assertThat(collector.levels()).isEqualTo(levelsBefore);
+        assertThat(collector.levelDeclarations()).isEqualTo(declarationsBefore);
+
+        collector.registerLevelType(type);
+        var snapshot = collector.freeze();
+        assertThat(snapshot.levels().get(levelId).typeId()).isEqualTo(typeId);
+        assertThat(snapshot.levels().get(levelId).statePredicate()
+                .matches(Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();
+        assertThat(collector.freeze()).isSameAs(snapshot);
+        assertThatThrownBy(() -> collector.registerLevelType(type)).hasMessageContaining("frozen");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void duplicate_ids_across_level_forms_are_rejected_before_type_resolution(boolean runtimeFirst) {
+        var typeId = Identifier.parse("test:missing_type");
+        var levelId = Identifier.parse("test:duplicate_forms");
+        var collector = StructureRegistration.current();
+        var runtime = new MachineLevel(levelId, typeId, 0,
+                new BlockPredicate.OfBlockState(Blocks.COPPER_BLOCK.defaultBlockState()),
+                ItemStack.EMPTY, ModifierDefinition.EMPTY);
+        var declaration = new MachineLevelBuilderJS(levelId).type(typeId).state("missing_mod:coil");
+        if (runtimeFirst) {
+            collector.registerLevel(runtime);
+            assertThatThrownBy(declaration::register).hasMessageContaining("Duplicate machine level")
+                    .hasMessageContaining(levelId.toString());
+        } else {
+            declaration.register();
+            assertThatThrownBy(() -> collector.registerLevel(runtime)).hasMessageContaining("Duplicate machine level")
+                    .hasMessageContaining(levelId.toString());
+        }
     }
 
     @Test
@@ -103,13 +173,14 @@ class MachineLevelBuilderJSTest {
 
     @Test
     void prepare_preserves_immutable_level_reference_when_builder_is_reused() {
-        new LevelTypeBuilderJS("test:coil").register();
         var builder = new MachineLevelBuilderJS("test:captured_coil").type("test:coil")
                 .state("minecraft:copper_block");
         builder.register();
         builder.state("missing_mod:changed_coil");
 
-        var snapshot = StructureRegistration.prepare(Set.of()).freeze();
+        var prepared = StructureRegistration.prepare(Set.of());
+        new LevelTypeBuilderJS("test:coil").register();
+        var snapshot = prepared.freeze();
 
         assertThat(snapshot.levels().get(Identifier.parse("test:captured_coil")).statePredicate()
                 .matches(Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();

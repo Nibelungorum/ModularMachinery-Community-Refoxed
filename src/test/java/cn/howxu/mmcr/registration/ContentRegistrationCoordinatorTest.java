@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.compat.kubejs.MMCRStartupEventJS;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -20,6 +21,7 @@ import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
 import cn.howxu.mmcr.api.registration.MachineRecipeRegistration;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineRecipesEvent;
 import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
@@ -34,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.BusBuilder;
 import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.core.Holder;
@@ -227,6 +231,55 @@ class ContentRegistrationCoordinatorTest {
         assertThatCode(() -> RuntimeContentCoordinator.commitDynamic(Map.of(machineId, structure), Map.of()))
                 .doesNotThrowAnyException();
         assertThat(MachineRegistry.getMachine(machineId)).isNotNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void forward_references_survive_either_startup_collection_order(boolean javaFirst) throws Exception {
+        var event = new MMCRStartupEventJS();
+        var typeId = id("forward_startup_type");
+        var levelId = id("forward_startup_level");
+        var modifierId = id("forward_startup_modifier");
+        Runnable references = () -> {
+            event.createLevel(levelId).type(typeId).state("minecraft:copper_block").register();
+            event.registerModifierItem("minecraft:diamond", modifierId.toString());
+        };
+        Runnable definitions = () -> {
+            event.createLevelType(typeId).register();
+            event.registerModifier(modifierId, ModifierDefinition.EMPTY);
+        };
+        if (!javaFirst) {
+            references.run();
+            definitions.run();
+        }
+        // Exercise the existing explicit deferral path without replacing the global ModList.
+        var register = StartupContentRegistration.class.getDeclaredMethod("registerStartupContent",
+                Consumer.class, Consumer.class, Consumer.class, boolean.class, boolean.class, boolean.class,
+                IEventBus.class);
+        register.setAccessible(true);
+        Consumer<RegisterMachineDefinitionsEvent> machines = ignored -> { };
+        Consumer<RegisterMachineStructuresEvent> structures = ignored -> {
+            if (javaFirst) references.run();
+        };
+        Consumer<RegisterMachineRecipesEvent> recipes = ignored -> { };
+        register.invoke(null, machines, structures, recipes, true, false, javaFirst, BusBuilder.builder().build());
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isFalse();
+        if (javaFirst) {
+            assertThat(MachineLevelRegistry.getType(typeId)).isNull();
+            assertThat(MachineLevelRegistry.getLevel(levelId)).isNull();
+            assertThat(ModifierRegistry.get(modifierId)).isNull();
+            definitions.run();
+        }
+
+        StartupContentRegistration.completeKubeJSStartup();
+        StartupContentRegistration.completeKubeJSStartup();
+
+        assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
+        assertThat(ContentRegistrationCoordinator.commitCountForTesting()).isEqualTo(1);
+        assertThat(MachineLevelRegistry.getLevel(levelId).typeId()).isEqualTo(typeId);
+        assertThat(ModifierRegistry.modifierFor(new ItemStack(Items.DIAMOND))).isEqualTo(modifierId);
+        assertThatThrownBy(() -> event.createLevelType(id("late_forward_type")).register())
+                .hasMessageContaining("frozen");
     }
 
     @Test

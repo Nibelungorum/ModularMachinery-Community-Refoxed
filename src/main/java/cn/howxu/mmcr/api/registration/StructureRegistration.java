@@ -113,9 +113,6 @@ public final class StructureRegistration {
     public void registerLevel(MachineLevel level) {
         requireOpen();
         require(level, "level");
-        if (!levelTypes.containsKey(level.typeId())) {
-            throw new ApiRegistrationException("Unknown machine level type: " + level.typeId());
-        }
         if (levelDeclarations.containsKey(level.id()) || levels.putIfAbsent(level.id(), level) != null) {
             throw new ApiRegistrationException("Duplicate machine level: " + level.id());
         }
@@ -124,9 +121,6 @@ public final class StructureRegistration {
     public void registerLevel(cn.howxu.mmcr.api.machine.definition.MachineLevel level) {
         requireOpen();
         require(level, "level");
-        if (!levelTypes.containsKey(level.typeId())) {
-            throw new ApiRegistrationException("Unknown machine level type: " + level.typeId());
-        }
         if (levels.containsKey(level.id()) || levelDeclarations.putIfAbsent(level.id(), level) != null) {
             throw new ApiRegistrationException("Duplicate machine level: " + level.id());
         }
@@ -194,13 +188,13 @@ public final class StructureRegistration {
 
     public Snapshot freeze() {
         if (frozen) return snapshot;
-        Map<Identifier, MachineLevel> resolvedLevels = new LinkedHashMap<>(levels);
-        levelDeclarations.forEach((id, declaration) -> {
-            try {
-                resolvedLevels.put(id, MachineDefinitionConverter.toMachineLevel(declaration));
-            } catch (RuntimeException exception) {
-                throw new ApiRegistrationException("Invalid machine level " + id + ": " + exception.getMessage(), exception);
-            }
+        levels.values().forEach(level -> {
+            if (!levelTypes.containsKey(level.typeId())) throw new ApiRegistrationException(
+                    "Machine level " + level.id() + " refers to unknown machine level type " + level.typeId());
+        });
+        levelDeclarations.values().forEach(level -> {
+            if (!levelTypes.containsKey(level.typeId())) throw new ApiRegistrationException(
+                    "Machine level " + level.id() + " refers to unknown machine level type " + level.typeId());
         });
         structures.values().forEach(structure -> structure.stages().forEach(stage -> {
             stage.requirements().levelSlots().values().forEach(typeId -> {
@@ -221,6 +215,14 @@ public final class StructureRegistration {
         modifierItemIds.forEach((itemId, modifierId) -> {
             if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
                     "Modifier item " + itemId + " refers to unknown machine modifier " + modifierId);
+        });
+        Map<Identifier, MachineLevel> resolvedLevels = new LinkedHashMap<>(levels);
+        levelDeclarations.forEach((id, declaration) -> {
+            try {
+                resolvedLevels.put(id, MachineDefinitionConverter.toMachineLevel(declaration));
+            } catch (RuntimeException exception) {
+                throw new ApiRegistrationException("Invalid machine level " + id + ": " + exception.getMessage(), exception);
+            }
         });
         levels.putAll(resolvedLevels);
         levelDeclarations.clear();

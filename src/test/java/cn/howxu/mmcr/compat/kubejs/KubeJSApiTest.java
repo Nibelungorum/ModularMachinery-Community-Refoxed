@@ -274,7 +274,7 @@ class KubeJSApiTest {
     }
 
     @Test
-    void level_requirement_rejects_a_level_from_another_type() {
+    void level_requirement_rejects_a_level_from_another_type_when_the_recipe_is_built() {
         var otherType = MMCR.id("api_other_type");
         TestBootstrap.beginRegistration();
         TestBootstrap.registerType(new LevelType(otherType, Component.literal("Other")));
@@ -282,8 +282,12 @@ class KubeJSApiTest {
                 new BlockPredicate.OfBlockState(Blocks.EMERALD_BLOCK.defaultBlockState()), ItemStack.EMPTY, ModifierDefinition.EMPTY));
         TestBootstrap.freezeRegistration();
 
-        assertThatThrownBy(() -> api.levelRequirement(TEST_LEVEL_TYPE.toString(), "mmcr:api_other_level"))
-                .isInstanceOf(IllegalArgumentException.class);
+        var requirement = api.levelRequirement(TEST_LEVEL_TYPE.toString(), "mmcr:api_other_level");
+        var builder = new MachineRecipeBuilderJS("mmcr:api_wrong_type");
+        builder.recipePoolId = MMCR.id("test_pool");
+        builder.addRequirement(requirement);
+        assertThatThrownBy(builder::createObject).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not belong to type").hasMessageContaining("mmcr:api_other_level");
     }
 
     @Test
@@ -317,13 +321,17 @@ class KubeJSApiTest {
     }
 
     @Test
-    void level_slot_factory_exposes_registered_type_to_server_scripts() {
+    void level_slot_factory_leaves_unknown_type_validation_to_structure_consumption() {
         var slot = api.levelSlot(TEST_LEVEL_TYPE.toString());
 
         assertThat(slot).isEqualTo(new LevelSlot(TEST_LEVEL_TYPE));
-        assertThatThrownBy(() -> api.levelSlot("test:missing_level_type"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unknown machine level type");
+        var missing = api.levelSlot("test:missing_level_type");
+        assertThatThrownBy(() -> new MachineStructureBuilderJS("test:missing_type_structure")
+                .pattern("L").set("L", missing)).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown machine level type").hasMessageContaining(missing.typeId().toString());
+        assertThatThrownBy(() -> new MachineStructureStageBuilderJS("test:missing_type_stage")
+                .pattern("L").set("L", missing)).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown machine level type").hasMessageContaining(missing.typeId().toString());
     }
 
     @Test
