@@ -64,9 +64,6 @@ public final class MMCRStartupEventJS implements KubeEvent {
     }
 
     public LevelSlot levelSlot(ResourceLocation typeId) {
-        if (!StructureRegistration.current().levelTypes().containsKey(typeId)) {
-            throw new IllegalArgumentException("Unknown machine level type: " + typeId);
-        }
         return new LevelSlot(typeId);
     }
 

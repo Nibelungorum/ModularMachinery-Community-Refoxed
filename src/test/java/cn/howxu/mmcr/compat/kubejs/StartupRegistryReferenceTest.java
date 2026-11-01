@@ -1,23 +1,31 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
+import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
+import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.internal.api.facade.registration.RegistrationAdapters;
 import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.publicapi.recipe.modifier.Modifiers;
 import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.publicapi.structure.level.Levels;
+import net.minecraft.ResourceLocationException;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.Map;
 import java.util.Set;
@@ -140,12 +148,92 @@ class StartupRegistryReferenceTest {
     }
 
     @Test
-    void startup_level_slot_uses_declared_type_before_runtime_publication() {
+    void startup_level_slot_is_validated_when_the_registered_structure_is_frozen() {
+        var machineId = ResourceLocation.parse("test:forward_structure");
+        var typeId = ResourceLocation.parse("test:startup_coil");
+        var collector = StructureRegistration.prepare(Set.of(machineId));
         var event = new MMCRStartupEventJS();
-        event.createLevelType("test:startup_coil").register();
-        assertThat(event.levelSlot("test:startup_coil").typeId()).isEqualTo(ResourceLocation.parse("test:startup_coil"));
-        assertThatThrownBy(() -> event.levelSlot("test:undeclared_coil"))
-                .hasMessageContaining("test:undeclared_coil");
+        var slot = event.levelSlot(typeId);
+        assertThat(event.levelSlot(typeId.toString())).isEqualTo(slot);
+        collector.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
+                .requirements(requirements -> requirements.levelSlot('F', slot.typeId()))));
+
+        assertThatThrownBy(collector::freeze).hasMessageContaining(machineId.toString())
+                .hasMessageContaining(typeId.toString());
+        event.createLevelType(typeId).register();
+        assertThat(collector.freeze().levelTypes()).containsKey(typeId);
+    }
+
+    @Test
+    void reference_factories_do_not_need_a_published_registry_or_track_unused_references() {
+        var event = new MMCRStartupEventJS();
+        var api = event.getAPI();
+        var typeId = ResourceLocation.parse("test:future_type");
+        var levelId = ResourceLocation.parse("test:future_level");
+        assertThat(MachineLevelRegistry.getType(typeId)).isNull();
+        assertThat(api.levelSlot(typeId.toString())).isEqualTo(event.levelSlot(typeId));
+        assertThat(api.levelSlot(typeId)).isEqualTo(event.levelSlot(typeId.toString()));
+        var requirement = api.levelRequirement(typeId.toString(), levelId.toString());
+        assertThat(requirement).isEqualTo(api.levelRequirement(typeId, levelId));
+        assertThat(requirement.typeId()).isEqualTo(typeId);
+        assertThat(requirement.levelId()).isEqualTo(levelId);
+        assertThatThrownBy(() -> event.levelSlot((ResourceLocation) null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> api.levelSlot((ResourceLocation) null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> api.levelRequirement(typeId, null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> api.levelSlot("INVALID TYPE")).isInstanceOf(ResourceLocationException.class);
+        assertThatThrownBy(() -> api.levelRequirement(typeId.toString(), "INVALID LEVEL"))
+                .isInstanceOf(ResourceLocationException.class);
+        assertThat(StructureRegistration.current().freeze().levelTypes()).isEmpty();
+
+        var recipe = new MachineRecipeBuilderJS("test:missing_level_recipe");
+        recipe.recipePoolId = ResourceLocation.parse("test:pool");
+        recipe.addRequirement(requirement);
+        assertThatThrownBy(recipe::createObject).hasMessageContaining(levelId.toString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+    void level_and_modifier_declarations_accept_either_dependency_order(boolean typeFirst, boolean modifierFirst) {
+        var event = new MMCRStartupEventJS();
+        var typeId = ResourceLocation.parse("test:order_type");
+        var levelId = ResourceLocation.parse("test:order_level");
+        if (typeFirst) event.createLevelType(typeId).register();
+        event.createLevel(levelId).type(typeId).state("minecraft:copper_block").register();
+        if (!typeFirst) event.createLevelType(typeId).register();
+        if (modifierFirst) event.registerModifier(MODIFIER, ModifierDefinition.EMPTY);
+        event.registerModifierItem("minecraft:diamond", MODIFIER.toString());
+        if (!modifierFirst) event.registerModifier(MODIFIER, ModifierDefinition.EMPTY);
+
+        var snapshot = StructureRegistration.current().freeze();
+        assertThat(snapshot.levels().get(levelId).typeId()).isEqualTo(typeId);
+        assertThat(snapshot.levels().get(levelId).statePredicate().matches(Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();
+        assertThat(snapshot.modifiers()).containsEntry(MODIFIER, ModifierDefinition.EMPTY);
+        assertThat(snapshot.resolveModifierItems().get(MODIFIER)).singleElement()
+                .satisfies(stack -> assertThat(stack.getItem()).isSameAs(Items.DIAMOND));
+    }
+
+    @Test
+    void modifier_references_link_after_declaration_but_missing_definitions_still_fail() {
+        var machineId = ResourceLocation.parse("test:modifier_structure");
+        var recipeId = ResourceLocation.parse("test:modifier_recipe");
+        var collector = StructureRegistration.prepare(Set.of(machineId));
+        var api = new KubeJSApi();
+        var use = api.modifierUse(MODIFIER, api.block("minecraft:diamond_block"));
+        var recipe = MachineRecipeBuilder.recipe(recipeId).recipePool(machineId).modifier(MODIFIER).build();
+        collector.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
+                .modifier('F', use)));
+        assertThatThrownBy(collector::freeze).hasMessageContaining(machineId.toString())
+                .hasMessageContaining(MODIFIER.toString());
+        var empty = new StructureRegistration(Set.of()).freeze();
+        assertThatThrownBy(() -> MachineRecipeConverter.toRecipe(recipe, empty))
+                .hasMessageContaining(recipeId.toString()).hasMessageContaining(MODIFIER.toString());
+
+        collector.registerModifier(MODIFIER, ModifierDefinition.EMPTY);
+        var snapshot = collector.freeze();
+        assertThat(snapshot.structures()).containsKey(machineId);
+        assertThat(MachineRecipeConverter.toRecipe(recipe, snapshot).id()).isEqualTo(recipeId);
     }
 
     @Test

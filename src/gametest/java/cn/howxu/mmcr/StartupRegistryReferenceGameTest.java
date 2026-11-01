@@ -41,11 +41,11 @@ public final class StartupRegistryReferenceGameTest {
     public static void registerPublicReferences(RegisterMachineStructuresEvent event) {
         ResourceLocation typeId = ResourceLocation.parse("mmcr_test:public_induction_cell");
         ResourceLocation modifierId = ResourceLocation.parse("mmcr_test:public_mek_upgrade");
-        event.registerLevelType(Levels.type(typeId, Component.translatable("level.mmcr_test.public_induction_cell")));
         event.registerLevel(Levels.level(ResourceLocation.parse("mmcr_test:public_basic_induction_cell"), typeId, 0,
                 BlockConditions.state("mekanism:basic_induction_cell"), Modifiers.bundle()));
-        event.registerModifier(modifierId, Modifiers.bundle());
         event.registerModifierItem(ResourceLocation.parse("mekanism:basic_control_circuit"), modifierId);
+        event.registerLevelType(Levels.type(typeId, Component.translatable("level.mmcr_test.public_induction_cell")));
+        event.registerModifier(modifierId, Modifiers.bundle());
     }
 
     public static void mekanismExampleResolvesRegisteredContent(GameTestHelper helper) {
@@ -80,9 +80,14 @@ public final class StartupRegistryReferenceGameTest {
         assertLevel(helper, "mmcr_test:kubejs_reference_coil", "kubejs:mmcr_reference_coil");
         assertBinding(helper, "kubejs:mmcr_reference_upgrade", "mmcr_test:kubejs_reference_speed");
         assertBinding(helper, "kubejs:mmcr_reference_coil", "mmcr_test:kubejs_reference_speed");
+        var typeId = ResourceLocation.parse("mmcr_test:kubejs_reference_coil");
+        helper.assertTrue(MachineLevelRegistry.getType(typeId) != null
+                        && MachineLevelRegistry.getLevel(typeId).typeId().equals(typeId),
+                "A level declared before its type in another startup file resolves to that type");
         var horizontalLevel = MachineLevelRegistry.getLevel(ResourceLocation.parse("mmcr_test:kubejs_reference_horizontal_log"));
         var horizontalLog = Blocks.OAK_LOG.defaultBlockState().setValue(RotatedPillarBlock.AXIS, Direction.Axis.X);
-        helper.assertTrue(horizontalLevel != null && horizontalLevel.statePredicate().matches(horizontalLog)
+        helper.assertTrue(horizontalLevel != null && horizontalLevel.typeId().equals(typeId)
+                        && horizontalLevel.statePredicate().matches(horizontalLog)
                         && !horizontalLevel.statePredicate().matches(Blocks.OAK_LOG.defaultBlockState()),
                 "Script level declarations preserve explicit state properties through deferred compilation");
         assertIdentifierOverloads(helper);

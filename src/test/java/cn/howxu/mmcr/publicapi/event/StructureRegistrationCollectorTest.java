@@ -39,16 +39,19 @@ class StructureRegistrationCollectorTest {
         var type = MMCR.id("shared_collector_type");
         var level = MMCR.id("shared_collector_level");
         var modifier = MMCR.id("shared_collector_modifier");
-        StructureRegistration.current().registerLevelType(new LevelType(type, Component.translatable("test.mmcr.coil")));
         var event = RegistrationAdapters.prepare(Set.of(machine));
-        event.registerLevel(Levels.level(level, type, 1, BlockConditions.block(Blocks.FURNACE),
+        event.registerLevel(Levels.level(level, type, 1, BlockConditions.state("minecraft:furnace"),
                 Modifiers.bundle()));
-        // Models KJS writing its core collector after Java event subscribers have returned.
-        StructureRegistration.current().registerModifier(modifier, ModifierDefinition.EMPTY);
+        assertThat(event.levels()).containsKey(level);
+        assertThatThrownBy(() -> event.levels().clear()).isInstanceOf(UnsupportedOperationException.class);
         event.registerStructure(machine, draft -> draft.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockConditions.block(Blocks.FURNACE)).controller('F'))
                 .requirements(requirements -> requirements.levelSlot('F', type).modifier('F', modifier))));
+        // Models KJS writing dependencies after Java event subscribers have returned.
+        StructureRegistration.current().registerLevelType(new LevelType(type, Component.translatable("test.mmcr.coil")));
+        StructureRegistration.current().registerModifier(modifier, ModifierDefinition.EMPTY);
         var snapshot = RegistrationAdapters.freeze(event);
+        assertThat(snapshot.levels().get(level).statePredicate().matches(Blocks.FURNACE.defaultBlockState())).isTrue();
         assertThat(snapshot.levelTypes()).containsKey(type);
         assertThat(snapshot.levels()).containsKey(level);
         assertThat(snapshot.modifiers()).containsKey(modifier);
@@ -58,6 +61,20 @@ class StructureRegistrationCollectorTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> event.registerModifier(MMCR.id("late"), Modifiers.bundle()))
                 .isInstanceOf(RegistrationException.class);
+    }
+
+    @Test
+    void unresolved_level_type_is_wrapped_at_freeze_and_can_be_completed_later() {
+        var event = new RegisterMachineStructuresEvent(Set.of());
+        var type = MMCR.id("public_forward_type");
+        var level = MMCR.id("public_forward_level");
+        event.registerLevel(Levels.level(level, type, 0, BlockConditions.state("minecraft:copper_block"),
+                Modifiers.bundle()));
+        assertThatThrownBy(() -> RegistrationAdapters.freeze(event)).isInstanceOf(RegistrationException.class)
+                .hasMessageContaining(level.toString()).hasMessageContaining(type.toString());
+        assertThat(event.levels()).containsKey(level);
+        event.registerLevelType(Levels.type(type, Component.translatable("test.mmcr.coil")));
+        assertThat(RegistrationAdapters.freeze(event).levels().get(level).typeId()).isEqualTo(type);
     }
 
     @Test

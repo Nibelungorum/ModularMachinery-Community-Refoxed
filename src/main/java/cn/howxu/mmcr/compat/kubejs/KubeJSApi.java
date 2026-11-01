@@ -3,7 +3,6 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
-import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
@@ -769,11 +768,6 @@ public final class KubeJSApi {
     }
 
     public LevelRequirement levelRequirement(ResourceLocation typeId, ResourceLocation levelId) {
-        var registered = MachineLevelRegistry.getLevel(levelId);
-        if (MachineLevelRegistry.getType(typeId) == null || registered == null
-                || !registered.typeId().equals(typeId)) {
-            throw new IllegalArgumentException("Unknown or mismatched machine level: " + typeId + "/" + levelId);
-        }
         return new LevelRequirement(typeId, levelId);
     }
 
@@ -786,9 +780,6 @@ public final class KubeJSApi {
     }
 
     public LevelSlot levelSlot(ResourceLocation typeId) {
-        if (MachineLevelRegistry.getType(typeId) == null) {
-            throw new IllegalArgumentException("Unknown machine level type: " + typeId);
-        }
         return new LevelSlot(typeId);
     }
 
