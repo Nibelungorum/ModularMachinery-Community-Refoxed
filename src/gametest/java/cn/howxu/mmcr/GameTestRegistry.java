@@ -82,6 +82,9 @@ public final class GameTestRegistry {
     @GameTestGenerator
     public static Collection<TestFunction> generateTests() {
         List<TestFunction> event = new ArrayList<>();
+        register(event, "detector_data_reset_recipe", 20, ItemDataResetGameTest::detectorClearsSelectionAndMask);
+        register(event, "terminal_data_reset_recipe", 20, ItemDataResetGameTest::terminalClearsBindingsAndConfiguration);
+        register(event, "blueprint_data_reset_recipe", 20, ItemDataResetGameTest::blueprintClearsMachineAndStage);
         register(event, "block_map_color", 20, BlockMapColorGameTest::registeredBlocksAreVisibleMapSurfaces);
         register(event, "structure_material_fluid_counts", 20, StructureMaterialGameTest::sourcesAndFlowsShareBuckets);
         register(event, "structure_material_flowing_only", 20, StructureMaterialGameTest::flowingOnlyBucketsAreDisplayOnly);
@@ -890,6 +893,8 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:input_isolation_")
                     || name.startsWith("mmcr:fluxnetworks_")
                     || name.startsWith("mmcr:appflux_")
+                    || name.equals("mmcr:detector_data_reset_recipe")
+                    || name.equals("mmcr:blueprint_data_reset_recipe")
                     || name.equals("mmcr:spectator_menu_opening")
                     || name.equals("mmcr:spectator_controller_ui_metadata")
                     || name.equals("mmcr:startup_mekanism_registry_references")
