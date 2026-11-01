@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -171,6 +172,7 @@ class FluxRuntimeBoundaryTest {
         assertThat(fixture.attempt(mode).advance()).isFalse();
 
         assertThat(fixture.runtime.tickCount()).isZero();
+        assertThat(fixture.runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
         assertThat(allocations(save(fixture.runtime))).containsEntry("single", 15L);
         assertThat(energy.buffer.amount()).isEqualTo(15L);
         assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
@@ -184,6 +186,28 @@ class FluxRuntimeBoundaryTest {
         restored.invalidate();
         assertThat(energy.buffer.reserved()).isZero();
         assertThat(energy.buffer.idleExcess()).isEqualTo(15L);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,SYNC", "true,SEMI_SYNC", "true,ASYNC", "false,SYNC", "false,SEMI_SYNC", "false,ASYNC"})
+    void missing_prefetch_result_reports_missing_energy(boolean atStart, MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        Fixture fixture = new Fixture(3);
+        if (atStart) {
+            fixture.first.missingPrefetchResult = true;
+            assertThat(fixture.start(false)).isFalse();
+            assertThat(fixture.first.networkCommits).isZero();
+            assertThat(fixture.first.buffer.amount()).isZero();
+        } else {
+            assertThat(fixture.start(false)).isTrue();
+            fixture.first.missingConsumptionResult = true;
+            assertThat(fixture.attempt(mode).advance()).isFalse();
+            fixture.assertReservations(6L, 9L);
+        }
+
+        assertThat(fixture.runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(fixture.runtime.tickCount()).isZero();
+        fixture.runtime.invalidate();
     }
 
     @ParameterizedTest
@@ -623,6 +647,8 @@ class FluxRuntimeBoundaryTest {
         private int releaseCalls;
         private long released;
         private boolean rejectConsumption;
+        private boolean missingPrefetchResult;
+        private boolean missingConsumptionResult;
         private long consumeLimit = Long.MAX_VALUE;
 
         private ObservedFlux(String key, long exactAmount) {
@@ -645,7 +671,10 @@ class FluxRuntimeBoundaryTest {
             return type == RecipeEnergyPrefetchFacet.class ? Optional.of(type.cast(this)) : delegate.facet(type);
         }
         @Override public String reservationKey() { return delegate.reservationKey(); }
-        @Override public Optional<PrefetchPlan> planPrefetch(long amount) { return delegate.planPrefetch(amount); }
+        @Override public Optional<PrefetchPlan> planPrefetch(long amount) {
+            return missingPrefetchResult ? Optional.of(new PrefetchPlan(amount, transaction -> null))
+                    : delegate.planPrefetch(amount);
+        }
         @Override public void restoreReservation(long amount) { delegate.restoreReservation(amount); }
         @Override public long releaseReservation(long amount) {
             releaseCalls++;
@@ -655,6 +684,7 @@ class FluxRuntimeBoundaryTest {
         }
         @Override public CapabilityResult consumeReservation(long amount, TransactionContext transaction) {
             consumeCalls++;
+            if (missingConsumptionResult) return null;
             long debited = Math.min(amount, consumeLimit);
             CapabilityResult result = delegate.consumeReservation(debited, transaction);
             return result.success() && (rejectConsumption || debited < amount)

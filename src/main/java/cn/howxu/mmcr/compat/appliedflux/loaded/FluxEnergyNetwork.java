@@ -96,7 +96,7 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
 
     private CapabilityResult extractExactly(long requestedAmount, TransactionContext transaction) {
         long simulated = energy.extract(requestedAmount, true);
-        if (simulated != requestedAmount) return missingInput();
+        if (simulated != requestedAmount) return missingEnergy();
         updateSnapshots(transaction);
         long extracted = energy.extract(requestedAmount, false);
         extractedInTransaction += extracted;
@@ -105,7 +105,7 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
             restore(extracted);
             extractedInTransaction -= extracted;
         }
-        return missingInput();
+        return missingEnergy();
     }
 
     @Override
@@ -131,10 +131,10 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
         }
     }
 
-    private static CapabilityResult missingInput() {
+    private static CapabilityResult missingEnergy() {
         var energyType = BuiltinCapabilityDefinitions.ENERGY_TYPE.id();
         return CapabilityResult.failure(ExecutionStatus.blocked(energyType, energyType,
-                FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, energyType,
+                FailureOccurrence.at(BuiltinFailureReasons.MISSING_ENERGY, energyType,
                         FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
     }
 

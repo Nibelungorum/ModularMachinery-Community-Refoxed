@@ -219,11 +219,11 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
                                             TransactionContext transaction) {
         long cached = buffer.amount();
         long capacity = buffer.storage().capacity();
-        if (requestedAmount > capacity - cached) return failure(BuiltinFailureReasons.MISSING_INPUT);
+        if (requestedAmount > capacity - cached) return failure(BuiltinFailureReasons.MISSING_ENERGY);
         try (Transaction nested = Transaction.open(transaction)) {
             CapabilityResult result = bridgeOperation.commit(nested);
-            if (result == null || !result.success()) return result == null ? failure(BuiltinFailureReasons.MISSING_INPUT) : result;
-            if (buffer.insert(requestedAmount, nested) != requestedAmount) return failure(BuiltinFailureReasons.MISSING_INPUT);
+            if (result == null || !result.success()) return result == null ? failure(BuiltinFailureReasons.MISSING_ENERGY) : result;
+            if (buffer.insert(requestedAmount, nested) != requestedAmount) return failure(BuiltinFailureReasons.MISSING_ENERGY);
             buffer.reserve(requestedAmount, nested);
             nested.commit();
         }
@@ -251,9 +251,9 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
     }
 
     private CapabilityResult extractLocal(long amount, TransactionContext transaction) {
-        if (buffer.amount() < amount) return failure(BuiltinFailureReasons.MISSING_INPUT);
+        if (buffer.amount() < amount) return failure(BuiltinFailureReasons.MISSING_ENERGY);
         return buffer.extract(amount, transaction) == amount
-                ? CapabilityResult.successful() : failure(BuiltinFailureReasons.MISSING_INPUT);
+                ? CapabilityResult.successful() : failure(BuiltinFailureReasons.MISSING_ENERGY);
     }
 
     private CapabilityResult failure(FailureReason reason) {

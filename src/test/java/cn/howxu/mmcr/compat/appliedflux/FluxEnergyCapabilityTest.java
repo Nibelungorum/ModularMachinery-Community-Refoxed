@@ -115,12 +115,52 @@ class FluxEnergyCapabilityTest {
         FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input");
 
         try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(capability.prepareOperation(new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT,
-                    1L, 11L, false)).commit(transaction).success()).isFalse();
+            var result = capability.prepareOperation(new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT,
+                    1L, 11L, false)).commit(transaction);
+            assertThat(result.success()).isFalse();
+            assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
             transaction.commit();
         }
 
         assertThat(buffer.amount()).isEqualTo(10L);
+    }
+
+    @Test
+    void asyncInputCommitReportsMissingEnergyWhenTheSnapshotBecomesStale() throws Exception {
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        buffer.setAmount(10L);
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input");
+        AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
+        AsyncCapabilitySnapshot snapshot = (AsyncCapabilitySnapshot) invoke(facet, "captureSnapshotOnServerThread");
+        AsyncCapabilityPlanner planner = (AsyncCapabilityPlanner) invoke(facet, "workerPlannerOnServerThread");
+        var operation = planner.plan(snapshot, new AsyncCapabilityRequest.Scalar(
+                capability.type().id(), 1L, 7L, false)).orElseThrow();
+        buffer.setAmount(6L);
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            var result = commit(facet, operation, transaction);
+            assertThat(result.success()).isFalse();
+            assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+            transaction.commit();
+        }
+        assertThat(buffer.amount()).isEqualTo(6L);
+    }
+
+    @Test
+    void prefetchWithoutABridgeResultReportsMissingEnergy() {
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
+                requested -> Optional.of(transaction -> null));
+        var plan = capability.planPrefetch(25L).orElseThrow();
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            var result = plan.operation().commit(transaction);
+            assertThat(result.success()).isFalse();
+            assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+            transaction.commit();
+        }
+        assertThat(buffer.amount()).isZero();
+        assertThat(buffer.reserved()).isZero();
     }
 
     @Test
@@ -251,7 +291,9 @@ class FluxEnergyCapabilityTest {
         FluxEnergyInputCapability missing = new FluxEnergyInputCapability(new FluxEnergyBuffer(), "missing-input");
         try (Transaction transaction = Transaction.openRoot()) {
             assertThat(capability.consumeReservation(7L, transaction).success()).isTrue();
-            assertThat(missing.consumeReservation(1L, transaction).success()).isFalse();
+            var result = missing.consumeReservation(1L, transaction);
+            assertThat(result.success()).isFalse();
+            assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
         }
 
         assertThat(ordinary.amount()).isEqualTo(95L);
@@ -282,7 +324,9 @@ class FluxEnergyCapabilityTest {
         var plan = capability.planPrefetch(2L).orElseThrow();
 
         try (Transaction transaction = Transaction.openRoot()) {
-            assertThat(plan.operation().commit(transaction).success()).isFalse();
+            var result = plan.operation().commit(transaction);
+            assertThat(result.success()).isFalse();
+            assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
             transaction.commit();
         }
 

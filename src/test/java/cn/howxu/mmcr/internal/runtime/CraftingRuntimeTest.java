@@ -2425,7 +2425,7 @@ class CraftingRuntimeTest {
         runtime.start(energyRecipe("runtime_flux_shortage", 3, 2), 1);
 
         assertThat(runtime.active()).isFalse();
-        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
         assertThat(network.extracted()).isZero();
         assertThat(network.reserved()).isZero();
     }
@@ -2438,7 +2438,7 @@ class CraftingRuntimeTest {
         var result = context.planStartResult(energyRecipe("runtime_flux_search_shortage", 3, 2), 1);
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
+        assertThat(result.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
         assertThat(network.planned).isZero();
         assertThat(network.extracted()).isZero();
         assertThat(network.reserved()).isZero();

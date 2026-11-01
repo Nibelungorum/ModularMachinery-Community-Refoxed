@@ -1349,7 +1349,7 @@ public final class CraftingRuntime {
                 if (prefetches != null) releaseUnpaidPrefetches(prefetches);
                 return status;
             }
-            if (prefetches == null) return fail(missingInputStatus());
+            if (prefetches == null) return fail(failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.RECIPE_START, Map.of()));
             prepared = new PreparedStart(effectiveRecipe, runtime,
                     catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches,
                     List.of(), !facets.isEmpty());
@@ -2611,7 +2611,8 @@ public final class CraftingRuntime {
         for (PreparedPrefetch prefetch : prepared.prefetches()) {
             CapabilityResult result = prefetch.plan().operation().commit(transaction);
             if (result == null || !result.success()) {
-                return result == null || result.status() == null ? missingInputStatus() : result.status();
+                return result == null || result.status() == null
+                        ? failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.RECIPE_START, Map.of()) : result.status();
             }
         }
         if (!preparedStartCurrent(prepared) || !startAttemptCurrent(lifecycle, payment)) {
@@ -2827,7 +2828,8 @@ public final class CraftingRuntime {
                 if (consumed > 0L) {
                     CapabilityResult result = prefetch.facet().consumeReservation(consumed, transaction);
                     if (result == null || !result.success()) {
-                        return result == null || result.status() == null ? missingInputStatus() : result.status();
+                        return result == null || result.status() == null
+                                ? failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.PER_TICK, Map.of()) : result.status();
                     }
                 }
                 ActivePrefetch updated = new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(), prefetch.remaining() - consumed);
