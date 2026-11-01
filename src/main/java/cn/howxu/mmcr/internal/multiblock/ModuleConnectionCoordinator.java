@@ -13,6 +13,8 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.chunk.LevelChunk;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -30,8 +32,8 @@ public final class ModuleConnectionCoordinator {
     }
 
     public static void refresh(ServerLevel level, BlockPos couplerPos) {
-        if (level == null || couplerPos == null || !level.hasChunk(couplerPos.getX() >> 4, couplerPos.getZ() >> 4)) return;
-        if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) return;
+        if (level == null || couplerPos == null) return;
+        if (!(loadedBlockEntity(level, couplerPos) instanceof ModuleCouplerBlockEntity coupler)) return;
         Optional<MachineConnection> existing = existingConnection(level, coupler);
 
         List<MachineControllerBlockEntity> hosts = controllersFor(level, couplerPos, true);
@@ -77,7 +79,7 @@ public final class ModuleConnectionCoordinator {
 
     public static boolean validate(ModuleCouplerBlockEntity coupler) {
         if (coupler == null || !(coupler.getLevel() instanceof ServerLevel level)) return false;
-        if (!level.hasChunk(coupler.getBlockPos().getX() >> 4, coupler.getBlockPos().getZ() >> 4)) return false;
+        if (level.getChunkSource().getChunkNow(coupler.getBlockPos().getX() >> 4, coupler.getBlockPos().getZ() >> 4) == null) return false;
         Optional<GlobalPos> hostPos = coupler.connectedHost();
         Optional<GlobalPos> modulePos = coupler.connectedModule();
         if (hostPos.isPresent() || modulePos.isPresent()) return false;
@@ -90,11 +92,15 @@ public final class ModuleConnectionCoordinator {
     }
 
     public static void tick(ServerLevel level) {
-        for (BlockPos couplerPos : ModuleConnectionRefreshQueue.drain(level)) refresh(level, couplerPos);
-        if (level.getGameTime() % ServerConfig.moduleFallbackScanIntervalTicks() != 0) return;
-        for (BlockPos couplerPos : registeredCouplers(level)) {
-            if (level.hasChunk(couplerPos.getX() >> 4, couplerPos.getZ() >> 4)) refresh(level, couplerPos);
+        Set<BlockPos> pending = new LinkedHashSet<>(ModuleConnectionRefreshQueue.drain(level));
+        Set<ChunkPos> chunks = ModuleConnectionRefreshQueue.drainChunks(level);
+        boolean fallback = level.getGameTime() % ServerConfig.moduleFallbackScanIntervalTicks() == 0;
+        if (fallback || !chunks.isEmpty()) {
+            for (BlockPos couplerPos : registeredCouplers(level)) {
+                if (fallback || chunks.contains(new ChunkPos(couplerPos))) pending.add(couplerPos);
+            }
         }
+        for (BlockPos couplerPos : pending) refresh(level, couplerPos);
     }
 
     public static void clearConnectionsFor(ServerLevel level, MachineControllerBlockEntity controller) {
@@ -102,7 +108,7 @@ public final class ModuleConnectionCoordinator {
         Set<MachineControllerBlockEntity> affectedControllers = new LinkedHashSet<>();
         affectedControllers.add(controller);
         for (BlockPos couplerPos : controller.couplerWorldPositions()) {
-            if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
+            if (!(loadedBlockEntity(level, couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
             existingConnection(level, coupler).ifPresent(connection -> {
                 affectedControllers.add(connection.host());
                 affectedControllers.add(connection.module());
@@ -120,12 +126,8 @@ public final class ModuleConnectionCoordinator {
     }
 
     public static void enqueueCouplersInChunk(ServerLevel level, ChunkPos chunkPos) {
-        if (level == null || chunkPos == null) return;
-        for (BlockPos couplerPos : registeredCouplers(level)) {
-            if ((couplerPos.getX() >> 4) == chunkPos.x && (couplerPos.getZ() >> 4) == chunkPos.z) {
-                ModuleConnectionRefreshQueue.enqueue(level, couplerPos);
-            }
-        }
+        // Chunk load events run before FULL is ready; even discovery must wait for the level tick.
+        ModuleConnectionRefreshQueue.enqueueChunk(level, chunkPos);
     }
 
     public static ModuleConnectionStatus connectionStatus(MachineControllerBlockEntity controller) {
@@ -136,12 +138,12 @@ public final class ModuleConnectionCoordinator {
         if (!(controller.getLevel() instanceof ServerLevel level)) return ModuleConnectionStatus.disconnected();
         GlobalPos expectedModule = GlobalPos.of(level.dimension(), controller.getBlockPos());
         for (BlockPos couplerPos : controller.couplerWorldPositions()) {
-            if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
+            if (!(loadedBlockEntity(level, couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
             Optional<GlobalPos> hostPos = coupler.connectedHost();
             Optional<GlobalPos> modulePos = coupler.connectedModule();
             if (hostPos.isEmpty() || modulePos.isEmpty() || !expectedModule.equals(modulePos.get())) continue;
             if (!level.dimension().equals(hostPos.get().dimension())) continue;
-            BlockEntity hostEntity = level.getBlockEntity(hostPos.get().pos());
+            BlockEntity hostEntity = loadedBlockEntity(level, hostPos.get().pos());
             if (!(hostEntity instanceof MachineControllerBlockEntity host)) continue;
             Machine hostMachine = host.currentStructureSnapshot().machine();
             if (hostMachine != null && canConnect(level, couplerPos, host, controller)) {
@@ -156,14 +158,13 @@ public final class ModuleConnectionCoordinator {
         if (!isFormedHost(controller)) return 0;
         int count = 0;
         for (BlockPos couplerPos : controller.couplerWorldPositions()) {
-            if (!level.hasChunk(couplerPos.getX() >> 4, couplerPos.getZ() >> 4)) continue;
-            if (!(level.getBlockEntity(couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
+            if (!(loadedBlockEntity(level, couplerPos) instanceof ModuleCouplerBlockEntity coupler)) continue;
             Optional<GlobalPos> hostPos = coupler.connectedHost();
             Optional<GlobalPos> modulePos = coupler.connectedModule();
             if (hostPos.isEmpty() || modulePos.isEmpty()) continue;
             if (!level.dimension().equals(hostPos.get().dimension()) || !level.dimension().equals(modulePos.get().dimension())) continue;
             if (!controller.getBlockPos().equals(hostPos.get().pos())) continue;
-            BlockEntity moduleEntity = level.getBlockEntity(modulePos.get().pos());
+            BlockEntity moduleEntity = loadedBlockEntity(level, modulePos.get().pos());
             if (!(moduleEntity instanceof MachineControllerBlockEntity module)) continue;
             if (canConnect(level, couplerPos, controller, module)) count++;
         }
@@ -177,7 +178,7 @@ public final class ModuleConnectionCoordinator {
         Set<BlockPos> hostInterfaces = worldPositions(hostPattern.interfacePositions(facing), hostPos);
         if (hostCouplers.isEmpty() || hostInterfaces.isEmpty()) return false;
         for (BlockPos controllerPos : StructureClaimRegistry.get(level).claimedControllers()) {
-            if (!(level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity module)
+            if (!(loadedBlockEntity(level, controllerPos) instanceof MachineControllerBlockEntity module)
                     || !isFormedModule(module)) continue;
             Machine moduleMachine = module.currentStructureSnapshot().machine();
             if (!hostMachine.acceptedModuleIds().contains(moduleMachine.registryName())) continue;
@@ -202,7 +203,7 @@ public final class ModuleConnectionCoordinator {
 
     private static List<MachineControllerBlockEntity> controllersFor(ServerLevel level, BlockPos couplerPos, boolean host) {
         return StructureClaimRegistry.get(level).claimedControllers().stream()
-                .map(level::getBlockEntity)
+                .map(pos -> loadedBlockEntity(level, pos))
                 .filter(MachineControllerBlockEntity.class::isInstance)
                 .map(MachineControllerBlockEntity.class::cast)
                 .filter(controller -> host ? isFormedHost(controller) : isFormedModule(controller))
@@ -213,11 +214,16 @@ public final class ModuleConnectionCoordinator {
     private static Set<BlockPos> registeredCouplers(ServerLevel level) {
         Set<BlockPos> couplers = new LinkedHashSet<>();
         for (BlockPos controllerPos : StructureClaimRegistry.get(level).claimedControllers()) {
-            if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
+            if (loadedBlockEntity(level, controllerPos) instanceof MachineControllerBlockEntity controller) {
                 couplers.addAll(controller.couplerWorldPositions());
             }
         }
         return couplers;
+    }
+
+    private static @Nullable BlockEntity loadedBlockEntity(ServerLevel level, BlockPos pos) {
+        LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        return chunk == null ? null : chunk.getBlockEntity(pos);
     }
 
     private static Optional<MachineConnection> existingConnection(ServerLevel level, ModuleCouplerBlockEntity coupler) {
@@ -227,8 +233,8 @@ public final class ModuleConnectionCoordinator {
         if (!level.dimension().equals(hostPos.get().dimension()) || !level.dimension().equals(modulePos.get().dimension())) {
             return Optional.empty();
         }
-        BlockEntity host = level.getBlockEntity(hostPos.get().pos());
-        BlockEntity module = level.getBlockEntity(modulePos.get().pos());
+        BlockEntity host = loadedBlockEntity(level, hostPos.get().pos());
+        BlockEntity module = loadedBlockEntity(level, modulePos.get().pos());
         if (host instanceof MachineControllerBlockEntity hostController
                 && module instanceof MachineControllerBlockEntity moduleController) {
             return Optional.of(new MachineConnection(hostController, moduleController));
@@ -265,6 +271,9 @@ public final class ModuleConnectionCoordinator {
     }
 
     private static boolean structureMatches(ServerLevel level, MachineControllerBlockEntity controller) {
+        for (ChunkPos chunkPos : controller.currentStructureSnapshot().criticalChunks()) {
+            if (level.getChunkSource().getChunkNow(chunkPos.x, chunkPos.z) == null) return false;
+        }
         CompiledMachinePattern compiled = compiled(controller);
         Direction facing = facing(controller);
         return compiled != null && facing != null

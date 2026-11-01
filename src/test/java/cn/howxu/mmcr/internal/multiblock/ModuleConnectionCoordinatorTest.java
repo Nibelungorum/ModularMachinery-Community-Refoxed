@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.multiblock;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
@@ -21,6 +22,9 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -242,6 +246,101 @@ class ModuleConnectionCoordinatorTest {
     }
 
     @Test
+    void chunk_refresh_requests_do_not_query_the_world_and_are_deduplicated_and_discarded() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+        ModuleConnectionRefreshQueue.discard(fixture.level());
+        ChunkPos chunkPos = new ChunkPos(fixture.couplerPos());
+        TestServerLevel otherLevel = serverLevel(Map.of(), List.of(), true);
+        ChunkPos otherChunk = new ChunkPos(-1, -2);
+        fixture.level().rejectWorldQueries = true;
+        otherLevel.rejectWorldQueries = true;
+
+        ModuleConnectionCoordinator.enqueueCouplersInChunk(fixture.level(), chunkPos);
+        ModuleConnectionCoordinator.enqueueCouplersInChunk(fixture.level(), chunkPos);
+
+        assertThat(ModuleConnectionRefreshQueue.drainChunks(fixture.level())).containsExactly(chunkPos);
+        assertThat(ModuleConnectionRefreshQueue.drainChunks(fixture.level())).isEmpty();
+        assertThat(ModuleConnectionRefreshQueue.drain(fixture.level())).isEmpty();
+
+        ModuleConnectionCoordinator.enqueueCouplersInChunk(fixture.level(), chunkPos);
+        ModuleConnectionCoordinator.enqueueCouplersInChunk(otherLevel, otherChunk);
+        ModuleConnectionRefreshQueue.enqueue(fixture.level(), fixture.couplerPos());
+        ModuleConnectionRefreshQueue.enqueue(otherLevel, fixture.couplerPos());
+        ModuleConnectionRefreshQueue.discard(fixture.level());
+        assertThat(ModuleConnectionRefreshQueue.drainChunks(fixture.level())).isEmpty();
+        assertThat(ModuleConnectionRefreshQueue.drain(fixture.level())).isEmpty();
+        assertThat(ModuleConnectionRefreshQueue.drainChunks(otherLevel)).containsExactly(otherChunk);
+        assertThat(ModuleConnectionRefreshQueue.drain(otherLevel)).containsExactly(fixture.couplerPos());
+    }
+
+    @Test
+    void chunk_refresh_connects_only_when_the_level_tick_processes_the_request() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
+        ModuleConnectionRefreshQueue.discard(fixture.level());
+
+        ModuleConnectionCoordinator.enqueueCouplersInChunk(fixture.level(), new ChunkPos(fixture.couplerPos()));
+
+        assertThat(fixture.coupler().connectedHost()).isEmpty();
+        ModuleConnectionCoordinator.tick(fixture.level());
+        assertThat(fixture.coupler().connectedHost()).contains(GlobalPos.of(Level.OVERWORLD, fixture.hostPos()));
+        assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+    }
+
+    @Test
+    void refresh_skips_unavailable_controller_chunks_and_recovers_cross_chunk_connections() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null,
+                true, new BlockPos(10, 64, 18));
+        ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
+        assertThat(fixture.coupler().connectedModule()).isPresent();
+        ChunkPos moduleChunk = new ChunkPos(fixture.modulePos());
+        fixture.level().unavailableChunks.add(moduleChunk);
+
+        ModuleConnectionCoordinator.enqueueCouplersInChunk(fixture.level(), new ChunkPos(fixture.couplerPos()));
+        ModuleConnectionCoordinator.tick(fixture.level());
+
+        assertThat(fixture.coupler().connectedHost()).isEmpty();
+        assertThat(fixture.coupler().connectedModule()).isEmpty();
+        assertThat(ModuleConnectionCoordinator.installedModuleCount(fixture.host())).isZero();
+        assertThat(ModuleConnectionCoordinator.connectionStatus(fixture.module()).connected()).isFalse();
+        assertThat(ModuleConnectionCoordinator.validate(fixture.coupler())).isFalse();
+
+        fixture.level().unavailableChunks.remove(moduleChunk);
+        ModuleConnectionCoordinator.enqueueCouplersInChunk(fixture.level(), new ChunkPos(fixture.couplerPos()));
+        ModuleConnectionCoordinator.tick(fixture.level());
+        assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+    }
+
+    @Test
+    void fallback_scan_skips_unavailable_chunks_without_an_explicit_refresh_request() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null,
+                true, new BlockPos(10, 64, 18));
+        ModuleConnectionRefreshQueue.discard(fixture.level());
+        fixture.level().gameTime = ServerConfig.moduleFallbackScanIntervalTicks();
+        ChunkPos moduleChunk = new ChunkPos(fixture.modulePos());
+        fixture.level().unavailableChunks.add(moduleChunk);
+
+        ModuleConnectionCoordinator.tick(fixture.level());
+        assertThat(fixture.coupler().connectedModule()).isEmpty();
+
+        fixture.level().unavailableChunks.remove(moduleChunk);
+        ModuleConnectionCoordinator.tick(fixture.level());
+        assertThat(fixture.coupler().connectedModule()).contains(GlobalPos.of(Level.OVERWORLD, fixture.modulePos()));
+    }
+
+    @Test
+    void refresh_does_not_read_pattern_blocks_in_unavailable_chunks() throws Exception {
+        FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null,
+                true, new BlockPos(10, 64, 34), new BlockPos(11, 64, 24));
+        // Both controllers remain available; only a chunk between the module and its coupler is missing.
+        fixture.level().unavailableChunks.add(new ChunkPos(0, 1));
+
+        ModuleConnectionCoordinator.refresh(fixture.level(), fixture.couplerPos());
+
+        assertThat(fixture.coupler().connectedHost()).isEmpty();
+        assertThat(fixture.coupler().connectedModule()).isEmpty();
+    }
+
+    @Test
     void controller_caches_coupler_world_positions() throws Exception {
         FormationFixture fixture = formedFixture(HOST_ID, MODULE_ID, true, true, false, null);
 
@@ -274,17 +373,32 @@ class ModuleConnectionCoordinatorTest {
     private static FormationFixture formedFixture(ResourceLocation hostId, ResourceLocation moduleId, boolean hostFormed,
                                                   boolean moduleFormed, boolean sharedInterface,
                                                   BlockPos moduleCouplerOverride, boolean chunksLoaded) throws Exception {
+        return formedFixture(hostId, moduleId, hostFormed, moduleFormed, sharedInterface,
+                moduleCouplerOverride, chunksLoaded, new BlockPos(10, 64, 12));
+    }
+
+    private static FormationFixture formedFixture(ResourceLocation hostId, ResourceLocation moduleId, boolean hostFormed,
+                                                  boolean moduleFormed, boolean sharedInterface,
+                                                  BlockPos moduleCouplerOverride, boolean chunksLoaded,
+                                                  BlockPos modulePos) throws Exception {
+        return formedFixture(hostId, moduleId, hostFormed, moduleFormed, sharedInterface,
+                moduleCouplerOverride, chunksLoaded, modulePos, new BlockPos(11, 64, 10));
+    }
+
+    private static FormationFixture formedFixture(ResourceLocation hostId, ResourceLocation moduleId, boolean hostFormed,
+                                                  boolean moduleFormed, boolean sharedInterface,
+                                                  BlockPos moduleCouplerOverride, boolean chunksLoaded,
+                                                  BlockPos modulePos, BlockPos moduleNormal) throws Exception {
         MachineRegistry.clearForTesting();
         BlockPos couplerPos = new BlockPos(10, 64, 10);
         BlockPos hostPos = new BlockPos(10, 64, 8);
-        BlockPos modulePos = new BlockPos(10, 64, 12);
         BlockPos sharedNormal = new BlockPos(11, 64, 10);
         BlockPos hostInterface = sharedInterface ? new BlockPos(12, 64, 10) : new BlockPos(12, 64, 9);
         BlockPos moduleInterface = new BlockPos(12, 64, 10);
         BlockPos moduleCoupler = moduleCouplerOverride == null ? couplerPos : moduleCouplerOverride;
 
         DynamicMachine hostMachine = machine(hostId, MachineRole.HOST, Set.of(MODULE_ID), hostPos, couplerPos, sharedNormal, hostInterface);
-        DynamicMachine moduleMachine = machine(moduleId, MachineRole.MODULE, Set.of(), modulePos, moduleCoupler, sharedNormal, moduleInterface);
+        DynamicMachine moduleMachine = machine(moduleId, MachineRole.MODULE, Set.of(), modulePos, moduleCoupler, moduleNormal, moduleInterface);
         MachineControllerBlockEntity host = controller(hostPos, hostMachine, hostFormed);
         MachineControllerBlockEntity module = controller(modulePos, moduleMachine, moduleFormed);
         ModuleCouplerBlockEntity coupler = new ModuleCouplerBlockEntity(couplerPos, ModBlocks.MODULE_BRIDGE.get().defaultBlockState());
@@ -294,6 +408,7 @@ class ModuleConnectionCoordinatorTest {
         blocks.put(couplerPos, ModBlocks.MODULE_BRIDGE.get());
         blocks.put(moduleCoupler, ModBlocks.MODULE_BRIDGE.get());
         blocks.put(sharedNormal, Blocks.STONE);
+        blocks.put(moduleNormal, Blocks.STONE);
         blocks.put(hostInterface, ModBlocks.SMART_INTERFACE.get());
         blocks.put(moduleInterface, ModBlocks.SMART_INTERFACE.get());
         TestServerLevel level = serverLevel(blocks, List.of(host, module, coupler), chunksLoaded);
@@ -376,6 +491,11 @@ class ModuleConnectionCoordinatorTest {
         setField(TestServerLevel.class, level, "blockEntities", blockEntities.stream()
                 .collect(Collectors.toMap(BlockEntity::getBlockPos, entity -> entity)));
         setField(TestServerLevel.class, level, "chunksLoaded", chunksLoaded);
+        setField(TestServerLevel.class, level, "gameTime", 1L);
+        setField(TestServerLevel.class, level, "unavailableChunks", new HashSet<ChunkPos>());
+        TestChunkCache chunkSource = (TestChunkCache) unsafe().allocateInstance(TestChunkCache.class);
+        chunkSource.level = level;
+        setField(ServerLevel.class, level, "chunkSource", chunkSource);
         setField(ServerLevel.class, level, "players", List.of());
         setField(Level.class, level, "dimension", Level.OVERWORLD);
         return level;
@@ -393,6 +513,40 @@ class ModuleConnectionCoordinatorTest {
         field.set(target, value);
     }
 
+    /** @author howxu <dev@howxu.cn> */
+    private static class TestChunkCache extends ServerChunkCache {
+        private TestServerLevel level;
+
+        private TestChunkCache() {
+            super(null, null, null, null, null, null, 0, 0, false, null, null, null);
+        }
+
+        @Override public LevelChunk getChunkNow(int x, int z) {
+            if (level.rejectWorldQueries) throw new AssertionError("Unexpected chunk query");
+            if (!level.chunksLoaded || level.unavailableChunks.contains(new ChunkPos(x, z))) return null;
+            try {
+                TestChunk chunk = (TestChunk) unsafe().allocateInstance(TestChunk.class);
+                chunk.level = level;
+                return chunk;
+            } catch (ReflectiveOperationException exception) {
+                throw new AssertionError(exception);
+            }
+        }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static class TestChunk extends LevelChunk {
+        private TestServerLevel level;
+
+        private TestChunk() {
+            super(null, new ChunkPos(0, 0));
+        }
+
+        @Override public BlockEntity getBlockEntity(BlockPos pos) {
+            return level.getBlockEntity(pos);
+        }
+    }
+
     private record FormationFixture(TestServerLevel level, MachineControllerBlockEntity host,
                                     MachineControllerBlockEntity module, ModuleCouplerBlockEntity coupler,
                                     BlockPos hostPos, BlockPos modulePos, BlockPos couplerPos) {
@@ -402,16 +556,27 @@ class ModuleConnectionCoordinatorTest {
         private Map<BlockPos, BlockState> blocks;
         private Map<BlockPos, BlockEntity> blockEntities;
         private boolean chunksLoaded;
+        private long gameTime;
+        private boolean rejectWorldQueries;
+        private Set<ChunkPos> unavailableChunks;
 
         private TestServerLevel() {
             super(null, null, null, null, null, null, null, false, 0L, List.of(), false, null);
         }
 
+        private void checkWorldQuery(BlockPos pos) {
+            if (rejectWorldQueries || unavailableChunks.contains(new ChunkPos(pos))) {
+                throw new AssertionError("Unexpected world query at " + pos);
+            }
+        }
+
         @Override public BlockState getBlockState(BlockPos pos) {
+            checkWorldQuery(pos);
             return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState());
         }
 
         @Override public BlockEntity getBlockEntity(BlockPos pos) {
+            checkWorldQuery(pos);
             return blockEntities.get(pos);
         }
 
@@ -439,7 +604,7 @@ class ModuleConnectionCoordinatorTest {
         }
 
         @Override public long getGameTime() {
-            return 1L;
+            return gameTime;
         }
     }
 }
