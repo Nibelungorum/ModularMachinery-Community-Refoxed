@@ -57,6 +57,9 @@ public final class GameTestRegistry {
     }
 
     public static void registerAll(RegisterGameTestsEvent event) {
+        register(event, "detector_data_reset_recipe", 20, ItemDataResetGameTest::detectorClearsSelectionAndMask);
+        register(event, "terminal_data_reset_recipe", 20, ItemDataResetGameTest::terminalClearsBindingsAndConfiguration);
+        register(event, "blueprint_data_reset_recipe", 20, ItemDataResetGameTest::blueprintClearsMachineAndStage);
         register(event, "block_map_color", 20, BlockMapColorGameTest::registeredBlocksAreVisibleMapSurfaces);
         register(event, "structure_material_fluid_counts", 20, StructureMaterialGameTest::sourcesAndFlowsShareBuckets);
         register(event, "structure_material_flowing_only", 20, StructureMaterialGameTest::flowingOnlyBucketsAreDisplayOnly);

@@ -283,6 +283,18 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('E', Tags.Items.GLASS_PANES)
                 .save(output);
 
+        shapeless(ModItems.MULTIBLOCK_DETECTOR.get(), 1)
+                .requires(ModItems.MULTIBLOCK_DETECTOR.get())
+                .save(output, "mmcr:multiblock_detector_reset");
+
+        shapeless(ModItems.TERMINAL.get(), 1)
+                .requires(ModItems.TERMINAL.get())
+                .save(output, "mmcr:terminal_reset");
+
+        shapeless(ModItems.BLUEPRINT.get(), 1)
+                .requires(ModItems.BLUEPRINT.get())
+                .save(output, "mmcr:blueprint_reset");
+
         shaped(ModItems.KEY_CARD.get(), 1)
                 .pattern("IRI")
                 .pattern("RPR")

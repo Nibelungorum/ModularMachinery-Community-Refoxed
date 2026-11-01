@@ -287,7 +287,8 @@ class PublicMachineBuilderTest {
             assertThat(ModItems.ITEMS).containsKey(id);
         }
         assertThat(recipes).containsKeys(MMCR.id("blueprint"), MMCR.id("key_card"), MMCR.id("data_storage"),
-                MMCR.id("network_interface"));
+                MMCR.id("network_interface"), MMCR.id("multiblock_detector_reset"),
+                MMCR.id("terminal_reset"), MMCR.id("blueprint_reset"));
     }
 
     private static void installRecipeTestTags() {

@@ -162,6 +162,7 @@ public final class TestBootstrap {
         bindNetworkInterface();
         bindModuleBridge();
         bindUpgradeBuses();
+        bind(ModItems.MULTIBLOCK_DETECTOR, registerItem(ModItems.MULTIBLOCK_DETECTOR));
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         bind(ModItems.TERMINAL, registerItem(ModItems.TERMINAL));
         bind(ModItems.KEY_CARD, registerItem(ModItems.KEY_CARD));
