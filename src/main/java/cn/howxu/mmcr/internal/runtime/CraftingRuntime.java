@@ -1523,7 +1523,7 @@ public final class CraftingRuntime {
                 if (prefetches != null) releaseUnpaidPrefetches(prefetches);
                 return status;
             }
-            if (prefetches == null) return fail(missingInputStatus());
+            if (prefetches == null) return fail(failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.RECIPE_START, Map.of()));
             prepared = new PreparedStart(effectiveRecipe, runtime,
                     catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches,
                     List.of(), !facets.isEmpty());
@@ -2989,7 +2989,8 @@ public final class CraftingRuntime {
                 }
                 if (result == null || !result.success() || prefetch.confirmedAmount() != prefetch.plan().amount()) {
                     payment.pauseAfterCommitFailure();
-                    return result == null || result.status() == null ? missingInputStatus() : result.status();
+                    return result == null || result.status() == null
+                            ? failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.RECIPE_START, Map.of()) : result.status();
                 }
                 if (payment != ledger || lifecycle != controller.lifecycleEpoch()) return missingInputStatus();
             }
@@ -3435,7 +3436,7 @@ public final class CraftingRuntime {
                     if (!prefetchConsumptionCurrent(consumingRecipe, payment, attempt, lifecycle, owned)) return missingInputStatus();
                 }
                 return result == null || result.status() == null
-                        ? failure(BuiltinFailureReasons.MISSING_INPUT, FailurePhase.PER_TICK, Map.of()) : result.status();
+                        ? failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.PER_TICK, Map.of()) : result.status();
             }
             // Publish each successful debit before visiting the next allocation, which may fail.
             activePrefetches = replacePrefetchAllocation(updated, index, new ActivePrefetch(

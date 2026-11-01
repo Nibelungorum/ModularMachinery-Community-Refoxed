@@ -401,7 +401,7 @@ public final class CraftingContext {
         int index = Math.max(0, Math.min(requirementIndex, requirements.size() - 1));
         MachineRequirement requirement = requirements.get(index);
         return new PlanningResult(null,
-                RequirementHandlerSupport.blocked(requirement, BuiltinFailureReasons.MISSING_INPUT),
+                RequirementHandlerSupport.blocked(requirement, BuiltinFailureReasons.MISSING_ENERGY),
                 List.of(), index);
     }
 

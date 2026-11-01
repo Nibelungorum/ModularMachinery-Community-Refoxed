@@ -71,7 +71,7 @@ public final class FluxNetworkInputCapability implements MachineCapability, Scal
         boolean[] committed = {false};
         return Optional.of(new PrefetchPlan(accepted, (NativeCapabilityOperation) () -> {
             reservationKey();
-            if (committed[0] || !handler.commitCandidate(accepted, () -> committed[0] = true)) return failure(BuiltinFailureReasons.MISSING_INPUT);
+            if (committed[0] || !handler.commitCandidate(accepted, () -> committed[0] = true)) return failure(BuiltinFailureReasons.MISSING_ENERGY);
             return CapabilityResult.successful();
         }, () -> committed[0] ? accepted : 0L));
     }
@@ -91,7 +91,7 @@ public final class FluxNetworkInputCapability implements MachineCapability, Scal
     @Override
     public CapabilityResult consumeReservation(long amount) {
         reservationKey();
-        return handler.consumeReserved(amount) ? CapabilityResult.successful() : failure(BuiltinFailureReasons.MISSING_INPUT);
+        return handler.consumeReserved(amount) ? CapabilityResult.successful() : failure(BuiltinFailureReasons.MISSING_ENERGY);
     }
 
     @Override public long availableForConsumption() { return handler.availableForPrefetch(); }
@@ -147,7 +147,7 @@ public final class FluxNetworkInputCapability implements MachineCapability, Scal
         return (NativeCapabilityOperation) () -> {
             reservationKey();
             return handler.consumeUnreserved(value.amount()) ? CapabilityResult.successful()
-                    : failure(BuiltinFailureReasons.MISSING_INPUT);
+                    : failure(BuiltinFailureReasons.MISSING_ENERGY);
         };
     }
 

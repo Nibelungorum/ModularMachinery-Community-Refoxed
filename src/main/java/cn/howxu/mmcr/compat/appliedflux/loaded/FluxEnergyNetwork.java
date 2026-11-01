@@ -83,16 +83,16 @@ public final class FluxEnergyNetwork implements ExactPrefetchBridge {
 
     private CapabilityResult extractExactly(long requestedAmount) {
         long simulated = energy.extract(requestedAmount, true);
-        if (simulated != requestedAmount) return missingInput();
+        if (simulated != requestedAmount) return missingEnergy();
         long extracted = energy.extract(requestedAmount, false);
         if (extracted == requestedAmount) return CapabilityResult.successful();
-        return missingInput();
+        return missingEnergy();
     }
 
-    private static CapabilityResult missingInput() {
+    private static CapabilityResult missingEnergy() {
         var energyType = BuiltinCapabilityDefinitions.ENERGY_TYPE.id();
         return CapabilityResult.failure(ExecutionStatus.blocked(energyType, energyType,
-                FailureOccurrence.at(BuiltinFailureReasons.MISSING_INPUT, energyType,
+                FailureOccurrence.at(BuiltinFailureReasons.MISSING_ENERGY, energyType,
                         FailurePhase.CAPABILITY_COMMIT, null, null, Map.of())));
     }
 

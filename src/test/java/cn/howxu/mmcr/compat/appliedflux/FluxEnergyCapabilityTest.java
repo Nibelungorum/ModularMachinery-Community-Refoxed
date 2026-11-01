@@ -83,10 +83,43 @@ class FluxEnergyCapabilityTest {
         buffer.insert(10L);
         FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input");
 
-        assertThat(capability.prepareOperation(new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT,
-                1L, 11L, false)).commit().success()).isFalse();
+        var result = capability.prepareOperation(new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT,
+                1L, 11L, false)).commit();
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
 
         assertThat(buffer.amount()).isEqualTo(10L);
+    }
+
+    @Test
+    void localEnergyLostAfterPlanningIsReportedAsMissingEnergy() {
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        buffer.insert(10L);
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input");
+        var operation = capability.prepareOperation(new CapabilityRequests.ValueRequest(capability.type(), IOType.INPUT,
+                1L, 7L, false));
+        buffer.setAmount(6L);
+
+        var result = operation.commit();
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(buffer.amount()).isEqualTo(6L);
+    }
+
+    @Test
+    void prefetchWithoutABridgeResultReportsMissingEnergy() {
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
+                requested -> Optional.of(() -> null));
+        var plan = capability.planPrefetch(25L).orElseThrow();
+
+        var result = plan.operation().commit();
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(buffer.amount()).isZero();
+        assertThat(buffer.reserved()).isZero();
     }
 
     @Test
@@ -123,7 +156,9 @@ class FluxEnergyCapabilityTest {
                 }));
         var plan = capability.planPrefetch(25L).orElseThrow();
 
-        assertThat(plan.operation().commit().success()).isFalse();
+        var result = plan.operation().commit();
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_INPUT);
 
         assertThat(network.amount()).isZero();
         assertThat(buffer.amount()).isZero();
@@ -182,7 +217,9 @@ class FluxEnergyCapabilityTest {
         assertThat(ordinary.extract(5L, false)).isEqualTo(5L);
         FluxEnergyInputCapability missing = new FluxEnergyInputCapability(new FluxEnergyBuffer(), "missing-input");
         assertThat(capability.consumeReservation(7L).success()).isTrue();
-        assertThat(missing.consumeReservation(1L).success()).isFalse();
+        var result = missing.consumeReservation(1L);
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
 
         assertThat(ordinary.amount()).isEqualTo(95L);
         assertThat(buffer.amount()).isEqualTo(13L);
@@ -211,7 +248,9 @@ class FluxEnergyCapabilityTest {
                 }));
         var plan = capability.planPrefetch(2L).orElseThrow();
 
-        assertThat(plan.operation().commit().success()).isFalse();
+        var result = plan.operation().commit();
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
 
         assertThat(bridgeCalls[0]).isZero();
         assertThat(buffer.amount()).isEqualTo(Long.MAX_VALUE - 1L);

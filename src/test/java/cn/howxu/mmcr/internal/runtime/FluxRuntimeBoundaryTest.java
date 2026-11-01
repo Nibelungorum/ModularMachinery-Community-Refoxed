@@ -13,6 +13,8 @@ import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -108,6 +110,31 @@ class FluxRuntimeBoundaryTest {
         } finally {
             if (serverThreadScope != null) serverThreadScope.close();
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true,SYNC", "true,SEMI_SYNC", "true,ASYNC", "false,SYNC", "false,SEMI_SYNC", "false,ASYNC"})
+    void missing_prefetch_result_reports_missing_energy(boolean atStart, MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        Fixture fixture = new Fixture(3);
+        if (atStart) {
+            fixture.first.missingPrefetchResult = true;
+            fixture.start(false);
+            assertThat(fixture.runtime.ledger().state().phase()).isEqualTo(RecipeCommitLedger.Phase.ERROR_PAUSED);
+            assertThat(fixture.first.networkCommits).isZero();
+            assertThat(fixture.first.buffer.amount()).isZero();
+        } else {
+            assertThat(fixture.start(false)).isTrue();
+            fixture.first.missingConsumptionResult = true;
+            assertThat(fixture.attempt(mode).advance()).isFalse();
+            fixture.assertReservations(6L, 9L);
+        }
+
+        assertThat(fixture.runtime.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(fixture.runtime.failure().failure().trace().frames().getFirst().phase())
+                .isEqualTo(atStart ? FailurePhase.RECIPE_START : FailurePhase.PER_TICK);
+        assertThat(fixture.runtime.tickCount()).isZero();
+        fixture.runtime.invalidate();
     }
 
     @ParameterizedTest
@@ -977,6 +1004,8 @@ class FluxRuntimeBoundaryTest {
         private int releaseCalls;
         private long released;
         private boolean rejectConsumption;
+        private boolean missingPrefetchResult;
+        private boolean missingConsumptionResult;
         private boolean rejectAfterConsumption;
         private long consumeLimit = Long.MAX_VALUE;
 
@@ -1003,6 +1032,7 @@ class FluxRuntimeBoundaryTest {
         }
         @Override public String reservationKey() { return delegate.reservationKey(); }
         @Override public Optional<PrefetchPlan> planPrefetch(long amount) {
+            if (missingPrefetchResult) return Optional.of(new PrefetchPlan(amount, () -> null));
             return delegate.planPrefetch(amount).map(plan -> new PrefetchPlan(plan.amount(), () -> {
                 CapabilityResult result = plan.operation().commit();
                 if (result.success()) notifyOnce(notification);
@@ -1018,6 +1048,7 @@ class FluxRuntimeBoundaryTest {
         }
         @Override public CapabilityResult consumeReservation(long amount) {
             consumeCalls++;
+            if (missingConsumptionResult) return null;
             if (rejectConsumption) return missing.consumeReservation(1L);
             long debited = Math.min(amount, consumeLimit);
             CapabilityResult result = delegate.consumeReservation(debited);

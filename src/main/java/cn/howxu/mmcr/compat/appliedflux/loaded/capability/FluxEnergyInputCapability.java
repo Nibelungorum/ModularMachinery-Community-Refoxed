@@ -120,20 +120,20 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
     @Override public CapabilityResult consumeReservation(long amount) { return extractLocal(amount); }
 
     private CapabilityResult commitPrefetch(CapabilityOperation operation, long requestedAmount, LongConsumer acquired) {
-        if (requestedAmount > buffer.storage().capacity() - buffer.amount()) return failure(BuiltinFailureReasons.MISSING_INPUT);
+        if (requestedAmount > buffer.storage().capacity() - buffer.amount()) return failure(BuiltinFailureReasons.MISSING_ENERGY);
         // A foreign command may mutate before throwing; zero local reservation is not proof of zero network debit.
         acquired.accept(-1L);
         CapabilityResult result = operation.commit();
         if (result == null || !result.success()) {
-            return result == null ? failure(BuiltinFailureReasons.MISSING_INPUT) : result;
+            return result == null ? failure(BuiltinFailureReasons.MISSING_ENERGY) : result;
         }
-        if (buffer.acquireReservation(requestedAmount, acquired) != requestedAmount) return failure(BuiltinFailureReasons.MISSING_INPUT);
+        if (buffer.acquireReservation(requestedAmount, acquired) != requestedAmount) return failure(BuiltinFailureReasons.MISSING_ENERGY);
         return CapabilityResult.successful();
     }
 
     private CapabilityResult extractLocal(long amount) {
         return buffer.amount() >= amount && buffer.extract(amount) == amount
-                ? CapabilityResult.successful() : failure(BuiltinFailureReasons.MISSING_INPUT);
+                ? CapabilityResult.successful() : failure(BuiltinFailureReasons.MISSING_ENERGY);
     }
 
     private CapabilityResult failure(FailureReason reason) {

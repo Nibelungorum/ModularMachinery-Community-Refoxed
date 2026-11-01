@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.facet.ValueFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
 import cn.howxu.mmcr.api.capability.plan.NativeCapabilityOperation;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInputCapability;
@@ -159,6 +160,62 @@ class FluxNetworksPrefetchTest {
         assertThat(handler.reserved()).isZero();
         assertThat(handler.availableForPrefetch()).isEqualTo(40L);
         assertThat(handler.storage().amount()).isEqualTo(40L);
+    }
+
+    @Test
+    void discardedPrefetchCommitReportsMissingEnergyWithoutReservingTheBuffer() {
+        FluxNetworkPointHandler handler = handler(100L);
+        handler.requestWarmup(20L);
+        handler.onCycleStart();
+        handler.addToBuffer(20L);
+        FluxNetworkInputCapability capability = capability(handler);
+        var plan = capability.planPrefetch(20L).orElseThrow();
+        capability.restoreReservation(plan.amount());
+
+        var result = plan.operation().commit();
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(handler.getBuffer()).isEqualTo(20L);
+        assertThat(handler.reserved()).isZero();
+        assertThat(handler.availableForPrefetch()).isEqualTo(20L);
+    }
+
+    @Test
+    void scalarShortageAfterPlanningLeavesLocalEnergyUntouched() {
+        FluxNetworkPointHandler handler = handler(100L);
+        handler.requestWarmup(20L);
+        handler.onCycleStart();
+        handler.addToBuffer(20L);
+        FluxNetworkInputCapability capability = capability(handler);
+        var operation = capability.prepareOperation(new CapabilityRequests.ValueRequest(
+                capability.type(), IOType.INPUT, 1L, 15L, false));
+        assertThat(handler.consumeUnreserved(10L)).isTrue();
+
+        var result = operation.commit();
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(handler.getBuffer()).isEqualTo(10L);
+        assertThat(handler.reserved()).isZero();
+    }
+
+    @Test
+    void reservationShortageDoesNotConsumeReservedOrUnreservedEnergy() {
+        FluxNetworkPointHandler handler = handler(100L);
+        handler.requestWarmup(20L);
+        handler.onCycleStart();
+        handler.addToBuffer(20L);
+        FluxNetworkInputCapability capability = capability(handler);
+        assertThat(capability.planPrefetch(10L).orElseThrow().operation().commit().success()).isTrue();
+
+        var result = capability.consumeReservation(11L);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(handler.getBuffer()).isEqualTo(20L);
+        assertThat(handler.reserved()).isEqualTo(10L);
+        assertThat(handler.availableForPrefetch()).isEqualTo(10L);
     }
 
     @Test
@@ -316,7 +373,9 @@ class FluxNetworksPrefetchTest {
         CraftingContext context = new CraftingContext(new CapabilitySnapshot(List.of(capability)));
         var recipe = RecipeTestSupport.create(MMCR.id("flux_point_prefetch"), MMCR.id("test_cube"), 3,
                 List.of(), List.of(), List.of(), 0, 1, false, List.of(), List.of(new EnergyRequirement(2L)));
-        assertThat(context.planStartResult(recipe, 1L).successful()).isFalse();
+        var shortage = context.planStartResult(recipe, 1L);
+        assertThat(shortage.successful()).isFalse();
+        assertThat(shortage.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
         handler.onCycleStart();
         handler.addToBuffer(handler.getRequest());
         assertThat(context.planStartResult(recipe, 1L).successful()).isTrue();

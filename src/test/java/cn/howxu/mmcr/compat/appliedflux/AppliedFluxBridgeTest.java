@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.appliedflux;
 
 import appeng.api.config.Actionable;
 import appeng.api.networking.ticking.TickRateModulation;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.compat.appliedflux.loaded.FluxEnergyNetwork;
 import cn.howxu.mmcr.compat.appliedflux.loaded.FluxEnergyTicker;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
@@ -65,11 +66,28 @@ class AppliedFluxBridgeTest {
         storage.modulatedExtractionLimit = 25L;
         FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
 
-        assertThat(network.planExactExtract(40L).orElseThrow().commit().success()).isFalse();
+        var result = network.planExactExtract(40L).orElseThrow().commit();
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
 
         assertThat(storage.calls).containsExactly("extract:40:SIMULATE", "extract:40:SIMULATE",
                 "extract:40:MODULATE");
         assertThat(storage.amount).isEqualTo(75L);
+    }
+
+    @Test
+    void energyLostAfterPlanningIsReportedAsMissingEnergy() {
+        RecordingStorage storage = new RecordingStorage(100L, 100L);
+        FluxEnergyNetwork network = new FluxEnergyNetwork(storage);
+        var plan = network.planExactExtract(40L).orElseThrow();
+        storage.amount = 0L;
+
+        var result = plan.commit();
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.status().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
+        assertThat(storage.calls).containsExactly("extract:40:SIMULATE", "extract:40:SIMULATE");
+        assertThat(storage.amount).isZero();
     }
 
     @Test
