@@ -23,6 +23,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
+import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
@@ -91,6 +92,7 @@ import cn.howxu.mmcr.test.RecipeTestSupport;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextSnapshot;
 import cn.howxu.mmcr.internal.runtime.FactoryRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineStateSnapshot;
+import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -2451,6 +2453,218 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void safety_capture_uses_one_batch_below_eighty_positions_and_configured_batches_otherwise() throws Exception {
+        for (int size : List.of(40, 79, 80, 81)) {
+            MachineControllerBlockEntity controller = safetyScanController(size, false);
+            ServerLevel level = (ServerLevel) controller.getLevel();
+            var published = controller.runtimeSnapshot();
+            beginSafetyCheck(controller);
+
+            var scan = controller.structureWorkSnapshotForTesting().scan();
+            int expectedBudget = size < 80 ? size : (size + 39) / 40;
+            assertThat(scan).isNotNull();
+            assertThat(scan.batchSize()).isEqualTo(expectedBudget);
+            assertThat(waitForPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
+            SharedIoEvents.completeLevelTick(level);
+
+            if (size < 80) {
+                assertThat(controller.structureWorkSnapshotForTesting().scan()).isNull();
+                assertThat(controller.runtimeSnapshot()).isSameAs(published);
+            } else {
+                assertThat(controller.structureScanCursorForTesting()).isEqualTo(expectedBudget);
+            }
+            assertThat(controller.currentStructureSnapshot().formed()).isTrue();
+        }
+    }
+
+    @Test
+    void safety_batch_threshold_counts_explicit_air_and_preserves_configured_large_structure_batches() throws Exception {
+        MachineControllerBlockEntity airController = safetyScanController(80, true);
+        airController.setStructureScanBatchesForTesting(5);
+        beginSafetyCheck(airController);
+        assertThat(airController.structureWorkSnapshotForTesting().scan().batchSize()).isEqualTo(16);
+
+        MachineControllerBlockEntity smallController = safetyScanController(79, false);
+        smallController.setStructureScanBatchesForTesting(5);
+        beginSafetyCheck(smallController);
+        assertThat(smallController.structureWorkSnapshotForTesting().scan().batchSize()).isEqualTo(79);
+    }
+
+    @Test
+    void sparse_structure_uses_one_safety_batch_even_when_its_bounds_are_large() throws Exception {
+        Machine machine = new DynamicMachine(MMCR.id("sparse_safety_structure"), "sparse safety structure",
+                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE),
+                        new BlockPos(160, 0, 0), new BlockPredicate.OfBlock(Blocks.STONE))));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, machine);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        runtimeStateBatchLevels.add(level);
+        beginSafetyCheck(controller);
+
+        assertThat(waitForPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
+        SharedIoEvents.completeLevelTick(level);
+
+        assertThat(controller.structureWorkSnapshotForTesting().scan()).isNull();
+        assertThat(controller.scanBatchCountForTesting()).isEqualTo(1);
+        assertThat(controller.currentStructureSnapshot().formed()).isTrue();
+    }
+
+    @Test
+    void unrelated_changes_keep_an_inflight_safety_scan_and_its_pending_task() throws Exception {
+        MachineControllerBlockEntity controller = safetyScanController(80, false);
+        beginSafetyCheck(controller);
+        var scan = controller.structureWorkSnapshotForTesting().scan();
+        long version = controller.currentStructureVersion();
+        Field pendingTask = MachineControllerBlockEntity.class.getDeclaredField("pendingStructureScanTask");
+        pendingTask.setAccessible(true);
+        Object task = pendingTask.get(controller);
+        assertThat(task).isNotNull();
+
+        controller.handleStructureBlockChanged(controller.getBlockPos().offset(0, 1, 0));
+
+        assertThat(controller.structureWorkSnapshotForTesting().scan()).isEqualTo(scan);
+        assertThat(controller.currentStructureVersion()).isEqualTo(version);
+        assertThat(pendingTask.get(controller)).isSameAs(task);
+        assertThat(controller.isPendingStructureInvalidationForTesting()).isFalse();
+        assertThat(waitForPendingMainStep(MachineAsyncCoordinator.get((ServerLevel) controller.getLevel()))).isTrue();
+        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        assertThat(controller.structureScanCursorForTesting()).isEqualTo(scan.batchSize());
+    }
+
+    @Test
+    void changes_inside_an_active_candidate_scan_still_invalidate_outside_the_formed_bounds() throws Exception {
+        MachineControllerBlockEntity controller = safetyScanController(1, false);
+        BlockArray activePattern = new BlockArray(Map.of(new BlockPos(0, 2, 0), new BlockPredicate.Air()));
+        var scan = StructureMatcher.beginScan(activePattern, Map.of(), false,
+                StructureMatcher.ScanOptions.of(1, false, 0));
+        runtimeOf(controller).startStructureScan(scan, controller.currentStructureSnapshot().machine(), null, 0L, 0L);
+        long version = controller.currentStructureVersion();
+
+        controller.handleStructureBlockChanged(controller.getBlockPos().offset(0, 2, 0));
+
+        assertThat(controller.currentStructureVersion()).isGreaterThan(version);
+        assertThat(controller.isPendingStructureInvalidationForTesting()).isTrue();
+        assertThat(controller.structureWorkSnapshotForTesting().componentRefreshRequired()).isTrue();
+    }
+
+    @Test
+    void stable_formation_reuses_the_chunk_index_and_candidate_layout() throws Exception {
+        MachineControllerBlockEntity controller = safetyScanController(3, false);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        Field index = MachineControllerBlockEntity.class.getDeclaredField("FORMED_CONTROLLER_INDEX");
+        index.setAccessible(true);
+        Object byChunk = ((Map<?, ?>) index.get(null)).get(level);
+        Method candidates = MachineControllerBlockEntity.class.getDeclaredMethod("candidatePatterns", Machine.class, Direction.class);
+        candidates.setAccessible(true);
+        Machine machine = controller.currentStructureSnapshot().machine();
+        Object patterns = candidates.invoke(controller, machine, controller.currentStructureSnapshot().facing());
+
+        controller.requestImmediateStructureCheck();
+        controller.tickStructure(level, controller.getBlockPos());
+
+        assertThat(((Map<?, ?>) index.get(null)).get(level)).isSameAs(byChunk);
+        assertThat(candidates.invoke(controller, machine, controller.currentStructureSnapshot().facing())).isSameAs(patterns);
+    }
+
+    @Test
+    void clearing_the_level_index_releases_its_projection_and_allows_registration_again() throws Exception {
+        MachineControllerBlockEntity controller = safetyScanController(3, false);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        Field patterns = MachineControllerBlockEntity.class.getDeclaredField("indexedCandidatePatterns");
+        patterns.setAccessible(true);
+        Field chunks = MachineControllerBlockEntity.class.getDeclaredField("indexedCriticalChunks");
+        chunks.setAccessible(true);
+        assertThat(patterns.get(controller)).isNotNull();
+
+        MachineControllerBlockEntity.clearFormedControllerIndex(level);
+
+        assertThat(patterns.get(controller)).isNull();
+        assertThat((Set<?>) chunks.get(controller)).isEmpty();
+        controller.requestImmediateStructureCheck();
+        controller.tickStructure(level, controller.getBlockPos());
+        assertThat(patterns.get(controller)).isNotNull();
+        long version = controller.currentStructureVersion();
+        BlockPos relative = controller.currentStructureSnapshot().pattern().pattern().keySet().iterator().next();
+        MachineControllerBlockEntity.markStructureDirty(level, controller.getBlockPos().offset(relative));
+        controller.flushPendingStructureChanges();
+        assertThat(controller.currentStructureVersion()).isGreaterThan(version);
+    }
+
+    @Test
+    void candidate_layout_cache_tracks_orientation_roll_source_identity_and_compiled_reload() throws Exception {
+        TestBootstrap.registerRuntimeBuiltins();
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        Machine machine = MachineRegistry.getMachine(MMCR.id("test_cube"));
+        Method candidates = MachineControllerBlockEntity.class.getDeclaredMethod("candidatePatterns", Machine.class, Direction.class);
+        candidates.setAccessible(true);
+        Object south = candidates.invoke(controller, machine, Direction.SOUTH);
+        assertThat(candidates.invoke(controller, machine, Direction.SOUTH)).isSameAs(south);
+        assertThat(candidates.invoke(controller, machine, Direction.NORTH)).isNotSameAs(south);
+        Object vertical = candidates.invoke(controller, machine, Direction.UP);
+        setField(BlockEntity.class, controller, "blockState", controller.getBlockState()
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.EAST));
+        assertThat(candidates.invoke(controller, machine, Direction.UP)).isNotSameAs(vertical);
+
+        Object beforeReload = candidates.invoke(controller, machine, Direction.SOUTH);
+        MachineRegistry.rebuildCompiledCache();
+        assertThat(candidates.invoke(controller, machine, Direction.SOUTH)).isNotSameAs(beforeReload);
+        Machine replacement = new DynamicMachine(machine.registryName(), "replacement", machine.pattern());
+        Object beforeReplacement = candidates.invoke(controller, machine, Direction.SOUTH);
+        assertThat(candidates.invoke(controller, replacement, Direction.SOUTH)).isNotSameAs(beforeReplacement);
+    }
+
+    @Test
+    void higher_stage_positions_remain_indexed_after_stable_lower_stage_formation() throws Exception {
+        BlockArray first = new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        BlockArray second = new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK),
+                new BlockPos(33, 0, 0), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+        Identifier machineId = MMCR.id("indexed_higher_stage");
+        MachineControllerBlockEntity controller = expandStructureControllerWith(machineId, BlockPos.ZERO, first, second);
+        RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(machineId), 1);
+        runtimeStateBatchLevels.add((ServerLevel) controller.getLevel());
+        controller.requestImmediateStructureCheck();
+        controller.tickStructure((ServerLevel) controller.getLevel(), controller.getBlockPos());
+        long version = controller.currentStructureVersion();
+
+        MachineControllerBlockEntity.markStructureDirty(controller.getLevel(), new BlockPos(33, 0, 0));
+        controller.flushPendingStructureChanges();
+
+        assertThat(controller.currentStructureVersion()).isGreaterThan(version);
+        assertThat(controller.currentStructureSnapshot().dirty()).isTrue();
+    }
+
+    @Test
+    void synchronous_mismatch_diagnostics_reuse_the_first_match_failure() throws Exception {
+        AtomicInteger predicateReads = new AtomicInteger();
+        BlockPredicate predicate = new BlockPredicate.DeferredBlock(() -> {
+            predicateReads.incrementAndGet();
+            return Blocks.STONE;
+        });
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int x = 1; x <= 3; x++) entries.put(new BlockPos(x, 0, 0), predicate);
+        Machine machine = new DynamicMachine(MMCR.id("single_mismatch_scan"), "single mismatch", new BlockArray(entries));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, machine);
+        runtimeStateBatchLevels.add((ServerLevel) controller.getLevel());
+        BlockArray pattern = controller.currentStructureSnapshot().pattern();
+        BlockPos failedPosition = pattern.pattern().keySet().stream().reduce((first, second) -> second).orElseThrow();
+        controller.getLevel().setBlock(controller.getBlockPos().offset(failedPosition), Blocks.DIRT.defaultBlockState(), 3);
+        Method candidates = MachineControllerBlockEntity.class.getDeclaredMethod("candidatePatterns", Machine.class, Direction.class);
+        candidates.setAccessible(true);
+        Object candidate = ((List<?>) candidates.invoke(controller, machine, controller.currentStructureSnapshot().facing())).getFirst();
+        Method tryForm = MachineControllerBlockEntity.class.getDeclaredMethod("tryFormMachine", Machine.class, Direction.class,
+                candidate.getClass());
+        tryForm.setAccessible(true);
+        predicateReads.set(0);
+
+        assertThat(tryForm.invoke(controller, machine, controller.currentStructureSnapshot().facing(), candidate)).isEqualTo(false);
+
+        assertThat(predicateReads.get()).isEqualTo(3);
+        assertThat(controller.currentStructureSnapshot().structureMismatchDiagnostic()).contains("reason=blockMismatch")
+                .contains("relativePos=" + failedPosition);
+    }
+
+    @Test
     void queued_structure_changes_are_coalesced_until_controller_tick() {
         TestBootstrap.registerRuntimeBuiltins();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
@@ -2602,8 +2816,7 @@ class MachineControllerBlockEntityTest {
     @Test
     void redstone_pause_keeps_an_inflight_structure_scan_deliverable() throws InterruptedException {
         TestBootstrap.registerRuntimeBuiltins();
-        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
-        RuntimeTestFixtures.formStructure(controller, MachineRegistry.getMachine(MMCR.id("test_cube")));
+        MachineControllerBlockEntity controller = safetyScanController(80, false);
         ServerLevel level = (ServerLevel) controller.getLevel();
 
         startPendingStructureScan(controller, level);
@@ -3697,6 +3910,26 @@ class MachineControllerBlockEntityTest {
         sharedIo.resolve(level);
         async.completeUntilIdleForTesting(() -> sharedIo.resolve(level));
         MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
+    }
+
+    private MachineControllerBlockEntity safetyScanController(int size, boolean includeAir) {
+        Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        for (int x = 1; x <= size; x++) {
+            entries.put(new BlockPos(x, 0, 0), includeAir && x % 2 == 0
+                    ? new BlockPredicate.Air() : new BlockPredicate.OfBlock(Blocks.STONE));
+        }
+        Machine machine = new DynamicMachine(MMCR.id("safety_size_" + size + "_" + includeAir),
+                "safety scan size", new BlockArray(entries));
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        RuntimeTestFixtures.formStructure(controller, machine);
+        runtimeStateBatchLevels.add((ServerLevel) controller.getLevel());
+        return controller;
+    }
+
+    private static void beginSafetyCheck(MachineControllerBlockEntity controller) throws Exception {
+        Method method = MachineControllerBlockEntity.class.getDeclaredMethod("runStructureSafetyCheck", StructureSnapshot.class);
+        method.setAccessible(true);
+        method.invoke(controller, controller.currentStructureSnapshot());
     }
 
     private static void startPendingStructureScan(MachineControllerBlockEntity controller, ServerLevel level)

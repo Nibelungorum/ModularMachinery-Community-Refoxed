@@ -154,6 +154,7 @@ public record CompiledMachinePattern(
         private final int[] entryOrder;
         private final int[] sentinelIndexes;
         private final boolean[] sentinelMembership;
+        private final BoundingBox bounds;
 
         private ScanPlan(List<BlockPos> entryPositions, List<BlockPredicate> entryPredicates,
                          List<Map.Entry<BlockPos, BlockPredicate>> entries, int[] entryOrder,
@@ -164,6 +165,8 @@ public record CompiledMachinePattern(
             this.entryOrder = entryOrder;
             this.sentinelIndexes = sentinelIndexes;
             this.sentinelMembership = sentinelMembership;
+            this.bounds = BoundingBox.encapsulatingPositions(entryPositions)
+                    .orElseGet(() -> new BoundingBox(0, 0, 0, 0, 0, 0));
         }
 
         private static ScanPlan create(BlockArray pattern, int sentinelCount) {
@@ -195,6 +198,9 @@ public record CompiledMachinePattern(
             return SCAN_PLAN_CACHE.computeIfAbsent(pattern, ignored -> new ConcurrentHashMap<>())
                     .computeIfAbsent(count, ignored -> create(pattern, count));
         }
+
+        /** Returns a defensive copy of the geometry retained with this pattern's scan plan. */
+        public BoundingBox boundingBox() { return bounds.moved(0, 0, 0); }
 
         public List<BlockPos> entryPositions() { return entryPositions; }
 
