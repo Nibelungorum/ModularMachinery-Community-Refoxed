@@ -53,6 +53,27 @@ class CompiledMachinePatternTest {
     }
 
     @Test
+    void scan_plan_geometry_is_reused_without_exposing_mutable_bounds() {
+        BlockPos first = new BlockPos(-4, 2, 7);
+        BlockPos second = new BlockPos(9, -3, -5);
+        BlockArray pattern = new BlockArray(Map.of(first, new BlockPredicate.OfBlock(Blocks.STONE),
+                second, new BlockPredicate.Air()));
+        var plan = CompiledMachinePattern.ScanPlan.forPattern(pattern, 0);
+        var bounds = plan.boundingBox();
+
+        assertThat(bounds.isInside(first)).isTrue();
+        assertThat(bounds.isInside(second)).isTrue();
+        assertThat(bounds.isInside(new BlockPos(-5, 0, 0))).isFalse();
+        bounds.move(100, 100, 100);
+
+        assertThat(CompiledMachinePattern.ScanPlan.forPattern(pattern, 0)).isSameAs(plan);
+        assertThat(plan.boundingBox().isInside(first)).isTrue();
+        assertThat(plan.boundingBox().isInside(second)).isTrue();
+        assertThat(CompiledMachinePattern.ScanPlan.forPattern(new BlockArray(Map.of()), 0)
+                .boundingBox().isInside(BlockPos.ZERO)).isTrue();
+    }
+
+    @Test
     void equal_patterns_with_different_entry_order_keep_their_own_scan_plans() {
         BlockPredicate predicate = new BlockPredicate.OfBlock(Blocks.STONE);
         BlockPos first = BlockPos.ZERO;

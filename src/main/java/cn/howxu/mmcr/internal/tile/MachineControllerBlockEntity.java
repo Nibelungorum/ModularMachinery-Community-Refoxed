@@ -283,6 +283,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private transient Set<BlockPos> pendingStructureChanges = new HashSet<>();
     private transient @Nullable ServerLevel indexedFormedLevel;
     private transient Set<ChunkPos> indexedFormedChunks = Set.of();
+    private transient @Nullable CandidatePatternCache cachedStructureCandidates;
+    private transient @Nullable List<CandidatePattern> indexedCandidatePatterns;
+    private transient Set<ChunkPos> indexedCriticalChunks = Set.of();
     private transient @Nullable StructureClaimRegistry cachedStructureClaimRegistry;
     private transient long cachedCouplerPositionsVersion = Long.MIN_VALUE;
     private transient Set<BlockPos> cachedCouplerWorldPositions = Set.of();
@@ -1311,23 +1314,26 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private void handleStructureBlockChanges(Set<BlockPos> changedPositions) {
         if (changedPositions.isEmpty()) return;
         if (changedPositions.stream().allMatch(getBlockPos()::equals)) return;
-        if (structureWorkSnapshot().scan() != null) {
+        StructureSnapshot structure = currentStructureSnapshot();
+        StructureWorkSnapshot work = structureWorkSnapshot();
+        if (structure.formed() && structure.pattern() != null && structure.facing() != null) {
+            boolean relevant = changedPositions.stream()
+                    .filter(changedPos -> !getBlockPos().equals(changedPos))
+                    .anyMatch(changedPos -> isInsideCompiledBounds(changedPos)
+                            || work.scan() != null && (!(work.scan().pattern() instanceof BlockArray scanPattern)
+                            || contains(boundingBox(scanPattern), changedPos.subtract(getBlockPos()))));
+            if (!relevant) return;
+        }
+        if (work.scan() != null) {
             cancelPendingStructureScan();
             runtime.invalidateStructureScan(StructureMatcher.InvalidationReason.VERSION);
             publishStructureWork(state -> state.withPendingInvalidation(true));
         }
-        StructureSnapshot structure = currentRuntimeSnapshot().structure();
         if (!structure.formed()) {
             if (structure.configuredMachine() != null) requestImmediateStructureCheck();
             return;
         }
         if (structure.pattern() == null || structure.facing() == null) {
-            return;
-        }
-        boolean insideStructure = changedPositions.stream()
-                .filter(changedPos -> !getBlockPos().equals(changedPos))
-                .anyMatch(this::isInsideCompiledBounds);
-        if (!insideStructure) {
             return;
         }
         runtime.requestStructureCheck(StructureRuntime.CheckReason.DIRTY_EVENT);
@@ -1411,19 +1417,32 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private void registerFormedController() {
-        unregisterFormedController();
-        if (!(level instanceof ServerLevel serverLevel)) return;
-        Set<ChunkPos> chunks = indexChunks(currentStructureSnapshot());
+        if (!(level instanceof ServerLevel serverLevel)) {
+            unregisterFormedController();
+            return;
+        }
+        StructureSnapshot structure = currentStructureSnapshot();
+        Machine candidate = structure.machine() == null ? structure.configuredMachine() : structure.machine();
+        List<CandidatePattern> patterns = candidate != null && structure.facing() != null
+                ? candidatePatterns(candidate, structure.facing()) : List.of();
+        if (indexedFormedLevel == serverLevel && indexedCandidatePatterns == patterns
+                && indexedCriticalChunks.equals(structure.criticalChunks())) return;
+        Set<ChunkPos> chunks = indexChunks(structure, patterns);
         if (chunks.isEmpty()) {
             chunks = Set.of(new ChunkPos(getBlockPos().getX() >> 4, getBlockPos().getZ() >> 4));
         }
-        Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX
-                .computeIfAbsent(serverLevel, ignored -> new ConcurrentHashMap<>());
-        for (ChunkPos chunk : chunks) {
-            byChunk.computeIfAbsent(chunk, ignored -> ConcurrentHashMap.newKeySet()).add(this);
+        if (indexedFormedLevel != serverLevel || !indexedFormedChunks.equals(chunks)) {
+            unregisterFormedController();
+            Map<ChunkPos, Set<MachineControllerBlockEntity>> byChunk = FORMED_CONTROLLER_INDEX
+                    .computeIfAbsent(serverLevel, ignored -> new ConcurrentHashMap<>());
+            for (ChunkPos chunk : chunks) {
+                byChunk.computeIfAbsent(chunk, ignored -> ConcurrentHashMap.newKeySet()).add(this);
+            }
+            indexedFormedLevel = serverLevel;
+            indexedFormedChunks = Set.copyOf(chunks);
         }
-        indexedFormedLevel = serverLevel;
-        indexedFormedChunks = Set.copyOf(chunks);
+        indexedCandidatePatterns = patterns;
+        indexedCriticalChunks = structure.criticalChunks();
     }
 
     private void unregisterFormedController() {
@@ -1440,6 +1459,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         indexedFormedLevel = null;
         indexedFormedChunks = Set.of();
+        indexedCandidatePatterns = null;
+        indexedCriticalChunks = Set.of();
     }
 
     public static void clearFormedControllerIndex(ServerLevel level) {
@@ -1452,18 +1473,17 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 if (controller.indexedFormedLevel == level) {
                     controller.indexedFormedLevel = null;
                     controller.indexedFormedChunks = Set.of();
+                    controller.indexedCandidatePatterns = null;
+                    controller.indexedCriticalChunks = Set.of();
                 }
             }
         }
     }
 
-    private Set<ChunkPos> indexChunks(StructureSnapshot structure) {
+    private Set<ChunkPos> indexChunks(StructureSnapshot structure, List<CandidatePattern> patterns) {
         Set<ChunkPos> chunks = new HashSet<>(structure.criticalChunks());
-        Machine candidate = structure.machine() == null ? structure.configuredMachine() : structure.machine();
-        if (candidate != null && structure.facing() != null) {
-            for (CandidatePattern pattern : candidatePatterns(candidate, structure.facing())) {
-                addIndexChunks(chunks, boundingBox(pattern.pattern()));
-            }
+        for (CandidatePattern pattern : patterns) {
+            addIndexChunks(chunks, boundingBox(pattern.pattern()));
         }
         return Set.copyOf(chunks);
     }
@@ -2303,7 +2323,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
         if (!isPatternAreaLoaded(structure.pattern())) return;
         CandidatePattern candidatePattern = new CandidatePattern(compiled, structure.pattern(), structure.rollFacing());
-        StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(structureSafetyScanBatches(), false, 0);
+        int batches = structure.pattern().pattern().size() < 80 ? 1 : structureSafetyScanBatches();
+        StructureMatcher.ScanOptions options = StructureMatcher.ScanOptions.of(batches, false, 0);
         CompiledMachinePattern.ScanPlan scanPlan = hasCompiledFacing(compiled, structure.facing())
                 ? compiled.scanPlan(structure.facing(), 0) : null;
         StructureMatcher.ScanState scan = StructureMatcher.beginScan(structure.version(), structure.facing(), structure.rollFacing(),
@@ -2681,6 +2702,20 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private List<CandidatePattern> candidatePatterns(Machine candidate, Direction facing) {
         List<CompiledMachinePattern> stages = MachineRegistry.getCompiledStages(candidate.registryName());
+        BlockArray source = candidate.pattern();
+        Direction roll = BlockRotator.normalizedRoll(facing, getBlockState().getValue(MachineControllerBlock.ROLL_FACING));
+        boolean symmetric = candidate.controller().fullyRotationallySymmetric();
+        CandidatePatternCache cached = cachedStructureCandidates;
+        if (cached != null && cached.machine() == candidate && cached.source() == source
+                && cached.stages() == stages && cached.facing() == facing && cached.roll() == roll
+                && cached.symmetric() == symmetric) return cached.patterns();
+        List<CandidatePattern> patterns = List.copyOf(buildCandidatePatterns(candidate, facing, stages));
+        cachedStructureCandidates = new CandidatePatternCache(candidate, source, stages, facing, roll, symmetric, patterns);
+        return patterns;
+    }
+
+    private List<CandidatePattern> buildCandidatePatterns(Machine candidate, Direction facing,
+                                                         List<CompiledMachinePattern> stages) {
         if (stages.isEmpty()) {
             if (!facing.getAxis().isVertical()) {
                 return List.of(new CandidatePattern(null, BlockArrayCache.get(candidate.pattern(), facing), Direction.SOUTH));
@@ -2726,13 +2761,18 @@ public class MachineControllerBlockEntity extends BlockEntity {
         var replacements = replacementsFor(validationMachine, stageCompiled, facing, rotatedPattern, candidatePattern.rollFacing());
         boolean stateSensitive = stageCompiled != null && stageCompiled.stateSensitive();
         matcherInvocationCountForTesting++;
-        boolean matches = hasCompiledFacing(stageCompiled, facing)
-                ? StructureMatcher.matchesCompiled(stageCompiled, facing, candidatePattern.rollFacing(), level,
-                getBlockPos(), replacements, stateSensitive)
-                : StructureMatcher.matchesRotated(rotatedPattern, level, getBlockPos(), replacements, stateSensitive);
-        if (!matches) {
-            StructureMatcher.Mismatch firstMismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(),
-                    replacements, stateSensitive).orElse(null);
+        boolean compiledFacing = hasCompiledFacing(stageCompiled, facing);
+        BlockArray matchPattern = compiledFacing ? stageCompiled.rotatedPattern(facing) : rotatedPattern;
+        var matchReplacements = compiledFacing && replacements.isEmpty()
+                ? stageCompiled.modifierReplacements(facing, candidatePattern.rollFacing()) : replacements;
+        StructureMatcher.Mismatch firstMismatch = StructureMatcher.firstMismatch(matchPattern, level, getBlockPos(),
+                matchReplacements, stateSensitive).orElse(null);
+        if (matchPattern.isEmpty() || firstMismatch != null) {
+            // A rolled candidate may use a different diagnostic pattern than the compiled matcher.
+            if (matchPattern != rotatedPattern) {
+                firstMismatch = StructureMatcher.firstMismatch(rotatedPattern, level, getBlockPos(),
+                        replacements, stateSensitive).orElse(null);
+            }
             recordStructureMismatch(candidate, facing, rotatedPattern, replacements, stateSensitive, firstMismatch);
             sendRequestedStructureDiagnostic(firstMismatch);
             return false;
@@ -3772,7 +3812,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private boolean isInsideCompiledBounds(BlockPos worldPos) {
-        StructureSnapshot structure = runtimeSnapshot().structure();
+        StructureSnapshot structure = currentStructureSnapshot();
         if (structure.facing() == null) return false;
         Machine candidate = structure.machine() == null ? structure.configuredMachine() : structure.machine();
         BlockPos relative = worldPos.subtract(getBlockPos());
@@ -3915,21 +3955,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private static BoundingBox boundingBox(BlockArray pattern) {
         if (pattern == null || pattern.isEmpty()) return new BoundingBox(0, 0, 0, 0, 0, 0);
-        int minX = Integer.MAX_VALUE;
-        int minY = Integer.MAX_VALUE;
-        int minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE;
-        int maxY = Integer.MIN_VALUE;
-        int maxZ = Integer.MIN_VALUE;
-        for (BlockPos pos : pattern.pattern().keySet()) {
-            minX = Math.min(minX, pos.getX());
-            minY = Math.min(minY, pos.getY());
-            minZ = Math.min(minZ, pos.getZ());
-            maxX = Math.max(maxX, pos.getX());
-            maxY = Math.max(maxY, pos.getY());
-            maxZ = Math.max(maxZ, pos.getZ());
-        }
-        return new BoundingBox(minX, minY, minZ, maxX, maxY, maxZ);
+        return CompiledMachinePattern.ScanPlan.forPattern(pattern, 0).boundingBox();
     }
 
     private void pauseActiveForUnloadedStructure() {
@@ -3975,6 +4001,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private record ComponentCounts(int itemInputs, int itemOutputs, int fluidInputs, int fluidOutputs, int energyInputs, int energyOutputs) { }
+
+    /** Retains only the most recently used immutable candidate layout.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record CandidatePatternCache(Machine machine, BlockArray source, List<CompiledMachinePattern> stages,
+                                         Direction facing, Direction roll, boolean symmetric, List<CandidatePattern> patterns) { }
 
     private record CandidatePattern(CompiledMachinePattern compiled, BlockArray pattern, Direction rollFacing) {
         int stageNumber() { return compiled == null ? 1 : compiled.stageNumber(); }
