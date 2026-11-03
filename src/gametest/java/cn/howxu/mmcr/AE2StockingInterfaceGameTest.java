@@ -74,6 +74,69 @@ public class AE2StockingInterfaceGameTest {
     private static final long ITEM_AMOUNT = 128L;
     private static final long FLUID_AMOUNT = 5_000L;
 
+    public void stockingConfigurationViewsRefreshOnChangeAndLoad(GameTestHelper helper) {
+        var state = ModBlocks.BLOCKS.get("ae2_me_stocking_input_interface").get().defaultBlockState();
+        helper.setBlock(BlockPos.ZERO, state);
+        StockingInterfaceBlockEntity port = helper.getBlockEntity(BlockPos.ZERO);
+        var config = port.getConfig();
+        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
+        AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
+        AEFluidKey water = AEFluidKey.of(Fluids.WATER);
+        AEFluidKey lava = AEFluidKey.of(Fluids.LAVA);
+        config.setStack(0, new GenericStack(iron, 1L));
+        config.setStack(1, new GenericStack(water, 1_000L));
+        config.setStack(2, new GenericStack(iron, 1L));
+        List<AEKey> configured = port.configuredKeys();
+        helper.assertTrue(configured.equals(List.of(iron, water, iron)), "Raw configuration retains slot order and duplicates");
+        var items = port.nativeItemHandler();
+        var fluids = port.nativeFluidHandler();
+        var itemAccess = (NativeReservationAccess) items;
+        var fluidAccess = (NativeReservationAccess) fluids;
+        for (int index = 0; index < 100; index++) {
+            helper.assertTrue(port.configuredKeys() == configured, "Unchanged configuration reuses the immutable key view");
+            helper.assertTrue(items.getSlots() == 1 && fluids.getTanks() == 1
+                            && itemAccess.storedKey(0).equals(iron) && fluidAccess.storedKey(0).equals(water),
+                    "Typed views retain distinct configured resource identities");
+        }
+
+        config.setStack(0, new GenericStack(gold, 1L));
+        helper.assertTrue(port.configuredKeys().equals(List.of(gold, water, iron))
+                        && items.getSlots() == 2 && itemAccess.storedKey(0).equals(gold),
+                "Real AE configuration callbacks immediately invalidate the cached views");
+        config.setStack(2, null);
+        config.setStack(1, new GenericStack(lava, 1_000L));
+        helper.assertTrue(items.getSlots() == 1 && itemAccess.storedKey(0).equals(gold)
+                        && fluids.getTanks() == 1 && fluidAccess.storedKey(0).equals(lava),
+                "Removing and replacing configured keys refreshes both typed views");
+        helper.assertTrue(configured.equals(List.of(iron, water, iron)), "Previously returned configuration stays immutable");
+
+        BlockPos restoredPos = new BlockPos(2, 0, 0);
+        helper.setBlock(restoredPos, state);
+        StockingInterfaceBlockEntity restored = helper.getBlockEntity(restoredPos);
+        restored.getConfig().setStack(0, new GenericStack(iron, 1L));
+        List<AEKey> previous = restored.configuredKeys();
+        restored.loadWithComponents(port.saveWithoutMetadata(helper.getLevel().registryAccess()), helper.getLevel().registryAccess());
+        helper.assertTrue(restored.configuredKeys() != previous && restored.configuredKeys().equals(List.of(gold, lava))
+                        && ((NativeReservationAccess) restored.nativeItemHandler()).storedKey(0).equals(gold)
+                        && ((NativeReservationAccess) restored.nativeFluidHandler()).storedKey(0).equals(lava),
+                "Loading saved configuration invalidates an already read view");
+        config.beginBatch();
+        try {
+            config.setStack(0, new GenericStack(iron, 1L));
+            config.setStack(1, new GenericStack(water, 1_000L));
+        } finally {
+            config.endBatch();
+        }
+        helper.assertTrue(port.configuredKeys().equals(List.of(iron, water))
+                        && itemAccess.storedKey(0).equals(iron) && fluidAccess.storedKey(0).equals(water),
+                "A batched AE configuration notification refreshes both typed views");
+        config.setStack(0, null);
+        config.setStack(1, null);
+        helper.assertTrue(port.configuredKeys().isEmpty() && items.getSlots() == 0 && fluids.getTanks() == 0,
+                "Clearing configuration removes all typed keys immediately");
+        helper.succeed();
+    }
+
     public void stockingInterfaceReadsAndWatchesNetworkStorage(GameTestHelper helper) {
         helper.assertTrue(AE2Bridge.get().available(),
                 "AE2 must be loaded for this integration test");

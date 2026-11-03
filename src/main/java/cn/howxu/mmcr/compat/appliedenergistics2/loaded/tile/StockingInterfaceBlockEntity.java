@@ -98,6 +98,8 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     @Nullable
     private IStackWatcher storageWatcher;
     private long storageMirrorRefreshes;
+    @Nullable
+    private List<AEKey> configuredKeys;
     private CapabilitySnapshot capabilitySnapshot;
     private int interfaceMenuPage;
 
@@ -283,7 +285,8 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     private void refreshNetworkStorage() {
-        // Native handlers resolve the current grid and configuration lazily.
+        // Keep inventory access live, but rebuild the configuration view only after a change.
+        configuredKeys = null;
     }
 
     public MEStorage networkStorage() {
@@ -292,12 +295,16 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     public List<AEKey> configuredKeys() {
-        List<AEKey> keys = new ArrayList<>();
-        for (int slot = 0; slot < logic.getConfig().size(); slot++) {
-            AEKey key = logic.getConfig().getKey(slot);
-            if (key != null) keys.add(key);
+        if (configuredKeys == null) {
+            List<AEKey> keys = new ArrayList<>();
+            var config = logic.getConfig();
+            for (int slot = 0; slot < config.size(); slot++) {
+                AEKey key = config.getKey(slot);
+                if (key != null) keys.add(key);
+            }
+            configuredKeys = List.copyOf(keys);
         }
-        return List.copyOf(keys);
+        return configuredKeys;
     }
 
     private void configureWatcher() {

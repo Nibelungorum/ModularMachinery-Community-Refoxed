@@ -736,6 +736,8 @@ public final class GameTestRegistry {
                     helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
             register(event, "ae2_me_input_memory_card", 100,
                     helper -> new AE2InterfaceGameTest().inputInterfaceMemoryCardRoundTrip(helper));
+            register(event, "ae2_stocking_configuration_views", 20,
+                    helper -> new AE2StockingInterfaceGameTest().stockingConfigurationViewsRefreshOnChangeAndLoad(helper));
             register(event, "ae2_me_stocking_input_interface", 100,
                     helper -> new AE2StockingInterfaceGameTest().stockingInterfaceReadsAndWatchesNetworkStorage(helper));
             register(event, "task2_ae2_output_lifecycle", 100,
@@ -912,6 +914,8 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:ae2_legacy_queue_")
                     || name.startsWith("mmcr:ae2_pattern_return_")
                     || name.startsWith("mmcr:ae2_standard_cpu_pattern_")
+                    || name.equals("mmcr:ae2_stocking_configuration_views")
+                    || name.equals("mmcr:ae2_me_stocking_input_interface")
                     || name.equals("mmcr:ae2_me_pattern_native_return_notification")
                     || name.equals("mmcr:ae2_me_pattern_interface_request")
                     || name.equals("mmcr:ae2_me_pattern_cpu_output_components")

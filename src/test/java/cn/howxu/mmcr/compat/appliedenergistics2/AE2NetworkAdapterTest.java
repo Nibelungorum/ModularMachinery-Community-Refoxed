@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -206,6 +207,124 @@ class AE2NetworkAdapterTest {
         assertThat(network.amount(iron)).isEqualTo(4L);
         assertThat(network.amount(water)).isEqualTo(4L);
         assertThat(network.modes()).containsExactly(Actionable.SIMULATE, Actionable.SIMULATE);
+    }
+
+    @Test
+    void typedConfigurationViewsAreReusedAndObserveInPlaceChanges() throws ReflectiveOperationException {
+        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
+        AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
+        AEFluidKey water = AEFluidKey.of(Fluids.WATER);
+        AEFluidKey lava = AEFluidKey.of(Fluids.LAVA);
+        List<AEKey> configured = new ArrayList<>(List.of(iron, water, iron, lava));
+        FakeMEStorage network = new FakeMEStorage(Map.of(iron, 10L, gold, 10L, water, 10L, lava, 10L));
+        var items = AE2NativeAdapters.networkItems(() -> network, () -> configured, IActionSource.empty());
+        var fluids = AE2NativeAdapters.networkFluids(() -> network, () -> configured, IActionSource.empty());
+        var itemAccess = (NativeReservationAccess) items;
+        var fluidAccess = (NativeReservationAccess) fluids;
+        var itemKeys = typedKeys(items);
+        var fluidKeys = typedKeys(fluids);
+        assertThat(itemKeys).containsExactly(iron);
+        assertThat(fluidKeys).containsExactly(water, lava);
+        for (int index = 0; index < 100; index++) {
+            assertThat(items.getSlots()).isEqualTo(1);
+            assertThat(fluids.getTanks()).isEqualTo(2);
+            assertThat(itemAccess.storedKey(0)).isEqualTo(iron);
+            assertThat(fluidAccess.storedKey(0)).isEqualTo(water);
+            assertThat(typedKeys(items)).isSameAs(itemKeys);
+            assertThat(typedKeys(fluids)).isSameAs(fluidKeys);
+        }
+
+        configured.set(0, gold);
+        configured.set(2, gold);
+        configured.set(1, lava);
+        configured.set(3, water);
+        assertThat(itemAccess.storedKey(0)).isEqualTo(gold);
+        assertThat(fluidAccess.storedKey(0)).isEqualTo(lava);
+        assertThat(fluidAccess.storedKey(1)).isEqualTo(water);
+        assertThat(itemAccess.transfer(0, iron.toStack(1), 1L, false, false)).isZero();
+        assertThat(fluidAccess.transfer(0, water.toStack(1), 1L, false, false)).isZero();
+        assertThat(network.modes()).isEmpty();
+        assertThat(itemKeys).containsExactly(iron);
+        assertThat(fluidKeys).containsExactly(water, lava);
+
+        configured.clear();
+        assertThat(items.getSlots()).isZero();
+        assertThat(fluids.getTanks()).isZero();
+        assertThat(itemAccess.transfer(0, gold.toStack(1), 1L, false, false)).isZero();
+        assertThat(fluidAccess.transfer(0, lava.toStack(1), 1L, false, false)).isZero();
+    }
+
+    @Test
+    void replacementConfigurationsReuseEqualViewsButPreserveResourceComponents() throws ReflectiveOperationException {
+        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
+        AEFluidKey water = AEFluidKey.of(Fluids.WATER);
+        ItemStack namedIron = iron.toStack(1);
+        namedIron.set(DataComponents.CUSTOM_NAME, Component.literal("configured identity"));
+        FluidStack namedWater = water.toStack(1);
+        namedWater.set(DataComponents.CUSTOM_NAME, Component.literal("configured identity"));
+        AEItemKey configuredIron = AEItemKey.of(namedIron);
+        AEFluidKey configuredWater = AEFluidKey.of(namedWater);
+        AtomicReference<List<AEKey>> configured = new AtomicReference<>(List.of(iron, water));
+        FakeMEStorage network = new FakeMEStorage(Map.of(iron, 10L, water, 10L));
+        var items = AE2NativeAdapters.networkItems(() -> network, configured::get, IActionSource.empty());
+        var fluids = AE2NativeAdapters.networkFluids(() -> network, configured::get, IActionSource.empty());
+        var itemKeys = typedKeys(items);
+        var fluidKeys = typedKeys(fluids);
+
+        configured.set(new ArrayList<>(List.of(iron, water)));
+        assertThat(typedKeys(items)).isSameAs(itemKeys);
+        assertThat(typedKeys(fluids)).isSameAs(fluidKeys);
+        configured.set(List.of(configuredIron, configuredWater));
+        var itemAccess = (NativeReservationAccess) items;
+        var fluidAccess = (NativeReservationAccess) fluids;
+        assertThat(itemAccess.storedKey(0)).isEqualTo(configuredIron).isNotEqualTo(iron);
+        assertThat(fluidAccess.storedKey(0)).isEqualTo(configuredWater).isNotEqualTo(water);
+        assertThat(itemAccess.transfer(0, iron.toStack(1), 1L, false, false)).isZero();
+        assertThat(fluidAccess.transfer(0, water.toStack(1), 1L, false, false)).isZero();
+        assertThat(network.modes()).isEmpty();
+    }
+
+    @Test
+    void reusedConfigurationDoesNotCacheNetworkIdentityOrStoredAmounts() throws ReflectiveOperationException {
+        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
+        AEFluidKey water = AEFluidKey.of(Fluids.WATER);
+        List<AEKey> configured = List.of(iron, water);
+        FakeMEStorage first = new FakeMEStorage(Map.of(iron, 10L, water, 20L));
+        FakeMEStorage second = new FakeMEStorage(Map.of(iron, 30L, water, 40L));
+        AtomicReference<FakeMEStorage> network = new AtomicReference<>(first);
+        var items = AE2NativeAdapters.networkItems(network::get, () -> configured, IActionSource.empty());
+        var fluids = AE2NativeAdapters.networkFluids(network::get, () -> configured, IActionSource.empty());
+        var itemAccess = (NativeReservationAccess) items;
+        var fluidAccess = (NativeReservationAccess) fluids;
+        var itemKeys = typedKeys(items);
+        var fluidKeys = typedKeys(fluids);
+        assertThat(itemAccess.storedAmount(0)).isEqualTo(10L);
+        assertThat(fluidAccess.storedAmount(0)).isEqualTo(20L);
+        first.amounts.put(iron, 7L);
+        first.amounts.put(water, 8L);
+        assertThat(itemAccess.storedAmount(0)).isEqualTo(7L);
+        assertThat(fluidAccess.storedAmount(0)).isEqualTo(8L);
+
+        network.set(second);
+        assertThat(itemAccess.reservationIdentity()).isSameAs(second);
+        assertThat(fluidAccess.reservationIdentity()).isSameAs(second);
+        assertThat(itemAccess.storedAmount(0)).isEqualTo(30L);
+        assertThat(fluidAccess.storedAmount(0)).isEqualTo(40L);
+        assertThat(itemAccess.transfer(0, iron.toStack(1), 3L, false, false)).isEqualTo(3L);
+        assertThat(fluidAccess.transfer(0, water.toStack(1), 4L, false, false)).isEqualTo(4L);
+        assertThat(first.amount(iron)).isEqualTo(7L);
+        assertThat(first.amount(water)).isEqualTo(8L);
+        assertThat(second.amount(iron)).isEqualTo(27L);
+        assertThat(second.amount(water)).isEqualTo(36L);
+        assertThat(typedKeys(items)).isSameAs(itemKeys);
+        assertThat(typedKeys(fluids)).isSameAs(fluidKeys);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<AEKey> typedKeys(Object adapter) throws ReflectiveOperationException {
+        var method = adapter.getClass().getDeclaredMethod("keys");
+        method.setAccessible(true);
+        return (List<AEKey>) method.invoke(adapter);
     }
 
     private static final class FakeMEStorage implements MEStorage {

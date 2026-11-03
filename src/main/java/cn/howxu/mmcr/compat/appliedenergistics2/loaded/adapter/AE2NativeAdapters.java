@@ -476,6 +476,9 @@ public final class AE2NativeAdapters {
         private final IActionSource source;
         private final java.util.Map<AEKey, Long> syncedAmounts = new java.util.HashMap<>();
 
+        private List<AEKey> configuredKeys = List.of();
+        private List<AEKey> typedKeys = List.of();
+
         private NetworkItems(Supplier<MEStorage> storage, Supplier<List<AEKey>> keys, IActionSource source) {
             this.storage = Objects.requireNonNull(storage, "storage");
             this.keys = Objects.requireNonNull(keys, "keys");
@@ -535,7 +538,12 @@ public final class AE2NativeAdapters {
         }
 
         private List<AEKey> keys() {
-            return keys.get().stream().filter(key -> key instanceof AEItemKey).distinct().toList();
+            List<AEKey> configured = keys.get();
+            if (!configuredKeys.equals(configured)) {
+                configuredKeys = List.copyOf(configured);
+                typedKeys = configuredKeys.stream().filter(key -> key instanceof AEItemKey).distinct().toList();
+            }
+            return typedKeys;
         }
 
         private AEKey key(int slot) { return keys().get(slot); }
@@ -546,6 +554,9 @@ public final class AE2NativeAdapters {
         private final Supplier<List<AEKey>> keys;
         private final IActionSource source;
         private final java.util.Map<AEKey, Long> syncedAmounts = new java.util.HashMap<>();
+
+        private List<AEKey> configuredKeys = List.of();
+        private List<AEKey> typedKeys = List.of();
 
         private NetworkFluids(Supplier<MEStorage> storage, Supplier<List<AEKey>> keys, IActionSource source) {
             this.storage = Objects.requireNonNull(storage, "storage");
@@ -615,7 +626,12 @@ public final class AE2NativeAdapters {
         }
 
         private List<AEKey> keys() {
-            return keys.get().stream().filter(key -> key instanceof AEFluidKey).distinct().toList();
+            List<AEKey> configured = keys.get();
+            if (!configuredKeys.equals(configured)) {
+                configuredKeys = List.copyOf(configured);
+                typedKeys = configuredKeys.stream().filter(key -> key instanceof AEFluidKey).distinct().toList();
+            }
+            return typedKeys;
         }
 
         private AEKey key(int tank) { return keys().get(tank); }
