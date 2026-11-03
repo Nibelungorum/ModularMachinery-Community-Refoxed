@@ -54,6 +54,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private final String threadName;
     private final String laneId;
     private final Set<MachineRecipe> recipeSet = new LinkedHashSet<>();
+    private Runnable searchScheduleChanged = () -> { };
     private int idleTicks;
     private long lastIdleGameTime = Long.MIN_VALUE;
     private @Nullable MachineRecipe lastRecipe;
@@ -261,6 +262,26 @@ public final class FactoryRecipeThread extends RecipeThread {
         installStartedProgram();
     }
 
+    public void setSearchScheduleChanged(Runnable listener) {
+        searchScheduleChanged = Objects.requireNonNull(listener);
+    }
+
+    @Override
+    protected void onSearchScheduleChanged() {
+        searchScheduleChanged.run();
+    }
+
+    public long nextSearchTick() {
+        return hasFullSearchPending() || lastSearchFailureKey == null ? Long.MIN_VALUE : nextSearchTick;
+    }
+
+    public long idleTimeoutTick(long gameTime) {
+        if (baseThread || coreThread || !isIdle()) return Long.MAX_VALUE;
+        if (lastIdleGameTime == Long.MIN_VALUE) lastIdleGameTime = gameTime;
+        long elapsed = effectiveIdleTicks(gameTime);
+        return gameTime + Math.max(0L, ServerConfig.factoryIdleTimeoutTicks() - elapsed);
+    }
+
     public boolean canSearch(long gameTime, RecipeSearchContextKey current) {
         return hasFullSearchPending() || searchFailureRecipePoolId == null || !searchFailureRecipePoolId.equals(currentRecipePoolId())
                 || lastSearchFailureKey == null
@@ -280,11 +301,13 @@ public final class FactoryRecipeThread extends RecipeThread {
         nextSearchTick = gameTime + retryDelay(failureStreak);
         lastSearchFailureReason = failureReason();
         resourceWakePending = false;
+        onSearchScheduleChanged();
     }
 
     public void wakeSearch() {
         nextSearchTick = Long.MIN_VALUE;
         resourceWakePending = true;
+        onSearchScheduleChanged();
     }
 
     public boolean matchesAvailability(ResourceAvailabilityNotifier.Reason reason, @Nullable Object resource) {
@@ -308,6 +331,7 @@ public final class FactoryRecipeThread extends RecipeThread {
         failureResourceMatchers = Map.of();
         failureCandidates = List.of();
         failureRequirements.clear();
+        onSearchScheduleChanged();
     }
 
     public @Nullable Identifier searchFailureReason() {

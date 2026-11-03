@@ -1503,13 +1503,21 @@ public abstract class RecipeThread {
     }
 
     public final boolean hasFullSearchPending() { return fullSearchPending; }
-    public final void requestFullSearch() { fullSearchPending = true; }
+    public final void requestFullSearch() {
+        fullSearchPending = true;
+        onSearchScheduleChanged();
+    }
 
     public final void onFullSearchResult(StartResult result) {
         if (result != StartResult.DEFERRED) clearFullSearchRequest();
     }
 
-    protected final void clearFullSearchRequest() { fullSearchPending = false; }
+    protected final void clearFullSearchRequest() {
+        fullSearchPending = false;
+        onSearchScheduleChanged();
+    }
+
+    protected void onSearchScheduleChanged() { }
 
     public final void reportLastRecipeStartResult(StartResult result) {
         if (result == StartResult.FAILED || result == StartResult.NO_MATCH) requestFullSearch();

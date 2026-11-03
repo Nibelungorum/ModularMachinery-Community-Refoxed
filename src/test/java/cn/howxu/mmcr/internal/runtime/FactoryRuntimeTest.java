@@ -129,6 +129,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.AbstractList;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -390,11 +391,27 @@ class FactoryRuntimeTest {
                 assertThat(running.active()).isTrue();
                 return;
             }
+            // Materialize one-time schedule changes, then check stable execution work.
+            factory.snapshot();
+            long checks = factory.schedulingChecksForTesting();
+            long ticks = factory.laneTicksForTesting();
+            long projections = factory.laneProjectionsForTesting();
+            FactorySnapshot previous = factory.snapshot();
             factory.wakeSearches(Reason.INPUT_AVAILABLE, new ItemStack(Items.IRON_INGOT));
             tickAttachedFactory(controller);
+            FactorySnapshot current = factory.snapshot();
             assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans);
+            assertThat(factory.schedulingChecksForTesting()).isEqualTo(checks);
+            assertThat(factory.laneTicksForTesting() - ticks).isEqualTo(activeLimit);
+            assertThat(factory.laneProjectionsForTesting() - projections).isEqualTo(activeLimit);
+            assertThat(previous.presentationLanes()).filteredOn(lane -> !lane.active())
+                    .allSatisfy(lane -> assertThat(current.presentationLanes().get(lane.index())).isSameAs(lane));
             if (wakeEarly) {
-                factory.wakeSearches(Reason.ENERGY_AVAILABLE, new CapabilityType(EnergyRequirement.TYPE.id()));
+                long matches = factory.wakeMatcherChecksForTesting();
+                for (int event = 0; event < 64; event++) {
+                    factory.wakeSearches(Reason.ENERGY_AVAILABLE, new CapabilityType(EnergyRequirement.TYPE.id()));
+                }
+                assertThat(factory.wakeMatcherChecksForTesting() - matches).isEqualTo(laneLimit - activeLimit);
                 tickAttachedFactory(controller);
             } else {
                 for (int step = 0; step < 5; step++) tickAttachedFactory(controller);
@@ -411,6 +428,68 @@ class FactoryRuntimeTest {
             ServerConfig.FACTORY_IDLE_TIMEOUT_TICKS.set(idleTimeout);
             SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
+    }
+
+    @Test
+    void cancelled_async_search_is_rescheduled_without_a_new_resource_event() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = asyncFactoryController(input);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(workers::addLast);
+        installFactoryCoordinator(level, coordinator);
+        try {
+            MachineRecipe recipe = itemInputRecipe("factory_cancelled_search_retry", Items.IRON_INGOT);
+            RecipeRegistry.registerStatic(recipe);
+            setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT));
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.ensureBaseLane(controller);
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            assertThat(workers).isNotEmpty();
+            coordinator.cancel(controller.getBlockPos());
+            coordinator.completeTick();
+            assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
+
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
+            pumpFactoryWorkers(controller, workers);
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(2L);
+            assertThat(factory.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(recipe);
+            assertThat(input.itemStorage().amount(0)).isZero();
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void repeated_failed_wakeups_replace_deadlines_and_clear_releases_all_lane_references() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.SYNC);
+        MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        MachineRecipe recipe = inputRecipe("factory_deadline_replacement");
+        var queueField = FactoryRuntime.class.getDeclaredField("laneDeadlines");
+        var indexField = FactoryRuntime.class.getDeclaredField("scheduledDeadlines");
+        queueField.setAccessible(true);
+        indexField.setAccessible(true);
+        for (long gameTime = 0; gameTime < 30; gameTime++) {
+            factory.wakeSearches(Reason.INPUT_AVAILABLE, new ItemStack(Items.IRON_INGOT));
+            factory.tick(List.of(recipe), 1L, gameTime);
+            assertThat((Collection<?>) queueField.get(factory)).hasSizeLessThanOrEqualTo(factory.laneCount());
+            assertThat((Map<?, ?>) indexField.get(factory)).hasSizeLessThanOrEqualTo(factory.laneCount());
+        }
+        FactorySnapshot before = factory.snapshot();
+        assertThat(before.lanes()).isNotEmpty();
+        factory.clear();
+        assertThat((Collection<?>) queueField.get(factory)).isEmpty();
+        assertThat((Map<?, ?>) indexField.get(factory)).isEmpty();
+        assertThat(factory.activeRuntimes()).isEmpty();
+        assertThat(factory.snapshot().lanes()).isEmpty();
+        assertThat(before.lanes()).isNotEmpty();
     }
 
     @Test
@@ -466,8 +545,12 @@ class FactoryRuntimeTest {
             assertThat(factory.activeLaneCount()).isEqualTo(recipeThreadLimit);
             assertThat(factory.laneCount()).isEqualTo(recipeThreadLimit);
             assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans + 1);
+            FactorySnapshot before = factory.snapshot();
             tickAttachedFactory(controller);
             tickAttachedFactory(controller);
+            FactorySnapshot after = factory.snapshot();
+            assertThat(before.presentationLanes()).filteredOn(lane -> !lane.active())
+                    .allSatisfy(lane -> assertThat(after.presentationLanes().get(lane.index())).isSameAs(lane));
             assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans + 1);
         } finally {
             SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
