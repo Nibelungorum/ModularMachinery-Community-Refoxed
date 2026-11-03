@@ -230,7 +230,9 @@ public final class TestBootstrap {
                     (List<FactoryRecipeThread>) FACTORY_LANES_FIELD.get(factoryRuntime);
             CraftingRuntime runtime = syntheticCraftingRuntimeWithOutputs(controller, outputs, parallelism);
             FactoryRecipeThread lane = syntheticLaneFor(controller, runtime, lanes.size());
-            lanes.add(lane);
+            var addLane = FactoryRuntime.class.getDeclaredMethod("addLane", FactoryRecipeThread.class);
+            addLane.setAccessible(true);
+            addLane.invoke(factoryRuntime, lane);
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Unable to bind factory outputs", exception);
         }

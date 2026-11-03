@@ -66,11 +66,11 @@ public record FactorySnapshot(
         machineId = machineId == null ? "" : machineId;
         recipePoolId = recipePoolId == null ? "" : recipePoolId;
         connectedHostId = connectedHostId == null ? "" : connectedHostId;
-        lanes = List.copyOf(lanes == null ? List.of() : lanes);
+        lanes = FactorySnapshotList.immutableCopy(lanes);
         if (laneLimit < 1) throw new IllegalArgumentException("laneLimit must be positive");
         if (activeLaneCount < 0) throw new IllegalArgumentException("activeLaneCount must not be negative");
         if (maxParallelism < 1) throw new IllegalArgumentException("maxParallelism must be positive");
-        presentationLanes = List.copyOf(presentationLanes == null ? List.of() : presentationLanes);
+        presentationLanes = FactorySnapshotList.immutableCopy(presentationLanes);
         if (parallelSlots < 0) throw new IllegalArgumentException("parallelSlots must not be negative");
         foundLevelIds = List.copyOf(foundLevelIds == null ? List.of() : foundLevelIds);
         if (matchedStage < 0) throw new IllegalArgumentException("matchedStage must not be negative");
