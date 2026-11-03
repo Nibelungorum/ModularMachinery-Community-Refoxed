@@ -103,7 +103,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                             Long.toString(requestedAmount(requirement, context.requestedParallelism()))))
                     : RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_INPUT,
                     Map.of("required", Long.toString(RequirementHandlerSupport.scaled(
-                                    requirement.count(), context.requestedParallelism())),
+                                    requirement.count(), requirement.consumeChance() <= 0F ? 1L : context.requestedParallelism())),
                             "available", Long.toString(matchingItemAmount(requirement, capabilities))));
         }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.consumeChance() <= 0F) {
@@ -141,6 +141,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             long available = matchingItemAmount(requirement, capabilities);
             if (requirement.count() <= 0) return requested;
+            if (requirement.consumeChance() <= 0F) return available >= requirement.count() ? requested : 0L;
             return Math.min(requested, available / requirement.count());
         }
         ItemStack stack = requirement.stack(null);

@@ -2,6 +2,9 @@ package cn.howxu.mmcr.internal.recipe;
 
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Rule;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Candidate;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Port;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Overlap;
@@ -93,6 +96,45 @@ class RecipeSearchPlannerTest {
                         match -> assertThat(match.parallelism()).isEqualTo(8L));
         assertThat(new RecipeSearchPlanner(snapshot(List.of(pool(0L)),
                 List.of(candidate("a", 16L, rules, List.of(LEGACY))))).advance())
+                .isInstanceOf(RecipeSearchPlanner.NoMatch.class);
+    }
+
+    @Test
+    void one_recipe_quantity_of_catalyst_allows_large_parallelism_for_every_resource_family() {
+        long parallelism = (long) Integer.MAX_VALUE + 1L;
+        for (var family : List.of(ITEM, BuiltinCapabilityDefinitions.FLUID_TYPE.id(), MekanismPortFamilies.CHEMICAL)) {
+            long amount = family.equals(ITEM) ? 2L : 1_000L;
+            var template = input(0, amount, 0F, List.of(new Port(0, 0, 0L, Long.MAX_VALUE)));
+            Rule catalyst = new Rule(template.index(), family, template.kind(), template.direction(),
+                    template.amount(), template.heat(), template.chance(), template.consumeChance(),
+                    template.partial(), template.valid(), template.resources(), template.output(), template.ports(),
+                    template.failureReason());
+            var rules = List.of(catalyst, input(1, 1L, 1F, List.of(new Port(1, 1, 0L, Long.MAX_VALUE))),
+                    output(2, 1L, false, 1F, List.of(new Port(2, 2, parallelism, Long.MAX_VALUE))));
+            var candidate = candidate("catalyst", parallelism + 1L, rules, List.of(LEGACY));
+            for (long available : new long[]{0L, amount - 1L, amount}) {
+                var catalystPool = new AsyncCapabilitySnapshot.Resource(family,
+                        ((AsyncCapabilitySnapshot.Resource) pool(available)).slots());
+                var result = new RecipeSearchPlanner(snapshot(List.of(catalystPool, pool(parallelism + 1L), pool(0L)),
+                        List.of(candidate))).advance();
+                if (available < amount) {
+                    assertThat(result).isInstanceOf(RecipeSearchPlanner.NoMatch.class);
+                } else {
+                    assertThat(result).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
+                            match -> assertThat(match.parallelism()).isEqualTo(parallelism));
+                }
+            }
+        }
+    }
+
+    @Test
+    void isolated_catalyst_quantities_are_not_pooled_to_satisfy_one_recipe() {
+        var source = twoScopeSnapshot(1L, 1L);
+        var original = source.candidates().getFirst();
+        var catalyst = input(0, 2L, 0F, original.rules().getFirst().ports());
+        assertThat(new RecipeSearchPlanner(snapshot(source.pools(),
+                List.of(candidate("catalyst", (long) Integer.MAX_VALUE + 1L,
+                        List.of(catalyst), original.scopes())))).advance())
                 .isInstanceOf(RecipeSearchPlanner.NoMatch.class);
     }
 

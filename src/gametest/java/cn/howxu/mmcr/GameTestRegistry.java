@@ -71,6 +71,7 @@ public final class GameTestRegistry {
         register(event, "async_search_components_and_stack_limits", 20, RecipeSearchGameTest::componentPredicatesAndOutputStackLimits);
         if (ModList.get().isLoaded("mekanism")) {
             register(event, "async_search_chemical_and_heat", 20, RecipeSearchGameTest::chemicalAndHeatMatchNativeHandlers);
+            register(event, "async_search_zero_consume_large_parallelism", 20, RecipeSearchGameTest::zeroConsumeCatalystsAllowLargeParallelism);
         }
         register(event, "input_isolation_item_sources", 20, InputIsolationGameTest::itemSourcesCannotPoolAcrossIsolation);
         register(event, "input_isolation_fluid_sources", 20, InputIsolationGameTest::fluidSourcesCannotPoolAcrossIsolation);

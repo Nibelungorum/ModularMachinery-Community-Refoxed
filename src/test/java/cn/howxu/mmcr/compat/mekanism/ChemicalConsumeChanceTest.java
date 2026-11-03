@@ -122,13 +122,31 @@ class ChemicalConsumeChanceTest {
                 ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L), 1F, List.of(), 0F);
         RequirementHandler<LoadedChemicalRequirement> handler = LoadedMekanismBridge.chemicalHandler();
 
-        RequirementPlan plan = handler.plan(requirement, List.of(port), emptyContext());
+        long parallelism = (long) Integer.MAX_VALUE + 1L;
+        RequirementPlan plan = handler.plan(requirement, List.of(port), new PlanningContext(parallelism, 0));
 
         assertThat(plan.successful()).isTrue();
-        assertThat(plan.maxParallelism()).isEqualTo(1L);
-        RequirementPlan materialized = plan.materialize(1L, new PlanningReservations(), null);
+        assertThat(plan.maxParallelism()).isEqualTo(parallelism);
+        RequirementPlan materialized = plan.materialize(parallelism, new PlanningReservations(), null);
         assertThat(materialized.operations()).isEmpty();
         assertThat(tank.amount()).isEqualTo(1_000L);
+    }
+
+    @Test
+    void zero_consume_chemical_input_still_requires_one_complete_recipe_quantity() {
+        Holder.Reference<Chemical> chemical = registerChemical("insufficient_catalyst");
+        LoadedChemicalRequirement requirement = new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                ChemicalIngredient.chemical(chemical.key().identifier(), 1_000L), 1F, List.of(), 0F);
+        for (long available : new long[]{0L, 999L}) {
+            FakeChemicalTank tank = new FakeChemicalTank(2_000L, ChemicalAttributeValidator.ALWAYS_ALLOW);
+            tank.setContents(ChemicalResource.of(chemical), available, null);
+            RequirementPlan plan = LoadedMekanismBridge.chemicalHandler().plan(requirement,
+                    List.of(new FakeChemicalPort(tank, IOType.INPUT)),
+                    new PlanningContext((long) Integer.MAX_VALUE + 1L, 0));
+
+            assertThat(plan.successful()).isFalse();
+            assertThat(tank.amount()).isEqualTo(available);
+        }
     }
 
     @Test

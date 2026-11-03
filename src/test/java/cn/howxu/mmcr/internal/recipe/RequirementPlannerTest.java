@@ -1634,13 +1634,82 @@ class RequirementPlannerTest {
     @Test
     void zero_consume_chance_still_requires_the_full_input_inventory() {
         BulkItemStorage storage = new BulkItemStorage(64, null);
+        storage.insert(ironResource(), 1, false);
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 2,
                         ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F)),
                 List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
-                new PlanningContext(1, 0));
+                new PlanningContext((long) Integer.MAX_VALUE + 1L, 0));
 
         assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("required", "2").containsEntry("available", "1");
+        assertThat(storage.amount(0)).isEqualTo(1L);
+    }
+
+    @Test
+    void zero_consume_item_input_does_not_limit_large_parallelism_or_extract_the_catalyst() {
+        long available = (long) Integer.MAX_VALUE + 1L;
+        LongResourceStorage<ItemResource> storage = new LongResourceStorage<>(
+                ItemResource.class, 2, Long.MAX_VALUE, ItemResource::isEmpty, null);
+        storage.setContents(0, ironResource(), 1L);
+        storage.setContents(1, ItemResource.of(Items.DIAMOND), available);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, ironIngredient(), 1,
+                                ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND), 1,
+                                ItemStack.EMPTY)),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
+                new PlanningContext(available + 1L, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(available);
+        assertThat(result.plan().requirements().getFirst().operations()).isEmpty();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(1L);
+        assertThat(storage.amount(1)).isZero();
+    }
+
+    @Test
+    void zero_consume_fluid_input_does_not_limit_large_parallelism_or_extract_the_catalyst() {
+        long available = (long) Integer.MAX_VALUE + 1L;
+        LongFluidStorage fluid = new LongFluidStorage(2_000L, null);
+        fluid.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        LongResourceStorage<ItemResource> items = new LongResourceStorage<>(
+                ItemResource.class, 1, Long.MAX_VALUE, ItemResource::isEmpty, null);
+        items.setContents(0, ItemResource.of(Items.DIAMOND), available);
+
+        var result = new RequirementPlanner().plan(
+                List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                                FluidStack.EMPTY, 1F, List.of(), 0F),
+                        new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND), 1,
+                                ItemStack.EMPTY)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.input(), fluid),
+                        new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.input(), items)),
+                new PlanningContext(available + 1L, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(available);
+        assertThat(result.plan().requirements().getFirst().operations()).isEmpty();
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(fluid.getAmountAsLong()).isEqualTo(1_000L);
+        assertThat(items.amount(0)).isZero();
+    }
+
+    @Test
+    void zero_consume_fluid_input_still_requires_one_complete_recipe_quantity() {
+        LongFluidStorage storage = new LongFluidStorage(2_000L, null);
+        storage.setFluid(new FluidStack(Fluids.WATER, 999));
+
+        var result = new RequirementPlanner().plan(
+                List.of(new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                        FluidStack.EMPTY, 1F, List.of(), 0F)),
+                List.of(new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.input(), storage)),
+                new PlanningContext((long) Integer.MAX_VALUE + 1L, 0));
+
+        assertThat(result.successful()).isFalse();
+        assertThat(result.failure().details()).containsEntry("required", "1000").containsEntry("available", "999");
+        assertThat(storage.getAmountAsLong()).isEqualTo(999L);
     }
 
     @Test

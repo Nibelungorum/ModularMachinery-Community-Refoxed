@@ -87,7 +87,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
                             Long.toString(requestedAmount(requirement, context.requestedParallelism()))))
                     : RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_INPUT,
                     Map.of("required", Long.toString(RequirementHandlerSupport.scaled(
-                                    requirement.amount(), context.requestedParallelism())),
+                                    requirement.amount(), requirement.consumeChance() <= 0F ? 1L : context.requestedParallelism())),
                             "available", Long.toString(matchingFluidAmount(requirement, capabilities))));
         }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.consumeChance() <= 0F) {
@@ -125,6 +125,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             if (requirement.fluid() == null || requirement.amount() <= 0) return 0;
             long available = matchingFluidAmount(requirement, capabilities);
+            if (requirement.consumeChance() <= 0F) return available >= requirement.amount() ? requested : 0L;
             return Math.min(requested, available / requirement.amount());
         }
         FluidStack stack = requirement.stack();

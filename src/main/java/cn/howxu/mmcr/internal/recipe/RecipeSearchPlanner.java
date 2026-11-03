@@ -278,6 +278,9 @@ public final class RecipeSearchPlanner {
             if (!allowed(rule, scope, port)) continue;
             available = SaturatingLong.add(available, resourceAvailable(rule, port, initial));
         }
+        if (rule.direction() == IOType.INPUT && rule.consumeChance() <= 0F) {
+            return available >= rule.amount() ? requested : 0L;
+        }
         if (rule.direction() == IOType.OUTPUT && rule.partial()) return available > 0L ? requested : 0L;
         long maximum = Math.min(requested, available / rule.amount());
         return rule.direction() == IOType.OUTPUT && maximum == 0L && available > 0L ? 1L : maximum;
