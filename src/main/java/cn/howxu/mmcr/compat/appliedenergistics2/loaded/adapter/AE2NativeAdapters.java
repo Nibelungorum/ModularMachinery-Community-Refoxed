@@ -491,6 +491,14 @@ public final class AE2NativeAdapters {
         @Override public Object storedKey(int slot) { return key(slot); }
         @Override public long storedAmount(int slot) { return storage.get().extract(key(slot), Long.MAX_VALUE, Actionable.SIMULATE, source); }
 
+        @Override public long transfer(int slot, Object resource, long amount, boolean insert, boolean simulate) {
+            if (insert || amount <= 0L) return 0L;
+            AEItemKey key = AEItemKey.of((ItemStack) resource);
+            List<AEKey> configured = keys();
+            if (key == null || slot < 0 || slot >= configured.size() || !key.equals(configured.get(slot))) return 0L;
+            return storage.get().extract(key, amount, mode(simulate), source);
+        }
+
         @Override public ItemStack getStackInSlot(int slot) {
             AEKey key = key(slot);
             if (!(key instanceof AEItemKey item)) return ItemStack.EMPTY;
@@ -553,6 +561,14 @@ public final class AE2NativeAdapters {
         @Override public Object resource(Object key) { return key instanceof AEFluidKey fluid ? fluid.toStack(1) : FluidStack.EMPTY; }
         @Override public Object storedKey(int tank) { return key(tank); }
         @Override public long storedAmount(int tank) { return storage.get().extract(key(tank), Long.MAX_VALUE, Actionable.SIMULATE, source); }
+
+        @Override public long transfer(int tank, Object resource, long amount, boolean insert, boolean simulate) {
+            if (insert || amount <= 0L) return 0L;
+            AEFluidKey key = AEFluidKey.of((FluidStack) resource);
+            List<AEKey> configured = keys();
+            if (key == null || tank < 0 || tank >= configured.size() || !key.equals(configured.get(tank))) return 0L;
+            return storage.get().extract(key, amount, mode(simulate), source);
+        }
 
         @Override public FluidStack getFluidInTank(int tank) {
             AEKey key = key(tank);

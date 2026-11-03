@@ -66,7 +66,7 @@ class AsyncPlanningFacetTest {
         assertThat(operation.amount()).isEqualTo(32L);
         assertThat(AsyncCapabilityOperation.Scalar.class.getRecordComponents())
                 .extracting(RecordComponent::getType)
-                .containsExactly(ResourceLocation.class, long.class, boolean.class);
+                .containsExactly(ResourceLocation.class, long.class, boolean.class, long.class);
     }
 
     @Test
@@ -81,16 +81,41 @@ class AsyncPlanningFacetTest {
     }
 
     @Test
-    void scalar_planner_splits_the_batch_limited_amount_into_committable_operations() {
+    void scalar_planner_keeps_the_batch_limited_amount_in_one_operation() {
         AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Scalar(MMCR.id("energy"));
         var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 100L, 1_000L, 20L);
         var request = new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), 3L, 100L, false);
 
-        assertThat(planner.plan(snapshot, request)).hasValueSatisfying(operation ->
-                assertThat(groupOperations(operation)).containsExactly(
-                        new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 20L, false),
-                        new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 20L, false),
-                        new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 20L, false)));
+        assertThat(planner.plan(snapshot, request)).contains(
+                new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 60L, false, 3L));
+    }
+
+    @Test
+    void scalar_planner_represents_extreme_parallelism_without_allocating_per_batch_operations() {
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Scalar(MMCR.id("energy"));
+        long amount = 1_000_000_000L * Integer.MAX_VALUE;
+        var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), amount, Long.MAX_VALUE, 1_000_000_000L);
+        var request = new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), Integer.MAX_VALUE, amount, false);
+
+        assertThat(planner.plan(snapshot, request)).contains(
+                new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), amount, false, Integer.MAX_VALUE));
+    }
+
+    @Test
+    void scalar_planner_handles_partial_budgets_and_saturated_limits_without_overflow() {
+        AsyncCapabilityPlanner planner = new AsyncCapabilityPlanner.Scalar(MMCR.id("energy"));
+        var snapshot = new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), Long.MAX_VALUE, Long.MAX_VALUE, 20L);
+        var request = new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), Long.MAX_VALUE, Long.MAX_VALUE, false);
+        long budgets = 1L + (Long.MAX_VALUE - 1L) / 20L;
+
+        assertThat(planner.plan(snapshot, request)).contains(
+                new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), Long.MAX_VALUE, false, budgets));
+        assertThat(planner.plan(snapshot, new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), 3L, 41L, false)))
+                .contains(new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 41L, false, 3L));
+        assertThat(planner.plan(new AsyncCapabilitySnapshot.Scalar(MMCR.id("energy"), 100L, 100L, 0L),
+                new AsyncCapabilityRequest.Scalar(MMCR.id("energy"), 1L, 1L, false))).isEmpty();
+        assertThatThrownBy(() -> new AsyncCapabilityOperation.Scalar(MMCR.id("energy"), 1L, false, 0L))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

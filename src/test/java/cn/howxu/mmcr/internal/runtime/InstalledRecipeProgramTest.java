@@ -57,6 +57,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
@@ -180,6 +181,31 @@ class InstalledRecipeProgramTest {
         runtime.tick();
         assertThat(input.energyStorage().getAmountAsLong()).isEqualTo(amount - 7L);
         assertThat(runtime.tickCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void installed_energy_input_debits_extreme_parallelism_once_per_storage(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        long parallelism = Integer.MAX_VALUE;
+        long amount = 1_000_000_000L * parallelism;
+        AtomicInteger changes = new AtomicInteger();
+        LongEnergyStorage storage = storage(Long.MAX_VALUE, 1_000_000_000L, amount, () -> {
+            if (changes.incrementAndGet() > 1) throw new AssertionError("Installed energy debit was split into batches");
+        });
+        changes.set(0);
+        var runtime = runtimeWithCapabilities(List.of(input(storage)));
+        MachineRecipe recipe = recipe("installed_bulk_energy", 5, List.of(new EnergyRequirement(1_000_000_000L)));
+        var snapshot = runtime.controller().currentRuntimeSnapshot();
+        var active = new ActiveMachineRecipe(recipe, parallelism);
+        active.setParallelism(parallelism);
+        runtime.restore(active, null, snapshot.structure().version(),
+                snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion());
+        var installed = runtime.ensureInstalledProgram();
+
+        assertThat(installed.executeContinuous()).isNull();
+        assertThat(storage.getAmountAsLong()).isZero();
+        assertThat(changes.get()).isEqualTo(1);
     }
 
     @Test

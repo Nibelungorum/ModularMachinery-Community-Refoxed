@@ -1,5 +1,10 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
@@ -11,6 +16,37 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 
 public class EnergyHatchCapabilityGameTest {
+
+    public void bulkAsyncRecipeEnergyCommitsWithoutPerBatchOperations(GameTestHelper helper) {
+        for (long parallelism : new long[] {1L, 3L, Integer.MAX_VALUE}) {
+            long amount = 1_000_000_000L * parallelism;
+            int[] changes = {0};
+            LongEnergyStorage storage = new LongEnergyStorage(Long.MAX_VALUE, 1_000_000_000L, () -> {
+                if (++changes[0] > 1) throw new AssertionError("Async energy was debited per batch");
+            });
+            storage.setAmount(amount);
+            changes[0] = 0;
+            EnergyHatchCapability capability = new EnergyHatchCapability(storage, IOType.INPUT);
+            AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
+            var request = new AsyncCapabilityRequest.Scalar(capability.type().id(), parallelism, amount, false);
+            var operation = facet.workerPlanner().plan(facet.captureSnapshot(), request).orElseThrow();
+            helper.assertTrue(operation instanceof AsyncCapabilityOperation.Scalar scalar
+                            && scalar.amount() == amount && scalar.parallelism() == parallelism,
+                    "Async planning retains one scalar and its complete parallel transfer budget");
+            helper.assertTrue(facet.commit(operation).success(), "Bulk async native energy commit succeeds");
+            helper.assertTrue(storage.getAmountAsLong() == 0L && changes[0] == 1,
+                    "Bulk async commit debits the exact amount with one change notification");
+        }
+        LongEnergyStorage storage = new LongEnergyStorage(Long.MAX_VALUE, 1_000_000_000L, null);
+        storage.setAmount(3_000_000_000L);
+        EnergyHatchCapability capability = new EnergyHatchCapability(storage, IOType.INPUT);
+        AsyncPlanningFacet facet = capability.facet(AsyncPlanningFacet.class).orElseThrow();
+        helper.assertFalse(facet.commit(new AsyncCapabilityOperation.Scalar(capability.type().id(),
+                        3_000_000_000L, false)).success(),
+                "A legacy one-budget scalar cannot bypass the energy transfer budget");
+        helper.assertTrue(storage.getAmountAsLong() == 3_000_000_000L, "Rejected scalar leaves energy unchanged");
+        helper.succeed();
+    }
 
     public void energyHatchStoresFE(GameTestHelper helper) {
         BlockPos inputPos = new BlockPos(0, 1, 0);

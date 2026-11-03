@@ -64,11 +64,17 @@ public sealed interface AsyncCapabilityOperation permits AsyncCapabilityOperatio
      * @param capabilityId capability type identifier
      * @param amount scalar amount
      * @param insert whether the scalar is inserted rather than extracted
+     * @param parallelism number of per-operation transfer budgets admitted by the planner
      */
-    record Scalar(ResourceLocation capabilityId, long amount, boolean insert) implements AsyncCapabilityOperation {
+    record Scalar(ResourceLocation capabilityId, long amount, boolean insert, long parallelism)
+            implements AsyncCapabilityOperation {
+        public Scalar(ResourceLocation capabilityId, long amount, boolean insert) {
+            this(capabilityId, amount, insert, 1L);
+        }
+
         public Scalar {
             Objects.requireNonNull(capabilityId, "capabilityId");
-            if (amount <= 0L) throw new IllegalArgumentException("amount must be positive");
+            if (amount <= 0L || parallelism <= 0L) throw new IllegalArgumentException("amount and parallelism must be positive");
         }
     }
 

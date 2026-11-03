@@ -127,6 +127,13 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
                 || !request.insert() && remaining > RequirementHandlerSupport.scaled(transferLimit, request.parallelism())) {
             return failure(request.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
         }
+        if (!request.insert() && energyStorage instanceof LongEnergyStorage storage) {
+            // The parallel-scaled transfer budget was checked above; debit native storage once.
+            if (storage.forceExtract(remaining, true) != remaining || storage.forceExtract(remaining, false) != remaining) {
+                return failure(BuiltinFailureReasons.MISSING_INPUT);
+            }
+            return CapabilityResult.successful();
+        }
         for (long batch = 0L; (request.insert() || batch < request.parallelism()) && remaining > 0L; batch++) {
             long chunk = Math.min(remaining, transferLimit);
             if (moveEnergy(chunk, request.insert(), true) != chunk) return failure(request.insert()
@@ -155,25 +162,28 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
     private CapabilityResult commitAsync(AsyncCapabilityOperation operation) {
         if (operation instanceof AsyncCapabilityOperation.Group(List<AsyncCapabilityOperation> operations)) {
             long amount = 0L;
+            long parallelism = 0L;
             Boolean insert = null;
             for (AsyncCapabilityOperation child : operations) {
                 if (!(child instanceof AsyncCapabilityOperation.Scalar(
-                        net.minecraft.resources.ResourceLocation capabilityId, long childAmount, boolean childInsert))
+                        net.minecraft.resources.ResourceLocation capabilityId, long childAmount, boolean childInsert,
+                        long childParallelism))
                         || !type().id().equals(capabilityId) || insert != null && insert != childInsert) {
                     return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
                 }
                 insert = childInsert;
                 amount = RequirementHandlerSupport.saturatingAdd(amount, childAmount);
+                parallelism = RequirementHandlerSupport.saturatingAdd(parallelism, childParallelism);
             }
             if (insert == null) return CapabilityResult.successful();
             return commitNative(new CapabilityRequests.ValueRequest(type(), insert ? IOType.OUTPUT : IOType.INPUT,
-                    operations.size(), amount, insert));
+                    parallelism, amount, insert));
         }
         if (!(operation instanceof AsyncCapabilityOperation.Scalar(
-                net.minecraft.resources.ResourceLocation capabilityId, long amount, boolean insert))
+                net.minecraft.resources.ResourceLocation capabilityId, long amount, boolean insert, long parallelism))
                 || !type().id().equals(capabilityId)) return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         return commitNative(new CapabilityRequests.ValueRequest(type(), insert ? IOType.OUTPUT : IOType.INPUT,
-                1L, amount, insert));
+                parallelism, amount, insert));
     }
 
     private CapabilityResult failure(FailureReason reason) {

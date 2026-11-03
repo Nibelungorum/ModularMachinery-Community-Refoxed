@@ -223,8 +223,8 @@ public final class InstalledRecipeProgram {
         return storage instanceof LongEnergyHandler handler ? handler.getTransferLimit() : Integer.MAX_VALUE;
     }
     private long move(IEnergyStorage storage, long amount, boolean insert) {
-        if (insert && storage instanceof LongEnergyStorage nativeStorage) {
-            return nativeStorage.forceInsert(amount, false);
+        if (storage instanceof LongEnergyStorage nativeStorage) {
+            return insert ? nativeStorage.forceInsert(amount, false) : nativeStorage.forceExtract(amount, false);
         }
         // One candidate may span multiple native per-call limits at installed parallelism.
         long remaining = amount;
