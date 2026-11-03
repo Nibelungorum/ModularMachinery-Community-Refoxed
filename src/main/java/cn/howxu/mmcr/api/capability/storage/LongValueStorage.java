@@ -63,6 +63,12 @@ public final class LongValueStorage extends SnapshotJournal<Long> implements Cap
         return extractInternal(requested, false, true, false);
     }
 
+    /** Extracts admitted recipe input without applying the external per-operation transfer limit. */
+    public long extractUnrestricted(long requested, TransactionContext transaction) {
+        updateSnapshots(transaction);
+        return extractInternal(requested, false, false, false);
+    }
+
     public void setAmount(long value) {
         long clamped = clamp(value);
         amount = clamped;

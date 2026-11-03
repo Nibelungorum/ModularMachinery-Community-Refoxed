@@ -26,6 +26,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -157,9 +158,17 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
         }
         // The request carries an absolute total, not a per-parallel recipe quantity.
         CapabilityOperation operation = transaction -> {
+            long available = valueRequest.insert() ? storage.capacity() - storage.amount()
+                    : Math.min(storage.amount(), RequirementHandlerSupport.scaled(
+                            storage.transferLimit(), valueRequest.parallelism()));
+            if (valueRequest.amount() > available) {
+                return failure(valueRequest.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                        Map.of("required", Long.toString(valueRequest.amount()), "available", Long.toString(available),
+                                "shortfall", Long.toString(valueRequest.amount() - available)));
+            }
             long moved = valueRequest.insert()
                     ? storage.insertUnrestricted(valueRequest.amount(), transaction)
-                    : storage.extract(valueRequest.amount(), transaction);
+                    : storage.extractUnrestricted(valueRequest.amount(), transaction);
             return moved == valueRequest.amount()
                     ? CapabilityResult.successful() : failure(
                     valueRequest.insert() ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
@@ -206,15 +215,13 @@ public final class EnergyHatchCapability implements MachineCapability, ScalarFac
             return CapabilityResult.successful();
         }
         if (!(operation instanceof AsyncCapabilityOperation.Scalar(
-                net.minecraft.resources.Identifier capabilityId, long amount, boolean insert
+                net.minecraft.resources.Identifier capabilityId, long amount, boolean insert, long parallelism
         ))
                 || !type().id().equals(capabilityId)) {
             return failure(BuiltinFailureReasons.UNSUPPORTED_REQUEST);
         }
-        long moved = insert ? storage.insertUnrestricted(amount, transaction)
-                : storage.extract(amount, transaction);
-        return moved == amount ? CapabilityResult.successful()
-                : failure(insert ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT);
+        return prepareOperation(new CapabilityRequests.ValueRequest(type(), insert ? IOType.OUTPUT : IOType.INPUT,
+                parallelism, amount, insert)).commit(transaction);
     }
 
     @Override

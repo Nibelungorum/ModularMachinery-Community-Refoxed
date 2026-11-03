@@ -137,6 +137,14 @@ public final class RequirementPlanner {
         long lower = 0L;
         long upper = parallelism;
         ReservationAttempt lastFailure = null;
+        // A fully feasible batch needs no search through smaller parallelism values.
+        ReservationAttempt upperAttempt = reserveCandidate(plans, requirementIndexes, upper, context.reservations());
+        if (upperAttempt.successful()) {
+            lower = upper;
+        } else {
+            lastFailure = upperAttempt;
+            upper--;
+        }
         while (lower < upper) {
             long distance = upper - lower;
             long candidate = lower + (distance >>> 1) + (distance & 1L);

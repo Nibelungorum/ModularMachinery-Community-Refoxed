@@ -62,6 +62,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
@@ -182,6 +183,39 @@ class InstalledRecipeProgramTest {
         assertThat(input.getEnergyStorage().amount()).isEqualTo(amount);
         assertThat(installed.ledger().state()).isEqualTo(before);
         assertThat(runtime.tickCount()).isZero();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void installed_energy_input_debits_extreme_parallelism_in_one_rollback_safe_transaction(MachineWorkMode mode) {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        long parallelism = Integer.MAX_VALUE;
+        long amount = 1_000_000_000L * parallelism;
+        AtomicInteger changes = new AtomicInteger();
+        LongValueStorage storage = storage(Long.MAX_VALUE, 1_000_000_000L, amount, changes::incrementAndGet);
+        changes.set(0);
+        var runtime = runtimeWithCapabilities(List.of(input(storage)));
+        var recipe = recipe("installed_bulk_energy", 5, List.of(new EnergyRequirement(1_000_000_000L)));
+        var snapshot = runtime.controller().currentRuntimeSnapshot();
+        var active = new ActiveMachineRecipe(recipe, parallelism);
+        active.setParallelism(parallelism);
+        runtime.restore(active, null, snapshot.structure().version(),
+                snapshot.capabilityVersion(), snapshot.modifierVersion(), snapshot.stateVersion());
+        var installed = runtime.ensureInstalledProgram();
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(installed.executeContinuous(transaction)).isNull();
+            assertThat(storage.amount()).isZero();
+            assertThat(changes.get()).isZero();
+        }
+        assertThat(storage.amount()).isEqualTo(amount);
+        assertThat(changes.get()).isZero();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(installed.executeContinuous(transaction)).isNull();
+            transaction.commit();
+        }
+        assertThat(storage.amount()).isZero();
+        assertThat(changes.get()).isEqualTo(1);
     }
 
     @Test

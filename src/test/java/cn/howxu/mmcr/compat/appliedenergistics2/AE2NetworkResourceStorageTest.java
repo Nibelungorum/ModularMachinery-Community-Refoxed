@@ -8,6 +8,10 @@ import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
+import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
@@ -23,6 +27,8 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,6 +48,38 @@ class AE2NetworkResourceStorageTest {
     @BeforeAll
     static void setup() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {1L, 2_147_483_648L, 2_147_483_647_000_000_000L})
+    void nativeCapabilitiesExtractLongInputsWithoutPerBatchNetworkCalls(long amount) {
+        AEKey ironKey = AEItemKey.of(Items.IRON_INGOT);
+        AEKey waterKey = AEFluidKey.of(Fluids.WATER);
+        FakeMEStorage network = new FakeMEStorage(ironKey, amount);
+        network.setAmount(waterKey, amount);
+        var items = new ItemBusCapability(new ItemNetworkResourceStorage(network, List.of(ironKey)), IOType.INPUT);
+        var fluids = new FluidHatchCapability(new FluidNetworkResourceStorage(network, List.of(waterKey)), IOType.INPUT);
+        var itemRequest = new CapabilityRequests.ResourceRequest<>(items.type(), IOType.INPUT, Integer.MAX_VALUE,
+                List.of(new CapabilityRequests.ResourceAction<>(0, ItemResource.of(Items.IRON_INGOT), amount, false)));
+        var fluidRequest = new CapabilityRequests.ResourceRequest<>(fluids.type(), IOType.INPUT, Integer.MAX_VALUE,
+                List.of(new CapabilityRequests.ResourceAction<>(0, FluidResource.of(Fluids.WATER), amount, false)));
+
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(items.prepareOperation(itemRequest).commit(transaction).success()).isTrue();
+            assertThat(fluids.prepareOperation(fluidRequest).commit(transaction).success()).isTrue();
+        }
+        assertThat(network.amount(ironKey)).isEqualTo(amount);
+        assertThat(network.amount(waterKey)).isEqualTo(amount);
+        assertThat(network.modulateExtractCalls()).isZero();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(items.prepareOperation(itemRequest).commit(transaction).success()).isTrue();
+            assertThat(fluids.prepareOperation(fluidRequest).commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+        assertThat(network.amount(ironKey)).isZero();
+        assertThat(network.amount(waterKey)).isZero();
+        assertThat(network.modulateExtractCalls()).isEqualTo(2);
+        assertThat(network.simulateExtractCalls()).isEqualTo(4);
     }
 
     @Test

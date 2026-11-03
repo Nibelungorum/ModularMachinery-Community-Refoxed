@@ -190,7 +190,7 @@ public final class InstalledRecipeProgram {
                 long amount = rule.amounts()[candidate];
                 if (amount == 0L) continue;
                 LongValueStorage storage = storages[rule.ids()[candidate]];
-                long moved = rule.insert() ? storage.insertUnrestricted(amount, transaction) : storage.extract(amount, transaction);
+                long moved = rule.insert() ? storage.insertUnrestricted(amount, transaction) : storage.extractUnrestricted(amount, transaction);
                 // Native hatches use one operation per candidate, even at parallelism > 1.
                 if (moved != amount) return owner.resourceCommitFailure(rule.insert(), rule.index(), amount, moved);
             }

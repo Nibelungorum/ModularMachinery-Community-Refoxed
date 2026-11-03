@@ -81,6 +81,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
@@ -119,6 +121,60 @@ class RequirementPlannerTest {
     @AfterEach
     void closeRegistryScope() {
         registryScope.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {1L, 2_147_483_647L, Long.MAX_VALUE})
+    void feasible_upper_bound_is_reserved_once_before_materialization(long maximum) {
+        List<Long> reserved = new ArrayList<>();
+        List<Long> materialized = new ArrayList<>();
+        register(TYPE, new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
+                                        PlanningContext context) {
+                return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null,
+                        (parallelism, reservations) -> {
+                            materialized.add(parallelism);
+                            return new RequirementPlan.OperationPlan(List.of(), null);
+                        }, (parallelism, reservations) -> {
+                            reserved.add(parallelism);
+                            return null;
+                        });
+            }
+        });
+
+        var result = new RequirementPlanner().plan(
+                List.of(new TestRequirement(TYPE, RecipeModifier.IOType.INPUT)), List.of(),
+                new PlanningContext(maximum, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(maximum);
+        assertThat(reserved).containsExactly(maximum);
+        assertThat(materialized).containsExactly(maximum);
+    }
+
+    @Test
+    void rejected_upper_bound_still_finds_the_shared_energy_limit_without_leaking_reservations() {
+        long perBatch = 1_000_000_000L;
+        long maximum = Integer.MAX_VALUE;
+        long amount = perBatch * maximum;
+        LongValueStorage storage = new LongValueStorage(Long.MAX_VALUE, Long.MAX_VALUE, null);
+        storage.setAmount(amount);
+        var requirements = List.<MachineRequirement>of(new EnergyRequirement(perBatch), new EnergyRequirement(perBatch));
+        var capabilities = List.<MachineCapability>of(new StorageCapability(
+                EnergyRequirement.TYPE.id(), CapabilityDirections.input(), storage));
+        RequirementPlanner planner = new RequirementPlanner();
+
+        var result = planner.plan(requirements, capabilities, new PlanningContext(maximum, 0));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(maximum / 2L);
+        assertThat(storage.amount()).isEqualTo(amount);
+        assertThat(planner.planFixed(requirements, capabilities, new PlanningContext(maximum, 0), List.of(0, 1))
+                .successful()).isFalse();
+        assertThat(storage.amount()).isEqualTo(amount);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount()).isEqualTo(perBatch);
     }
 
     @Test

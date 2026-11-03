@@ -331,9 +331,9 @@ class FixedRequirementPlannerTest {
 
         assertThat(fixed.successful()).isEqualTo(old.successful()).isTrue();
         assertThat(fixed.plan().parallelism()).isEqualTo(old.plan().parallelism());
-        // Direct hatches commit one operation; a total above their operation limit must still roll back.
-        assertThat(fixed.plan().commit()).isEqualTo(old.plan().commit()).isFalse();
-        assertThat(fixedStorage.amount()).isEqualTo(oldStorage.amount()).isEqualTo(24L);
+        // Direct hatches commit the admitted parallel-scaled total in one native operation.
+        assertThat(fixed.plan().commit()).isEqualTo(old.plan().commit()).isTrue();
+        assertThat(fixedStorage.amount()).isEqualTo(oldStorage.amount()).isEqualTo(12L);
         var overLimit = fixed(List.of(new EnergyRequirement(5L)), List.of(input(fixedStorage)),
                 3L, List.of(0), Map.of());
         assertThat(overLimit.failure().reason()).isEqualTo(BuiltinFailureReasons.MISSING_ENERGY);
