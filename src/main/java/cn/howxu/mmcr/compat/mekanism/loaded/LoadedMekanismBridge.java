@@ -752,7 +752,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     return RequirementHandlerSupport.blockedPlan(requirement, context,
                             BuiltinFailureReasons.MISSING_INPUT);
                 }
-                maximum = inputMaximum(matcher, matchingPorts, requirement.ingredient().amount(), requestedParallelism);
+                maximum = inputMaximum(matcher, matchingPorts, requirement.ingredient().amount(), requestedParallelism,
+                        requirement.consumeChance() <= 0F);
                 if (maximum <= 0L) failureReason = MekanismFailureReasons.CHEMICAL_INPUT_MISSING;
             }
 
@@ -900,7 +901,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         }
 
         private long inputMaximum(ChemicalMatcher matcher, List<ChemicalHandlerPort> ports,
-                                   long amount, long requested) {
+                                   long amount, long requested, boolean retained) {
             long available = 0L;
             PlanningReservations reservations = new PlanningReservations();
             for (ChemicalHandlerPort port : ports) {
@@ -917,6 +918,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                     }
                 }
             }
+            if (retained) return available >= amount ? requested : 0L;
             return Math.min(requested, available / amount);
         }
 

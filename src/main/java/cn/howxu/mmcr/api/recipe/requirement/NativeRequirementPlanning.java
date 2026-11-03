@@ -46,7 +46,8 @@ final class NativeRequirementPlanning {
         if (perBatch <= 0L || insert && requested.isEmpty()) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
-        long requestedAmount = RequirementHandlerSupport.scaled(perBatch, context.requestedParallelism());
+        boolean retained = !insert && requirement.consumeChance() <= 0F;
+        long requestedAmount = RequirementHandlerSupport.scaled(perBatch, retained ? 1L : context.requestedParallelism());
         List<MachineCapability> ordered = insert
                 ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
         long available = 0L;
@@ -58,7 +59,8 @@ final class NativeRequirementPlanning {
                             context.reservations()));
         }
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
-        long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
+        long maximum = retained ? available >= perBatch ? context.requestedParallelism() : 0L
+                : maximum(context.requestedParallelism(), perBatch, available, insert, partial);
         if (maximum <= 0L) return blocked(requirement, context, insert, requestedAmount, available);
         RequirementHandlerSupport.ConsumeProfile consumed = insert ? null
                 : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism(), context);
@@ -81,7 +83,8 @@ final class NativeRequirementPlanning {
         if (perBatch <= 0L || insert && requested.isEmpty()) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
-        long requestedAmount = RequirementHandlerSupport.scaled(perBatch, context.requestedParallelism());
+        boolean retained = !insert && requirement.consumeChance() <= 0F;
+        long requestedAmount = RequirementHandlerSupport.scaled(perBatch, retained ? 1L : context.requestedParallelism());
         List<MachineCapability> ordered = insert
                 ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
         long available = 0L;
@@ -92,7 +95,8 @@ final class NativeRequirementPlanning {
                     fluidAvailable(facet.fluidHandler(), requirement, requested, insert, context.reservations()));
         }
         boolean partial = insert && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
-        long maximum = maximum(context.requestedParallelism(), perBatch, available, insert, partial);
+        long maximum = retained ? available >= perBatch ? context.requestedParallelism() : 0L
+                : maximum(context.requestedParallelism(), perBatch, available, insert, partial);
         if (maximum <= 0L) return blocked(requirement, context, insert, requestedAmount, available);
         RequirementHandlerSupport.ConsumeProfile consumed = insert ? null
                 : RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), context.requestedParallelism(), context);

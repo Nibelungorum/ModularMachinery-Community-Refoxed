@@ -1712,8 +1712,8 @@ class PatternStartReservationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"0,false,false", "2,false,false", "4,false,false", "4,true,false", "4,false,true", "4,true,true"})
-    void onlyFullyRequestSuppliedRetainedInputsSkipContinuousChecksAfterReload(int requestCatalysts,
+    @CsvSource({"0,false,false", "1,false,false", "1,true,false", "2,false,false", "4,false,false", "4,true,false", "4,false,true", "4,true,true"})
+    void requestSuppliedRetainedRecipeQuantitySkipsContinuousChecksAfterReload(int requestCatalysts,
                                                                               boolean saveDuringCommit, boolean overlaps) throws Exception {
         try (var ignored = ServerThreadTestScope.open()) {
             var catalystItem = overlaps ? Items.IRON_INGOT : Items.DIAMOND;
@@ -1751,7 +1751,7 @@ class PatternStartReservationTest {
             restored.load(saved, fixture.controller.resourceDomain(), fixture.controller.getLevel().registryAccess());
             assertThat(restored.active()).isTrue();
             restored.rebindCurrentVersions();
-            boolean validatedRequest = requestCatalysts == 4 && !overlaps;
+            boolean validatedRequest = requestCatalysts >= 1 && !overlaps;
             if (validatedRequest) assertThat(restored.installedTickRequirements()).isEmpty();
             else assertThat(restored.installedTickRequirements()).isNotEmpty();
             LevelStub.setGameTime(fixture.controller.getLevel(), 1L);

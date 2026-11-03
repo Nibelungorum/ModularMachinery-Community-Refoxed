@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
+import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
@@ -13,6 +14,7 @@ import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
@@ -25,11 +27,14 @@ import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.storage.BulkItemStorage;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import com.google.gson.JsonPrimitive;
@@ -43,6 +48,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import mekanism.api.chemical.ChemicalStack;
 
 import java.util.List;
@@ -134,15 +142,64 @@ public final class RecipeSearchGameTest {
         helper.succeed();
     }
 
+    public static void zeroConsumeCatalystsAllowLargeParallelism(GameTestHelper helper) {
+        long parallelism = (long) Integer.MAX_VALUE + 1L;
+        BlockPos chemicalPos = new BlockPos(0, 1, 0);
+        helper.setBlock(chemicalPos, ModBlocks.BLOCKS.get("chemical_input_hatch_basic").get().defaultBlockState());
+        ChemicalPortBlockEntity chemical = helper.getBlockEntity(chemicalPos);
+        chemical.chemicalTank().setStack(new ChemicalStack(MekanismChemicals.OXYGEN, 1_000L));
+        LongFluidStorage fluid = new LongFluidStorage(2_000L, null);
+        fluid.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        var items = new LongItemStorage(2, Long.MAX_VALUE, null);
+        items.setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        items.setContents(1, new ItemStack(Items.DIAMOND), parallelism);
+        var capabilities = new CapabilitySnapshot(List.of(new ItemBusCapability(items, IOType.INPUT),
+                new FluidHatchCapability(fluid, IOType.INPUT), new ChemicalPortCapability(chemical)));
+        List<MachineRequirement> requirements = List.of(
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1,
+                        ItemStack.EMPTY, 1F, List.of(), DataComponentPredicateSet.EMPTY, 0F),
+                new FluidRequirement(RecipeModifier.IOType.INPUT, FluidIngredient.of(Fluids.WATER), 1_000,
+                        FluidStack.EMPTY, 1F, List.of(), 0F),
+                new LoadedChemicalRequirement(RecipeModifier.IOType.INPUT,
+                        ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_000L), 1F, List.of(), 0F),
+                new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.DIAMOND), 1, ItemStack.EMPTY));
+
+        items.setContents(0, new ItemStack(Items.IRON_INGOT), 0L);
+        helper.assertFalse(compare(helper, capabilities, requirements, parallelism + 1L).successful(),
+                "Both planners reject a missing item catalyst");
+        items.setContents(0, new ItemStack(Items.IRON_INGOT), 1L);
+        fluid.setFluid(new FluidStack(Fluids.WATER, 999));
+        helper.assertFalse(compare(helper, capabilities, requirements, parallelism + 1L).successful(),
+                "Both planners reject less than one recipe quantity of fluid catalyst");
+        fluid.setFluid(new FluidStack(Fluids.WATER, 1_000));
+        chemical.chemicalTank().setStack(new ChemicalStack(MekanismChemicals.OXYGEN, 999L));
+        helper.assertFalse(compare(helper, capabilities, requirements, parallelism + 1L).successful(),
+                "Both planners reject less than one recipe quantity of chemical catalyst");
+        chemical.chemicalTank().setStack(new ChemicalStack(MekanismChemicals.OXYGEN, 1_000L));
+        var result = compare(helper, capabilities, requirements, parallelism + 1L);
+        helper.assertTrue(result.successful() && result.plan().parallelism() == parallelism,
+                "Only the consumed diamonds limit the large parallelism, not the three catalysts");
+        helper.assertTrue(result.plan().commit(), "The large input plan commits without extracting catalysts");
+        helper.assertTrue(items.amount(0) == 1L && items.amount(1) == 0L
+                        && fluid.getAmountAsLong() == 1_000L && chemical.chemicalTank().getStored() == 1_000L,
+                "Commit consumes the diamonds exactly once and preserves all three catalyst families");
+        helper.succeed();
+    }
+
     private static void compare(GameTestHelper helper, CapabilitySnapshot capabilities, List<MachineRequirement> requirements) {
+        compare(helper, capabilities, requirements, 16L);
+    }
+
+    private static PlanningResult compare(GameTestHelper helper, CapabilitySnapshot capabilities,
+                                          List<MachineRequirement> requirements, long maximumParallelism) {
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("search_runtime_oracle"), MMCR.id("search_runtime_pool"),
                 20, requirements, List.of(), List.of(), 0, 1, false, true, false, Set.of());
-        var expected = new CraftingContext(capabilities).planStartResult(recipe, 16L);
+        var expected = new CraftingContext(capabilities).planStartResult(recipe, maximumParallelism);
         var runtime = new ControllerRuntimeSnapshot(StructureSnapshot.empty(), 0L, 0L, 0L, Map.of(), Map.of(), Set.of(),
                 ModuleConnectionStatus.notRequired(), 0, null, null, List.of(), List.of(), List.of(), "", "", 0,
-                false, false, 0, 0, 16L);
+                false, false, 0, 0, maximumParallelism);
         var effective = new EffectiveRecipeResolver().resolve(recipe, runtime, List.of());
-        var snapshot = RecipeSearchCapture.capture(runtime, 0L, 16L, List.of(effective), capabilities, false);
+        var snapshot = RecipeSearchCapture.capture(runtime, 0L, maximumParallelism, List.of(effective), capabilities, false);
         Thread owner = Thread.currentThread();
         var actual = CompletableFuture.supplyAsync(() -> {
             if (Thread.currentThread() == owner) throw new AssertionError("Search must execute on a worker");
@@ -159,6 +216,7 @@ public final class RecipeSearchGameTest {
                             && noMatch.failures().getFirst().reasonId().equals(expected.failure().reason().id()),
                     "Native snapshot rejection must retain the synchronous failure kind: " + actual);
         }
+        return expected;
     }
 
     /** Runtime lightning storage for differential search checks.
