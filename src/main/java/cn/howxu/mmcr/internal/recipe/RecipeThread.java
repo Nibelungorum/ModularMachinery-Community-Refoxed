@@ -729,8 +729,8 @@ public abstract class RecipeThread {
                         return false;
                     }
                 },
-                () -> controller.currentRuntimeSnapshot().structure().version(),
-                () -> controller.currentRuntimeSnapshot().stateVersion(),
+                () -> controller.currentStructureSnapshot().version(),
+                () -> controller.componentRuntime().stateVersion(),
                 startSnapshot.catalogVersion(),
                 this::currentCatalogVersion,
                 completion
@@ -785,7 +785,7 @@ public abstract class RecipeThread {
         if (controller.isRedstonePaused() || !Objects.equals(pendingStartDomain, controller.resourceDomain())) {
             return StartResult.DEFERRED;
         }
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        ControllerRuntimeSnapshot snapshot = controller.executionRuntimeSnapshot();
         if (pendingStartRecipePoolId == null
                 || !pendingStartRecipePoolId.equals(controller.currentRecipePoolId())
                 || !pendingStartRecipePoolId.equals(recipe.recipePoolId()) || !isStartCandidateEligible(recipe)) {
@@ -1063,8 +1063,8 @@ public abstract class RecipeThread {
                     }
                     return valid;
                 },
-                 () -> controller.currentRuntimeSnapshot().structure().version(),
-                 () -> controller.currentRuntimeSnapshot().stateVersion(),
+                 () -> controller.currentStructureSnapshot().version(),
+                 () -> controller.componentRuntime().stateVersion(),
                  catalogVersion,
                  this::currentCatalogVersion,
                  () -> {
@@ -1293,8 +1293,8 @@ public abstract class RecipeThread {
                         MachineAsyncCoordinator.get(level).resume(key);
                     }
                     return valid;
-                }, () -> controller.currentRuntimeSnapshot().structure().version(),
-                () -> controller.currentRuntimeSnapshot().stateVersion(), catalogVersion, this::currentCatalogVersion,
+                }, () -> controller.currentStructureSnapshot().version(),
+                () -> controller.componentRuntime().stateVersion(), catalogVersion, this::currentCatalogVersion,
                  () -> MachineAsyncCoordinator.get(level).resume(key)));
     }
 

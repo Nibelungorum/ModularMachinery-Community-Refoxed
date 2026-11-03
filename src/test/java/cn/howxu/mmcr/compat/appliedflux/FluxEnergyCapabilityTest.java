@@ -314,7 +314,6 @@ class FluxEnergyCapabilityTest {
     @Test
     void prefetchDoesNotCallTheBridgeWhenTheLocalBufferCannotFitTheFullAmount() {
         FluxEnergyBuffer buffer = new FluxEnergyBuffer();
-        buffer.setAmount(Long.MAX_VALUE - 1L);
         AtomicLong bridgeCalls = new AtomicLong();
         FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
                 requested -> Optional.of(transaction -> {
@@ -322,6 +321,7 @@ class FluxEnergyCapabilityTest {
                     return CapabilityResult.successful();
                 }));
         var plan = capability.planPrefetch(2L).orElseThrow();
+        buffer.setAmount(Long.MAX_VALUE - 1L);
 
         try (Transaction transaction = Transaction.openRoot()) {
             var result = plan.operation().commit(transaction);
@@ -333,6 +333,40 @@ class FluxEnergyCapabilityTest {
         assertThat(bridgeCalls).hasValue(0L);
         assertThat(buffer.amount()).isEqualTo(Long.MAX_VALUE - 1L);
         assertThat(buffer.reserved()).isZero();
+    }
+
+    @Test
+    void prefetchRefusesInsufficientLocalSpaceBeforePlanningNetworkExtraction() {
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        buffer.setAmount(Long.MAX_VALUE - 1L);
+        AtomicLong plans = new AtomicLong();
+        AtomicLong commits = new AtomicLong();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input", requested -> {
+            plans.incrementAndGet();
+            return Optional.of(transaction -> {
+                commits.incrementAndGet();
+                return CapabilityResult.successful();
+            });
+        });
+
+        for (int lane = 0; lane < 64; lane++) assertThat(capability.planPrefetch(2L)).isEmpty();
+        assertThat(plans).hasValue(0L);
+        assertThat(buffer.amount()).isEqualTo(Long.MAX_VALUE - 1L);
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(buffer.extract(1L, transaction)).isEqualTo(1L);
+            transaction.commit();
+        }
+        var plan = capability.planPrefetch(2L).orElseThrow();
+        assertThat(plans).hasValue(1L);
+        assertThat(commits).hasValue(0L);
+        assertThat(buffer.reserved()).isZero();
+        try (Transaction transaction = Transaction.openRoot()) {
+            assertThat(plan.operation().commit(transaction).success()).isTrue();
+            transaction.commit();
+        }
+        assertThat(commits).hasValue(1L);
+        assertThat(buffer.reserved()).isEqualTo(2L);
+        assertThat(buffer.amount()).isEqualTo(Long.MAX_VALUE);
     }
 
     @Test

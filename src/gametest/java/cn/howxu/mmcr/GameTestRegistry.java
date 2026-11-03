@@ -173,6 +173,8 @@ public final class GameTestRegistry {
         register(event, "running_resource_paid_save_reentrance", 20, RunningRecipeGameTest::resourcePaidSaveReentranceRestoresPausedLedger);
         register(event, "appflux_prefetch_port_nbt_restore", 20,
                 helper -> new AppliedFluxInterfaceGameTest().prefetchReservationRestoresWithActualPortNbt(helper));
+        register(event, "appflux_full_cache_search_admission", 20,
+                helper -> new AppliedFluxInterfaceGameTest().fullPrefetchCacheRejectsWaitingSearchesAndRecoversAfterConsumption(helper));
         register(event, "running_same_time_qualification", 20, RunningRecipeGameTest::sameGameTimeRoundsRequireFreshBlockEntityEligibility);
         register(event, "controller_ui_committed_progress_baseline", 20, ControllerUiGameTest::reopenedSessionUsesCommittedProgressAndJadeRequest);
         register(event, "mekanism_prepared_temperature_live_check", 20,
