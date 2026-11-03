@@ -175,8 +175,12 @@ public final class FactoryRuntime {
         if (paused || controller == null) return currentTickResult(initialEpoch, false);
         currentFinishCallback = onFinished == null ? NO_FINISH_CALLBACK : onFinished;
         currentFinishCandidates = candidates == null ? List.of() : candidates;
-        if (canTickInstalledLanes(maxParallelism)) {
-            for (FactoryRecipeThread lane : List.copyOf(lanes)) tickLane(lane, snapshot);
+        if (canTickInstalledLanes(snapshot, maxParallelism, gameTime)) {
+            for (FactoryRecipeThread lane : List.copyOf(lanes)) {
+                tickLane(lane, snapshot);
+                lane.tickIdle(gameTime);
+                if (lane.isTimedOut()) removeLane(lane);
+            }
             trimLanesToLimit();
             return currentTickResult(initialEpoch, initialEpoch != factoryStateEpoch);
         }
@@ -499,8 +503,8 @@ public final class FactoryRuntime {
                     reserveStart(lane, started.ownsStart());
                     return true;
                 }, () -> validateAsyncSearchRequest(lane, request, catalogVersion, taskKey, level),
-                () -> controller.currentRuntimeSnapshot().structure().version(),
-                () -> controller.currentRuntimeSnapshot().stateVersion(), catalogVersion,
+                () -> controller.currentStructureSnapshot().version(),
+                () -> controller.componentRuntime().stateVersion(), catalogVersion,
                 this::currentCatalogVersion, () -> MachineAsyncCoordinator.get(level).resume(taskKey)));
         return MainThreadStep.Result.pending();
     }
@@ -521,7 +525,7 @@ public final class FactoryRuntime {
                 || pendingAsyncSearches.get(lane) != request || catalogVersion != request.context().catalogVersion()
                 || catalogVersion != currentCatalogVersion()
                 || lane.coreRecipeSetVersion() != request.coreRecipeSetVersion()) return false;
-        ControllerRuntimeSnapshot current = controller.currentRuntimeSnapshot();
+        ControllerRuntimeSnapshot current = controller.executionRuntimeSnapshot();
         return current.structure().version() == request.context().snapshot().structure().version()
                 && current.capabilityVersion() == request.context().snapshot().capabilityVersion()
                 && current.modifierVersion() == request.context().snapshot().modifierVersion()
@@ -1272,13 +1276,18 @@ public final class FactoryRuntime {
         return false;
     }
 
-    private boolean canTickInstalledLanes(long maxParallelism) {
-        if (laneAdmissionPending || lanes.isEmpty() || cachedActiveLaneCount != lanes.size() || perThreadParallelLimit != maxParallelism
+    private boolean canTickInstalledLanes(ControllerRuntimeSnapshot snapshot, long maxParallelism, long gameTime) {
+        if (laneAdmissionPending || lanes.isEmpty() || cachedActiveLaneCount == 0 || perThreadParallelLimit != maxParallelism
                 || !startReservations.isEmpty() || !patternStartReservations.isEmpty()
                 || !pendingAsyncSearches.isEmpty() || !readyLanes.isEmpty()) return false;
         for (FactoryRecipeThread lane : lanes) {
-            InstalledRecipeProgram execution = lane.runtime().installedProgram();
-            if (execution == null || !execution.current()) return false;
+            if (lane.runtime().active()) {
+                InstalledRecipeProgram execution = lane.runtime().installedProgram();
+                if (execution == null || !execution.current()) return false;
+            } else if (!lane.isIdle() || lane.needsSearch(currentSearchContextKey(snapshot, lane), gameTime)
+                    || lane.idleTimeoutDue(gameTime)) {
+                return false;
+            }
         }
         return true;
     }
@@ -1412,7 +1421,7 @@ public final class FactoryRuntime {
     }
 
     private EffectiveRecipe effectiveRecipe(MachineRecipe recipe) {
-        ControllerRuntimeSnapshot snapshot = controller.currentRuntimeSnapshot();
+        ControllerRuntimeSnapshot snapshot = controller.executionRuntimeSnapshot();
         return effectiveRecipeCache.resolveOne(snapshot, currentCatalogVersion(), recipe,
                 controller.componentRuntime().modifierList());
     }

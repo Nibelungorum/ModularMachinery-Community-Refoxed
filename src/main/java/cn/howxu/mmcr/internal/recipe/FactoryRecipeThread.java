@@ -242,7 +242,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     public boolean acceptsPatternRecipe(MachineRecipe recipe) {
         return super.isStartCandidateEligible(recipe)
                 && candidatesFor(List.of(recipe)).contains(recipe)
-                && AsyncRequirementPlanner.capturedRequirementFailure(controller.currentRuntimeSnapshot(), recipe) == null;
+                && AsyncRequirementPlanner.capturedRequirementFailure(controller.executionRuntimeSnapshot(), recipe) == null;
     }
 
     public boolean canStartPatternRecipe(MachineRecipe recipe) {

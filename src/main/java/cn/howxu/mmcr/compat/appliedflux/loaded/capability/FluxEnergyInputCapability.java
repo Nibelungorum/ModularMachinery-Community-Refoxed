@@ -106,7 +106,8 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
 
     @Override
     public Optional<PrefetchPlan> planPrefetch(long requestedAmount) {
-        if (requestedAmount <= 0L || prefetchBridge == null) return Optional.empty();
+        if (requestedAmount <= 0L || prefetchBridge == null
+                || requestedAmount > buffer.storage().capacity() - buffer.amount()) return Optional.empty();
         return prefetchBridge.planExactExtract(requestedAmount).map(operation -> {
             long[] acquired = {0L};
             return new PrefetchPlan(requestedAmount,

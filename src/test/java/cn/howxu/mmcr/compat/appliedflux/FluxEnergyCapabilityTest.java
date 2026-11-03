@@ -239,7 +239,6 @@ class FluxEnergyCapabilityTest {
     @Test
     void prefetchDoesNotCallTheBridgeWhenTheLocalBufferCannotFitTheFullAmount() {
         FluxEnergyBuffer buffer = new FluxEnergyBuffer();
-        buffer.setAmount(Long.MAX_VALUE - 1L);
         long[] bridgeCalls = {0L};
         FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input",
                 requested -> Optional.of(() -> {
@@ -247,6 +246,7 @@ class FluxEnergyCapabilityTest {
                     return CapabilityResult.successful();
                 }));
         var plan = capability.planPrefetch(2L).orElseThrow();
+        buffer.setAmount(Long.MAX_VALUE - 1L);
 
         var result = plan.operation().commit();
         assertThat(result.success()).isFalse();
@@ -255,6 +255,34 @@ class FluxEnergyCapabilityTest {
         assertThat(bridgeCalls[0]).isZero();
         assertThat(buffer.amount()).isEqualTo(Long.MAX_VALUE - 1L);
         assertThat(buffer.reserved()).isZero();
+    }
+
+    @Test
+    void prefetchRefusesInsufficientLocalSpaceBeforePlanningNetworkExtraction() {
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        buffer.setAmount(Long.MAX_VALUE - 1L);
+        AtomicLong plans = new AtomicLong();
+        AtomicLong commits = new AtomicLong();
+        FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer, "test-input", requested -> {
+            plans.incrementAndGet();
+            return Optional.of(() -> {
+                commits.incrementAndGet();
+                return CapabilityResult.successful();
+            });
+        });
+
+        for (int lane = 0; lane < 64; lane++) assertThat(capability.planPrefetch(2L)).isEmpty();
+        assertThat(plans).hasValue(0L);
+        assertThat(buffer.amount()).isEqualTo(Long.MAX_VALUE - 1L);
+        assertThat(buffer.extract(1L)).isEqualTo(1L);
+        var plan = capability.planPrefetch(2L).orElseThrow();
+        assertThat(plans).hasValue(1L);
+        assertThat(commits).hasValue(0L);
+        assertThat(buffer.reserved()).isZero();
+        assertThat(plan.operation().commit().success()).isTrue();
+        assertThat(commits).hasValue(1L);
+        assertThat(buffer.reserved()).isEqualTo(2L);
+        assertThat(buffer.amount()).isEqualTo(Long.MAX_VALUE);
     }
 
     @Test

@@ -3,6 +3,11 @@ package cn.howxu.mmcr;
 import appeng.api.AECapabilities;
 import appeng.api.networking.IInWorldGridNodeHost;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -36,6 +41,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.Capabilities;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Deterministic GameTest coverage for the optional AppFlux ME Flux port integration.
@@ -107,6 +113,45 @@ public class AppliedFluxInterfaceGameTest {
                         && buffer.amount() == 30 && buffer.reserved() == 0 && buffer.idleExcess() == 30
                         && networkStorage.amount == 40,
                 "Restored remainder becomes idle exactly once; save/load, consume and release conserve total energy");
+        helper.succeed();
+    }
+
+    public void fullPrefetchCacheRejectsWaitingSearchesAndRecoversAfterConsumption(GameTestHelper helper) {
+        assertBridgesAvailable();
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get(INPUT_PORT_ID.getPath()).get().defaultBlockState());
+        FluxEnergyInputInterfaceBlockEntity port = helper.getBlockEntity(pos);
+        FluxEnergyBuffer buffer = inputBuffer(port);
+        var networkStorage = new TestEnergyStorage(Long.MAX_VALUE);
+        var network = new FluxEnergyNetwork(networkStorage);
+        int[] networkPlans = {0};
+        var capability = new FluxEnergyInputCapability(buffer, "gametest-full-prefetch", requested -> {
+            networkPlans[0]++;
+            return network.planExactExtract(requested);
+        });
+        var occupied = capability.planPrefetch(Long.MAX_VALUE - 10L).orElseThrow();
+        helper.assertTrue(occupied.operation().commit().success(), "Running work owns the actual port's cached energy");
+        networkStorage.amount = 100L;
+        var context = new CraftingContext(new CapabilitySnapshot(List.of(capability)), List.of());
+        var recipe = MachineRecipe.fromCanonical(MMCR.id("full_cache_search"), MMCR.id("test_cube"), 20,
+                List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 1L)), List.of(), List.of(),
+                0, 64, false, false, false, Set.of());
+
+        for (int lane = 0; lane < 64; lane++) {
+            helper.assertTrue(!context.planStartResult(recipe, 1L).successful(),
+                    "A waiting search cannot prove a prefetch which does not fit its port");
+        }
+        helper.assertTrue(networkPlans[0] == 1 && networkStorage.amount == 100L
+                        && buffer.amount() == Long.MAX_VALUE - 10L && buffer.reserved() == buffer.amount(),
+                "Rejected search proofs do not query the network or change already-owned energy");
+        helper.assertTrue(capability.consumeReservation(20L).success(), "Running work frees actual local cache space");
+        helper.assertTrue(context.planStartResult(recipe, 1L).successful()
+                        && networkStorage.amount == 100L && buffer.amount() == Long.MAX_VALUE - 30L,
+                "A new live proof succeeds after space is freed, without consuming network energy during proof");
+        var recovered = capability.planPrefetch(20L).orElseThrow();
+        helper.assertTrue(recovered.operation().commit().success() && networkStorage.amount == 80L
+                        && buffer.amount() == Long.MAX_VALUE - 10L && buffer.reserved() == buffer.amount(),
+                "Recovered work acquires and pays its own energy exactly once");
         helper.succeed();
     }
 
