@@ -18,6 +18,8 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterface
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternLogicKind;
+import cn.howxu.mmcr.compat.extendedae_plus.ExtendedAEPlusCompat;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.AsyncOutputInterfaceBlockEntity;
@@ -46,10 +48,10 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 /**
  * AE2-present bridge implementation: registers the native input and output port kinds
@@ -72,20 +74,15 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public List<IOPortKind> portKinds() {
-        if (!contributor.available()) {
-            return List.of(
-                    InputInterfaceKind.INSTANCE,
-                    StockingInterfaceKind.INSTANCE,
-                    OutputInterfaceKind.INSTANCE,
-                    AsyncOutputInterfaceKind.INSTANCE,
-                    PatternInterfaceKind.INSTANCE);
-        }
-        return Stream.concat(List.of(
+        List<IOPortKind> kinds = new ArrayList<>(List.of(
                 InputInterfaceKind.INSTANCE,
                 StockingInterfaceKind.INSTANCE,
                 OutputInterfaceKind.INSTANCE,
                 AsyncOutputInterfaceKind.INSTANCE,
-                PatternInterfaceKind.INSTANCE).stream(), contributor.portKinds().stream()).toList();
+                PatternInterfaceKind.INSTANCE));
+        if (contributor.available()) kinds.addAll(contributor.portKinds());
+        kinds.addAll(ExtendedAEPlusCompat.portKinds());
+        return List.copyOf(kinds);
     }
 
     @Override
@@ -95,11 +92,18 @@ public final class LoadedAE2Bridge implements AE2Bridge {
                 || OUTPUT_INTERFACE_ID.equals(id)
                 || ASYNC_OUTPUT_INTERFACE_ID.equals(id)
                 || PATTERN_INTERFACE_ID.equals(id)
+                || ExtendedAEPlusCompat.portKinds().stream().anyMatch(kind -> kind.id().equals(id))
                 || contributor.available() && contributor.isPort(id);
     }
 
     @Override
     public boolean openMenu(ServerPlayer player, Level level, BlockPos pos) {
+        if (level.getBlockEntity(pos) instanceof PatternInterfaceBlockEntity host
+                && ((PatternLogicKind) host.kind()).readOnlyPatterns()) {
+            player.sendOverlayMessage(Component.translatable(
+                    "extendedae_plus.message.mirror_pattern_provider.readonly"));
+            return true;
+        }
         if (contributor.available() && contributor.openMenu(player, level, pos)) return true;
         if (!(level.getBlockEntity(pos) instanceof IOPortBlockEntity host)
                 || !isPort(host.kind().id())) return false;
@@ -122,6 +126,12 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (!(stack.getItem() instanceof IMemoryCard memoryCard)
                 || !(level.getBlockEntity(pos) instanceof MemoryCardHost memoryCardHost)) {
             return false;
+        }
+        if (memoryCardHost instanceof PatternInterfaceBlockEntity host
+                && ((PatternLogicKind) host.kind()).readOnlyPatterns()) {
+            player.sendOverlayMessage(Component.translatable(
+                    "extendedae_plus.message.mirror_pattern_provider.readonly"));
+            return true;
         }
         if (ItemSpecialOperationUtil.isSpecialOperated(player)) {
             DataComponentMap.Builder builder = DataComponentMap.builder();
@@ -199,6 +209,13 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, patternInterfaceType,
                 (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
         if (contributor.available()) contributor.registerCapabilities(event);
+        for (IOPortKind kind : ExtendedAEPlusCompat.portKinds()) {
+            BlockEntityType<?> type = ModBlockEntities.BES.get(kind.id()).get();
+            event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, type,
+                    (be, ignored) -> be instanceof PatternInterfaceBlockEntity host ? host : null);
+            event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
+                    (be, _) -> be instanceof PatternInterfaceBlockEntity host ? host.getLogic().getReturnInv() : null);
+        }
     }
 
 }

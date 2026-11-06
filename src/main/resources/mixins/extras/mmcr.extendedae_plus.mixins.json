@@ -1,0 +1,17 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.extendedae_plus",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "MirrorPatternBindingToolItemMixin",
+    "MirrorPatternProviderBlockEntityMixin",
+    "PatternInterfaceBlockEntityMixin",
+    "ChannelCardPortTickMixin",
+    "ChannelCardHostLifecycleMixin",
+    "StockingChannelCardLogicMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -46,7 +46,8 @@ public final class BlockLoot extends BlockLootSubProvider {
             Identifier id = BuiltInRegistries.BLOCK.getKey(block);
             if (MMCR.MODID.equals(id.getNamespace())
                     && ("ae2_me_pattern_interface".equals(id.getPath())
-                    || "eae_me_extended_pattern_interface".equals(id.getPath()))) {
+                    || "eae_me_extended_pattern_interface".equals(id.getPath())
+                    || "eaep_me_mirror_pattern_interface".equals(id.getPath()))) {
                 builder.apply(CopyComponentsFunction.copyComponentsFromBlockEntity(LootContextParams.BLOCK_ENTITY)
                         // One compressed owner for both legacy escrow and every native return slot.
                         .include(DataComponents.BLOCK_ENTITY_DATA));

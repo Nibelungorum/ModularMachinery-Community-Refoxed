@@ -58,6 +58,10 @@ public final class PendingPatternLifecycleGameTest {
         carrierRoundTrip(helper, "eae_me_extended_pattern_interface");
     }
 
+    public static void mirrorCarrierRoundTrip(GameTestHelper helper) {
+        carrierRoundTrip(helper, "eaep_me_mirror_pattern_interface");
+    }
+
     public static void hugeReturnAndLegacyQueueHaveOneDropOwner(GameTestHelper helper) {
         carrierRoundTrip(helper, "ae2_me_pattern_interface");
     }
@@ -74,14 +78,15 @@ public final class PendingPatternLifecycleGameTest {
                 new KeyCounter[]{legacyInputs}, List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)), 2_147_483_647L));
         host.getLogic().getReturnInv().insert(iron, quantity, Actionable.MODULATE, IActionSource.empty());
         host.getLogic().getReturnInv().insert(water, quantity, Actionable.MODULATE, IActionSource.empty());
-        host.getLogic().getPatternInv().setItemDirect(0, Items.PAPER.getDefaultInstance());
+        boolean writablePatterns = host.getLogic().getPatternInv().size() > 0;
+        if (writablePatterns) host.getLogic().getPatternInv().setItemDirect(0, Items.PAPER.getDefaultInstance());
         host.linkControllerAppearance(helper.absolutePos(new BlockPos(0, 1, 3)), null);
 
         // Player removal can clear native contents before loot is collected; explosion/removal
         // can reach this entry twice. Neither entry may expand or duplicate the carrier balance.
         host.dropContents();
         host.dropContents();
-        ItemStack carrier = destroyAndCollect(helper, first, kind, 1L);
+        ItemStack carrier = destroyAndCollect(helper, first, kind, writablePatterns ? 1L : 0L);
         var data = carrier.get(DataComponents.BLOCK_ENTITY_DATA);
         helper.assertTrue(data != null && data.getUnsafe().keySet().equals(Set.of("pending_patterns", "returnInv")),
                 "Carrier includes only balances, never node identity, links or physical patterns");

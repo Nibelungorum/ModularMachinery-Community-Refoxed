@@ -26,6 +26,8 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.InterfaceMenuGameTest;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.StructureFluidGameTest;
 import cn.howxu.mmcr.compat.patchouli.PatchouliGuideGameTest;
+import cn.howxu.mmcr.compat.extendedae_plus.ChannelCardMenuGameTest;
+import cn.howxu.mmcr.compat.extendedae_plus.MirrorPatternInterfaceGameTest;
 import net.neoforged.fml.ModList;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -576,6 +578,25 @@ public final class GameTestRegistry {
             // No need for this gameTest
             // register(event, "ae2_cpu_factory_pattern_batch", 180,
             //         helper -> new AE2PatternInterfaceGameTest().craftingCpuBatchesFactoryPatternAcrossLanesAndAccountsForOutputs(helper));
+        }
+        if (ModList.get().isLoaded("ae2") && ModList.get().isLoaded("extendedae")
+                && ModList.get().isLoaded("extendedae_plus")) {
+            Identifier structure = MMCR.id("eaep_interfaces");
+            register(event, "eaep_pending_pattern_carrier", 40, structure, PendingPatternLifecycleGameTest::mirrorCarrierRoundTrip);
+            register(event, "eaep_mirror_native_cpu_local_capacity_tail", 1000, structure,
+                    helper -> new MirrorPatternInterfaceGameTest().nativeCpuUsesMirrorCapacityAndTail(helper));
+            register(event, "eaep_mirror_batch_publication_lifecycle", 600, structure,
+                    helper -> new MirrorPatternInterfaceGameTest().publicationRefreshesOnSourceUnbindAndReconnect(helper));
+            register(event, "eaep_mirror_master_chunk_not_loaded", 200, structure,
+                    helper -> new MirrorPatternInterfaceGameTest().unavailableMasterChunkIsNeverForceLoaded(helper));
+            register(event, "eaep_channel_card_own_menu", 100, structure,
+                    helper -> new ChannelCardMenuGameTest().channelCardsSurviveOwnMenusAndReconnect(helper));
+            register(event, "eaep_mirror_sync", 200, structure,
+                    helper -> new MirrorPatternInterfaceGameTest().syncAndPersistence(helper));
+            register(event, "eaep_mirror_tool", 100, structure,
+                    helper -> new MirrorPatternInterfaceGameTest().nativeToolBinding(helper));
+            register(event, "eaep_mirror_dispatch", 200, structure,
+                    helper -> new MirrorPatternInterfaceGameTest().dispatchesOwnController(helper));
         }
         register(event, "appflux_me_flux_input_interface", 100,
                 helper -> new AppliedFluxInterfaceGameTest().portBlocksResolveToFluxBlockEntities(helper));

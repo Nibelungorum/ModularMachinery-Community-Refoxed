@@ -11,6 +11,10 @@ import cn.howxu.mmcr.internal.port.IOPortKind;
  * @author howxu <dev@howxu.cn>
  */
 public interface PatternLogicKind extends IOPortKind {
+    default boolean readOnlyPatterns() {
+        return false;
+    }
+
     default PatternProviderLogic createPatternLogic(IManagedGridNode node, PatternProviderLogicHost host) {
         return new PatternProviderLogic(node, host);
     }
