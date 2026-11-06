@@ -47,6 +47,9 @@ dependencies {
     // modern ui
     compileOnly "maven.modrinth:${mui_id}:${mui_version}"
 
+    // eaep
+    implementation "maven.modrinth:${eaep_id}:${eaep_version}"
+
     // junit
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
