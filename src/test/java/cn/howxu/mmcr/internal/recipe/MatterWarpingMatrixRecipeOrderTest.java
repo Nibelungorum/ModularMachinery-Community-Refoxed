@@ -193,10 +193,10 @@ class MatterWarpingMatrixRecipeOrderTest {
     void full_extreme_output_can_select_clear_rain_or_nothing_depending_on_output_samples() {
         var capabilities = capabilities(ALL_ITEMS, Layout.SINGLE_BUS, Environment.EXTREME_FULL);
         var request = capture(capabilities, recipes);
-        // A skipped probabilistic output needs no space. Thunder always needs five EXTREME units.
-        assertSampledSelection(request, List.of(0.9), recipes.getFirst());
-        assertSampledSelection(request, List.of(0.1, 0.9), recipes.get(1));
-        assertSampledSelection(request, List.of(0.1, 0.1), null);
+        // Each output samples perturbation, then its fractional unit. Thunder always needs five EXTREME units.
+        assertSampledSelection(request, List.of(0.5, 0.9), recipes.getFirst());
+        assertSampledSelection(request, List.of(0.5, 0.1, 0.5, 0.9), recipes.get(1));
+        assertSampledSelection(request, List.of(0.5, 0.1, 0.5, 0.1), null);
     }
 
     @Test

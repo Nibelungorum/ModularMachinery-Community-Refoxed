@@ -83,8 +83,9 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         long parallelism = context.requestedParallelism();
         List<MachineCapability> plannedCapabilities = requirement.io() == RecipeModifier.IOType.OUTPUT
                 ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
-        if (requirement.io() == RecipeModifier.IOType.OUTPUT
-                && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
+        OutputExpectation output = requirement.io() == RecipeModifier.IOType.OUTPUT
+                ? RequirementHandlerSupport.outputExpectation(requirement.chance(), context) : null;
+        if (output != null && output.amount(requirement.stack(null).getCount(), parallelism) == 0L) {
             return new RequirementPlan(context.requirementIndex(), parallelism, List.of(), null);
         }
         if (requirement.io() == RecipeModifier.IOType.INPUT && requirement.item() == null) {
@@ -92,15 +93,15 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         }
         boolean allowPartialOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
                 && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
-        long maximum = itemMaximum(requirement, plannedCapabilities, parallelism, allowPartialOutput);
+        long maximum = itemMaximum(requirement, plannedCapabilities, parallelism, allowPartialOutput, output);
         if (maximum <= 0) {
             return requirement.io() == RecipeModifier.IOType.OUTPUT
                     ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
                     BuiltinFailureReasons.MISSING_OUTPUT,
-                    requestedAmount(requirement, context.requestedParallelism()),
-                    Map.of("required", Long.toString(requestedAmount(requirement, context.requestedParallelism())),
+                    output.amount(requirement.stack(null).getCount(), parallelism),
+                    Map.of("required", Long.toString(output.amount(requirement.stack(null).getCount(), parallelism)),
                             "available", "0", "shortfall",
-                            Long.toString(requestedAmount(requirement, context.requestedParallelism()))))
+                            Long.toString(output.amount(requirement.stack(null).getCount(), parallelism))))
                     : RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_INPUT,
                     Map.of("required", Long.toString(RequirementHandlerSupport.scaled(
                                     requirement.count(), requirement.consumeChance() <= 0F ? 1L : context.requestedParallelism())),
@@ -117,9 +118,9 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
         IOType direction = IOType.valueOf(requirement.io().name());
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planOperations(requirement, plannedCapabilities, finalParallelism,
-                        context, consumed, reservations, direction, allowPartialOutput, true),
+                        context, consumed, output, reservations, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((finalParallelism, reservations) -> planOperations(
-                        requirement, plannedCapabilities, finalParallelism, context, consumed, reservations,
+                        requirement, plannedCapabilities, finalParallelism, context, consumed, output, reservations,
                         direction, allowPartialOutput, false)));
     }
 
@@ -137,7 +138,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
     }
 
     private static long itemMaximum(ItemRequirement requirement, List<MachineCapability> capabilities,
-                                    long requested, boolean allowPartialOutputs) {
+                                    long requested, boolean allowPartialOutputs, OutputExpectation output) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             long available = matchingItemAmount(requirement, capabilities);
             if (requirement.count() <= 0) return requested;
@@ -170,9 +171,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                 }
             }
         }
-        if (allowPartialOutputs) return capacity > 0L ? requested : 0;
-        long maximum = Math.min(requested, capacity / stack.getCount());
-        return maximum > 0 || capacity <= 0L ? maximum : 1;
+        return output.maximum(stack.getCount(), requested, capacity, allowPartialOutputs);
     }
 
     private static RequirementPlan.OperationPlan planOperations(ItemRequirement requirement,
@@ -180,6 +179,7 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                                                                  long parallelism,
                                                                  PlanningContext context,
                                                                   RequirementHandlerSupport.ConsumeProfile consumed,
+                                                                OutputExpectation output,
                                                                 PlanningReservations reservations,
                                                                 IOType direction,
                                                                 boolean allowPartialOutputs,
@@ -188,10 +188,10 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
                 ? consumed.consumedBatches(parallelism) : parallelism;
         long amount = requirement.io() == RecipeModifier.IOType.INPUT
                 ? RequirementHandlerSupport.scaled(requirement.count(), batches)
-                : RequirementHandlerSupport.scaled(requirement.stack(null).getCount(), parallelism);
+                : output.amount(requirement.stack(null).getCount(), parallelism);
         if (amount <= 0L) return new RequirementPlan.OperationPlan(List.of(), null);
         long requestedAmount = requirement.io() == RecipeModifier.IOType.OUTPUT
-                ? requestedAmount(requirement, parallelism) : 0L;
+                ? amount : 0L;
         ItemResource requestedResource = requirement.io() == RecipeModifier.IOType.OUTPUT
                 ? ItemResource.of(requirement.stack(null)) : null;
         int stackLimit = requirement.io() == RecipeModifier.IOType.OUTPUT
@@ -246,9 +246,9 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
             if (remaining == 0L) break;
         }
         if (remaining > 0L && !(allowPartialOutputs && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
-            boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
+            boolean isOutput = requirement.io() == RecipeModifier.IOType.OUTPUT;
             return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement, context,
-                    output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                    isOutput ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
                     Map.of("required", Long.toString(amount), "available", Long.toString(amount - remaining),
                             "shortfall", Long.toString(remaining))), RequirementHandlerSupport.outputSimulation(
                     requestedAmount, amount - remaining));
@@ -307,10 +307,6 @@ public final class ItemRequirementHandler implements RequirementHandler<ItemRequ
             }
         }
         return amount;
-    }
-
-    private static long requestedAmount(ItemRequirement requirement, long parallelism) {
-        return RequirementHandlerSupport.scaled(requirement.stack(null).getCount(), parallelism);
     }
 
     private static Predicate<Object> itemMatcher(ItemRequirement requirement) {

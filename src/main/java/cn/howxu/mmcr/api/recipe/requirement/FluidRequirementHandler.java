@@ -69,22 +69,23 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
         long parallelism = context.requestedParallelism();
         List<MachineCapability> plannedCapabilities = requirement.io() == RecipeModifier.IOType.OUTPUT
                 ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
-        if (requirement.io() == RecipeModifier.IOType.OUTPUT
-                && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
+        OutputExpectation output = requirement.io() == RecipeModifier.IOType.OUTPUT
+                ? RequirementHandlerSupport.outputExpectation(requirement.chance(), context) : null;
+        if (output != null && output.amount(requirement.stack().getAmount(), parallelism) == 0L) {
             return new RequirementPlan(context.requirementIndex(), parallelism, List.of(), null);
         }
         boolean allowPartialOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
                 && context.outputPolicy() == OutputPolicy.ALLOW_PARTIAL;
         IOType direction = IOType.valueOf(requirement.io().name());
-        long maximum = fluidMaximum(requirement, plannedCapabilities, parallelism, allowPartialOutput);
+        long maximum = fluidMaximum(requirement, plannedCapabilities, parallelism, allowPartialOutput, output);
         if (maximum <= 0) {
             return requirement.io() == RecipeModifier.IOType.OUTPUT
                     ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
                     BuiltinFailureReasons.MISSING_OUTPUT,
-                    requestedAmount(requirement, context.requestedParallelism()),
-                    Map.of("required", Long.toString(requestedAmount(requirement, context.requestedParallelism())),
+                    output.amount(requirement.stack().getAmount(), parallelism),
+                    Map.of("required", Long.toString(output.amount(requirement.stack().getAmount(), parallelism)),
                             "available", "0", "shortfall",
-                            Long.toString(requestedAmount(requirement, context.requestedParallelism()))))
+                            Long.toString(output.amount(requirement.stack().getAmount(), parallelism))))
                     : RequirementHandlerSupport.blockedPlan(requirement, context, BuiltinFailureReasons.MISSING_INPUT,
                     Map.of("required", Long.toString(RequirementHandlerSupport.scaled(
                                     requirement.amount(), requirement.consumeChance() <= 0F ? 1L : context.requestedParallelism())),
@@ -100,9 +101,9 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
                 ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), parallelism, context) : null;
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (finalParallelism, reservations) -> planOperations(requirement, plannedCapabilities, finalParallelism,
-                        context, consumed, reservations, direction, allowPartialOutput, true),
+                        context, consumed, output, reservations, direction, allowPartialOutput, true),
                 RequirementHandlerSupport.reservationFactory((finalParallelism, reservations) -> planOperations(
-                        requirement, plannedCapabilities, finalParallelism, context, consumed, reservations,
+                        requirement, plannedCapabilities, finalParallelism, context, consumed, output, reservations,
                         direction, allowPartialOutput, false)));
     }
 
@@ -121,7 +122,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
     }
 
     private static long fluidMaximum(FluidRequirement requirement, List<MachineCapability> capabilities,
-                                     long requested, boolean allowPartialOutputs) {
+                                     long requested, boolean allowPartialOutputs, OutputExpectation output) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {
             if (requirement.fluid() == null || requirement.amount() <= 0) return 0;
             long available = matchingFluidAmount(requirement, capabilities);
@@ -149,9 +150,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
                 }
             }
         }
-        if (allowPartialOutputs) return capacity > 0L ? requested : 0;
-        long maximum = Math.min(requested, capacity / stack.getAmount());
-        return maximum > 0 || capacity <= 0L ? maximum : 1;
+        return output.maximum(stack.getAmount(), requested, capacity, allowPartialOutputs);
     }
 
     private static RequirementPlan.OperationPlan planOperations(FluidRequirement requirement,
@@ -159,6 +158,7 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
                                                                  long parallelism,
                                                                  PlanningContext context,
                                                                  RequirementHandlerSupport.ConsumeProfile consumed,
+                                                                 OutputExpectation output,
                                                                  PlanningReservations reservations,
                                                                  IOType direction,
                                                                  boolean allowPartialOutputs,
@@ -167,10 +167,10 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
                 ? consumed.consumedBatches(parallelism) : parallelism;
         long amount = requirement.io() == RecipeModifier.IOType.INPUT
                 ? RequirementHandlerSupport.scaled(requirement.amount(), batches)
-                : RequirementHandlerSupport.scaled(requirement.stack().getAmount(), parallelism);
+                : output.amount(requirement.stack().getAmount(), parallelism);
         if (amount <= 0L) return new RequirementPlan.OperationPlan(List.of(), null);
         long requestedAmount = requirement.io() == RecipeModifier.IOType.OUTPUT
-                ? requestedAmount(requirement, parallelism) : 0L;
+                ? amount : 0L;
         FluidResource requestedResource = requirement.io() == RecipeModifier.IOType.OUTPUT
                 ? FluidResource.of(requirement.stack()) : null;
         Map<MachineCapability, List<CapabilityRequests.ResourceAction<FluidResource>>> actionMap = new LinkedHashMap<>();
@@ -220,9 +220,9 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
             if (remaining == 0L) break;
         }
         if (remaining > 0L && !(allowPartialOutputs && requirement.io() == RecipeModifier.IOType.OUTPUT)) {
-            boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
+            boolean isOutput = requirement.io() == RecipeModifier.IOType.OUTPUT;
             return new RequirementPlan.OperationPlan(List.of(), RequirementHandlerSupport.blocked(requirement, context,
-                    output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                    isOutput ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
                     Map.of("required", Long.toString(amount), "available", Long.toString(amount - remaining),
                             "shortfall", Long.toString(remaining))), RequirementHandlerSupport.outputSimulation(
                     requestedAmount, amount - remaining));
@@ -261,10 +261,6 @@ public final class FluidRequirementHandler implements RequirementHandler<FluidRe
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static long outputCapacity(OutputResourceStorage<?> storage, Object resource) {
         return ((OutputResourceStorage) storage).outputCapacity(resource);
-    }
-
-    private static long requestedAmount(FluidRequirement requirement, long parallelism) {
-        return RequirementHandlerSupport.scaled(requirement.stack().getAmount(), parallelism);
     }
 
     private static long matchingFluidAmount(FluidRequirement requirement, List<MachineCapability> capabilities) {

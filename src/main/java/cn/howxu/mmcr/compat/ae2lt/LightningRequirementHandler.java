@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.OutputExpectation;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
@@ -35,7 +36,9 @@ public final class LightningRequirementHandler implements RequirementHandler<Lig
         }
         boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
         long requested = context.requestedParallelism();
-        if (output && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
+        OutputExpectation expectation = output
+                ? RequirementHandlerSupport.outputExpectation(requirement.chance(), context) : null;
+        if (output && expectation.amount(requirement.amount(), requested) == 0L) {
             return new RequirementPlan(context.requirementIndex(), requested, List.of(), null);
         }
         List<MachineCapability> ports = output
@@ -58,25 +61,26 @@ public final class LightningRequirementHandler implements RequirementHandler<Lig
                 available = RequirementHandlerSupport.saturatingAdd(available, amount);
             }
         }
-        long maximum = partial ? available > 0L ? requested : 0L
+        long maximum = output ? expectation.maximum(requirement.amount(), requested, available, partial)
                 : Math.min(requested, available / requirement.amount());
-        // Let the reservation pass report the precise partial output shortfall.
-        if (output && maximum == 0L && available > 0L) maximum = 1L;
         if (maximum == 0L) return output
                 ? RequirementHandlerSupport.blockedOutputPlan(requirement, context, LightningFailureReasons.OUTPUT_BLOCKED,
-                        RequirementHandlerSupport.scaled(requirement.amount(), requested))
+                        expectation.amount(requirement.amount(), requested))
                 : RequirementHandlerSupport.blockedPlan(requirement, context, LightningFailureReasons.INPUT_MISSING);
         return RequirementHandlerSupport.deferredPlan(context, maximum,
-                (parallelism, reservations) -> operations(requirement, ports, context, parallelism, reservations, partial, true),
+                (parallelism, reservations) -> operations(requirement, ports, context, parallelism, expectation,
+                        reservations, partial, true),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) ->
-                        operations(requirement, ports, context, parallelism, reservations, partial, false)));
+                        operations(requirement, ports, context, parallelism, expectation, reservations, partial, false)));
     }
 
     private RequirementPlan.OperationPlan operations(LightningRequirement requirement, List<MachineCapability> ports,
-            PlanningContext context, long parallelism, PlanningReservations reservations, boolean partial,
-            boolean materialize) {
+            PlanningContext context, long parallelism, OutputExpectation expectation,
+            PlanningReservations reservations, boolean partial, boolean materialize) {
         boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
-        long requested = RequirementHandlerSupport.scaled(requirement.amount(), parallelism);
+        long requested = output ? expectation.amount(requirement.amount(), parallelism)
+                : RequirementHandlerSupport.scaled(requirement.amount(), parallelism);
+        if (requested == 0L) return new RequirementPlan.OperationPlan(List.of(), null);
         long remaining = requested;
         Map<MachineCapability, List<CapabilityRequests.ResourceAction<LightningTier>>> actions = new LinkedHashMap<>();
         List<CapabilityOperation> dynamicOperations = new ArrayList<>();

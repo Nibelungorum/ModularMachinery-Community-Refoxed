@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
@@ -180,6 +181,23 @@ class LightningPlanningTest {
         assertThat(partial.plan().commit()).isTrue();
         assertThat(storage.amount(0)).isEqualTo(50);
         assertThat(storage.resource(0)).isEqualTo(HIGH);
+    }
+
+    @Test
+    void probabilisticOutputUsesExpectedAmountAndPreservesItThroughCommit() {
+        var storage = storage(50L);
+        var sampling = new RequirementHandlerSupport.Sampling();
+        var context = new PlanningContext(100L, 0, false, new PlanningReservations(), Map.of(), null, null, sampling);
+        var result = new RequirementPlanner().plan(List.of(LightningRequirement.output(HIGH, 2L, 0.7F)),
+                List.of(new LightningCapability(storage, IOType.OUTPUT)), context);
+
+        assertThat(result.successful()).isTrue();
+        var expectation = RequirementHandlerSupport.outputExpectation(0.7F, context);
+        long parallelism = result.plan().parallelism();
+        assertThat(parallelism).isGreaterThan(25L).isLessThan(100L);
+        assertThat(expectation.amount(2L, parallelism + 1L)).isGreaterThan(50L);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(expectation.amount(2L, parallelism));
     }
 
     @Test
