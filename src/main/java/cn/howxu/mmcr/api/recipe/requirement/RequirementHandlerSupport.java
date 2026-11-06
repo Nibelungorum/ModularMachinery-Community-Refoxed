@@ -123,13 +123,25 @@ public final class RequirementHandlerSupport {
         return SaturatingLong.add(first, second);
     }
 
+    /**
+     * @deprecated A boolean can represent only one output unit; use {@link #outputExpectation(float, PlanningContext)}
+     * for a parallel batch.
+     */
+    @Deprecated
     public static boolean shouldProduce(float chance) {
-        return chance >= 1F || chance > 0F && Math.random() < chance;
+        return OutputExpectation.sample(chance, Math::random).amount(1L, 1L) > 0L;
     }
 
+    /** @deprecated Use the sampled expectation to size the entire output batch. */
+    @Deprecated
     public static boolean shouldProduce(float chance, PlanningContext context) {
-        return context.sampling() == null ? shouldProduce(chance)
-                : context.sampling().outputs.computeIfAbsent(context.requirementIndex(), ignored -> shouldProduce(chance));
+        return outputExpectation(chance, context).amount(1L, 1L) > 0L;
+    }
+
+    public static OutputExpectation outputExpectation(float chance, PlanningContext context) {
+        return context.sampling() == null ? OutputExpectation.sample(chance, Math::random)
+                : context.sampling().outputs.computeIfAbsent(context.requirementIndex(),
+                        ignored -> OutputExpectation.sample(chance, Math::random));
     }
 
     public static ConsumeProfile consumeProfile(float chance, long parallelism, PlanningContext context) {
@@ -144,7 +156,7 @@ public final class RequirementHandlerSupport {
      */
     public static final class Sampling {
         private final Map<Integer, ConsumeProfile> inputs = new LinkedHashMap<>();
-        private final Map<Integer, Boolean> outputs = new LinkedHashMap<>();
+        private final Map<Integer, OutputExpectation> outputs = new LinkedHashMap<>();
     }
 
     public static ConsumeProfile consumeProfile(float chance, long parallelism) {

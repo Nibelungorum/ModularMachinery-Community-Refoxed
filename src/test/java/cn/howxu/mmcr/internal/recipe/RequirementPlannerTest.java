@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.capability.facet.ItemHandlerFacet;
 import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
+import cn.howxu.mmcr.api.recipe.requirement.OutputExpectation;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -226,14 +227,14 @@ class RequirementPlannerTest {
     @Test
     void real_item_handlers_reuse_probability_samples_after_an_earlier_group_fails() {
         List<RequirementHandlerSupport.ConsumeProfile> profiles = new ArrayList<>();
-        List<Boolean> outputs = new ArrayList<>();
+        List<OutputExpectation> outputs = new ArrayList<>();
         register(TYPE, new RequirementHandler<TestRequirement>() {
             @Override
             public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> capabilities,
                                         PlanningContext context) {
                 assertThat(context.requirementIndex()).isEqualTo(9);
                 var profile = (RequirementHandlerSupport.ConsumeProfile) cachedDecision(context.sampling(), "inputs", 4);
-                var produced = (Boolean) cachedDecision(context.sampling(), "outputs", 8);
+                var produced = (OutputExpectation) cachedDecision(context.sampling(), "outputs", 8);
                 assertThat(profile).isNotNull();
                 assertThat(produced).isNotNull();
                 profiles.add(profile);
@@ -273,7 +274,7 @@ class RequirementPlannerTest {
         assertThat(first.amount(0)).isEqualTo(1);
         assertThat(second.amount(0)).isEqualTo(1 - profiles.getFirst().consumedBatches(result.plan().parallelism()));
         assertThat(gold.amount(0)).isZero();
-        assertThat(output.amount(0)).isEqualTo(outputs.getFirst() ? 1 : 0);
+        assertThat(output.amount(0)).isEqualTo(outputs.getFirst().amount(1L, result.plan().parallelism()));
     }
 
     private static Object cachedDecision(RequirementHandlerSupport.Sampling sampling, String kind, int index) {
@@ -1138,6 +1139,70 @@ class RequirementPlannerTest {
         assertThat(admission.planOutputCalls).isZero();
         assertThat(result.plan().commit()).isTrue();
         assertThat(storage.amount()).isEqualTo(3L);
+    }
+
+    @Test
+    void probabilistic_item_and_fluid_outputs_commit_expected_amounts_instead_of_whole_batches() {
+        BulkItemStorage items = new BulkItemStorage(1_000L, null);
+        LongFluidStorage fluids = new LongFluidStorage(100_000L, null);
+        RequirementHandlerSupport.Sampling sampling = new RequirementHandlerSupport.Sampling();
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2), 0.7F, List.of()),
+                        new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
+                                new FluidStack(Fluids.WATER, 100), 0.7F, List.of())),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), items),
+                        new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.output(), fluids)),
+                new PlanningContext(25L, 0, false, new PlanningReservations(), Map.of(), null, null, sampling));
+
+        assertThat(result.successful()).isTrue();
+        assertThat(result.plan().parallelism()).isEqualTo(25L);
+        var itemOutput = (OutputExpectation) cachedDecision(sampling, "outputs", 0);
+        var fluidOutput = (OutputExpectation) cachedDecision(sampling, "outputs", 1);
+        assertThat(result.outputSimulations()).extracting(simulation -> simulation.requested())
+                .containsExactly(itemOutput.amount(2L, 25L), fluidOutput.amount(100L, 25L));
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(items.amount(0)).isEqualTo(itemOutput.amount(2L, 25L)).isBetween(30L, 40L);
+        assertThat(fluids.amount(0)).isEqualTo(fluidOutput.amount(100L, 25L)).isBetween(1_500L, 2_000L);
+    }
+
+    @Test
+    void expected_output_capacity_limits_parallelism_and_reuses_the_same_sample() {
+        BulkItemStorage storage = new BulkItemStorage(50L, null);
+        RequirementHandlerSupport.Sampling sampling = new RequirementHandlerSupport.Sampling();
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2), 0.7F, List.of())),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)),
+                new PlanningContext(100L, 0, false, new PlanningReservations(), Map.of(), null, null, sampling));
+
+        assertThat(result.successful()).isTrue();
+        OutputExpectation output = (OutputExpectation) cachedDecision(sampling, "outputs", 0);
+        long parallelism = result.plan().parallelism();
+        assertThat(parallelism).isGreaterThan(25L).isLessThan(100L);
+        assertThat(output.amount(2L, parallelism)).isLessThanOrEqualTo(50L);
+        assertThat(output.amount(2L, parallelism + 1L)).isGreaterThan(50L);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(output.amount(2L, parallelism));
+    }
+
+    @Test
+    void expected_outputs_share_reservations_and_keep_their_samples_when_parallelism_is_reduced() {
+        BulkItemStorage storage = new BulkItemStorage(50L, null);
+        var sampling = new RequirementHandlerSupport.Sampling();
+        var context = new PlanningContext(100L, 0, false, new PlanningReservations(), Map.of(), null, null, sampling);
+        var result = new RequirementPlanner().plan(
+                List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2), 0.7F, List.of()),
+                        new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2), 0.7F, List.of())),
+                List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), storage)), context);
+
+        assertThat(result.successful()).isTrue();
+        var first = RequirementHandlerSupport.outputExpectation(0.7F, context.forRequirement(0, context.reservations()));
+        var second = RequirementHandlerSupport.outputExpectation(0.7F, context.forRequirement(1, context.reservations()));
+        long parallelism = result.plan().parallelism();
+        long total = first.amount(2L, parallelism) + second.amount(2L, parallelism);
+        assertThat(total).isLessThanOrEqualTo(50L);
+        assertThat(first.amount(2L, parallelism + 1L) + second.amount(2L, parallelism + 1L)).isGreaterThan(50L);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(storage.amount(0)).isEqualTo(total);
     }
 
     @Test

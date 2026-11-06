@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.ars_nouveau;
 
 import cn.howxu.mmcr.internal.recipe.InputValidationOperation;
+import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
@@ -160,6 +161,36 @@ class SourceRequirementHandlerTest {
             assertThat(result.plan().wasNativeExecuted(0)).isFalse();
             assertThat(result.plan().hasOperations(0)).isFalse();
             assertThat(input.amount()).isEqualTo(stale ? 799L : 800L);
+        }
+    }
+
+    @Test
+    void expectedOutputsShareCapacityAndKeepSamplesThroughCommit() {
+        for (int count : List.of(1, 2)) {
+            var empty = capability(0L, IOType.OUTPUT);
+            long initial = empty.capacity() - 50L;
+            var output = capability(initial, IOType.OUTPUT);
+            var context = new PlanningContext(100L, 0, false, new PlanningReservations(), Map.of(), null, null,
+                    new RequirementHandlerSupport.Sampling());
+            List<MachineRequirement> requirements = new ArrayList<>();
+            for (int index = 0; index < count; index++) requirements.add(SourceRequirement.output(2L, 0.7F));
+            var result = new RequirementPlanner().plan(requirements, List.of(output, output), context);
+
+            assertThat(result.successful()).isTrue();
+            long parallelism = result.plan().parallelism();
+            long expected = 0L;
+            long next = 0L;
+            for (int index = 0; index < count; index++) {
+                var sample = RequirementHandlerSupport.outputExpectation(0.7F,
+                        context.forRequirement(index, context.reservations()));
+                expected += sample.amount(2L, parallelism);
+                next += sample.amount(2L, parallelism + 1L);
+            }
+            assertThat(parallelism).isGreaterThan(25L / count).isLessThan(100L);
+            assertThat(next).isGreaterThan(50L);
+            assertThat(output.amount()).isEqualTo(initial);
+            assertThat(result.plan().commit()).isTrue();
+            assertThat(output.amount()).isEqualTo(initial + expected);
         }
     }
 

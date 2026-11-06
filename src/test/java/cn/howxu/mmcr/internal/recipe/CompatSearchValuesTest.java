@@ -64,6 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -111,6 +112,34 @@ class CompatSearchValuesTest {
                 assertEquivalent(List.of(AirRequirement.output(rate)), List.of(output), false);
                 assertEquivalent(List.of(AirRequirement.output(rate)), List.of(output), true);
             }
+        }
+    }
+
+    @Test
+    void expectedAirOutputsShareSignedCapacityAndReuseSamplesOnWorkers() {
+        for (int count : List.of(1, 2)) {
+            List<Rule> rules = new ArrayList<>();
+            var condition = new CompatSearchValues.Air(0F,
+                    List.of(new CompatSearchValues.AirPort(0, 0, -100L, 100, 400L)));
+            for (int index = 0; index < count; index++) {
+                rules.add(new Rule(index, PneumaticIds.AIR, Kind.AIR, IOType.OUTPUT, 20L, 0D, 0.7F, 1F,
+                        false, true, Set.of(), null, List.of(), AirFailureReasons.OUTPUT_BLOCKED.id(), condition));
+            }
+            var candidate = new Candidate(MMCR.id("expected_air"), 0, 0, 100L, null, rules,
+                    List.of(new Scope(InputScope.legacy(), Set.of())), new Overlap(Set.of(), false, false, false), null, -1);
+            var snapshot = new RecipeSearchSnapshot(new RecipeSearchSnapshot.Stamp(0, 0, 0, 0, 0, 0, 0, 100, 1),
+                    List.of(), List.of(candidate));
+            AtomicInteger draws = new AtomicInteger();
+            var planner = new RecipeSearchPlanner(snapshot, () -> {
+                draws.incrementAndGet();
+                return 0.5D;
+            });
+            var result = CompletableFuture.supplyAsync(planner::advance).join();
+            assertThat(result).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
+                    match -> assertThat(match.parallelism()).isEqualTo(count == 1 ? 35L : 17L));
+            assertThat(draws).hasValue(2 * count);
+            assertThat(planner.advance()).isSameAs(result);
+            assertThat(draws).hasValue(2 * count);
         }
     }
 

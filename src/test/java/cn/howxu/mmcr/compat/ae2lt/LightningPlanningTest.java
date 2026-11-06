@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.capability.facet.TransferFacet;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningViewFacet;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import static cn.howxu.mmcr.api.compat.ae2lt.LightningTier.HIGH_VOLTAGE;
 import static cn.howxu.mmcr.api.compat.ae2lt.LightningTier.EXTREME_HIGH_VOLTAGE;
@@ -85,6 +87,27 @@ class LightningPlanningTest {
         assertThat(partial.outputSimulation().accepted()).isEqualTo(3L);
         assertThat(partial.operations().getFirst().commit().success()).isTrue();
         assertThat(state.amounts[0]).isEqualTo(10L);
+    }
+
+    @Test
+    void probabilisticOutputUsesExpectedAmountAndPreservesItThroughCommit() {
+        State state = new State();
+        var capability = new LightningCapability(new View(state, new int[]{0}), IOType.OUTPUT);
+        var context = new PlanningContext(100L, 0, false, new PlanningReservations(), Map.of(), null, null,
+                new RequirementHandlerSupport.Sampling());
+        var plan = new LightningRequirementHandler().plan(
+                LightningRequirement.output(HIGH_VOLTAGE, 2L, 0.7F), List.of(capability), context);
+        var expectation = RequirementHandlerSupport.outputExpectation(0.7F, context);
+        long parallelism = plan.maxParallelism();
+
+        assertThat(plan.successful()).isTrue();
+        assertThat(parallelism).isGreaterThan(5L).isLessThan(100L);
+        assertThat(expectation.amount(2L, parallelism + 1L)).isGreaterThan(10L);
+        assertThat(plan.reserve(parallelism, new PlanningReservations())).isNull();
+        var operations = plan.materialize(parallelism, new PlanningReservations(), null);
+        assertThat(operations.outputSimulation().requested()).isEqualTo(expectation.amount(2L, parallelism));
+        assertThat(operations.operations()).allSatisfy(operation -> assertThat(operation.commit().success()).isTrue());
+        assertThat(state.amounts[0]).isEqualTo(expectation.amount(2L, parallelism));
     }
 
     @Test void unavailableAndChanceZeroNeverPrepareNativeOperations() {

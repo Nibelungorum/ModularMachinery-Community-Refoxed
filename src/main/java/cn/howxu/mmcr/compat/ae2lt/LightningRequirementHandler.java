@@ -13,6 +13,7 @@ import cn.howxu.mmcr.api.compat.ae2lt.LightningViewFacet;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.OutputExpectation;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.util.IOType;
@@ -30,7 +31,9 @@ public final class LightningRequirementHandler implements RequirementHandler<Lig
         if (!LightningBridge.get().available()) return RequirementHandlerSupport.blockedPlan(requirement, context, LightningFailureReasons.UNAVAILABLE);
         boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
         long requested = context.requestedParallelism();
-        if (output && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
+        OutputExpectation expectation = output
+                ? RequirementHandlerSupport.outputExpectation(requirement.chance(), context) : null;
+        if (output && expectation.amount(requirement.amount(), requested) == 0L) {
             return new RequirementPlan(context.requirementIndex(), requested, List.of(), null);
         }
         List<MachineCapability> ports = output ? RequirementHandlerSupport.prioritizedOutputCapabilities(capabilities) : capabilities;
@@ -40,7 +43,7 @@ public final class LightningRequirementHandler implements RequirementHandler<Lig
             LightningStorage storage = storage(capability);
             if (storage == null) continue;
             if (output) available = RequirementHandlerSupport.saturatingAdd(available,
-                    storage.reserveOutput(requirement.tier(), RequirementHandlerSupport.scaled(requirement.amount(), requested),
+                    storage.reserveOutput(requirement.tier(), expectation.amount(requirement.amount(), requested),
                             new PlanningReservations()));
             else for (int slot = 0; slot < storage.size(); slot++) {
                 if (storage.key(requirement.tier()).equals(storage.storedKey(slot))) {
@@ -48,22 +51,26 @@ public final class LightningRequirementHandler implements RequirementHandler<Lig
                 }
             }
         }
-        long maximum = partial ? available > 0L ? requested : 0L : Math.min(requested, available / requirement.amount());
-        if (output && maximum == 0L && available > 0L) maximum = 1L;
+        long maximum = output ? expectation.maximum(requirement.amount(), requested, available, partial)
+                : Math.min(requested, available / requirement.amount());
         if (maximum == 0L) return output
                 ? RequirementHandlerSupport.blockedOutputPlan(requirement, context, LightningFailureReasons.OUTPUT_BLOCKED,
-                        RequirementHandlerSupport.scaled(requirement.amount(), requested))
+                        expectation.amount(requirement.amount(), requested))
                 : RequirementHandlerSupport.blockedPlan(requirement, context, LightningFailureReasons.INPUT_MISSING);
         return RequirementHandlerSupport.deferredPlan(context, maximum,
-                (parallelism, reservations) -> operations(requirement, ports, context, parallelism, reservations, partial, true),
+                (parallelism, reservations) -> operations(requirement, ports, context, parallelism, expectation,
+                        reservations, partial, true),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) ->
-                        operations(requirement, ports, context, parallelism, reservations, partial, false)));
+                        operations(requirement, ports, context, parallelism, expectation, reservations, partial, false)));
     }
 
     private RequirementPlan.OperationPlan operations(LightningRequirement requirement, List<MachineCapability> ports,
-            PlanningContext context, long parallelism, PlanningReservations reservations, boolean partial, boolean materialize) {
+            PlanningContext context, long parallelism, OutputExpectation expectation,
+            PlanningReservations reservations, boolean partial, boolean materialize) {
         boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
-        long requested = RequirementHandlerSupport.scaled(requirement.amount(), parallelism);
+        long requested = output ? expectation.amount(requirement.amount(), parallelism)
+                : RequirementHandlerSupport.scaled(requirement.amount(), parallelism);
+        if (requested == 0L) return new RequirementPlan.OperationPlan(List.of(), null);
         long remaining = requested;
         List<CapabilityOperation> operations = new ArrayList<>();
         for (MachineCapability capability : ports) {

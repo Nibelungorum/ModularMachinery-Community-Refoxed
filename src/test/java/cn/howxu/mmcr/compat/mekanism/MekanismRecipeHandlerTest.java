@@ -57,6 +57,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
@@ -127,6 +128,27 @@ class MekanismRecipeHandlerTest {
         outputScope.close();
         requirementScope.close();
         MekanismBridgeBootstrap.resetForTesting();
+    }
+
+    @Test
+    void chemical_probability_scales_expected_output_and_reuses_samples_through_commit() {
+        MekanismBridgeBootstrap.installForTesting(MekanismBridgeBootstrap.selectForTesting(true));
+        MekanismRecipeTypes.register();
+        var chemical = registerChemical("expected_output");
+        var tank = new FakeChemicalTank(50L, ChemicalAttributeValidator.ALWAYS_ALLOW);
+        var sampling = new RequirementHandlerSupport.Sampling();
+        var context = new PlanningContext(100L, 0, false, new PlanningReservations(), Map.of(), null, null, sampling);
+        var output = LoadedChemicalRequirement.output(chemical.key().location(), 2L, 0.7F);
+        var result = new RequirementPlanner().plan(List.of(output),
+                List.of(new FakeChemicalPort(tank, IOType.OUTPUT)), context);
+
+        assertThat(result.successful()).isTrue();
+        var expectation = RequirementHandlerSupport.outputExpectation(0.7F, context);
+        long parallelism = result.plan().parallelism();
+        assertThat(parallelism).isGreaterThan(25L).isLessThan(100L);
+        assertThat(expectation.amount(2L, parallelism + 1L)).isGreaterThan(50L);
+        assertThat(result.plan().commit()).isTrue();
+        assertThat(tank.amount()).isEqualTo(expectation.amount(2L, parallelism));
     }
 
     @Test

@@ -132,6 +132,34 @@ class AirPlanningTest {
     }
 
     @Test
+    void expectedAirOutputsShareSignedCapacityAndKeepSamplesThroughCommit() {
+        for (int count : List.of(1, 2)) {
+            var port = new Port(IOType.OUTPUT, -10, 10, List.of());
+            var context = new PlanningContext(100L, 0, false, new PlanningReservations(), Map.of(), null, null,
+                    new RequirementHandlerSupport.Sampling());
+            List<MachineRequirement> requirements = new ArrayList<>();
+            for (int index = 0; index < count; index++) requirements.add(AirRequirement.output(20L, 0.7F));
+            var result = new RequirementPlanner().plan(requirements, List.of(port, port), context);
+
+            assertThat(result.successful()).isTrue();
+            long parallelism = result.plan().parallelism();
+            long expected = 0L;
+            long next = 0L;
+            for (int index = 0; index < count; index++) {
+                var sample = RequirementHandlerSupport.outputExpectation(0.7F,
+                        context.forRequirement(index, context.reservations()));
+                expected += sample.amount(20L, parallelism);
+                next += sample.amount(20L, parallelism + 1L);
+            }
+            assertThat(parallelism).isGreaterThan(10L / count).isLessThan(100L);
+            assertThat(next).isGreaterThan(210L);
+            assertThat(port.state().air()).isEqualTo(-10);
+            assertThat(result.plan().commit()).isTrue();
+            assertThat(port.state().air()).isEqualTo(Math.toIntExact(-10L + expected));
+        }
+    }
+
+    @Test
     void outputSamplingIsSharedAcrossScopesAndDeferredAllocation() {
         var port = new Port(IOType.OUTPUT, -10, 10, List.of());
         var context = new PlanningContext(4L, 0, false, new PlanningReservations(), Map.of(), null, null,

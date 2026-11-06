@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.botania;
 
 import cn.howxu.mmcr.internal.recipe.InputValidationOperation;
+import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
@@ -19,6 +20,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
@@ -144,6 +146,36 @@ class ManaRequirementHandlerTest {
             assertThat(result.plan().wasNativeExecuted(0)).isFalse();
             assertThat(result.plan().hasOperations(0)).isFalse();
             assertThat(input.amount()).isEqualTo(stale ? 799L : 800L);
+        }
+    }
+
+    @Test
+    void expectedOutputsShareCapacityAndKeepSamplesThroughCommit() {
+        for (int count : List.of(1, 2)) {
+            var empty = capability(0L, IOType.OUTPUT);
+            long initial = empty.capacity() - 50L;
+            var output = capability(initial, IOType.OUTPUT);
+            var context = new PlanningContext(100L, 0, false, new PlanningReservations(), Map.of(), null, null,
+                    new RequirementHandlerSupport.Sampling());
+            List<MachineRequirement> requirements = new ArrayList<>();
+            for (int index = 0; index < count; index++) requirements.add(ManaRequirement.output(2L, 0.7F));
+            var result = new RequirementPlanner().plan(requirements, List.of(output, output), context);
+
+            assertThat(result.successful()).isTrue();
+            long parallelism = result.plan().parallelism();
+            long expected = 0L;
+            long next = 0L;
+            for (int index = 0; index < count; index++) {
+                var sample = RequirementHandlerSupport.outputExpectation(0.7F,
+                        context.forRequirement(index, context.reservations()));
+                expected += sample.amount(2L, parallelism);
+                next += sample.amount(2L, parallelism + 1L);
+            }
+            assertThat(parallelism).isGreaterThan(25L / count).isLessThan(100L);
+            assertThat(next).isGreaterThan(50L);
+            assertThat(output.amount()).isEqualTo(initial);
+            assertThat(result.plan().commit()).isTrue();
+            assertThat(output.amount()).isEqualTo(initial + expected);
         }
     }
 

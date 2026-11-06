@@ -36,6 +36,7 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.OutputExpectation;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.WakeupReason;
@@ -702,8 +703,10 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         public RequirementPlan plan(LoadedChemicalRequirement requirement, List<MachineCapability> capabilities,
                                     PlanningContext context) {
             long requestedParallelism = context.requestedParallelism();
-            if (requirement.io() == RecipeModifier.IOType.OUTPUT
-                    && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
+            boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
+            OutputExpectation expectation = output
+                    ? RequirementHandlerSupport.outputExpectation(requirement.chance(), context) : null;
+            if (output && expectation.amount(requirement.ingredient().amount(), requestedParallelism) == 0L) {
                 return new RequirementPlan(context.requirementIndex(), requestedParallelism, List.of(), null);
             }
 
@@ -713,7 +716,6 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                         MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
             }
 
-            boolean output = requirement.io() == RecipeModifier.IOType.OUTPUT;
             IOType direction = IOType.valueOf(requirement.io().name());
             List<ChemicalHandlerPort> ports = chemicalPorts(capabilities, direction);
             List<ChemicalHandlerPort> plannedPorts = output
@@ -735,13 +737,11 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                 if (matchingPorts.isEmpty()) {
                     return RequirementHandlerSupport.blockedOutputPlan(requirement, context,
                             BuiltinFailureReasons.MISSING_OUTPUT,
-                            RequirementHandlerSupport.scaled(requirement.ingredient().amount(), requestedParallelism));
+                            expectation.amount(requirement.ingredient().amount(), requestedParallelism));
                 }
                 OutputCapacity capacity = outputCapacity(matcher.exactHolder(), matchingPorts);
-                maximum = allowPartialOutput
-                        ? capacity.amount() > 0L ? requestedParallelism : 0L
-                        : Math.min(requestedParallelism, capacity.amount() / requirement.ingredient().amount());
-                if (maximum == 0L && !allowPartialOutput && capacity.amount() > 0L) maximum = 1L;
+                maximum = expectation.maximum(requirement.ingredient().amount(), requestedParallelism,
+                        capacity.amount(), allowPartialOutput);
                 if (maximum <= 0L) {
                     failureReason = capacity.radioactivityRejected()
                             ? MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED
@@ -761,7 +761,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                 return output
                         ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
                         failureReason,
-                        RequirementHandlerSupport.scaled(requirement.ingredient().amount(), requestedParallelism))
+                        expectation.amount(requirement.ingredient().amount(), requestedParallelism))
                         : RequirementHandlerSupport.blockedPlan(requirement, context, failureReason);
             }
             if (!output && requirement.consumeChance() <= 0F) {
@@ -771,10 +771,11 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             RequirementHandlerSupport.ConsumeProfile consumed = !output
                     ? RequirementHandlerSupport.consumeProfile(requirement.consumeChance(), requestedParallelism, context) : null;
             RequirementPlan.OperationFactory operationFactory = (parallelism, reservations) -> planOperations(
-                    requirement, matcher, matchingPorts, parallelism, consumed, reservations, direction, allowPartialOutput, true);
+                    requirement, matcher, matchingPorts, parallelism, consumed, expectation, reservations,
+                    direction, allowPartialOutput, true);
             RequirementPlan.ReservationFactory reservationFactory = RequirementHandlerSupport.reservationFactory(
                     (parallelism, reservations) -> planOperations(requirement, matcher, matchingPorts, parallelism,
-                            consumed, reservations, direction, allowPartialOutput, false));
+                            consumed, expectation, reservations, direction, allowPartialOutput, false));
             return RequirementHandlerSupport.deferredPlan(context, maximum, operationFactory, reservationFactory);
         }
 
@@ -808,6 +809,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                                                               ChemicalMatcher matcher, List<ChemicalHandlerPort> ports,
                                                               long rawParallelism,
                                                               RequirementHandlerSupport.ConsumeProfile consumed,
+                                                              OutputExpectation expectation,
                                                               PlanningReservations reservations,
                                                               IOType direction,
                                                               boolean allowPartialOutput, boolean materialize) {
@@ -815,7 +817,9 @@ public final class LoadedMekanismBridge implements MekanismBridge {
             long parallelism = input ? consumed.consumedBatches(rawParallelism) : rawParallelism;
             // Feasibility was checked before sampling. A retained input is a valid zero-debit plan.
             if (input && parallelism == 0L) return new RequirementPlan.OperationPlan(List.of(), null);
-            long amount = RequirementHandlerSupport.scaled(requirement.ingredient().amount(), parallelism);
+            long amount = input ? RequirementHandlerSupport.scaled(requirement.ingredient().amount(), parallelism)
+                    : expectation.amount(requirement.ingredient().amount(), parallelism);
+            if (amount == 0L) return new RequirementPlan.OperationPlan(List.of(), null);
             long requested = !input ? amount : 0L;
             ChemicalStack requestedResource = matcher.exactHolder() == null ? null
                     : new ChemicalStack(matcher.exactHolder(), 1L);

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -126,6 +127,39 @@ class CompatSearchCaptureTest {
     }
 
     @Test
+    void expectedSourceAndManaOutputsShareCapacityAndReuseSamplesOnWorkers() {
+        for (int count : List.of(1, 2)) {
+            var source = new SourcePortStorage(() -> { });
+            source.setAmount(source.capacity() - 50L);
+            var mana = new ManaStorage(() -> { });
+            mana.setAmount(mana.capacity() - 50L);
+            var sourcePort = new SourcePortCapability(null, source, IOType.OUTPUT);
+            var manaPort = new ManaPortCapability(null, mana, IOType.OUTPUT);
+            List<MachineRequirement> requirements = new ArrayList<>();
+            for (int index = 0; index < count; index++) {
+                requirements.add(SourceRequirement.output(10L, 0.7F));
+                requirements.add(ManaRequirement.output(10L, 0.7F));
+            }
+            var snapshot = capture(capabilities(sourcePort, sourcePort, manaPort, manaPort),
+                    List.of(recipe(requirements, false)));
+            assertThat(snapshot.candidates().getFirst().proofReason()).isNull();
+            AtomicInteger draws = new AtomicInteger();
+            var planner = new RecipeSearchPlanner(snapshot, () -> {
+                draws.incrementAndGet();
+                return 0.5D;
+            });
+            var result = CompletableFuture.supplyAsync(planner::advance).join();
+            assertThat(result).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
+                    match -> assertThat(match.parallelism()).isEqualTo(count == 1 ? 7L : 3L));
+            assertThat(draws).hasValue(4 * count);
+            assertThat(planner.advance()).isSameAs(result);
+            assertThat(draws).hasValue(4 * count);
+            assertThat(source.amount()).isEqualTo(source.capacity() - 50L);
+            assertThat(mana.amount()).isEqualTo(mana.capacity() - 50L);
+        }
+    }
+
+    @Test
     void workerDoesNotReadLiveStorageAfterCaptureAndCustomDelegatesRequireProof() {
         var source = new SourcePortStorage(() -> { });
         source.setAmount(100L);
@@ -145,13 +179,14 @@ class CompatSearchCaptureTest {
     void retainedInputsDoNotConsumeRandomSamplesAndPartialConsumptionSharesTheBudget() {
         var source = new SourcePortStorage(() -> { });
         source.setAmount(100L);
-        var capabilities = capabilities(new SourcePortCapability(null, source, IOType.INPUT));
+        var capabilities = capabilities(new SourcePortCapability(null, source, IOType.INPUT),
+                new SourcePortCapability(null, source, IOType.OUTPUT));
         var retained = recipe(List.of(SourceRequirement.input(20L, 0F), SourceRequirement.output(10L, 0.5F)), false);
         var snapshot = capture(capabilities, List.of(retained));
         AtomicInteger samples = new AtomicInteger();
         var result = new RecipeSearchPlanner(snapshot, () -> { samples.incrementAndGet(); return 0.75D; }).advance();
         assertThat(result).isInstanceOf(RecipeSearchPlanner.Match.class);
-        assertThat(samples).hasValue(1);
+        assertThat(samples).hasValue(2);
         var consumed = recipe(List.of(SourceRequirement.input(20L, 0.5F), SourceRequirement.input(20L)), false);
         var consumedSnapshot = capture(capabilities, List.of(consumed));
         assertThat(new RecipeSearchPlanner(consumedSnapshot, () -> 0.25D).advance())

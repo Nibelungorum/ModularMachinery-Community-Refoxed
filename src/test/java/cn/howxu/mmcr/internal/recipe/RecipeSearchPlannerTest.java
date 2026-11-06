@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Rule;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Candidate;
@@ -154,6 +155,94 @@ class RecipeSearchPlannerTest {
         assertThat(draws).hasValue(10);
         planner.advance();
         assertThat(draws).hasValue(10);
+    }
+
+    @Test
+    void expected_outputs_use_reduced_capacity_and_reuse_both_samples_for_every_resource_family() {
+        for (var family : List.of(ITEM, BuiltinCapabilityDefinitions.FLUID_TYPE.id(), MekanismPortFamilies.CHEMICAL,
+                LightningTier.HIGH_VOLTAGE.requirementId())) {
+            var template = output(0, 2L, false, 0.7F, List.of(new Port(0, 0, 50L, Long.MAX_VALUE)));
+            Rule rule = new Rule(template.index(), family, template.kind(), template.direction(),
+                    template.amount(), template.heat(), template.chance(), template.consumeChance(),
+                    template.partial(), template.valid(), template.resources(), template.output(), template.ports(),
+                    template.failureReason());
+            AtomicInteger draws = new AtomicInteger();
+            var planner = new RecipeSearchPlanner(snapshot(List.of(pool(0L)),
+                    List.of(candidate("expected", 100L, List.of(rule), List.of(LEGACY)))), () -> {
+                draws.incrementAndGet();
+                return 0.5D;
+            });
+            assertThat(planner.advance()).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
+                    match -> assertThat(match.parallelism()).isEqualTo(36L));
+            assertThat(draws).hasValue(2);
+            planner.advance();
+            assertThat(draws).hasValue(2);
+        }
+    }
+
+    @Test
+    void fractional_output_samples_are_reused_across_failed_isolated_scopes() {
+        var source = twoScopeSnapshot(0L, 80L);
+        var original = source.candidates().getFirst();
+        var rules = List.of(input(0, 1L, 1F, original.rules().getFirst().ports()),
+                output(1, 1L, false, 0.7F, List.of(new Port(2, 2, 1_000L, Long.MAX_VALUE))));
+        AtomicInteger draws = new AtomicInteger();
+        var planner = new RecipeSearchPlanner(snapshot(List.of(source.pools().get(0), source.pools().get(1), pool(0L)),
+                List.of(candidate("expected_scopes", 100L, rules, original.scopes()))), () -> {
+            draws.incrementAndGet();
+            return 0.5D;
+        });
+        assertThat(planner.advance()).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class, match -> {
+            assertThat(match.parallelism()).isEqualTo(80L);
+            assertThat(match.scope()).isEqualTo(original.scopes().get(1).input());
+        });
+        assertThat(draws).hasValue(2);
+    }
+
+    @Test
+    void expected_outputs_reserve_shared_capacity_in_order_instead_of_each_using_the_full_space() {
+        var ports = List.of(new Port(0, 0, 50L, Long.MAX_VALUE));
+        var rules = List.of(output(0, 2L, false, 0.7F, ports), output(1, 2L, false, 0.7F, ports));
+        AtomicInteger draws = new AtomicInteger();
+        var result = new RecipeSearchPlanner(snapshot(List.of(pool(0L)),
+                List.of(candidate("shared_expected", 100L, rules, List.of(LEGACY)))), () -> {
+            draws.incrementAndGet();
+            return 0.5D;
+        }).advance();
+        assertThat(result).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
+                match -> assertThat(match.parallelism()).isEqualTo(18L));
+        assertThat(draws).hasValue(4);
+    }
+
+    @Test
+    void candidate_order_uses_perturbation_then_fraction_samples_for_each_output() {
+        var probabilistic = output(0, 1L, false, 0.7F, List.of(new Port(0, 0, 0L, Long.MAX_VALUE)));
+        var certain = output(0, 5L, false, 1F, probabilistic.ports());
+        var request = snapshot(List.of(pool(0L)), List.of(
+                candidate("clear", 1L, List.of(probabilistic), List.of(LEGACY)),
+                candidate("rain", 1L, List.of(probabilistic), List.of(LEGACY)),
+                candidate("thunder", 1L, List.of(certain), List.of(LEGACY))));
+        var samples = List.of(List.of(0.5D, 0.9D), List.of(0.5D, 0.1D, 0.5D, 0.9D),
+                List.of(0.5D, 0.1D, 0.5D, 0.1D));
+        for (int index = 0; index < samples.size(); index++) {
+            var draws = samples.get(index).iterator();
+            var outcome = new RecipeSearchPlanner(request, draws::next).advance();
+            if (index < 2) {
+                int expected = index;
+                assertThat(outcome).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
+                        match -> assertThat(match.candidateIndex()).isEqualTo(expected));
+            } else assertThat(outcome).isInstanceOf(RecipeSearchPlanner.NoMatch.class);
+            assertThat(draws.hasNext()).isFalse();
+        }
+    }
+
+    @Test
+    void output_fraction_rounding_allows_low_probability_single_outputs_without_a_port() {
+        var rule = output(0, 1L, false, 0.2F, List.of());
+        assertThat(new RecipeSearchPlanner(snapshot(List.of(),
+                List.of(candidate("zero_tail", 1L, List.of(rule), List.of(LEGACY)))), () -> 0.5D).advance())
+                .isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
+                        match -> assertThat(match.parallelism()).isEqualTo(1L));
     }
 
     @Test

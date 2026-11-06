@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.OutputExpectation;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.util.IOType;
@@ -35,7 +36,9 @@ public final class SourceRequirementHandler implements RequirementHandler<Source
     public RequirementPlan plan(SourceRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {
         boolean insert = requirement.io() == RecipeModifier.IOType.OUTPUT;
-        if (insert && !RequirementHandlerSupport.shouldProduce(requirement.chance(), context)) {
+        OutputExpectation expectation = insert
+                ? RequirementHandlerSupport.outputExpectation(requirement.chance(), context) : null;
+        if (insert && expectation.amount(requirement.amount(), context.requestedParallelism()) == 0L) {
             return new RequirementPlan(context.requirementIndex(), context.requestedParallelism(), List.of(), null);
         }
         RequirementHandlerSupport.ConsumeProfile consumption = insert ? null
@@ -52,9 +55,13 @@ public final class SourceRequirementHandler implements RequirementHandler<Source
                     available(source, context.reservations(), insert));
         }
         long maximum = partial ? context.requestedParallelism()
+                : insert ? expectation.maximum(requirement.amount(), context.requestedParallelism(), totalAvailable, false)
                 : Math.min(context.requestedParallelism(), totalAvailable / requirement.amount());
+        // Preserve the scalar handler's full-attempt diagnostics when not even one batch fits.
+        if (insert && !partial && expectation.amount(requirement.amount(), maximum) > totalAvailable) maximum = 0L;
         if (maximum <= 0L) {
-            long requested = RequirementHandlerSupport.scaled(requirement.amount(), context.requestedParallelism());
+            long requested = insert ? expectation.amount(requirement.amount(), context.requestedParallelism())
+                    : RequirementHandlerSupport.scaled(requirement.amount(), context.requestedParallelism());
             Map<String, String> details = details(requested, totalAvailable);
             return insert ? RequirementHandlerSupport.blockedOutputPlan(requirement, context,
                     SourceFailureReasons.OUTPUT_BLOCKED, requested, details)
@@ -63,9 +70,10 @@ public final class SourceRequirementHandler implements RequirementHandler<Source
         }
         return RequirementHandlerSupport.deferredPlan(context, maximum,
                 (parallelism, reservations) -> allocate(requirement, ordered, context, parallelism,
-                        insert, partial, reservations, true, consumption),
+                        insert, partial, reservations, true, consumption, expectation),
                 RequirementHandlerSupport.reservationFactory((parallelism, reservations) -> allocate(
-                        requirement, ordered, context, parallelism, insert, partial, reservations, false, consumption)));
+                        requirement, ordered, context, parallelism, insert, partial, reservations, false, consumption,
+                        expectation)));
     }
 
     @Override
@@ -95,8 +103,10 @@ public final class SourceRequirementHandler implements RequirementHandler<Source
                                                     PlanningContext context, long parallelism, boolean insert,
                                                     boolean partial, PlanningReservations reservations,
                                                     boolean createOperations,
-                                                    RequirementHandlerSupport.ConsumeProfile consumption) {
-        long requested = RequirementHandlerSupport.scaled(requirement.amount(), parallelism);
+                                                    RequirementHandlerSupport.ConsumeProfile consumption,
+                                                    OutputExpectation expectation) {
+        long requested = insert ? expectation.amount(requirement.amount(), parallelism)
+                : RequirementHandlerSupport.scaled(requirement.amount(), parallelism);
         if (!insert) {
             // A retained batch still has to match the full input before reserving only its consumed share.
             long totalAvailable = 0L;

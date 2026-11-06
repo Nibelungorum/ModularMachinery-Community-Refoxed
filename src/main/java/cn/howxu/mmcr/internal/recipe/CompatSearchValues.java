@@ -6,7 +6,6 @@ import cn.howxu.mmcr.api.compat.pneumaticcraft.AirState;
 import cn.howxu.mmcr.compat.pneumaticcraft.AirFailureReasons;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Rule;
 import cn.howxu.mmcr.util.IOType;
-import cn.howxu.mmcr.util.SaturatingLong;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -63,11 +62,11 @@ final class CompatSearchValues {
         }
     }
 
-    static @Nullable ResourceLocation reserveAir(Rule rule, long parallelism, long consumedBatches, Budget budget) {
+    static @Nullable ResourceLocation reserveAir(Rule rule, long requested, long consumedAmount, Budget budget) {
         Air air = (Air) rule.condition();
-        if (air.ports().isEmpty()) return AirFailureReasons.MISSING_INTERFACE.id();
         boolean insert = rule.direction() == IOType.OUTPUT;
-        long requested = SaturatingLong.multiply(rule.amount(), parallelism);
+        if (insert && requested == 0L && rule.amount() > 0L) return null;
+        if (air.ports().isEmpty()) return AirFailureReasons.MISSING_INTERFACE.id();
         long remaining = requested;
         boolean pressureMet = false;
         List<AirAllocation> allocations = new ArrayList<>();
@@ -94,7 +93,7 @@ final class CompatSearchValues {
             return (insert ? AirFailureReasons.OUTPUT_BLOCKED
                     : pressureMet ? AirFailureReasons.INSUFFICIENT_AIR : AirFailureReasons.INSUFFICIENT_PRESSURE).id();
         }
-        long consumed = insert ? requested : SaturatingLong.multiply(rule.amount(), consumedBatches);
+        long consumed = insert ? requested : consumedAmount;
         for (AirAllocation allocation : allocations) {
             long moved = Math.min(consumed, allocation.amount());
             budget.air.merge(allocation.port().id(), insert ? moved : -moved, Long::sum);

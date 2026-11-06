@@ -286,8 +286,10 @@ class InputRoutingTest {
         PlanningContext second = base.forScope(new InputScope(InputScope.Kind.ISOLATED, List.of(SECOND)), sampling);
         var profile = RequirementHandlerSupport.consumeProfile(0.5F, 16, first);
         assertThat(RequirementHandlerSupport.consumeProfile(0.5F, 16, second)).isSameAs(profile);
-        boolean output = RequirementHandlerSupport.shouldProduce(0.5F, first);
-        assertThat(RequirementHandlerSupport.shouldProduce(output ? 0F : 1F, second)).isEqualTo(output);
+        var output = RequirementHandlerSupport.outputExpectation(0.5F, first);
+        assertThat(RequirementHandlerSupport.outputExpectation(0.5F, second)).isSameAs(output);
+        assertThat(RequirementHandlerSupport.outputExpectation(0.5F, second).amount(1L, 16L))
+                .isEqualTo(output.amount(1L, 16L));
         var later = second.forRequirement(8, second.reservations());
         assertThat(RequirementHandlerSupport.consumeProfile(0.5F, 16, later)).isNotSameAs(profile);
     }
