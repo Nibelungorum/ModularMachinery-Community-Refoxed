@@ -15,6 +15,7 @@ import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
+import cn.howxu.mmcr.registry.RegistrationLock;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
@@ -291,9 +292,16 @@ public final class StartupContentRegistration {
     }
 
     private static void registerDynamicControllers(Set<Identifier> machineIds) {
-        ModBlocks.registerMachineControllers(machineIds);
-        ModBlockEntities.registerMachineControllers(machineIds);
-        ModItems.registerMachineControllerItems(machineIds);
+        // Trigger class initialization without reading mutable maps or holding the registration lock.
+        // ModItems' initializer takes the same lock, so initializing it inside the lock can deadlock.
+        ModBlocks.REGISTER.getRegistryKey();
+        ModItems.REGISTER.getRegistryKey();
+        ModBlockEntities.REGISTER.getRegistryKey();
+        synchronized (RegistrationLock.LOCK) {
+            ModBlocks.registerMachineControllers(machineIds);
+            ModBlockEntities.registerMachineControllers(machineIds);
+            ModItems.registerMachineControllerItems(machineIds);
+        }
     }
 
     /**

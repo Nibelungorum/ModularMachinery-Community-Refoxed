@@ -47,28 +47,32 @@ public final class ModItems {
     private static Map<Item, Identifier> controllerMachineIds = Map.of();
 
     static {
-        ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
-            DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
-                    {
-                        Item item = new InterfaceBlockItem(blockHolder.get(),
-                                new Item.Properties().setId(
-                                        ResourceKey.create(Registries.ITEM, MMCR.id(name))));
-                        Identifier machineId = ModBlocks.machineIdForController(blockHolder.get());
-                        if (machineId != null) {
-                            Map<Item, Identifier> ids = new LinkedHashMap<>(controllerMachineIds);
-                            ids.put(item, machineId);
-                            controllerMachineIds = Map.copyOf(ids);
-                        }
-                        return item;
-                    });
-            ITEMS.put(name, itemHolder);
-        });
-        ITEMS.put("multiblock_detector", MULTIBLOCK_DETECTOR);
-        ITEMS.put("thread_disperser", THREAD_DISPERSER);
-        ITEMS.put("terminal", TERMINAL);
-        ITEMS.put("key_card", KEY_CARD);
-        ITEMS.put("modularium", MODULARIUM);
-        ITEMS.put("blueprint", BLUEPRINT);
+        // ModBlocks may be initializing on another mod's constructor thread; wait outside the lock.
+        var blocks = ModBlocks.BLOCKS;
+        synchronized (RegistrationLock.LOCK) {
+            blocks.forEach((name, blockHolder) -> {
+                DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
+                        {
+                            Item item = new InterfaceBlockItem(blockHolder.get(),
+                                    new Item.Properties().setId(
+                                            ResourceKey.create(Registries.ITEM, MMCR.id(name))));
+                            Identifier machineId = ModBlocks.machineIdForController(blockHolder.get());
+                            if (machineId != null) {
+                                Map<Item, Identifier> ids = new LinkedHashMap<>(controllerMachineIds);
+                                ids.put(item, machineId);
+                                controllerMachineIds = Map.copyOf(ids);
+                            }
+                            return item;
+                        });
+                ITEMS.put(name, itemHolder);
+            });
+            ITEMS.put("multiblock_detector", MULTIBLOCK_DETECTOR);
+            ITEMS.put("thread_disperser", THREAD_DISPERSER);
+            ITEMS.put("terminal", TERMINAL);
+            ITEMS.put("key_card", KEY_CARD);
+            ITEMS.put("modularium", MODULARIUM);
+            ITEMS.put("blueprint", BLUEPRINT);
+        }
     }
 
     public static Identifier machineIdForControllerItem(Item item) {
@@ -76,14 +80,16 @@ public final class ModItems {
     }
 
     public static void registerMachineControllerItems(Collection<Identifier> machineIds) {
-        machineIds.forEach(machineId -> {
-            String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
-            if (ITEMS.containsKey(name)) return;
-            DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
-                    new InterfaceBlockItem(ModBlocks.controllerFor(machineId).get(),
-                            new Item.Properties().setId(ResourceKey.create(Registries.ITEM, MMCR.id(name)))));
-            ITEMS.put(name, itemHolder);
-        });
+        synchronized (RegistrationLock.LOCK) {
+            machineIds.forEach(machineId -> {
+                String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
+                if (ITEMS.containsKey(name)) return;
+                DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
+                        new InterfaceBlockItem(ModBlocks.controllerFor(machineId).get(),
+                                new Item.Properties().setId(ResourceKey.create(Registries.ITEM, MMCR.id(name)))));
+                ITEMS.put(name, itemHolder);
+            });
+        }
     }
 
     public static void register(IEventBus bus) {
