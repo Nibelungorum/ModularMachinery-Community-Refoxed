@@ -48,6 +48,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.Task2AE2OutputGameTest;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.InterfaceMenuGameTest;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.StructureFluidGameTest;
 import cn.howxu.mmcr.compat.patchouli.PatchouliGuideGameTest;
+import cn.howxu.mmcr.compat.extendedae_plus.PatternUploadGameTest;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
@@ -882,6 +883,8 @@ public final class GameTestRegistry {
                         helper -> new MirrorPatternInterfaceGameTest().publicationRefreshesOnSourceUnbindAndReconnect(helper));
                 register(event, "eaep_mirror_master_chunk_not_loaded", 200,
                         helper -> new MirrorPatternInterfaceGameTest().unavailableMasterChunkIsNeverForceLoaded(helper));
+                register(event, "eaep_pattern_upload_identity", 100,
+                        helper -> new PatternUploadGameTest().interfacesKeepOwnUploadIdentity(helper));
             }
             // Dynamic profile placement extends above the template (energy cell at Y=24 or 26).
             register(event, "eaep_channel_card_own_menu", 100, "mmcr:empty",
@@ -930,6 +933,7 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:eae_pattern_rename_")
                     || name.equals("mmcr:eae_pending_pattern_carrier")
                     || name.equals("mmcr:eaep_pending_pattern_carrier")
+                    || name.equals("mmcr:eaep_pattern_upload_identity")
                     || name.startsWith("mmcr:eaep_mirror_")
                     || name.startsWith("mmcr:appmek_native_")
                     || name.equals("mmcr:appmek_chemical_output_binding_identity")
