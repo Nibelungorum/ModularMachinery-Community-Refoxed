@@ -64,7 +64,9 @@ public final class ModBlockEntities {
     }
 
     public static void registerMachineControllers(Collection<ResourceLocation> machineIds) {
-        machineIds.forEach(ModBlockEntities::registerMachineController);
+        synchronized (RegistrationLock.LOCK) {
+            machineIds.forEach(ModBlockEntities::registerMachineController);
+        }
     }
 
     public static Set<ResourceLocation> controllerMachineIds() {

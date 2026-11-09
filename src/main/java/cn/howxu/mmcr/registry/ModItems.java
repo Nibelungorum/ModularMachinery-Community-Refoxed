@@ -46,28 +46,32 @@ public final class ModItems {
     private static Map<Item, ResourceLocation> controllerMachineIds = Map.of();
 
     static {
-        ModBlocks.BLOCKS.forEach((name, blockHolder) -> {
-            DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
-                    {
-                        Item item = FluxNetworksIds.INPUT.equals(name) || FluxNetworksIds.OUTPUT.equals(name)
-                                ? FluxNetworksBridge.get().createBlockItem(blockHolder.get(), new Item.Properties())
-                                : new InterfaceBlockItem(blockHolder.get(), new Item.Properties());
-                        ResourceLocation machineId = ModBlocks.machineIdForController(blockHolder.get());
-                        if (machineId != null) {
-                            Map<Item, ResourceLocation> ids = new LinkedHashMap<>(controllerMachineIds);
-                            ids.put(item, machineId);
-                            controllerMachineIds = Map.copyOf(ids);
-                        }
-                        return item;
-                    });
-            ITEMS.put(name, itemHolder);
-        });
-        ITEMS.put("multiblock_detector", MULTIBLOCK_DETECTOR);
-        ITEMS.put("thread_disperser", THREAD_DISPERSER);
-        ITEMS.put("terminal", TERMINAL);
-        ITEMS.put("key_card", KEY_CARD);
-        ITEMS.put("modularium", MODULARIUM);
-        ITEMS.put("blueprint", BLUEPRINT);
+        // ModBlocks may be initializing on another mod's constructor thread; wait outside the lock.
+        var blocks = ModBlocks.BLOCKS;
+        synchronized (RegistrationLock.LOCK) {
+            blocks.forEach((name, blockHolder) -> {
+                DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
+                        {
+                            Item item = FluxNetworksIds.INPUT.equals(name) || FluxNetworksIds.OUTPUT.equals(name)
+                                    ? FluxNetworksBridge.get().createBlockItem(blockHolder.get(), new Item.Properties())
+                                    : new InterfaceBlockItem(blockHolder.get(), new Item.Properties());
+                            ResourceLocation machineId = ModBlocks.machineIdForController(blockHolder.get());
+                            if (machineId != null) {
+                                Map<Item, ResourceLocation> ids = new LinkedHashMap<>(controllerMachineIds);
+                                ids.put(item, machineId);
+                                controllerMachineIds = Map.copyOf(ids);
+                            }
+                            return item;
+                        });
+                ITEMS.put(name, itemHolder);
+            });
+            ITEMS.put("multiblock_detector", MULTIBLOCK_DETECTOR);
+            ITEMS.put("thread_disperser", THREAD_DISPERSER);
+            ITEMS.put("terminal", TERMINAL);
+            ITEMS.put("key_card", KEY_CARD);
+            ITEMS.put("modularium", MODULARIUM);
+            ITEMS.put("blueprint", BLUEPRINT);
+        }
     }
 
     public static ResourceLocation machineIdForControllerItem(Item item) {
@@ -75,14 +79,16 @@ public final class ModItems {
     }
 
     public static void registerMachineControllerItems(Collection<ResourceLocation> machineIds) {
-        machineIds.forEach(machineId -> {
-            String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
-            if (ITEMS.containsKey(name)) return;
-            DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
-                    new InterfaceBlockItem(ModBlocks.controllerFor(machineId).get(),
-                            new Item.Properties()));
-            ITEMS.put(name, itemHolder);
-        });
+        synchronized (RegistrationLock.LOCK) {
+            machineIds.forEach(machineId -> {
+                String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();
+                if (ITEMS.containsKey(name)) return;
+                DeferredHolder<Item, Item> itemHolder = REGISTER.register(name, () ->
+                        new InterfaceBlockItem(ModBlocks.controllerFor(machineId).get(),
+                                new Item.Properties()));
+                ITEMS.put(name, itemHolder);
+            });
+        }
     }
 
     public static void register(IEventBus bus) {

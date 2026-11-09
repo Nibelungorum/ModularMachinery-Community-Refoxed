@@ -74,7 +74,9 @@ public final class ModBlocks {
     }
 
     public static void registerMachineControllers(Collection<ResourceLocation> machineIds) {
-        machineIds.forEach(ModBlocks::registerMachineController);
+        synchronized (RegistrationLock.LOCK) {
+            machineIds.forEach(ModBlocks::registerMachineController);
+        }
     }
 
     public static boolean hasControllerFor(ResourceLocation machineId) {
