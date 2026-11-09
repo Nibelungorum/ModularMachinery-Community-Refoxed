@@ -90,8 +90,9 @@ public class PatternInterfaceRenameGameTest {
             menu.setName("   ");
             helper.assertFalse(host.hasCustomName(), "Whitespace clears the name");
             helper.assertTrue(Component.translatable("container.mmcr." + id).equals(host.getName())
+                            && host.getName().equals(host.getTerminalGroup().name())
                             && host.getName().equals(InterfaceScreenTitles.titleFor(host, Component.empty())),
-                    "Clearing restores the translated title");
+                    "Clearing restores the translated title and terminal name");
             client.handleUpdateTag(TagValueInput.create(ProblemReporter.DISCARDING,
                     helper.getLevel().registryAccess(), host.getUpdateTag(helper.getLevel().registryAccess())));
             helper.assertFalse(client.hasCustomName(), "Update data also clears a previously synchronized name");

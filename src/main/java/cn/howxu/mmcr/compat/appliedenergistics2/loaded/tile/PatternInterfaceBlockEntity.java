@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile;
 
+import appeng.api.implementations.blockentities.PatternContainerGroup;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
@@ -337,6 +338,13 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public AEItemKey getTerminalIcon() {
         return AEItemKey.of(AEBlocks.PATTERN_PROVIDER.stack());
+    }
+
+    @Override
+    public PatternContainerGroup getTerminalGroup() {
+        if (((PatternLogicKind) kind).readOnlyPatterns()) return PatternProviderLogicHost.super.getTerminalGroup();
+        // Keep the display identity separate from getTerminalIcon(), also used by EAEP for upgrade compatibility.
+        return new PatternContainerGroup(AEItemKey.of(getBlockState().getBlock().asItem()), getName(), List.of());
     }
 
     @Override

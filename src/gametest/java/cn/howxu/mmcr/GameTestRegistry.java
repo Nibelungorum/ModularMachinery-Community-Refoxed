@@ -29,6 +29,7 @@ import cn.howxu.mmcr.compat.patchouli.PatchouliGuideGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.ChannelCardMenuGameTest;
 import cn.howxu.mmcr.compat.extendedae.PatternInterfaceRenameGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.MirrorPatternInterfaceGameTest;
+import cn.howxu.mmcr.compat.extendedae_plus.PatternUploadGameTest;
 import net.neoforged.fml.ModList;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -594,6 +595,8 @@ public final class GameTestRegistry {
                     helper -> new MirrorPatternInterfaceGameTest().publicationRefreshesOnSourceUnbindAndReconnect(helper));
             register(event, "eaep_mirror_master_chunk_not_loaded", 200, structure,
                     helper -> new MirrorPatternInterfaceGameTest().unavailableMasterChunkIsNeverForceLoaded(helper));
+            register(event, "eaep_pattern_upload_identity", 100, structure,
+                    helper -> new PatternUploadGameTest().interfacesKeepOwnUploadIdentity(helper));
             register(event, "eaep_channel_card_own_menu", 100, structure,
                     helper -> new ChannelCardMenuGameTest().channelCardsSurviveOwnMenusAndReconnect(helper));
             register(event, "eaep_mirror_sync", 200, structure,
