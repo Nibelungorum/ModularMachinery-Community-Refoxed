@@ -12,6 +12,7 @@ import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksDeviceGameTest;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksRecipeGameTest;
+import cn.howxu.mmcr.compat.extendedae.PatternInterfaceRenameGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.MirrorPatternInterfaceGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.ChannelCardMenuGameTest;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticRecipeGameTest;
@@ -698,6 +699,10 @@ public final class GameTestRegistry {
             register(event, "ae2_pattern_menu_terminal", 100,
                     helper -> new AE2PatternInterfaceGameTest().patternMenuStateAndTerminalVisibility(helper));
             if (ModList.get().isLoaded("extendedae")) {
+                register(event, "eae_pattern_rename_persistence", 40,
+                        helper -> new PatternInterfaceRenameGameTest().renameAndPersistence(helper));
+                register(event, "eae_pattern_rename_filters", 40,
+                        helper -> new PatternInterfaceRenameGameTest().interactionFilters(helper));
                 register(event, "eae_pattern_return_long_balances", 40,
                         helper -> new PatternReturnInventoryGameTest().extendedInterfaceUsesTheSameOverflow(helper));
                 register(event, "eae_menu_host_routes", 40,
@@ -922,6 +927,7 @@ public final class GameTestRegistry {
                     || name.equals("mmcr:ae2_me_pattern_native_return_notification")
                     || name.equals("mmcr:ae2_me_pattern_interface_request")
                     || name.equals("mmcr:ae2_me_pattern_cpu_output_components")
+                    || name.startsWith("mmcr:eae_pattern_rename_")
                     || name.equals("mmcr:eae_pending_pattern_carrier")
                     || name.equals("mmcr:eaep_pending_pattern_carrier")
                     || name.startsWith("mmcr:eaep_mirror_")

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.extendedae.loaded.PatternInterfaceRenaming;
 import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration;
 import cn.howxu.mmcr.internal.api.facade.ui.UiProtocolAdapters;
 import cn.howxu.mmcr.internal.runtime.ui.ControllerUiServerSession;
@@ -60,6 +61,7 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.ModLoader;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
@@ -105,6 +107,9 @@ public final class ModEventRegistration {
         modContainer.registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC,
                 "modular-machinery-community-refoxed/server.toml");
         registerListeners(registrar(modBus), registrar(NeoForge.EVENT_BUS), EventHandlers.production());
+        if (ModList.get().isLoaded("ae2") && ModList.get().isLoaded("extendedae")) {
+            NeoForge.EVENT_BUS.addListener(PatternInterfaceRenaming::onRightClickBlock);
+        }
         MMCR.CREATIVE_TABS.register(MMCR.MODID, () -> CreativeModeTab.builder()
                 .title(Component.translatable("itemGroup.mmcr"))
                 .icon(() -> ModItems.ITEMS.get("basic_casing").get().getDefaultInstance())

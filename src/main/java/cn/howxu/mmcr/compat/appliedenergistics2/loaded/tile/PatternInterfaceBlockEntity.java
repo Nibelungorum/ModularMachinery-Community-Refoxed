@@ -47,6 +47,7 @@ import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.Nameable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
@@ -72,7 +73,7 @@ import java.util.function.LongFunction;
  * @author howxu <dev@howxu.cn>
  */
 public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
-        implements MemoryCardHost, PatternProviderLogicHost, IGridConnectedBlockEntity, PatternInterfaceHost {
+        implements MemoryCardHost, PatternProviderLogicHost, IGridConnectedBlockEntity, PatternInterfaceHost, Nameable {
     private static final IGridNodeListener<PatternInterfaceBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
@@ -94,6 +95,26 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private long lastLegacyRefundTick = Long.MIN_VALUE;
     private @Nullable BatchPublicationKey batchPublicationKey;
     private boolean batchPublicationSuspended;
+    private @Nullable Component customName;
+
+    @Override
+    public Component getName() {
+        return customName != null ? customName : Component.translatable("container.mmcr." + kind.id());
+    }
+
+    @Override
+    public @Nullable Component getCustomName() {
+        return customName;
+    }
+
+    public void setCustomName(@Nullable Component name) {
+        if (((PatternLogicKind) kind).readOnlyPatterns()) return;
+        customName = name == null || name.getString().isBlank() ? null : name.copy();
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        }
+    }
 
     public PendingPatternQueue pendingPatterns() {
         return pendingPatterns;
@@ -413,6 +434,9 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void saveAdditional(CompoundTag output, HolderLookup.Provider registries) {
         super.saveAdditional(output, registries);
+        if (customName != null) {
+            output.putString("CustomName", Component.Serializer.toJson(customName, registries));
+        }
         mainNode.saveToNBT(output);
         craftingMachine.savePendingReturns(output, registries);
         logic.writeToNBT(output, registries);
@@ -424,6 +448,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         beginLoadingAdditional();
         try {
             super.loadAdditional(input, registries);
+            customName = ((PatternLogicKind) kind).readOnlyPatterns() || !input.contains("CustomName", 8)
+                    ? null : parseCustomNameSafe(input.getString("CustomName"), registries);
             mainNode.loadFromNBT(input);
             logic.readFromNBT(input, registries);
             craftingMachine.loadPendingReturns(input, registries);
@@ -434,8 +460,21 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
+    protected void applyImplicitComponents(BlockEntity.DataComponentInput components) {
+        super.applyImplicitComponents(components);
+        customName = ((PatternLogicKind) kind).readOnlyPatterns() ? null : components.get(DataComponents.CUSTOM_NAME);
+    }
+
+    @Override
+    public void removeComponentsFromTag(CompoundTag output) {
+        super.removeComponentsFromTag(output);
+        output.remove("CustomName");
+    }
+
+    @Override
     protected void collectImplicitComponents(DataComponentMap.Builder components) {
         super.collectImplicitComponents(components);
+        components.set(DataComponents.CUSTOM_NAME, customName);
         if (level != null && (!pendingPatterns.isEmpty() || !logic.getReturnInv().isEmpty()
                 || craftingMachine.hasPendingReturns())) {
             CompoundTag data = new CompoundTag();

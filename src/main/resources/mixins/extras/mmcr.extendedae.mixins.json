@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.extendedae",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ContainerRenamerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

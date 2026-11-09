@@ -38,6 +38,10 @@ config="mixins/extras/mmcr.ae2lt.jei.mixins.json"
 requiredMods=["ae2", "ae2lt", "jei", "ae2jeiintegration"]
 
 [[mixins]]
+config="mixins/extras/mmcr.extendedae.mixins.json"
+requiredMods=["ae2", "extendedae"]
+
+[[mixins]]
 config="mixins/extras/mmcr.extendedae_plus.mixins.json"
 requiredMods=["ae2", "extendedae", "extendedae_plus"]
 

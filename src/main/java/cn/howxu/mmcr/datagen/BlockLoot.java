@@ -41,8 +41,12 @@ public final class BlockLoot extends BlockLootSubProvider {
                 add(block, FluxNetworksBridge.get().deviceLoot(block));
             } else if (id.equals("ae2_me_pattern_interface") || id.equals("eae_me_extended_pattern_interface")
                     || id.equals("eaep_me_mirror_pattern_interface")) {
-                add(block, createSingleItemTable(block).apply(CopyComponentsFunction.copyComponents(
-                        CopyComponentsFunction.Source.BLOCK_ENTITY).include(DataComponents.BLOCK_ENTITY_DATA)));
+                var components = CopyComponentsFunction.copyComponents(CopyComponentsFunction.Source.BLOCK_ENTITY)
+                        .include(DataComponents.BLOCK_ENTITY_DATA);
+                if (!id.equals("eaep_me_mirror_pattern_interface")) {
+                    components.include(DataComponents.CUSTOM_NAME);
+                }
+                add(block, createSingleItemTable(block).apply(components));
             } else {
                 dropSelf(block);
             }
