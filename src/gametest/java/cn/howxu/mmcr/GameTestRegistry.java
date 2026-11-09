@@ -27,6 +27,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.InterfaceMenuGameTest;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.StructureFluidGameTest;
 import cn.howxu.mmcr.compat.patchouli.PatchouliGuideGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.ChannelCardMenuGameTest;
+import cn.howxu.mmcr.compat.extendedae.PatternInterfaceRenameGameTest;
 import cn.howxu.mmcr.compat.extendedae_plus.MirrorPatternInterfaceGameTest;
 import net.neoforged.fml.ModList;
 import cn.howxu.mmcr.AppliedFluxInterfaceGameTest;
@@ -481,6 +482,10 @@ public final class GameTestRegistry {
             register(event, "ae2_pattern_menu_terminal", 100,
                     helper -> new AE2PatternInterfaceGameTest().patternMenuStateAndTerminalVisibility(helper));
             if (ModList.get().isLoaded("extendedae")) {
+                register(event, "eae_pattern_rename_persistence", 40,
+                        helper -> new PatternInterfaceRenameGameTest().renameAndPersistence(helper));
+                register(event, "eae_pattern_rename_filters", 40,
+                        helper -> new PatternInterfaceRenameGameTest().interactionFilters(helper));
                 register(event, "eae_pattern_return_long_balances", 40,
                         helper -> new PatternReturnInventoryGameTest().extendedInterfaceUsesTheSameOverflow(helper));
                 register(event, "eae_menu_host_routes", 40,

@@ -52,9 +52,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.component.DataComponentGetter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.world.Nameable;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -87,7 +90,7 @@ import java.util.function.LongFunction;
  * @author howxu <dev@howxu.cn>
  */
 public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
-        implements MemoryCardHost, PatternProviderLogicHost, IGridConnectedBlockEntity, PatternInterfaceHost {
+        implements MemoryCardHost, PatternProviderLogicHost, IGridConnectedBlockEntity, PatternInterfaceHost, Nameable {
     private static final IGridNodeListener<PatternInterfaceBlockEntity> NODE_LISTENER =
             new BlockEntityNodeListener<>() {
                 @Override
@@ -110,6 +113,26 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private long lastLegacyRefundTick = Long.MIN_VALUE;
     private @Nullable BatchPublicationKey batchPublicationKey;
     private boolean batchPublicationSuspended;
+    private @Nullable Component customName;
+
+    @Override
+    public Component getName() {
+        return customName != null ? customName : Component.translatable("container.mmcr." + kind.id());
+    }
+
+    @Override
+    public @Nullable Component getCustomName() {
+        return customName;
+    }
+
+    public void setCustomName(@Nullable Component name) {
+        if (((PatternLogicKind) kind).readOnlyPatterns()) return;
+        customName = name == null || name.getString().isBlank() ? null : name.copy();
+        setChanged();
+        if (level != null) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        }
+    }
 
     public PendingPatternQueue pendingPatterns() {
         return pendingPatterns;
@@ -489,6 +512,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        output.storeNullable("CustomName", ComponentSerialization.CODEC, customName);
         mainNode.serialize(output);
         logic.writeToNBT(output);
         pendingPatterns.write(output, level == null ? 0L : level.getGameTime());
@@ -499,6 +523,8 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         beginLoadingAdditional();
         try {
             super.loadAdditional(input);
+            customName = ((PatternLogicKind) kind).readOnlyPatterns() ? null
+                    : input.read("CustomName", ComponentSerialization.CODEC).orElse(null);
             mainNode.deserialize(input);
             logic.readFromNBT(input);
             pendingPatterns.read(input);
@@ -508,8 +534,21 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     @Override
+    protected void applyImplicitComponents(DataComponentGetter components) {
+        super.applyImplicitComponents(components);
+        customName = ((PatternLogicKind) kind).readOnlyPatterns() ? null : components.get(DataComponents.CUSTOM_NAME);
+    }
+
+    @Override
+    public void removeComponentsFromTag(ValueOutput output) {
+        super.removeComponentsFromTag(output);
+        output.discard("CustomName");
+    }
+
+    @Override
     protected void collectImplicitComponents(DataComponentMap.Builder components) {
         super.collectImplicitComponents(components);
+        components.set(DataComponents.CUSTOM_NAME, customName);
         if ((!pendingPatterns.isEmpty() || !logic.getReturnInv().isEmpty()) && level != null) {
             TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
             pendingPatterns.write(output, level.getGameTime());
