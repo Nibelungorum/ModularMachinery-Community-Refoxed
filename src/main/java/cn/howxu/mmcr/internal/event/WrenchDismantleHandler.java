@@ -9,6 +9,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -84,6 +86,7 @@ public final class WrenchDismantleHandler {
         drops.forEach(player.getInventory()::placeItemBackInInventory);
         level.removeBlock(pos, false);
         block.destroy(level, pos, state);
+        level.playSound(null, pos, SoundEvents.ITEM_FRAME_REMOVE_ITEM, SoundSource.BLOCKS, 0.7F, 1.0F);
         player.swing(InteractionHand.MAIN_HAND, true);
         return true;
     }

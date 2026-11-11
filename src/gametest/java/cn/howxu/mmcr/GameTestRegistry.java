@@ -322,6 +322,8 @@ public final class GameTestRegistry {
         //         helper -> new WrenchDismantleGameTest().wrenchWhileStandingDoesNotDismantle(helper));
         // register(event, "wrench_dismantles_item_bus", 100,
         //         helper -> new WrenchDismantleGameTest().wrenchDismantlesItemBusAndDropsItsContents(helper));
+        register(event, "wrench_dismantling_sound", 20,
+                helper -> new WrenchDismantleGameTest().wrenchDismantlingPlaysSoundOnlyOnSuccess(helper));
         register(event, "dynamic_controller_drops_self", 100, ItemBusCapabilityGameTest::dynamicControllerDropsItself);
         register(event, "auto_io_adjacent_picked_icons", 20,
                 helper -> new AutoIOGameTest().adjacentIconsUsePickedItems(helper));
@@ -912,6 +914,7 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:appflux_")
                     || name.equals("mmcr:detector_data_reset_recipe")
                     || name.equals("mmcr:blueprint_data_reset_recipe")
+                    || name.equals("mmcr:wrench_dismantling_sound")
                     || name.equals("mmcr:spectator_menu_opening")
                     || name.equals("mmcr:spectator_controller_ui_metadata")
                     || name.equals("mmcr:startup_mekanism_registry_references")
