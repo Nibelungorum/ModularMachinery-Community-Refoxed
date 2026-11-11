@@ -4,6 +4,8 @@ import cn.howxu.mmcr.internal.item.TerminalData;
 import cn.howxu.mmcr.test.TestBootstrap;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.neoforged.neoforge.network.connection.ConnectionType;
@@ -25,9 +27,9 @@ class PktTerminalStatePayloadTest {
 
     @Test
     void round_trip_preserves_canonical_data_and_availability() {
-        PktTerminalStatePayload payload = new PktTerminalStatePayload(TerminalData.DEFAULT, true, false,
+        PktTerminalStatePayload payload = new PktTerminalStatePayload(TerminalData.DEFAULT.withHighlight(true), true, false, true,
                 List.of(1, 2), Component.literal("Test Machine"), List.of(-2, 0, 4),
-                "message.mmcr.terminal.storage_unavailable");
+                "message.mmcr.terminal.storage_unavailable", Identifier.parse("test:highlight"), Direction.WEST);
         var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
 
         PktTerminalStatePayload.STREAM_CODEC.encode(buffer, payload);

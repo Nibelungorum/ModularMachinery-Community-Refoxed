@@ -12,6 +12,7 @@ import cn.howxu.mmcr.internal.item.TerminalData;
 import cn.howxu.mmcr.internal.item.TerminalInventoryMode;
 import cn.howxu.mmcr.internal.item.TerminalAction;
 import cn.howxu.mmcr.internal.item.TerminalService;
+import cn.howxu.mmcr.internal.network.PktTerminalStatePayload;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -25,6 +26,12 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
@@ -79,6 +86,59 @@ public class TerminalAssemblyGameTest {
 
         helper.assertTrue(!result.accepted() && result.messageKey().equals("message.mmcr.terminal.no_controller"),
                 "A valid level selection without a controller is rejected without normalizing null");
+        helper.succeed();
+    }
+
+    public void terminalHighlightIsIndependentAndBindingChangesClearIt(GameTestHelper helper) {
+        ServerPlayer player = servicePlayer(helper);
+        List<Packet<?>> packets = new ArrayList<>();
+        player.connection = new ServerGamePacketListenerImpl(helper.getLevel().getServer(),
+                new Connection(PacketFlow.CLIENTBOUND), player,
+                CommonListenerCookie.createInitial(player.getGameProfile(), false)) {
+            @Override
+            public void send(Packet<?> packet) {
+                packets.add(packet);
+            }
+        };
+        ItemStack terminal = new ItemStack(ModItems.TERMINAL.get());
+        player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
+        helper.assertTrue(!TerminalService.execute(player, terminal, TerminalAction.SET_HIGHLIGHT_ENABLED,
+                1, null, null).accepted(), "Highlight requires an accessible bound controller");
+
+        BlockPos controllerPos = new BlockPos(4, 1, 4);
+        helper.setBlock(controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState());
+        MachineControllerBlockEntity controller = helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(MMCR.id("test_cube")));
+        player.setPos(helper.absolutePos(controllerPos).getCenter());
+        GlobalPos target = GlobalPos.of(helper.getLevel().dimension(), helper.absolutePos(controllerPos));
+        helper.assertTrue(TerminalService.bindController(player, terminal, target).accepted(), "Controller binds");
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.SET_HIGHLIGHT_ENABLED,
+                1, null, null).accepted(), "Highlight can be enabled without ghost preview");
+        helper.assertTrue(TerminalData.from(terminal).highlightEnabled() && !TerminalData.from(terminal).previewEnabled(),
+                "Highlight does not enable ghost preview");
+        PktTerminalStatePayload state = packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
+                        && custom.payload() instanceof PktTerminalStatePayload)
+                .map(packet -> (PktTerminalStatePayload) ((ClientboundCustomPayloadPacket) packet).payload())
+                .reduce((first, second) -> second).orElseThrow();
+        helper.assertTrue(MMCR.id("test_cube").equals(state.machineId()) && state.data().highlightEnabled(),
+                "The client receives the selected machine and independent highlight setting");
+        helper.assertTrue(state.facing() == controller.getBlockState().getValue(BlockStateProperties.FACING),
+                "The client receives the controller orientation for projection");
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.SET_PREVIEW_ENABLED,
+                1, null, null).accepted(), "Ghost preview can be independently enabled");
+        helper.assertTrue(TerminalData.from(terminal).highlightEnabled(), "Enabling ghost preview retains highlight");
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.SET_HIGHLIGHT_ENABLED,
+                0, null, null).accepted(), "Highlight can be disabled independently");
+        helper.assertTrue(!TerminalData.from(terminal).highlightEnabled() && TerminalData.from(terminal).previewEnabled(),
+                "Disabling highlight does not disable ghost preview");
+        TerminalService.execute(player, terminal, TerminalAction.SET_HIGHLIGHT_ENABLED, 1, null, null);
+        helper.assertTrue(TerminalService.bindController(player, terminal, target).accepted(), "Controller rebinds");
+        helper.assertTrue(!TerminalData.from(terminal).highlightEnabled(), "Rebinding clears the old highlight setting");
+        TerminalService.execute(player, terminal, TerminalAction.SET_HIGHLIGHT_ENABLED, 1, null, null);
+        TerminalService.clear(player, terminal);
+        helper.assertTrue(TerminalData.from(terminal).controller() == null && !TerminalData.from(terminal).highlightEnabled(),
+                "Clearing the terminal removes its highlight and binding");
         helper.succeed();
     }
 

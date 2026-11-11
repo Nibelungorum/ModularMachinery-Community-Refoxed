@@ -14,5 +14,6 @@ public enum TerminalAction {
     CHECK,
     BUILD,
     DEMOLISH,
-    REQUEST_STATE
+    REQUEST_STATE,
+    SET_HIGHLIGHT_ENABLED
 }

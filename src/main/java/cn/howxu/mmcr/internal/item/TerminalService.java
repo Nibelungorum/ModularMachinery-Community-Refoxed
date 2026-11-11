@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.config.ServerConfig;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.StructureItemSink;
 import cn.howxu.mmcr.internal.assembly.StructureItemStorage;
@@ -19,6 +20,7 @@ import cn.howxu.mmcr.registry.ModItems;
 import java.util.Comparator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
@@ -47,7 +49,7 @@ public final class TerminalService {
         if (controller == null) return rejected(player, stack, "message.mmcr.terminal.invalid_controller");
         TerminalData data = TerminalData.from(stack);
         controllerAt(player, data.controller()).ifPresent(previous -> previous.clearStructurePreview(player));
-        setData(stack, normalize(controller, data.withController(target).withPreview(false, Integer.MAX_VALUE)));
+        setData(stack, normalize(controller, data.withController(target).withPreview(false, Integer.MAX_VALUE).withHighlight(false)));
         return accepted(player, stack, "message.mmcr.terminal.controller_bound");
     }
 
@@ -131,6 +133,11 @@ public final class TerminalService {
                 else controller.clearStructurePreview(player);
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
+            case SET_HIGHLIGHT_ENABLED -> {
+                if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
+                setData(stack, normalize(controller, data).withHighlight(value != 0));
+                return accepted(player, stack, "message.mmcr.terminal.updated");
+            }
             case SET_PREVIEW_LAYER -> {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
                 if (!previewLayerAllowed(value, currentPreviewLayers(controller, data))) {
@@ -209,7 +216,7 @@ public final class TerminalService {
         Identifier selectedType = data.selectedLevelType();
         if (selectedType == null || !levels.containsKey(selectedType)) selectedType = levels.isEmpty() ? null : levels.keySet().iterator().next();
         return new TerminalData(data.controller(), data.container(), data.ae2AccessPoint(), data.inventoryMode(), selectedType,
-                levels, stage, data.previewEnabled(), data.previewLayer());
+                levels, stage, data.previewEnabled(), data.previewLayer(), data.highlightEnabled());
     }
 
     private static Optional<MachineControllerBlockEntity> controllerAt(ServerPlayer player, GlobalPos target) {
@@ -264,7 +271,9 @@ public final class TerminalService {
                 stages,
                 machine == null ? Component.translatable("gui.mmcr.terminal.no_controller")
                         : machine.displayName(),
-                previewLayers(pattern, PktTerminalStatePayload.maxPreviewLayers()), statusKey));
+                previewLayers(pattern, PktTerminalStatePayload.maxPreviewLayers()), statusKey,
+                machine == null ? null : machine.registryName(),
+                controller == null ? Direction.SOUTH : controller.getBlockState().getValue(MachineControllerBlock.FACING)));
     }
 
     private static List<Integer> currentPreviewLayers(MachineControllerBlockEntity controller, TerminalData data) {
@@ -278,8 +287,7 @@ public final class TerminalService {
     private static BlockArray previewPattern(MachineControllerBlockEntity controller, TerminalData data,
             StructureSnapshot structure, Machine machine, List<Integer> stages) {
         if (controller == null || structure == null) return null;
-        if (structure.pattern() != null) return structure.pattern();
-        if (machine == null) return null;
+        if (machine == null) return structure.pattern();
         OptionalInt stage = effectiveStage(stages, data.stage());
         if (stage.isEmpty()) return null;
         try {

@@ -29,7 +29,7 @@ import java.util.Map;
  * @author howxu <dev@howxu.cn>
  */
 public final class TerminalScreen extends Screen {
-    private static final int PANEL_WIDTH = 310;
+    private static final int PANEL_WIDTH = 384;
     private static final int PANEL_HEIGHT = 156;
     private static final int TEXT_COLOR = 0xFF202020;
     private TerminalData data;
@@ -48,6 +48,7 @@ public final class TerminalScreen extends Screen {
     private Button minusButton;
     private Button resetButton;
     private Button previewButton;
+    private Button highlightButton;
     private Button checkButton;
     private Button buildButton;
     private Button dismantleButton;
@@ -99,9 +100,11 @@ public final class TerminalScreen extends Screen {
         int footer = left() + 8;
         previewButton = addRenderableWidget(actionButton("gui.mmcr.terminal.preview", footer,
                 TerminalAction.SET_PREVIEW_ENABLED));
-        checkButton = addRenderableWidget(actionButton("gui.mmcr.terminal.check", footer + 74, TerminalAction.CHECK));
-        buildButton = addRenderableWidget(actionButton("gui.mmcr.terminal.build", footer + 148, TerminalAction.BUILD));
-        dismantleButton = addRenderableWidget(actionButton("gui.mmcr.terminal.dismantle", footer + 222,
+        highlightButton = addRenderableWidget(actionButton("gui.mmcr.terminal.highlight", footer + 74,
+                TerminalAction.SET_HIGHLIGHT_ENABLED));
+        checkButton = addRenderableWidget(actionButton("gui.mmcr.terminal.check", footer + 148, TerminalAction.CHECK));
+        buildButton = addRenderableWidget(actionButton("gui.mmcr.terminal.build", footer + 222, TerminalAction.BUILD));
+        dismantleButton = addRenderableWidget(actionButton("gui.mmcr.terminal.dismantle", footer + 296,
                 TerminalAction.DEMOLISH));
         updateWidgets();
     }
@@ -195,7 +198,8 @@ public final class TerminalScreen extends Screen {
     }
 
     static boolean closesAfter(TerminalAction action) {
-        return action == TerminalAction.SET_PREVIEW_ENABLED || action == TerminalAction.CHECK
+        return action == TerminalAction.SET_PREVIEW_ENABLED || action == TerminalAction.SET_HIGHLIGHT_ENABLED
+                || action == TerminalAction.CHECK
                 || action == TerminalAction.BUILD || action == TerminalAction.DEMOLISH;
     }
 
@@ -204,14 +208,21 @@ public final class TerminalScreen extends Screen {
     }
 
     private Button actionButton(String key, int x, TerminalAction action) {
-        var label = action == TerminalAction.SET_PREVIEW_ENABLED ? previewLabel() : Component.translatable(key);
+        var label = switch (action) {
+            case SET_PREVIEW_ENABLED -> previewLabel();
+            case SET_HIGHLIGHT_ENABLED -> toggleLabel("gui.mmcr.terminal.highlight", data.highlightEnabled());
+            default -> Component.translatable(key);
+        };
         if (action == TerminalAction.BUILD) {
             label = label.withStyle(ChatFormatting.GREEN);
         } else if (action == TerminalAction.DEMOLISH) {
             label = label.withStyle(ChatFormatting.RED);
         }
-        return new StyledButton(x, top() + 128, 70, 20, label, button -> send(action,
-                action == TerminalAction.SET_PREVIEW_ENABLED && !data.previewEnabled() ? 1 : 0, null, null));
+        return new StyledButton(x, top() + 128, 70, 20, label, button -> send(action, switch (action) {
+            case SET_PREVIEW_ENABLED -> data.previewEnabled() ? 0 : 1;
+            case SET_HIGHLIGHT_ENABLED -> data.highlightEnabled() ? 0 : 1;
+            default -> 0;
+        }, null, null));
     }
 
     private void send(TerminalAction action, int value, Identifier firstId, Identifier secondId) {
@@ -242,6 +253,8 @@ public final class TerminalScreen extends Screen {
         levelButton.setMessage(levelLabel(view));
         previewButton.active = controllerAvailable;
         previewButton.setMessage(previewLabel());
+        highlightButton.active = controllerAvailable;
+        highlightButton.setMessage(toggleLabel("gui.mmcr.terminal.highlight", data.highlightEnabled()));
         checkButton.active = controllerAvailable;
         buildButton.active = controllerAvailable && storageAvailable;
         dismantleButton.active = controllerAvailable && storageAvailable;
@@ -347,14 +360,13 @@ public final class TerminalScreen extends Screen {
     }
 
     private MutableComponent previewLabel() {
-        return Component.translatable("gui.mmcr.terminal.preview.label")
-                .append(
-                        data.previewEnabled()
-                        ?
-                        Component.translatable("gui.mmcr.terminal.preview.on").withStyle(ChatFormatting.GREEN)
-                        :
-                        Component.translatable("gui.mmcr.terminal.preview.off").withStyle(ChatFormatting.RED)
-                );
+        return toggleLabel("gui.mmcr.terminal.preview", data.previewEnabled());
+    }
+
+    static MutableComponent toggleLabel(String key, boolean enabled) {
+        return Component.translatable(key + ".label")
+                .append(Component.translatable(key + (enabled ? ".on" : ".off"))
+                        .withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.RED));
     }
 
     private boolean canSend(TerminalAction action) {
@@ -366,7 +378,7 @@ public final class TerminalScreen extends Screen {
                 LevelView view = levelView(levelTypes(), data.selectedLevelType(), data.selectedLevels());
                 yield controllerAvailable && (typeButtonActive(view) || view.levelButtonActive());
             }
-            case SET_PREVIEW_ENABLED, SET_PREVIEW_LAYER, CHECK -> controllerAvailable;
+            case SET_PREVIEW_ENABLED, SET_HIGHLIGHT_ENABLED, SET_PREVIEW_LAYER, CHECK -> controllerAvailable;
             case BUILD, DEMOLISH -> controllerAvailable && storageAvailable;
         };
     }

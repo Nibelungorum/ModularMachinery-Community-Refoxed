@@ -140,7 +140,18 @@ class TerminalScreenTest {
     @Test
     void action_buttons_close_screen_but_configuration_buttons_do_not() {
         assertThat(TerminalScreen.closesAfter(TerminalAction.BUILD)).isTrue();
+        assertThat(TerminalScreen.closesAfter(TerminalAction.SET_HIGHLIGHT_ENABLED)).isTrue();
         assertThat(TerminalScreen.closesAfter(TerminalAction.SET_STAGE)).isFalse();
+    }
+
+    @Test
+    void highlight_toggle_uses_the_same_enabled_and_disabled_styles_as_preview() {
+        assertThat(TerminalScreen.toggleLabel("gui.mmcr.terminal.highlight", true).getSiblings().getFirst()
+                .getStyle().getColor()).isEqualTo(TerminalScreen.toggleLabel("gui.mmcr.terminal.preview", true)
+                        .getSiblings().getFirst().getStyle().getColor());
+        assertThat(TerminalScreen.toggleLabel("gui.mmcr.terminal.highlight", false).getSiblings().getFirst()
+                .getStyle().getColor()).isEqualTo(TerminalScreen.toggleLabel("gui.mmcr.terminal.preview", false)
+                        .getSiblings().getFirst().getStyle().getColor());
     }
 
     @Test
