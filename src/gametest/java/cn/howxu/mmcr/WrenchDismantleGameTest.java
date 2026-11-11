@@ -9,6 +9,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -18,12 +20,17 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.common.util.FakePlayer;
+import net.neoforged.neoforge.event.PlayLevelSoundEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Verifies wrench dismantling for MMCR blocks.
@@ -78,6 +85,46 @@ public class WrenchDismantleGameTest {
             helper.assertTrue(dropped == 3, "Wrench dismantling drops all item bus contents");
             helper.succeed();
         });
+    }
+
+    public void wrenchDismantlingPlaysSoundOnlyOnSuccess(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(0, 1, 0);
+        helper.setBlock(pos, ModBlocks.CASING.get().defaultBlockState());
+        BlockPos worldPos = helper.absolutePos(pos);
+        ServerPlayer player = new FakePlayer(helper.getLevel(), new GameProfile(UUID.randomUUID(), "mmcr-wrench-sound"));
+        player.setItemInHand(InteractionHand.MAIN_HAND, AEItems.CERTUS_QUARTZ_WRENCH.stack());
+        List<PlayLevelSoundEvent.AtPosition> sounds = new ArrayList<>();
+        Consumer<PlayLevelSoundEvent.AtPosition> listener = sound -> {
+            if (sound.getLevel() == helper.getLevel()
+                    && sound.getPosition().equals(Vec3.atCenterOf(worldPos))
+                    && sound.getSound() != null && sound.getSound().value() == SoundEvents.ITEM_FRAME_REMOVE_ITEM) {
+                sounds.add(sound);
+            }
+        };
+        NeoForge.EVENT_BUS.addListener(PlayLevelSoundEvent.AtPosition.class, listener);
+        try {
+            BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(worldPos), Direction.UP, worldPos, false);
+            NeoForge.EVENT_BUS.post(new PlayerInteractEvent.RightClickBlock(player, InteractionHand.MAIN_HAND, worldPos, hit));
+            helper.assertTrue(sounds.isEmpty(), "Standing wrench interaction does not play the dismantling sound");
+
+            player.setPose(Pose.CROUCHING);
+            PlayerInteractEvent.RightClickBlock canceled = new PlayerInteractEvent.RightClickBlock(player,
+                    InteractionHand.MAIN_HAND, worldPos, hit);
+            canceled.setCanceled(true);
+            NeoForge.EVENT_BUS.post(canceled);
+            helper.assertTrue(sounds.isEmpty(), "Canceled wrench interaction does not play the dismantling sound");
+
+            NeoForge.EVENT_BUS.post(new PlayerInteractEvent.RightClickBlock(player, InteractionHand.MAIN_HAND, worldPos, hit));
+            helper.assertTrue(helper.getLevel().getBlockState(worldPos).isAir(), "The wrench dismantles the block");
+            helper.assertTrue(sounds.size() == 1, "Successful dismantling plays the AE2-style sound exactly once");
+            PlayLevelSoundEvent.AtPosition sound = sounds.getFirst();
+            helper.assertTrue(sound.getSource() == SoundSource.BLOCKS
+                            && sound.getOriginalVolume() == 0.7F && sound.getOriginalPitch() == 1.0F,
+                    "Dismantling uses the AE2 sound category, volume and pitch");
+        } finally {
+            NeoForge.EVENT_BUS.unregister(listener);
+        }
+        helper.succeed();
     }
 
     private static ServerPlayer player(GameTestHelper helper) {

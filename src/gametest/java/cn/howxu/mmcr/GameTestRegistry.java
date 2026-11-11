@@ -265,6 +265,8 @@ public final class GameTestRegistry {
         //         helper -> new WrenchDismantleGameTest().wrenchWhileStandingDoesNotDismantle(helper));
         // register(event, "wrench_dismantles_item_bus", 100,
         //         helper -> new WrenchDismantleGameTest().wrenchDismantlesItemBusAndDropsItsContents(helper));
+        register(event, "wrench_dismantling_sound", 20,
+                helper -> new WrenchDismantleGameTest().wrenchDismantlingPlaysSoundOnlyOnSuccess(helper));
         register(event, "dynamic_controller_drops_self", 100, ItemBusCapabilityGameTest::dynamicControllerDropsItself);
         // Disabled: CPU scheduling delays can cause this otherwise-correct test to fail intermittently.
         register(event, "auto_io_adjacent_picked_icons", 20,
