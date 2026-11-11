@@ -43,10 +43,11 @@ public class PURPUR_FURNACE {
                     .maxParallelism(32).parallelizable(true)
                     .smartInterface(SmartInterfaces.type("mode", 1F, 3F, 1, SmartInterfaces.ValueType.INTEGER))
                     .smartInterface(SmartInterfaces.type("conversation", 0F, 1F, 0))
-                    .smartInterfaceModifier(Modifiers.smartEnergy("mode", 1F, 2F, 1F, 2F, ModifierOperation.MULTIPLY))
-                    .smartInterfaceModifier(Modifiers.smartEnergy("mode", 2F, 3F, 2F, 4F, ModifierOperation.MULTIPLY))
-                    .smartInterfaceModifier(Modifiers.smartDuration("conversation", 0F, .5F, 1F, 1.5F, ModifierOperation.MULTIPLY))
-                    .smartInterfaceModifier(Modifiers.smartDuration("conversation", .5F, 1F, 1.5F, 2.5F, ModifierOperation.MULTIPLY))
+                    // Mode 1/2/3 maps to energy multipliers 1/2/4 without stacking interval rules.
+                    .smartInterfaceModifier(Modifiers.smartEnergy("mode", value -> Math.pow(2D, value - 1D), ModifierOperation.MULTIPLY))
+                    // A single function can also describe a piecewise curve.
+                    .smartInterfaceModifier(Modifiers.smartDuration("conversation",
+                            value -> value <= 0.5D ? 1D + value : 0.5D + 2D * value, ModifierOperation.MULTIPLY))
                     .runningSound(Identifier.parse("minecraft:block.furnace.fire_crackle"))
                     .finishSound(Identifier.parse("minecraft:entity.ender_dragon.growl"))
                     .build();

@@ -281,11 +281,10 @@ public record MachineRecipeDisplay(
     }
 
     public record SmartInterfaceModifierDisplay(String type, String target, String scope, boolean chance,
-            float minValue, float maxValue, float atMin, float atMax, RecipeModifier.Operation operation) {
+            RecipeModifier.Operation operation) {
         static SmartInterfaceModifierDisplay from(SmartInterfaceModifier modifier) {
             return new SmartInterfaceModifierDisplay(modifier.interfaceType(), modifier.target(), modifier.scope(),
-                    modifier.affectsChance(), modifier.minValue(), modifier.maxValue(), modifier.atMin(),
-                    modifier.atMax(), modifier.operation());
+                    modifier.affectsChance(), modifier.operation());
         }
 
         public String label() {
@@ -293,9 +292,10 @@ public record MachineRecipeDisplay(
         }
 
         public Component tooltip() {
-            return Component.literal("Smart interface " + type + " modifies " + target + " " + scope
-                    + (chance ? " chance" : "") + ": [" + minValue + ", " + maxValue + "] -> ["
-                    + atMin + ", " + atMax + "] " + operation);
+            return Component.translatable("jei.mmcr.smart_interface.modifier.function",
+                    Component.translatable("mmcr.smart_interface.type." + type), target, scope,
+                    Component.translatable(chance ? "jei.mmcr.smart_interface.modifier.chance"
+                            : "jei.mmcr.smart_interface.modifier.amount"), operation.name());
         }
     }
 

@@ -67,7 +67,7 @@ class PublicApiAdapterTest {
     void startup_registration_preserves_canonical_smart_interface_values_without_reconstruction() {
         var type = new SmartInterfaceType("yield", 1F, 4F, 0, SmartInterfaceType.ValueType.INTEGER);
         var modifier = SmartInterfaceModifier.item("yield", RecipeModifier.IOType.OUTPUT, false,
-                1F, 4F, 1F, 2F, RecipeModifier.Operation.MULTIPLY);
+                value -> 1D + (value - 1D) / 3D, RecipeModifier.Operation.MULTIPLY);
         var definition = MachineBuilder.machine(MMCR.id("canonical_values"))
                 .role(MachineRole.MODULE)
                 .smartInterface(type)

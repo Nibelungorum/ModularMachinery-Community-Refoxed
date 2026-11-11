@@ -255,7 +255,7 @@ class MachineRecipeDisplayTest {
         MachineDefinitions.beginRegistryPhase();
         MachineDefinitions.register(MachineRegistration.builder(MMCR.id("jei_interface_modifier"))
                 .smartInterfaceType(new SmartInterfaceType("temperature", 20F, 0))
-                .smartInterfaceModifier(SmartInterfaceModifier.energy("temperature", 0F, 100F, 1F, 2F,
+                .smartInterfaceModifier(SmartInterfaceModifier.energy("temperature", value -> 1D + value / 100D,
                         RecipeModifier.Operation.MULTIPLY))
                 .build());
         MachineDefinitions.freezeRegistryPhase();
@@ -268,6 +268,20 @@ class MachineRecipeDisplayTest {
         assertThat(display.tooltips()).noneMatch(text -> text.getString().contains("modifies"));
         MachineRecipeLayout layout = MachineRecipeLayout.forDisplay(display, 4);
         assertThat(layout.lastMetadataTextY(display)).isEqualTo(layout.smartInterfaceTextY(display) - 10);
+    }
+
+    @Test
+    void function_modifier_tooltip_preserves_metadata_without_evaluating_user_code() {
+        var modifier = SmartInterfaceModifier.energy("temperature", value -> {
+            throw new AssertionError("JEI must not evaluate a modifier function");
+        }, RecipeModifier.Operation.ADD);
+
+        var display = MachineRecipeDisplay.SmartInterfaceModifierDisplay.from(modifier);
+        assertThat(display.type()).isEqualTo("temperature");
+        assertThat(display.target()).isEqualTo("energy");
+        assertThat(display.operation()).isEqualTo(RecipeModifier.Operation.ADD);
+        assertThat(((TranslatableContents) display.tooltip().getContents()).getKey())
+                .isEqualTo("jei.mmcr.smart_interface.modifier.function");
     }
 
     @Test

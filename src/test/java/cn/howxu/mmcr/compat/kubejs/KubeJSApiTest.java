@@ -253,11 +253,63 @@ class KubeJSApiTest {
         ScriptableObject.putProperty(scope, "builder", builder, context);
 
         context.evaluateString(scope, """
-                builder.durationByInterface('temperature', 0, 100, 2, 0.5, api.modifierOperation().ADD)
+                builder.durationByInterface('temperature', value => 1 / (1 + value * value), api.modifierOperation().ADD)
                 """, "modifier-operation-test", 1, null);
 
         assertThat(builder.createObject().smartInterfaceModifiers()).singleElement()
-                .satisfies(modifier -> assertThat(modifier.operation()).isEqualTo(RecipeModifier.Operation.ADD));
+                .satisfies(modifier -> {
+                    assertThat(modifier.operation()).isEqualTo(RecipeModifier.Operation.ADD);
+                    assertThat(modifier.toModifier(2F).value()).isEqualTo(0.2D);
+                });
+    }
+
+    @Test
+    void rhino_arrow_functions_support_nonlinear_piecewise_and_chance_modifiers() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var builder = new MachineBuilderJS("mmcr:function_modifier_test");
+        ScriptableObject.putProperty(scope, "api", api, context);
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+
+        context.evaluateString(scope, """
+                builder
+                    .durationByInterface('speed', value => 1 / (1 + value * value))
+                    .energyByInterface('speed', value => {
+                        if (value < 2) return 1;
+                        return Math.pow(value, 2);
+                    })
+                    .itemOutputChanceByInterface('speed', value => value / 10, api.modifierOperation().ADD);
+                """, "function-modifier-test", 1, null);
+
+        var modifiers = builder.createObject().smartInterfaceModifiers();
+        assertThat(modifiers.get(0).toModifier(3F).value()).isEqualTo(0.1D);
+        assertThat(modifiers.get(1).toModifier(1F).value()).isEqualTo(1D);
+        assertThat(modifiers.get(1).toModifier(4F).value()).isEqualTo(16D);
+        var chance = modifiers.get(2).toModifier(3F);
+        assertThat(chance.value()).isEqualTo(0.3D);
+        assertThat(chance.affectsChance()).isTrue();
+        assertThat(chance.operation()).isEqualTo(RecipeModifier.Operation.ADD);
+    }
+
+    @Test
+    void rhino_function_failures_and_non_finite_results_are_rejected_at_evaluation() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        var builder = new MachineBuilderJS("mmcr:invalid_function_modifier_test");
+        ScriptableObject.putProperty(scope, "builder", builder, context);
+
+        context.evaluateString(scope, """
+                builder
+                    .durationByInterface('speed', value => NaN)
+                    .energyByInterface('speed', value => Infinity)
+                    .energyByInterface('speed', value => { throw new Error('bad mapping'); });
+                """, "invalid-function-modifier-test", 1, null);
+
+        var modifiers = builder.createObject().smartInterfaceModifiers();
+        assertThatThrownBy(() -> modifiers.get(0).toModifier(1F)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> modifiers.get(1).toModifier(1F)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> modifiers.get(2).toModifier(1F)).isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("bad mapping");
     }
 
     @Test

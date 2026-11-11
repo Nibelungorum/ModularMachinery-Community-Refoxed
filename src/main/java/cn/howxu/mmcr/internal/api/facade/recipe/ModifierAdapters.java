@@ -8,6 +8,7 @@ import cn.howxu.mmcr.publicapi.recipe.IoDirection;
 import cn.howxu.mmcr.publicapi.recipe.modifier.*;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.DoubleUnaryOperator;
 
 /** Typed modifier adapters; no duplicated modifier computation. @author howxu <dev@howxu.cn> */
 public final class ModifierAdapters {
@@ -37,7 +38,7 @@ public final class ModifierAdapters {
     public static double apply(Collection<RecipeAdjustmentSpec> modifiers, String target, IoDirection io, double value, boolean chance) { return RecipeModifier.applyModifiers(adjustments(modifiers), target, io(io), value, chance); }
     public static List<RecipeModifier> adjustments(Collection<RecipeAdjustmentSpec> values) { return values == null ? null : values.stream().map(ModifierAdapters::unwrap).toList(); }
     public static List<RecipeAdjustmentSpec> recipeModifiers(Collection<ModifierSpec> values) { return MachineModifier.recipeModifiers(values == null ? null : values.stream().map(ModifierAdapters::unwrap).toList()).stream().map(ModifierAdapters::wrap).toList(); }
-    public static SmartModifierSpec smart(String type, String target, ModifierScope scope, boolean chance, float min, float max, float atMin, float atMax, ModifierOperation op) { return wrap(new SmartInterfaceModifier(type, target, scopeKey(scope), chance, min, max, atMin, atMax, operation(op))); }
+    public static SmartModifierSpec smart(String type, String target, ModifierScope scope, boolean chance, DoubleUnaryOperator mapping, ModifierOperation op) { return wrap(new SmartInterfaceModifier(type, target, scopeKey(scope), chance, mapping, operation(op))); }
     private static String scopeKey(ModifierScope value) {
         return switch (value) { case INPUT -> "input"; case OUTPUT -> "output"; case MACHINE -> "machine"; case RECIPE -> "recipe"; };
     }
@@ -51,7 +52,7 @@ public final class ModifierAdapters {
     private static String operationKey(ModifierOperation value) {
         return switch (value) { case ADD -> "add"; case MULTIPLY -> "multiply"; case SUBTRACT -> "subtract"; case DIVIDE -> "divide"; };
     }
-    public static SmartModifierSpec smart(String type, String target, IoDirection io, boolean chance, float min, float max, float atMin, float atMax, ModifierOperation op) { return wrap(new SmartInterfaceModifier(type, target, io(io), chance, min, max, atMin, atMax, operation(op))); }
+    public static SmartModifierSpec smart(String type, String target, IoDirection io, boolean chance, DoubleUnaryOperator mapping, ModifierOperation op) { return wrap(new SmartInterfaceModifier(type, target, io(io), chance, mapping, operation(op))); }
     private static ModifierScope scope(MachineModifier.Numeric value) {
         return switch (value.target()) {
             case DURATION, ENERGY, CHEMICAL, HEAT -> ModifierScope.INPUT;
@@ -83,13 +84,9 @@ public final class ModifierAdapters {
         public String target() { return delegate.target(); }
         public ModifierScope scope() { return ModifierAdapters.scope(delegate.scope()); }
         public boolean affectsChance() { return delegate.affectsChance(); }
-        public float minValue() { return delegate.minValue(); }
-        public float maxValue() { return delegate.maxValue(); }
-        public float atMin() { return delegate.atMin(); }
-        public float atMax() { return delegate.atMax(); }
         public ModifierOperation operation() { return ModifierAdapters.operation(delegate.operation()); }
         public IoDirection io() { return ModifierAdapters.io(delegate.io()); }
-        public float mappedValue(float value) { return delegate.mappedValue(value); }
+        public double mappedValue(float value) { return delegate.mappedValue(value); }
         public NumericModifierSpec toModifier(float value) { return (NumericModifierSpec) wrap(delegate.toModifier(value)); }
     }
 }

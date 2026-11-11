@@ -173,8 +173,8 @@ class PublicMachineFacadeTest {
 
     @Test
     void smart_modifier_order_and_curves_survive_build_and_later_additions() {
-        var duration = Modifiers.smartDuration("speed", 1, 8, 2, 4, ModifierOperation.MULTIPLY);
-        var energy = Modifiers.smartEnergy("speed", 1, 8, 1, 3, ModifierOperation.MULTIPLY);
+        var duration = Modifiers.smartDuration("speed", value -> 1D / (1D + value * value), ModifierOperation.MULTIPLY);
+        var energy = Modifiers.smartEnergy("speed", value -> value < 4D ? 1D : 3D, ModifierOperation.MULTIPLY);
         var draft = Machines.machine(id("curves")).smartInterfaceModifier(duration).smartInterfaceModifier(energy);
         var spec = draft.build();
         draft.smartInterfaceModifier(duration);
