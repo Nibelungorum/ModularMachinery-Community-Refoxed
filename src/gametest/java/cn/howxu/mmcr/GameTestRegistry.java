@@ -385,6 +385,8 @@ public final class GameTestRegistry {
                 helper -> new TerminalAssemblyGameTest().terminalServiceRejectsActionsWithoutHeldTerminal(helper));
         register(event, "terminal_service_rejects_level_without_controller", 100,
                 helper -> new TerminalAssemblyGameTest().terminalServiceRejectsLevelSelectionWithoutController(helper));
+        register(event, "terminal_highlight_independent_and_binding_reset", 100,
+                helper -> new TerminalAssemblyGameTest().terminalHighlightIsIndependentAndBindingChangesClearIt(helper));
         register(event, "terminal_service_normalizes_stale_stage", 100,
                 helper -> new TerminalAssemblyGameTest().terminalServiceNormalizesStaleStageBeforeBuildAndDemolish(helper));
         register(event, "terminal_demolish", 100, helper -> new TerminalAssemblyGameTest().demolishSkipsAirAndNonMatchingBlocks(helper));

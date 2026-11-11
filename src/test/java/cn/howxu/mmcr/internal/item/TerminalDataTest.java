@@ -83,6 +83,30 @@ class TerminalDataTest {
         assertThat(decoded).isEqualTo(TerminalData.DEFAULT);
     }
 
+    @Test
+    void highlight_is_independent_and_survives_configuration_and_codec_round_trip() {
+        TerminalData data = TerminalData.DEFAULT.withHighlight(true).withStage(2).withPreview(false, -1)
+                .withInventoryMode(TerminalInventoryMode.CONTAINER)
+                .withController(GlobalPos.of(Level.OVERWORLD, BlockPos.ZERO))
+                .withSelectedLevel(ResourceLocation.parse("test:coils"), ResourceLocation.parse("test:iron"));
+
+        assertThat(data.highlightEnabled()).isTrue();
+        assertThat(data.previewEnabled()).isFalse();
+        var encoded = TerminalData.CODEC.encodeStart(JsonOps.INSTANCE, data).getOrThrow();
+        assertThat(TerminalData.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow()).isEqualTo(data);
+        assertThat(data.withHighlight(false).withPreview(true, -1).previewEnabled()).isTrue();
+        assertThat(data.clear().highlightEnabled()).isFalse();
+    }
+
+    @Test
+    void legacy_data_without_highlight_decodes_as_disabled() {
+        var encoded = TerminalData.CODEC.encodeStart(JsonOps.INSTANCE, TerminalData.DEFAULT.withHighlight(true))
+                .getOrThrow().getAsJsonObject();
+        encoded.remove("highlight_enabled");
+
+        assertThat(TerminalData.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow()).isEqualTo(TerminalData.DEFAULT);
+    }
+
     @ParameterizedTest
     @EnumSource(TerminalInventoryMode.class)
     void switching_inventory_modes_preserves_bindings_and_other_settings(TerminalInventoryMode initialMode) {

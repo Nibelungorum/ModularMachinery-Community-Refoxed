@@ -6,11 +6,11 @@ import net.neoforged.neoforge.common.ModConfigSpec;
  * @author howxu <dev@howxu.cn>
  */
 public final class ClientConfig {
-    public static final double DEFAULT_PREVIEW_RENDER_RADIUS = 64.0;
+    public static final double DEFAULT_PREVIEW_RENDER_RADIUS = 196.0;
     public static final double DEFAULT_INTERACTIVE_RENDER_SCALE = 0.8;
     public static final int DEFAULT_INTERACTIVE_RESTORE_DELAY_MS = 150;
-    public static final boolean DEFAULT_INTERACTIVE_SKIP_TRANSLUCENT = true;
-    public static final boolean DEFAULT_INTERACTIVE_SKIP_BLOCK_ENTITIES = true;
+    public static final boolean DEFAULT_INTERACTIVE_SKIP_TRANSLUCENT = false;
+    public static final boolean DEFAULT_INTERACTIVE_SKIP_BLOCK_ENTITIES = false;
     public static final int DEFAULT_SCENE_PARALLEL_COMPILE_THRESHOLD = 80_000;
     public static final boolean DEFAULT_SHOW_FACTORY_THREAD_OUTPUT_ICON = true;
     public static final boolean DEFAULT_SHOW_FACTORY_THREAD_RECIPE_PROGRESS = true;
