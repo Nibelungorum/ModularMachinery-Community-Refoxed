@@ -16,11 +16,17 @@ MMCREvents.startup(event => {
         // The arguments define the minimum, maximum, priority, and value type; end() finishes the interface definition.
         .smartInterface('kubejs_mode', 1, 3).priority(1).valueType('integer').end()
         .smartInterface('kubejs_conversation', 0, 1).priority(0).valueType('float').end()
-        // After end(), machine parameters can be modified according to the interface value.
-        .energyByInterface('kubejs_mode', 1, 2, 1.0, 2.0)
-        .energyByInterface('kubejs_mode', 2, 3, 2.0, 4.0)
-        .durationByInterface('kubejs_conversation', 0, 0.5, 1.0, 1.5)
-        .durationByInterface('kubejs_conversation', 0.5, 1, 1.5, 2.5)
+        // Functions receive the actual interface value and return a modifier number.
+        // MULTIPLY is the default operation. No endpoint mapping or automatic clamping is applied.
+        // Mode 1/2/3 uses energy multipliers 1/2/4.
+        .energyByInterface('kubejs_mode', value => Math.pow(2, value - 1))
+        // Piecewise duration multipliers: 0 -> 1, 0.5 -> 1.5, 1 -> 2.5.
+        .durationByInterface('kubejs_conversation', value => {
+            if (value <= 0.5) return 1 + value
+            return 0.5 + 2 * value
+        })
+        // Functions must return a finite number and depend only on the input value.
+        // They run when modifiers refresh, not necessarily every tick.
 
     builder.register()
 

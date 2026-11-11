@@ -26,6 +26,8 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.RecipeFailureActions;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.api.machine.SmartInterfaceType;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -2057,6 +2059,51 @@ class MachineControllerBlockEntityTest {
         assertThat(runtime.craftingRuntime().active()).isTrue();
         assertThat(runtime.screenText().snapshot().lines()).singleElement()
                 .satisfies(line -> assertThat(line.scope()).isEqualTo(ControllerScreenTextScope.OPERATION));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "throw", "nan", "infinity" })
+    void smart_interface_mapping_failure_drops_stale_modifier_and_preserves_other_rules(String failure) {
+        ResourceLocation machineId = MMCR.id("function_modifier_failure");
+        AtomicBoolean invalid = new AtomicBoolean();
+        var duration = SmartInterfaceModifier.duration("speed", value -> {
+            if (!invalid.get()) return 0.5D;
+            return switch (failure) {
+                case "nan" -> Double.NaN;
+                case "infinity" -> Double.POSITIVE_INFINITY;
+                default -> throw new IllegalStateException("bad mapping");
+            };
+        }, RecipeModifier.Operation.MULTIPLY);
+        var energy = SmartInterfaceModifier.energy("speed", value -> value * value, RecipeModifier.Operation.ADD);
+        MachineDefinitions.clearForTesting();
+        MachineDefinitions.register(MachineRegistration.builder(machineId)
+                .smartInterfaceModifier(duration).smartInterfaceModifier(energy).build());
+        try {
+            var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+            controller.setMachine(new DynamicMachine(machineId, "function test", new BlockArray(Map.of())));
+            var smartInterface = new SmartInterfaceBlockEntity(new BlockPos(1, 0, 0),
+                    ModBlocks.SMART_INTERFACE.get().defaultBlockState());
+            smartInterface.syncTypes(Map.of("speed", new SmartInterfaceType("speed", 3F, 0)));
+            controller.componentRuntime().replaceComponents(List.of(new ProcessingComponent(null, smartInterface,
+                    smartInterface.getBlockPos(), smartInterface.getBlockPos(), (String) null)));
+            controller.setLevel(LevelStub.create(Map.of(BlockPos.ZERO, controller.getBlockState().getBlock(),
+                    smartInterface.getBlockPos(), ModBlocks.SMART_INTERFACE.get()), List.of(controller, smartInterface)));
+
+            controller.onSmartInterfaceValueChanged();
+            assertThat(controller.componentRuntime().modifierList())
+                    .containsExactly(duration.toModifier(3F), energy.toModifier(3F));
+
+            invalid.set(true);
+            assertThatCode(controller::onSmartInterfaceValueChanged).doesNotThrowAnyException();
+            assertThat(controller.componentRuntime().modifierList()).containsExactly(energy.toModifier(3F));
+
+            invalid.set(false);
+            controller.onSmartInterfaceValueChanged();
+            assertThat(controller.componentRuntime().modifierList())
+                    .containsExactly(duration.toModifier(3F), energy.toModifier(3F));
+        } finally {
+            MachineDefinitions.clearForTesting();
+        }
     }
 
     @Test

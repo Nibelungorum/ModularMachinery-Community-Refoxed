@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.function.DoubleUnaryOperator;
 import java.util.Locale;
 import java.util.Set;
 import java.util.Arrays;
@@ -610,143 +611,142 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public PortTierRequirementSpec manaInputTier(String id) { return KubeJSInterfaceHelpers.manaInputTier(id); }
     public PortTierRequirementSpec manaOutputTier(String id) { return KubeJSInterfaceHelpers.manaOutputTier(id); }
 
-    public MachineBuilderJS durationByInterface(String type, float min, float max, float atMin, float atMax) {
-        return durationByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    /** Maps the interface value to a duration multiplier; the function must be pure and return a finite number. */
+    public MachineBuilderJS durationByInterface(String type, DoubleUnaryOperator mapping) {
+        return durationByInterface(type, mapping, RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS durationByInterface(String type, float min, float max, float atMin, float atMax,
+    public MachineBuilderJS durationByInterface(String type, DoubleUnaryOperator mapping,
             RecipeModifier.Operation operation) {
-        smartInterfaceModifiers.add(SmartInterfaceModifier.duration(type, min, max, atMin, atMax, operation));
+        smartInterfaceModifiers.add(SmartInterfaceModifier.duration(type, mapping, operation));
         return this;
     }
 
-    public MachineBuilderJS energyByInterface(String type, float min, float max, float atMin, float atMax) {
-        return energyByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    public MachineBuilderJS energyByInterface(String type, DoubleUnaryOperator mapping) {
+        return energyByInterface(type, mapping, RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS energyByInterface(String type, float min, float max, float atMin, float atMax,
+    public MachineBuilderJS energyByInterface(String type, DoubleUnaryOperator mapping,
             RecipeModifier.Operation operation) {
-        smartInterfaceModifiers.add(SmartInterfaceModifier.energy(type, min, max, atMin, atMax, operation));
+        smartInterfaceModifiers.add(SmartInterfaceModifier.energy(type, mapping, operation));
         return this;
     }
 
-    public MachineBuilderJS itemInputByInterface(String type, float min, float max, float atMin, float atMax) {
-        return itemByInterface(type, RecipeModifier.IOType.INPUT, false, min, max, atMin, atMax,
+    public MachineBuilderJS itemInputByInterface(String type, DoubleUnaryOperator mapping) {
+        return itemByInterface(type, RecipeModifier.IOType.INPUT, false, mapping,
                 RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS itemOutputByInterface(String type, float min, float max, float atMin, float atMax) {
-        return itemByInterface(type, RecipeModifier.IOType.OUTPUT, false, min, max, atMin, atMax,
+    public MachineBuilderJS itemOutputByInterface(String type, DoubleUnaryOperator mapping) {
+        return itemByInterface(type, RecipeModifier.IOType.OUTPUT, false, mapping,
                 RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS itemInputChanceByInterface(String type, float min, float max, float atMin, float atMax) {
-        return itemInputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    public MachineBuilderJS itemInputChanceByInterface(String type, DoubleUnaryOperator mapping) {
+        return itemInputChanceByInterface(type, mapping, RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS itemInputChanceByInterface(String type, float min, float max, float atMin, float atMax,
+    public MachineBuilderJS itemInputChanceByInterface(String type, DoubleUnaryOperator mapping,
             RecipeModifier.Operation operation) {
-        return itemByInterface(type, RecipeModifier.IOType.INPUT, true, min, max, atMin, atMax, operation);
+        return itemByInterface(type, RecipeModifier.IOType.INPUT, true, mapping, operation);
     }
 
-    public MachineBuilderJS itemOutputChanceByInterface(String type, float min, float max, float atMin, float atMax) {
-        return itemOutputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    public MachineBuilderJS itemOutputChanceByInterface(String type, DoubleUnaryOperator mapping) {
+        return itemOutputChanceByInterface(type, mapping, RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS itemOutputChanceByInterface(String type, float min, float max, float atMin, float atMax,
+    public MachineBuilderJS itemOutputChanceByInterface(String type, DoubleUnaryOperator mapping,
             RecipeModifier.Operation operation) {
-        return itemByInterface(type, RecipeModifier.IOType.OUTPUT, true, min, max, atMin, atMax, operation);
+        return itemByInterface(type, RecipeModifier.IOType.OUTPUT, true, mapping, operation);
     }
 
-    public MachineBuilderJS fluidInputByInterface(String type, float min, float max, float atMin, float atMax) {
-        return fluidByInterface(type, RecipeModifier.IOType.INPUT, false, min, max, atMin, atMax,
+    public MachineBuilderJS fluidInputByInterface(String type, DoubleUnaryOperator mapping) {
+        return fluidByInterface(type, RecipeModifier.IOType.INPUT, false, mapping,
                 RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS fluidOutputByInterface(String type, float min, float max, float atMin, float atMax) {
-        return fluidByInterface(type, RecipeModifier.IOType.OUTPUT, false, min, max, atMin, atMax,
+    public MachineBuilderJS fluidOutputByInterface(String type, DoubleUnaryOperator mapping) {
+        return fluidByInterface(type, RecipeModifier.IOType.OUTPUT, false, mapping,
                 RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS fluidInputChanceByInterface(String type, float min, float max, float atMin, float atMax) {
-        return fluidInputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    public MachineBuilderJS fluidInputChanceByInterface(String type, DoubleUnaryOperator mapping) {
+        return fluidInputChanceByInterface(type, mapping, RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS fluidInputChanceByInterface(String type, float min, float max, float atMin, float atMax,
+    public MachineBuilderJS fluidInputChanceByInterface(String type, DoubleUnaryOperator mapping,
             RecipeModifier.Operation operation) {
-        return fluidByInterface(type, RecipeModifier.IOType.INPUT, true, min, max, atMin, atMax, operation);
+        return fluidByInterface(type, RecipeModifier.IOType.INPUT, true, mapping, operation);
     }
 
-    public MachineBuilderJS fluidOutputChanceByInterface(String type, float min, float max, float atMin, float atMax) {
-        return fluidOutputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    public MachineBuilderJS fluidOutputChanceByInterface(String type, DoubleUnaryOperator mapping) {
+        return fluidOutputChanceByInterface(type, mapping, RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS fluidOutputChanceByInterface(String type, float min, float max, float atMin, float atMax,
+    public MachineBuilderJS fluidOutputChanceByInterface(String type, DoubleUnaryOperator mapping,
             RecipeModifier.Operation operation) {
-        return fluidByInterface(type, RecipeModifier.IOType.OUTPUT, true, min, max, atMin, atMax, operation);
+        return fluidByInterface(type, RecipeModifier.IOType.OUTPUT, true, mapping, operation);
     }
 
-    public MachineBuilderJS chemicalInputByInterface(String type, float min, float max, float atMin, float atMax) {
-        return chemicalByInterface(type, RecipeModifier.IOType.INPUT, false, min, max, atMin, atMax,
+    public MachineBuilderJS chemicalInputByInterface(String type, DoubleUnaryOperator mapping) {
+        return chemicalByInterface(type, RecipeModifier.IOType.INPUT, false, mapping,
                 RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS chemicalOutputByInterface(String type, float min, float max, float atMin, float atMax) {
-        return chemicalByInterface(type, RecipeModifier.IOType.OUTPUT, false, min, max, atMin, atMax,
+    public MachineBuilderJS chemicalOutputByInterface(String type, DoubleUnaryOperator mapping) {
+        return chemicalByInterface(type, RecipeModifier.IOType.OUTPUT, false, mapping,
                 RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS chemicalInputChanceByInterface(String type, float min, float max, float atMin,
-            float atMax) {
-        return chemicalInputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    public MachineBuilderJS chemicalInputChanceByInterface(String type, DoubleUnaryOperator mapping) {
+        return chemicalInputChanceByInterface(type, mapping, RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS chemicalInputChanceByInterface(String type, float min, float max, float atMin,
-            float atMax, RecipeModifier.Operation operation) {
-        return chemicalByInterface(type, RecipeModifier.IOType.INPUT, true, min, max, atMin, atMax, operation);
+    public MachineBuilderJS chemicalInputChanceByInterface(String type, DoubleUnaryOperator mapping,
+            RecipeModifier.Operation operation) {
+        return chemicalByInterface(type, RecipeModifier.IOType.INPUT, true, mapping, operation);
     }
 
-    public MachineBuilderJS chemicalOutputChanceByInterface(String type, float min, float max, float atMin,
-            float atMax) {
-        return chemicalOutputChanceByInterface(type, min, max, atMin, atMax, RecipeModifier.Operation.MULTIPLY);
+    public MachineBuilderJS chemicalOutputChanceByInterface(String type, DoubleUnaryOperator mapping) {
+        return chemicalOutputChanceByInterface(type, mapping, RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS chemicalOutputChanceByInterface(String type, float min, float max, float atMin,
-            float atMax, RecipeModifier.Operation operation) {
-        return chemicalByInterface(type, RecipeModifier.IOType.OUTPUT, true, min, max, atMin, atMax, operation);
+    public MachineBuilderJS chemicalOutputChanceByInterface(String type, DoubleUnaryOperator mapping,
+            RecipeModifier.Operation operation) {
+        return chemicalByInterface(type, RecipeModifier.IOType.OUTPUT, true, mapping, operation);
     }
 
-    public MachineBuilderJS heatInputByInterface(String type, float min, float max, float atMin, float atMax) {
-        return heatByInterface(type, RecipeModifier.IOType.INPUT, min, max, atMin, atMax,
+    public MachineBuilderJS heatInputByInterface(String type, DoubleUnaryOperator mapping) {
+        return heatByInterface(type, RecipeModifier.IOType.INPUT, mapping,
                 RecipeModifier.Operation.MULTIPLY);
     }
 
-    public MachineBuilderJS heatOutputByInterface(String type, float min, float max, float atMin, float atMax) {
-        return heatByInterface(type, RecipeModifier.IOType.OUTPUT, min, max, atMin, atMax,
+    public MachineBuilderJS heatOutputByInterface(String type, DoubleUnaryOperator mapping) {
+        return heatByInterface(type, RecipeModifier.IOType.OUTPUT, mapping,
                 RecipeModifier.Operation.MULTIPLY);
     }
 
-    private MachineBuilderJS itemByInterface(String type, RecipeModifier.IOType io, boolean chance, float min, float max,
-            float atMin, float atMax, RecipeModifier.Operation operation) {
-        smartInterfaceModifiers.add(SmartInterfaceModifier.item(type, io, chance, min, max, atMin, atMax, operation));
+    private MachineBuilderJS itemByInterface(String type, RecipeModifier.IOType io, boolean chance,
+            DoubleUnaryOperator mapping, RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.item(type, io, chance, mapping, operation));
         return this;
     }
 
-    private MachineBuilderJS fluidByInterface(String type, RecipeModifier.IOType io, boolean chance, float min,
-            float max, float atMin, float atMax, RecipeModifier.Operation operation) {
-        smartInterfaceModifiers.add(SmartInterfaceModifier.fluid(type, io, chance, min, max, atMin, atMax, operation));
+    private MachineBuilderJS fluidByInterface(String type, RecipeModifier.IOType io, boolean chance,
+            DoubleUnaryOperator mapping, RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.fluid(type, io, chance, mapping, operation));
         return this;
     }
 
-    private MachineBuilderJS chemicalByInterface(String type, RecipeModifier.IOType io, boolean chance, float min,
-            float max, float atMin, float atMax, RecipeModifier.Operation operation) {
-        smartInterfaceModifiers.add(SmartInterfaceModifier.chemical(type, io, chance, min, max, atMin, atMax, operation));
+    private MachineBuilderJS chemicalByInterface(String type, RecipeModifier.IOType io, boolean chance,
+            DoubleUnaryOperator mapping, RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.chemical(type, io, chance, mapping, operation));
         return this;
     }
 
-    private MachineBuilderJS heatByInterface(String type, RecipeModifier.IOType io, float min, float max, float atMin,
-            float atMax, RecipeModifier.Operation operation) {
-        smartInterfaceModifiers.add(SmartInterfaceModifier.heat(type, io, min, max, atMin, atMax, operation));
+    private MachineBuilderJS heatByInterface(String type, RecipeModifier.IOType io, DoubleUnaryOperator mapping,
+            RecipeModifier.Operation operation) {
+        smartInterfaceModifiers.add(SmartInterfaceModifier.heat(type, io, mapping, operation));
         return this;
     }
 

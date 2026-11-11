@@ -66,7 +66,7 @@ public final class TypedFixture implements MachineDefinitionProvider {
     @Override
     public void register(RegisterMachineDefinitionsEvent event) {
         SmartInterfaceSpec smart = SmartInterfaces.type("power", 1, 0, 10, 1, SmartInterfaces.ValueType.FLOAT);
-        SmartModifierSpec mapping = Modifiers.smartEnergy("power", 0, 10, 1, 2, ModifierOperation.MULTIPLY);
+        SmartModifierSpec mapping = Modifiers.smartEnergy("power", value -> 1D + Math.pow(value / 10D, 2D), ModifierOperation.MULTIPLY);
         MachineDraft draft = Machines.machine(MACHINE).recipePool(POOL).displayNameKey("machine.example_addon.name")
                 .role(MachineKind.HOST).acceptedModule(id("module"))
                 .controller((ControllerOptions options) -> options.id(id("controller"))
@@ -80,11 +80,11 @@ public final class TypedFixture implements MachineDefinitionProvider {
                 .maxParallelism(64).maxParallelAmount(8).parallelizable(true)
                 .allowModifiers().allowMultithreading().smartInterface(smart).shareSmartInterfaces()
                 .smartInterfaceModifier(mapping)
-                .smartInterfaceModifier(Modifiers.smartDuration("power", 0, 10, 1, 0.5F, ModifierOperation.MULTIPLY))
-                .smartInterfaceModifier(Modifiers.smartItem("power", IoDirection.OUTPUT, true, 0, 10, 1, 2, ModifierOperation.MULTIPLY))
-                .smartInterfaceModifier(Modifiers.smartFluid("power", IoDirection.OUTPUT, true, 0, 10, 1, 2, ModifierOperation.MULTIPLY))
-                .smartInterfaceModifier(Modifiers.smartChemical("power", IoDirection.OUTPUT, false, 0, 10, 1, 2, ModifierOperation.MULTIPLY))
-                .smartInterfaceModifier(Modifiers.smartHeat("power", IoDirection.OUTPUT, 0, 10, 1, 2, ModifierOperation.MULTIPLY))
+                .smartInterfaceModifier(Modifiers.smartDuration("power", value -> 1D / (1D + value / 10D), ModifierOperation.MULTIPLY))
+                .smartInterfaceModifier(Modifiers.smartItem("power", IoDirection.OUTPUT, true, value -> 1D + value / 10D, ModifierOperation.MULTIPLY))
+                .smartInterfaceModifier(Modifiers.smartFluid("power", IoDirection.OUTPUT, true, value -> 1D + value / 10D, ModifierOperation.MULTIPLY))
+                .smartInterfaceModifier(Modifiers.smartChemical("power", IoDirection.OUTPUT, false, value -> 1D + value / 10D, ModifierOperation.MULTIPLY))
+                .smartInterfaceModifier(Modifiers.smartHeat("power", IoDirection.OUTPUT, value -> 1D + value / 10D, ModifierOperation.MULTIPLY))
                 .runningSound(id("running")).finishSound(id("finished"))
                 .failureAction(RecipeFailureMode.STILL).networkInterface(1, 4).allowNetworkMachine(MACHINE)
                 .requestProcess(id("deposit"), new DepositHandler()).requestFailed(id("deposit"), new FailedDeposit())

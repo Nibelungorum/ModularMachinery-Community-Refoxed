@@ -511,8 +511,8 @@ class MachineBuilderJSTest {
     @Test
     void builder_declares_interface_driven_modifiers() {
         var registration = new MachineBuilderJS("mmcr:interface_modifier_builder")
-                .durationByInterface("temperature", 0F, 100F, 2F, 0.5F)
-                .itemOutputChanceByInterface("temperature", 0F, 100F, 0.25F, 1F, RecipeModifier.Operation.ADD)
+                .durationByInterface("temperature", value -> 2D / (1D + 3D * Math.pow(value / 100D, 2D)))
+                .itemOutputChanceByInterface("temperature", value -> 0.25D + 0.75D * value / 100D, RecipeModifier.Operation.ADD)
                 .createObject();
 
         assertThat(registration.smartInterfaceModifiers()).hasSize(2);
@@ -525,11 +525,11 @@ class MachineBuilderJSTest {
     @Test
     void builder_declares_mekanism_interface_driven_modifiers() {
         var registration = new MachineBuilderJS("mmcr:mekanism_interface_modifier_builder")
-                .chemicalInputByInterface("pressure", 0F, 100F, 1F, 2F)
-                .chemicalOutputChanceByInterface("pressure", 0F, 100F, 0.25F, 1F,
+                .chemicalInputByInterface("pressure", value -> 1D + value / 100D)
+                .chemicalOutputChanceByInterface("pressure", value -> 0.25D + 0.75D * value / 100D,
                         RecipeModifier.Operation.ADD)
-                .heatInputByInterface("temperature", 0F, 100F, 1F, 3F)
-                .heatOutputByInterface("temperature", 0F, 100F, 1F, 4F)
+                .heatInputByInterface("temperature", value -> 1D + value / 50D)
+                .heatOutputByInterface("temperature", value -> 1D + value * 0.03D)
                 .createObject();
 
         assertThat(registration.smartInterfaceModifiers()).hasSize(4);

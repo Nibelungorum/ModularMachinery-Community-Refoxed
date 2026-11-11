@@ -28,10 +28,10 @@ class PublicModifierMappingTest {
             for (var operation : ModifierOperation.values()) {
                 double expected = switch (operation) { case ADD -> 14D; case MULTIPLY -> 40D; case SUBTRACT -> 6D; case DIVIDE -> 2.5D; };
                 var numeric = Modifiers.numeric(target, scope, 4D, operation, false);
-                var smart = Modifiers.smart("test", target, scope, false, 0F, 10F, 2F, 6F, operation);
+                var smart = Modifiers.smart("test", target, scope, false, value -> 2D + value * value * 0.08D, operation);
                 assertEquals(scope, smart.scope());
                 assertEquals(operation, smart.operation());
-                assertEquals(4F, smart.mappedValue(5F));
+                assertEquals(4D, smart.mappedValue(5F));
                 var mapped = smart.toModifier(5F);
                 assertEquals(scope, mapped.scope());
                 assertEquals(operation, mapped.operation());
@@ -51,8 +51,28 @@ class PublicModifierMappingTest {
     }
 
     @Test
+    void typed_factories_delegate_function_evaluation_and_validation_to_the_core() {
+        var factories = List.of(
+                Modifiers.smartDuration("test", value -> value * value, ModifierOperation.ADD),
+                Modifiers.smartEnergy("test", value -> value * value, ModifierOperation.ADD),
+                Modifiers.smartItem("test", IoDirection.OUTPUT, false, value -> value * value, ModifierOperation.ADD),
+                Modifiers.smartFluid("test", IoDirection.OUTPUT, false, value -> value * value, ModifierOperation.ADD),
+                Modifiers.smartChemical("test", IoDirection.INPUT, false, value -> value * value, ModifierOperation.ADD),
+                Modifiers.smartHeat("test", IoDirection.INPUT, value -> value * value, ModifierOperation.ADD));
+        var targets = List.of(ModifierTarget.DURATION, ModifierTarget.ENERGY, ModifierTarget.OUTPUT,
+                ModifierTarget.OUTPUT, ModifierTarget.CHEMICAL, ModifierTarget.HEAT);
+        for (int index = 0; index < factories.size(); index++) {
+            var modifier = ModifierAdapters.unwrap(factories.get(index).toModifier(3F));
+            assertEquals(19D, MachineModifier.apply(List.of(modifier), targets.get(index), 10D, false));
+        }
+        var invalid = Modifiers.smartEnergy("test", value -> Double.NaN, ModifierOperation.MULTIPLY);
+        assertThrows(IllegalArgumentException.class, () -> invalid.toModifier(1F));
+        assertThrows(NullPointerException.class, () -> Modifiers.smartDuration("test", null, ModifierOperation.MULTIPLY));
+    }
+
+    @Test
     void output_resource_scope_normalizes_and_chance_does_not_modify_amount() {
-        var smart = Modifiers.smartItem("test", IoDirection.OUTPUT, true, 0F, 10F, 0.5F, 1F, ModifierOperation.MULTIPLY);
+        var smart = Modifiers.smartItem("test", IoDirection.OUTPUT, true, value -> 0.5D + value / 20D, ModifierOperation.MULTIPLY);
         assertEquals(ModifierScope.OUTPUT, smart.scope());
         assertEquals("output", smart.target());
         var mapped = smart.toModifier(0F);

@@ -66,6 +66,7 @@ import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.MachineReferenceHasher;
@@ -3575,11 +3576,16 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .toList();
         List<MachineModifier> modifiers = new ArrayList<>();
         for (SmartInterfaceBlockEntity smartInterface : interfaces) {
-            for (cn.howxu.mmcr.api.machine.SmartInterfaceModifier mapping
-                    : registration.smartInterfaceModifiers()) {
-                smartInterface.value(mapping.interfaceType())
-                        .map(mapping::toModifier)
-                        .ifPresent(modifiers::add);
+            for (SmartInterfaceModifier mapping : registration.smartInterfaceModifiers()) {
+                smartInterface.value(mapping.interfaceType()).ifPresent(value -> {
+                    try {
+                        modifiers.add(mapping.toModifier(value));
+                    } catch (RuntimeException exception) {
+                        MMCR.LOG.error("Failed smart interface modifier: machine={}, interface={}, pos={}, target={}, input={}",
+                                machine.registryName(), mapping.interfaceType(), smartInterface.getBlockPos(),
+                                mapping.target(), value, exception);
+                    }
+                });
             }
         }
         runtime.componentRuntime().replaceSmartInterfaceModifiers(modifiers);

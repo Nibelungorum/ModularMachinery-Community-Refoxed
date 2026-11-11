@@ -1,90 +1,85 @@
 package cn.howxu.mmcr.api.machine;
 
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
-
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 
+import java.util.Locale;
+import java.util.Objects;
+import java.util.function.DoubleUnaryOperator;
+
 /**
- * Declarative linear mapping from a smart-interface value to a recipe modifier.
+ * Maps a smart-interface value to a numeric modifier using a pure function.
+ * The function is evaluated when modifiers are refreshed, not necessarily every tick.
  *
  * @author howxu <dev@howxu.cn>
  */
 public record SmartInterfaceModifier(String interfaceType, String target, String scope,
-        boolean affectsChance, float minValue, float maxValue, float atMin, float atMax,
-        RecipeModifier.Operation operation) {
+        boolean affectsChance, DoubleUnaryOperator mapping, RecipeModifier.Operation operation) {
     public SmartInterfaceModifier {
         if (interfaceType == null || interfaceType.isBlank()) throw new IllegalArgumentException("interfaceType blank");
         if (target == null || target.isBlank()) throw new IllegalArgumentException("target blank");
         if (scope == null || scope.isBlank()) throw new IllegalArgumentException("scope blank");
         operation = operation == null ? RecipeModifier.Operation.MULTIPLY : operation;
-        if (!Float.isFinite(minValue) || !Float.isFinite(maxValue)
-                || !Float.isFinite(atMin) || !Float.isFinite(atMax)) {
-            throw new IllegalArgumentException("smart interface modifier values must be finite");
-        }
-        MachineModifier.numeric(normalizedTarget(target, scope), scope, atMin, operation.name(), affectsChance);
-        MachineModifier.numeric(normalizedTarget(target, scope), scope, atMax, operation.name(), affectsChance);
+        Objects.requireNonNull(mapping, "mapping");
+        MachineModifier.numeric(normalizedTarget(target, scope), scope, 0D, operation.name(), affectsChance);
     }
 
     public SmartInterfaceModifier(String interfaceType, String target, RecipeModifier.IOType io,
-            boolean affectsChance, float minValue, float maxValue, float atMin, float atMax,
-            RecipeModifier.Operation operation) {
+            boolean affectsChance, DoubleUnaryOperator mapping, RecipeModifier.Operation operation) {
         this(interfaceType, normalizedTarget(target, io == null ? "input" : io.getKey()),
-                io == null ? "input" : io.getKey(), affectsChance, minValue, maxValue, atMin, atMax, operation);
+                io == null ? "input" : io.getKey(), affectsChance, mapping, operation);
     }
 
-    public static SmartInterfaceModifier numeric(String type, String target, String scope, float min, float max,
-            float atMin, float atMax, String operation, boolean affectsChance) {
+    public static SmartInterfaceModifier numeric(String type, String target, String scope, DoubleUnaryOperator mapping,
+            String operation, boolean affectsChance) {
         return new SmartInterfaceModifier(type, normalizedTarget(target, scope), scope, affectsChance,
-                min, max, atMin, atMax, RecipeModifier.Operation.valueOf(operation.toUpperCase(java.util.Locale.ROOT)));
+                mapping, RecipeModifier.Operation.valueOf(operation.toUpperCase(Locale.ROOT)));
     }
 
-    public static SmartInterfaceModifier duration(String type, float min, float max, float atMin, float atMax,
+    public static SmartInterfaceModifier duration(String type, DoubleUnaryOperator mapping,
             RecipeModifier.Operation operation) {
-        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_DURATION, "input",
-                false, min, max, atMin, atMax, operation);
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_DURATION, "input", false, mapping, operation);
     }
 
-    public static SmartInterfaceModifier energy(String type, float min, float max, float atMin, float atMax,
+    public static SmartInterfaceModifier energy(String type, DoubleUnaryOperator mapping,
             RecipeModifier.Operation operation) {
-        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_ENERGY, "input",
-                false, min, max, atMin, atMax, operation);
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_ENERGY, "input", false, mapping, operation);
     }
 
-    public static SmartInterfaceModifier item(String type, RecipeModifier.IOType io, boolean chance, float min,
-            float max, float atMin, float atMax, RecipeModifier.Operation operation) {
-        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_ITEM, io, chance, min, max, atMin, atMax,
-                operation);
+    public static SmartInterfaceModifier item(String type, RecipeModifier.IOType io, boolean chance,
+            DoubleUnaryOperator mapping, RecipeModifier.Operation operation) {
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_ITEM, io, chance, mapping, operation);
     }
 
-    public static SmartInterfaceModifier fluid(String type, RecipeModifier.IOType io, boolean chance, float min,
-            float max, float atMin, float atMax, RecipeModifier.Operation operation) {
-        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_FLUID, io, chance, min, max, atMin,
-                atMax, operation);
+    public static SmartInterfaceModifier fluid(String type, RecipeModifier.IOType io, boolean chance,
+            DoubleUnaryOperator mapping, RecipeModifier.Operation operation) {
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_FLUID, io, chance, mapping, operation);
     }
 
-    public static SmartInterfaceModifier chemical(String type, RecipeModifier.IOType io, boolean chance, float min,
-            float max, float atMin, float atMax, RecipeModifier.Operation operation) {
-        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_CHEMICAL, io, chance, min, max, atMin,
-                atMax, operation);
+    public static SmartInterfaceModifier chemical(String type, RecipeModifier.IOType io, boolean chance,
+            DoubleUnaryOperator mapping, RecipeModifier.Operation operation) {
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_CHEMICAL, io, chance, mapping, operation);
     }
 
-    public static SmartInterfaceModifier heat(String type, RecipeModifier.IOType io, float min, float max,
-            float atMin, float atMax, RecipeModifier.Operation operation) {
-        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_HEAT, io, false, min, max, atMin,
-                atMax, operation);
+    public static SmartInterfaceModifier heat(String type, RecipeModifier.IOType io, DoubleUnaryOperator mapping,
+            RecipeModifier.Operation operation) {
+        return new SmartInterfaceModifier(type, IntegrationTypeHelper.TARGET_HEAT, io, false, mapping, operation);
     }
 
     public MachineModifier.Numeric toModifier(float value) {
         return MachineModifier.numeric(target, scope, mappedValue(value), operation.name(), affectsChance);
     }
 
-    public float mappedValue(float value) {
-        if (minValue == maxValue) return value <= minValue ? atMin : atMax;
-        double t = ((double) value - minValue) / ((double) maxValue - minValue);
-        t = Math.clamp(t, 0D, 1D);
-        return (float) (atMin + ((double) atMax - atMin) * t);
+    public double mappedValue(float value) {
+        if (!Float.isFinite(value)) {
+            throw new IllegalArgumentException("Smart interface input must be finite: " + value);
+        }
+        double result = mapping.applyAsDouble(value);
+        if (!Double.isFinite(result)) {
+            throw new IllegalArgumentException("Smart interface modifier result must be finite: " + result);
+        }
+        return result;
     }
 
     public RecipeModifier.IOType io() {

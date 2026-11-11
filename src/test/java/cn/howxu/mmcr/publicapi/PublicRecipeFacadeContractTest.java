@@ -378,9 +378,9 @@ class PublicRecipeFacadeContractTest {
         assertThat(Modifiers.apply(List.of(multiply, zero, add), "energy", IoDirection.INPUT, 5F, false)).isEqualTo(16F);
         assertThat(Modifiers.apply(List.of(add), "energy", IoDirection.OUTPUT, 5F, false)).isEqualTo(5F);
         assertThat(Modifiers.apply(List.of(add), "energy", IoDirection.INPUT, 5F, true)).isEqualTo(5F);
-        var smart = Modifiers.smartEnergy("heat", 0, 10, 1, 3, ModifierOperation.MULTIPLY);
+        var smart = Modifiers.smartEnergy("heat", value -> 1D + value * value / 25D, ModifierOperation.MULTIPLY);
         assertThat(smart.toModifier(5).value()).isEqualTo(2D);
-        assertThat(smart.mappedValue(20)).isEqualTo(3F);
+        assertThat(smart.mappedValue(20)).isEqualTo(17D);
     }
     private static Dynamic<?> json(String value) { return new Dynamic<>(JsonOps.INSTANCE, JsonParser.parseString(value)); }
     private static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath("recipe_facade_test", path); }
