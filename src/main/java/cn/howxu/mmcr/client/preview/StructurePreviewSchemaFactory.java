@@ -31,6 +31,7 @@ import net.minecraft.world.item.ItemStack;
 
 import net.minecraft.world.level.block.Block;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -99,7 +100,6 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         Map<BlockPos, List<StructurePreviewSchema.Candidate>> candidates = new LinkedHashMap<>();
         Map<BlockPos, Integer> highlights = new LinkedHashMap<>();
         Map<BlockPredicate, Boolean> interfaceCache = new HashMap<>();
-        int levelRank = highestSharedLevelRank(stage);
         Map<BlockPos, BlockPredicate> pattern = rotatedPattern.pattern();
         for (var entry : pattern.entrySet()) {
             BlockPos position = entry.getKey().immutable();
@@ -108,7 +108,7 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                     ? entry.getValue() instanceof BlockPredicate.MachineCoupler
                             ? MultiblockPreviewPredicates.machineCouplerState().orElse(null)
                             : entry.getValue().preferredState().orElse(null)
-                            : levelState(levelSlot, levelRank).rotate(rotationFor(facing));
+                            : levelState(levelSlot).rotate(rotationFor(facing));
             if (state == null) continue;
             states.put(position, orientState(position, state, facing));
             List<SingleBlockModifierReplacement> replacements = rotatedModifierReplacements.get(position);
@@ -160,14 +160,6 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
                 || block instanceof UpgradeBusBlock || block instanceof ModuleCouplerBlock;
     }
 
-    private static int highestSharedLevelRank(MachineStructureStage stage) {
-        return stage.levelSlots().values().stream()
-                .mapToInt(typeId -> MachineLevelRegistry.levelsForType(typeId).stream()
-                        .mapToInt(MachineLevel::priority)
-                        .max().orElse(-1))
-                .max().orElse(-1);
-    }
-
     private static List<StructurePreviewSchema.Candidate> candidates(BlockPredicate predicate, List<SingleBlockModifierReplacement> replacements) {
         List<StructurePreviewSchema.Candidate> candidates = new ArrayList<>();
         collectCandidates(predicate, candidates, false);
@@ -195,10 +187,9 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         }
     }
 
-    private static BlockState levelState(Identifier typeId, int levelRank) {
+    private static BlockState levelState(Identifier typeId) {
         return MachineLevelRegistry.levelsForType(typeId).stream()
-                .filter(level -> level.priority() == levelRank)
-                .findFirst()
+                .max(Comparator.comparingInt(MachineLevel::priority))
                 .map(MachineLevel::statePredicate)
                 .filter(BlockPredicate.OfBlockState.class::isInstance)
                 .map(BlockPredicate.OfBlockState.class::cast)

@@ -49,7 +49,6 @@ public final class StructureMaterialSummary {
         if (stages.isEmpty()) throw new IllegalArgumentException("machine structure stages empty");
 
         MachineStructureStage stage = stages.getFirst();
-        int levelRank = highestSharedLevelRank(stage);
         List<BlockState> states = new ArrayList<>();
         stage.pattern().pattern().forEach((position, predicate) -> {
             Identifier levelSlot = stage.levelSlots().get(position);
@@ -57,7 +56,7 @@ public final class StructureMaterialSummary {
                     ? predicate instanceof BlockPredicate.MachineCoupler
                             ? MultiblockPreviewPredicates.machineCouplerState().orElse(null)
                             : predicate.preferredState().orElse(null)
-                    : levelState(levelSlot, levelRank);
+                    : levelState(levelSlot);
             if (state != null) states.add(state);
         });
         return fromStates(states);
@@ -97,18 +96,9 @@ public final class StructureMaterialSummary {
                 .toList());
     }
 
-    private static int highestSharedLevelRank(MachineStructureStage stage) {
-        return stage.levelSlots().values().stream()
-                .mapToInt(typeId -> MachineLevelRegistry.levelsForType(typeId).stream()
-                        .mapToInt(MachineLevel::priority)
-                        .max().orElse(-1))
-                .max().orElse(-1);
-    }
-
-    private static BlockState levelState(Identifier typeId, int levelRank) {
+    private static BlockState levelState(Identifier typeId) {
         return MachineLevelRegistry.levelsForType(typeId).stream()
-                .filter(level -> level.priority() == levelRank)
-                .findFirst()
+                .max(Comparator.comparingInt(MachineLevel::priority))
                 .map(MachineLevel::statePredicate)
                 .filter(BlockPredicate.OfBlockState.class::isInstance)
                 .map(BlockPredicate.OfBlockState.class::cast)

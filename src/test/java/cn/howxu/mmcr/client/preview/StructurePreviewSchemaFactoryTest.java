@@ -8,6 +8,9 @@ import cn.howxu.mmcr.api.machine.BlockRotator;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
+import cn.howxu.mmcr.api.machine.MachineStructureFamily;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -754,7 +757,7 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
-    void factory_uses_one_shared_highest_level_for_all_slots() {
+    void factory_uses_the_same_highest_level_for_slots_of_the_same_type() {
         Identifier coil = MMCR.id("preview_coil");
         registerLevels(Map.of(coil, List.of(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK)));
         BlockPos first = BlockPos.ZERO;
@@ -769,7 +772,7 @@ class StructurePreviewSchemaFactoryTest {
     }
 
     @Test
-    void factory_uses_air_when_a_shared_level_is_missing_for_a_slot() {
+    void factory_uses_each_slot_types_highest_level_and_keeps_materials_consistent() {
         Identifier coil = MMCR.id("preview_coil_missing");
         Identifier casing = MMCR.id("preview_casing_missing");
         registerLevels(Map.of(coil, List.of(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK), casing, List.of(Blocks.GOLD_BLOCK)));
@@ -781,7 +784,53 @@ class StructurePreviewSchemaFactoryTest {
                 StructurePreviewVariantSelection.defaults());
 
         assertThat(schema.stateAt(first)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
-        assertThat(schema.stateAt(second)).isEqualTo(Blocks.AIR.defaultBlockState());
+        assertThat(schema.stateAt(second)).isEqualTo(Blocks.GOLD_BLOCK.defaultBlockState());
+        assertThat(StructureMaterialSummary.from(schema).transferStacks()).extracting(ItemStack::getItem)
+                .containsExactlyInAnyOrder(Blocks.IRON_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem());
+        Machine machine = machineWithStages(stage.pattern(), List.of(stage));
+        assertThat(StructureMaterialSummary.from(machine).transferStacks()).extracting(ItemStack::getItem)
+                .containsExactlyInAnyOrder(Blocks.IRON_BLOCK.asItem(), Blocks.GOLD_BLOCK.asItem());
+    }
+
+    @Test
+    void extension_with_a_higher_ranked_level_type_preserves_existing_interface_highlights() {
+        Identifier machineId = MMCR.id("extension_level_highlights");
+        Identifier casing = MMCR.id("extension_casing");
+        Identifier coil = MMCR.id("extension_coil");
+        registerLevels(Map.of(casing, List.of(Blocks.GOLD_BLOCK),
+                coil, List.of(Blocks.COPPER_BLOCK, Blocks.IRON_BLOCK)));
+        BlockPos existing = new BlockPos(1, 0, 0);
+        BlockPos added = new BlockPos(2, 0, 0);
+        BlockPredicate casingPredicate = new BlockPredicate.AnyOf(List.of(
+                new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
+                new BlockPredicate.OfBlock(ModBlocks.SMART_INTERFACE.get())));
+        BlockArray base = new BlockArray(Map.of(existing, casingPredicate), Map.of(), Map.of(existing, 'A'));
+        BlockArray extension = new BlockArray(Map.of(added, new BlockPredicate.OfBlock(Blocks.COPPER_BLOCK)),
+                Map.of(), Map.of(added, 'B'));
+        List<MachineStructureStage> stages = MachineStructureFamily.of(new MachineStructureDefinition(machineId, List.of(
+                new Declaration(Declaration.Kind.FULL, base, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
+                        List.of(), MachineStructureRequirements.builder().levelSlot('A', casing).build(base)),
+                new Declaration(Declaration.Kind.EXTENSION, extension, null, null, List.of(),
+                        MachineStructureRequirements.builder().levelSlot('B', coil).build(extension))))).stages();
+        StructurePreviewSchemaFactory factory = new StructurePreviewSchemaFactory();
+        StructurePreviewSchema first = factory.create(stages.getFirst(), machineId);
+
+        assertThat(first.stateAt(existing)).isEqualTo(Blocks.GOLD_BLOCK.defaultBlockState());
+        assertThat(first.highlightAt(existing)).isEqualTo(INTERFACE | LEVEL);
+        for (Direction facing : List.of(Direction.SOUTH, Direction.EAST, Direction.UP)) {
+            StructurePreviewSchema expanded = factory.create(stages.get(1), machineId, facing);
+            BlockPos rotatedExisting = BlockRotator.rotateSouthTo(existing, facing);
+            BlockPos rotatedAdded = BlockRotator.rotateSouthTo(added, facing);
+
+            assertThat(expanded.stateAt(rotatedExisting)).isEqualTo(first.stateAt(existing));
+            assertThat(expanded.highlightAt(rotatedExisting)).isEqualTo(first.highlightAt(existing));
+            assertThat(expanded.stateAt(rotatedAdded)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
+            assertThat(expanded.highlightAt(rotatedAdded)).isEqualTo(LEVEL);
+        }
+        StructurePreviewSchema eager = factory.resolve(stages.get(1), StructurePreviewVariantSelection.defaults());
+        assertThat(eager.stateAt(existing)).isEqualTo(first.stateAt(existing));
+        assertThat(eager.highlightAt(existing)).isEqualTo(first.highlightAt(existing));
+        assertThat(eager.stateAt(added)).isEqualTo(Blocks.IRON_BLOCK.defaultBlockState());
     }
 
     private static MachineStructureStage stageWithSlots(Map<BlockPos, Identifier> slots) {
