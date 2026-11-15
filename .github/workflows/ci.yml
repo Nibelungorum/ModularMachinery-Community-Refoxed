@@ -9,6 +9,12 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/nibelungorum/mmcr-ci:26.1.2
+
+    env:
+      GRADLE_USER_HOME: /opt/gradle-home
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -16,40 +22,16 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Resolve build properties
-        id: properties
+      - name: Restore prewarmed Gradle state
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p build .gradle
+          cp -a /opt/mmcr-seed/build/. build/
+          cp -a /opt/mmcr-seed/project-gradle/. .gradle/
 
-          java_version="$(awk -F= '$1 == "java_version" { print $2; exit }' gradle.properties)"
-          if [ -z "$java_version" ]; then
-            echo "java_version is missing from gradle.properties" >&2
-            exit 1
-          fi
+      - name: Build and generate data
+        run: gradle --no-daemon compileJava runClientData runServerData
 
-          echo "java_version=${java_version}" >> "$GITHUB_OUTPUT"
-
-      - name: Setup JDK ${{ steps.properties.outputs.java_version }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ steps.properties.outputs.java_version }}
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Compile
-        run: gradle compileJava
-
-      - name: Run Client Data
-        run: gradle runClientData
-
-      - name: Run Server Data
-        run: gradle runServerData
-
-      - name: Unit Test
-        run: gradle test
-
-      - name: GameTest
-        run: gradle runGameTestServer
+      - name: Test
+        run: gradle --no-daemon test runGameTestServer
