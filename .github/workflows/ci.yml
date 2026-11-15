@@ -30,8 +30,17 @@ jobs:
           cp -a /opt/mmcr-seed/build/. build/
           cp -a /opt/mmcr-seed/project-gradle/. .gradle/
 
-      - name: Build and generate data
-        run: gradle --no-daemon compileJava runClientData runServerData
+      - name: Compile
+        run: gradle compileJava runClientData runServerData
 
-      - name: Test
-        run: gradle --no-daemon test runGameTestServer
+      - name: ClientData
+        run: gradle runClientData
+
+      - name: runServerData
+        run: gradle runServerData
+
+      - name: Unit Test
+        run: gradle test 
+      
+      - name: GameTest
+        run: gradle runGameTestServer
