@@ -633,6 +633,97 @@ class FactoryRuntimeTest {
         }
     }
 
+    @Test
+    void same_context_idle_lanes_share_search_and_backoff() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = attachedFactoryController(energy);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        installFactoryCoordinator(level, MachineAsyncCoordinator.forTesting(workers::addLast));
+        try {
+            MachineRecipe blocked = RecipeTestSupport.create(MMCR.id("factory_shared_search_backoff"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 4,
+                    false, List.of(), List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4L)));
+            RecipeRegistry.registerStatic(blocked);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.ensureBaseLane(controller);
+            factory.setLaneLimit(4);
+            addIdleLanes(factory, controller, 3, "factory-shared-idle-");
+
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            pumpFactoryWorkers(controller, workers);
+            factory.snapshot();
+            FactoryRecipeThread representative = laneThreadSnapshots(factory).keySet().stream()
+                    .filter(lane -> lane.searchFailureKey() != null).findFirst().orElseThrow();
+            long attempts = factory.searchAttemptsForTesting();
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(attempts);
+
+            while (level.getGameTime() < representative.nextSearchTick()) RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(attempts + 1L);
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void successful_shared_search_admits_next_lane_without_backoff() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        installFactoryCoordinator(level, MachineAsyncCoordinator.forTesting(workers::addLast));
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_shared_search_success"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 4);
+            RecipeRegistry.registerStatic(recipe);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.ensureBaseLane(controller);
+            factory.setLaneLimit(4);
+            addIdleLanes(factory, controller, 3, "factory-shared-success-idle-");
+
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            pumpFactoryWorkers(controller, workers);
+            assertThat(factory.activeRuntimes()).hasSize(4);
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void different_core_search_contexts_do_not_block_each_other() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineRecipe iron = itemInputRecipe("factory_shared_context_iron", Items.IRON_INGOT);
+        MachineRecipe gold = itemInputRecipe("factory_shared_context_gold", Items.GOLD_INGOT);
+        RecipeRegistry.registerStaticBatch(List.of(iron, gold));
+        MachineControllerBlockEntity controller = sharedFactoryController(MMCR.id("test_cube"), iron.id(), input);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        installFactoryCoordinator(level, MachineAsyncCoordinator.forTesting(workers::addLast));
+        try {
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.setLaneLimit(2);
+            factory.syncCoreLanes(controller, controller.currentStructureSnapshot().machine(), List.of(iron, gold));
+
+            factory.tick(List.of(iron, gold), 1L, level.getGameTime());
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(2L);
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
     @ParameterizedTest
     @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
     void attached_base_post_start_and_progress_update_factory_snapshots_without_manual_notification(MachineWorkMode mode)

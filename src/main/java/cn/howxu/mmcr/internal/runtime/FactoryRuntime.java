@@ -130,6 +130,7 @@ public final class FactoryRuntime {
     private boolean allSnapshotsDirty = true;
     private final Set<FactoryRecipeThread> readyLanes = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<FactoryRecipeThread, AsyncSearchRequest> pendingAsyncSearches = new IdentityHashMap<>();
+    private final Map<SharedSearchKey, SharedSearchState> sharedSearches = new HashMap<>();
     private long nextAsyncSearchId;
     private List<MachineRecipe> cachedOrderedCandidateSource = List.of();
     private long cachedOrderedCandidateCatalogVersion = Long.MIN_VALUE;
@@ -158,6 +159,8 @@ public final class FactoryRuntime {
         startReservations.clear();
         readyLanes.clear();
         pendingAsyncSearches.clear();
+        sharedSearches.values().removeIf(state -> state.inFlight);
+        dirtyLaneSchedules.addAll(lanes);
         for (FactoryRecipeThread lane : lanes) refreshLaneAccounting(lane);
     }
 
@@ -173,6 +176,8 @@ public final class FactoryRuntime {
         patternStartReservations.clear();
         readyLanes.clear();
         pendingAsyncSearches.clear();
+        sharedSearches.clear();
+        dirtyLaneSchedules.addAll(lanes);
         for (FactoryRecipeThread lane : lanes) refreshLaneAccounting(lane);
         clearCandidateCaches();
         failureDirty = true;
@@ -240,8 +245,16 @@ public final class FactoryRuntime {
         Set<FactoryRecipeThread> dueLanes = Collections.newSetFromMap(new IdentityHashMap<>());
         dueLanes.addAll(readyLanes);
         readyLanes.clear();
-        pendingAsyncSearches.entrySet().removeIf(entry ->
-                entry.getKey().coreRecipeSetVersion() != entry.getValue().coreRecipeSetVersion());
+        var pending = pendingAsyncSearches.entrySet().iterator();
+        while (pending.hasNext()) {
+            var entry = pending.next();
+            FactoryRecipeThread lane = entry.getKey();
+            AsyncSearchRequest request = entry.getValue();
+            if (lane.coreRecipeSetVersion() != request.coreRecipeSetVersion()) {
+                cancelSharedSearch(request.sharedKey(), lane);
+                pending.remove();
+            }
+        }
         dueLanes.addAll(activateDueLanes(context.gameTime()));
 
         if (perThreadParallelLimit != context.maxParallelism()) {
@@ -380,9 +393,13 @@ public final class FactoryRuntime {
                 initialEpoch != factoryStateEpoch, initialEpoch != factoryStateEpoch);
     }
 
-    private static StartResult searchAndStartRecipe(FactoryRecipeThread lane, FactorySearchContext context,
-                                                List<MachineRecipe> candidates, long structureVersion) {
-        return lane.searchAndStartRecipe(context, candidates, structureVersion);
+    private StartResult searchAndStartRecipe(FactoryRecipeThread lane, FactorySearchContext context,
+                                             List<MachineRecipe> candidates, long structureVersion) {
+        SharedSearchKey key = sharedSearchKey(context, lane);
+        if (!tryAcquireSharedSearch(key, lane, context.gameTime())) return StartResult.DEFERRED;
+        StartResult result = lane.searchAndStartRecipe(context, candidates, structureVersion);
+        completeSharedSearch(key, lane, result);
+        return result;
     }
 
     private void scheduleAsyncSearches(FactorySearchContext context, List<FactoryRecipeThread> laneSnapshot,
@@ -401,8 +418,10 @@ public final class FactoryRuntime {
             if (fullSearchCandidates(context, null).isEmpty()) break;
             FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
             addLane(lane);
-            if (!scheduleAsyncSearch(context, lane, level)
-                    && !lane.isStartPending() && !lane.runtime().active()) break;
+            boolean scheduled = scheduleAsyncSearch(context, lane, level);
+            SharedSearchState shared = sharedSearches.get(sharedSearchKey(context, lane));
+            boolean equivalentPending = shared != null && shared.inFlight && shared.owner != lane;
+            if (!scheduled && !equivalentPending && !lane.isStartPending() && !lane.runtime().active()) break;
         }
     }
 
@@ -420,6 +439,7 @@ public final class FactoryRuntime {
             return false;
         }
         RecipeSearchContextKey key = searchContextKey(context, lane);
+        SharedSearchKey sharedKey = sharedSearchKey(key, lane);
         if (!lane.canSearch(context.gameTime(), key)) return false;
         List<MachineRecipe> candidates = fullSearchCandidates(context, lane);
         if (candidates.isEmpty()) {
@@ -445,6 +465,7 @@ public final class FactoryRuntime {
         }
         if (restart == StartResult.DEFERRED || restart == StartResult.CANCELLED) return false;
         candidates = fullSearchCandidates(context, lane);
+        if (!tryAcquireSharedSearch(sharedKey, lane, context.gameTime())) return false;
         WorkerSearchRequest workerRequest;
         long coreRecipeSetVersion = lane.coreRecipeSetVersion();
         long lifecycleEpoch = controller.lifecycleEpoch();
@@ -452,16 +473,23 @@ public final class FactoryRuntime {
         try {
             workerRequest = captureWorkerSearch(context, candidates, lane.laneId(), searchId);
         } catch (RuntimeException exception) {
-            if (coreRecipeSetVersion != lane.coreRecipeSetVersion() || lifecycleEpoch != controller.lifecycleEpoch()) return false;
+            if (coreRecipeSetVersion != lane.coreRecipeSetVersion() || lifecycleEpoch != controller.lifecycleEpoch()) {
+                cancelSharedSearch(sharedKey, lane);
+                return false;
+            }
             searchAttemptsForTesting++;
             StartResult started = lane.startSearchResult(context, candidates, context.snapshot().structure().version(),
                     new FactoryRecipeThread.SearchResult(null, exception, false));
             reserveStart(lane, started.ownsStart());
+            completeSharedSearch(sharedKey, lane, started);
             return false;
         }
-        if (coreRecipeSetVersion != lane.coreRecipeSetVersion() || lifecycleEpoch != controller.lifecycleEpoch()) return false;
+        if (coreRecipeSetVersion != lane.coreRecipeSetVersion() || lifecycleEpoch != controller.lifecycleEpoch()) {
+            cancelSharedSearch(sharedKey, lane);
+            return false;
+        }
         AsyncSearchRequest request = new AsyncSearchRequest(context, candidates, searchId,
-                coreRecipeSetVersion, workerRequest);
+                coreRecipeSetVersion, sharedKey, workerRequest);
         MachineAsyncCoordinator.TaskKey taskKey = new MachineAsyncCoordinator.TaskKey(controller.getBlockPos(),
                 level.getGameTime(), MachineWorkMode.ASYNC, "factory-search/" + lane.laneId(), lifecycleEpoch);
         pendingAsyncSearches.put(lane, request);
@@ -479,15 +507,19 @@ public final class FactoryRuntime {
                                         && asyncSearchStillValid(lane, request, request.context().catalogVersion());
                                 removePendingSearch(lane, request);
                                 if (current && outcome instanceof MachineAsyncCoordinator.TaskOutcome.Failed failed) {
-                                    lane.startSearchResult(request.context(), request.candidates(),
+                                    StartResult started = lane.startSearchResult(request.context(), request.candidates(),
                                             request.context().snapshot().structure().version(),
                                             new FactoryRecipeThread.SearchResult(null, new RuntimeException(failed.cause()), false));
+                                    completeSharedSearch(request.sharedKey(), lane, started);
                                     refreshLaneAccounting(lane);
+                                } else {
+                                    cancelSharedSearch(request.sharedKey(), lane);
                                 }
                             }
                         }));
         if (submission != MachineAsyncCoordinator.SubmissionResult.ACCEPTED) {
             removePendingSearch(lane, request);
+            cancelSharedSearch(sharedKey, lane);
             return false;
         }
         if (coreRecipeSetVersion == lane.coreRecipeSetVersion() && lifecycleEpoch == controller.lifecycleEpoch()) {
@@ -518,6 +550,7 @@ public final class FactoryRuntime {
                 || !asyncSearchStillValid(lane, request, catalogVersion)) {
             if (lane != null && request != null && request.searchId() == searchId) {
                 removePendingSearch(lane, request);
+                cancelSharedSearch(request.sharedKey(), lane);
             }
             return MainThreadStep.Result.failure(new IllegalStateException("Factory async search became stale"));
         }
@@ -525,6 +558,7 @@ public final class FactoryRuntime {
             RecipeSearchProof.Result evidence = request.workerRequest().request.prove(proof.request(), lane.runtime());
             if (!asyncSearchStillValid(lane, request, catalogVersion)) {
                 removePendingSearch(lane, request);
+                cancelSharedSearch(request.sharedKey(), lane);
                 return MainThreadStep.Result.failure(new IllegalStateException("Factory recipe proof became stale"));
             }
             return MainThreadStep.Result.value(evidence);
@@ -533,6 +567,7 @@ public final class FactoryRuntime {
         StructureClaimRegistry.ResourceDomain domain = controller.resourceDomain();
         if (domain == null) {
             removePendingSearch(lane, request);
+            cancelSharedSearch(request.sharedKey(), lane);
             return MainThreadStep.Result.failure(new IllegalStateException("Factory search lost its resource domain"));
         }
         SharedIoCoordinator.get(level).enqueue(new SharedIoCoordinator.TickRequest(domain,
@@ -540,15 +575,24 @@ public final class FactoryRuntime {
                 request.context().snapshot().structure().version(), request.context().snapshot().stateVersion(), () -> {
                     if (!removePendingSearch(lane, request)) return false;
                     Map<ResourceLocation, Integer> activeCounts = activeRecipeCounts();
-                    if (lane.coreRecipeSetVersion() != request.coreRecipeSetVersion()) return false;
+                    if (lane.coreRecipeSetVersion() != request.coreRecipeSetVersion()) {
+                        cancelSharedSearch(request.sharedKey(), lane);
+                        return false;
+                    }
                     List<MachineRecipe> available = filterAvailableCandidates(
                             lane.candidatesFor(request.candidates(), catalogVersion), activeCounts);
                     FactoryRecipeThread.SearchResult result = request.workerRequest().result();
                     if (result == null || result.result() != null && result.result().success()
-                            && !available.contains(result.result().recipe())) return false;
+                            && !available.contains(result.result().recipe())) {
+                        cancelSharedSearch(request.sharedKey(), lane);
+                        return false;
+                    }
                     StartResult started = lane.startSearchResult(request.context(), available,
                             request.context().snapshot().structure().version(), result);
                     reserveStart(lane, started.ownsStart());
+                    admitEquivalentLanes(lane, request, result, started);
+                    shareEquivalentFailure(lane, request, result, started);
+                    completeSharedSearch(request.sharedKey(), lane, started);
                     return true;
                 }, () -> validateAsyncSearchRequest(lane, request, catalogVersion, taskKey, level),
                 () -> controller.currentStructureSnapshot().version(),
@@ -563,9 +607,63 @@ public final class FactoryRuntime {
                 && asyncSearchStillValid(lane, request, catalogVersion);
         if (!valid) {
             removePendingSearch(lane, request);
+            cancelSharedSearch(request.sharedKey(), lane);
             MachineAsyncCoordinator.get(level).resume(taskKey);
         }
         return valid;
+    }
+
+    private void admitEquivalentLanes(FactoryRecipeThread owner, AsyncSearchRequest request,
+                                      FactoryRecipeThread.SearchResult searchResult, StartResult ownerResult) {
+        if (!ownerResult.ownsStart() || searchResult.result() == null || !searchResult.result().success()) return;
+        for (FactoryRecipeThread lane : List.copyOf(lanes)) {
+            if (lane == owner || lane.lastRecipeId() != null || !equivalentContext(request, lane)) continue;
+            if (!startEquivalentLane(lane, request, searchResult)) break;
+        }
+        if (ownerResult != StartResult.STARTED || owner.isCoreThread()) return;
+        MachineRecipe recipe = searchResult.result().recipe();
+        while (lanes.size() < laneLimit
+                && activeRecipeCountFor(recipe.id()) < effectiveRecipe(recipe).recipeThreadLimit()) {
+            FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
+            addLane(lane);
+            if (startEquivalentLane(lane, request, searchResult)) continue;
+            if (lane.isIdle() && !lane.isStartPending()) removeLane(lane);
+            break;
+        }
+    }
+
+    private void shareEquivalentFailure(FactoryRecipeThread owner, AsyncSearchRequest request,
+                                        FactoryRecipeThread.SearchResult searchResult, StartResult ownerResult) {
+        if (ownerResult != StartResult.FAILED && ownerResult != StartResult.NO_MATCH) return;
+        for (FactoryRecipeThread lane : List.copyOf(lanes)) {
+            if (lane == owner || lane.lastRecipeId() != null || !equivalentContext(request, lane)
+                    || !lane.isIdle() || lane.isStartPending() || pendingAsyncSearches.containsKey(lane)
+                    || patternStartReservations.contains(lane)) continue;
+            List<MachineRecipe> available = filterAvailableCandidates(
+                    lane.candidatesFor(request.candidates(), request.context().catalogVersion()), activeRecipeCounts);
+            lane.startSearchResult(request.context(), available,
+                    request.context().snapshot().structure().version(), searchResult);
+            refreshLaneAccounting(lane);
+        }
+    }
+
+    private boolean equivalentContext(AsyncSearchRequest request, FactoryRecipeThread lane) {
+        return request.sharedKey().equals(sharedSearchKey(request.context(), lane));
+    }
+
+    private boolean startEquivalentLane(FactoryRecipeThread lane, AsyncSearchRequest request,
+                                        FactoryRecipeThread.SearchResult searchResult) {
+        int index = laneIndices.getOrDefault(lane, -1);
+        if (index < 0 || index >= laneLimit || !lane.isIdle() || lane.isStartPending()
+                || pendingAsyncSearches.containsKey(lane) || patternStartReservations.contains(lane)
+                || !equivalentContext(request, lane)) return false;
+        List<MachineRecipe> available = filterAvailableCandidates(
+                lane.candidatesFor(request.candidates(), request.context().catalogVersion()), activeRecipeCounts);
+        if (!available.contains(searchResult.result().recipe())) return false;
+        StartResult started = lane.startSearchResult(request.context(), available,
+                request.context().snapshot().structure().version(), searchResult);
+        reserveStart(lane, started.ownsStart());
+        return started.ownsStart();
     }
 
     private boolean removePendingSearch(FactoryRecipeThread lane, AsyncSearchRequest request) {
@@ -603,7 +701,8 @@ public final class FactoryRuntime {
     }
 
     private record AsyncSearchRequest(FactorySearchContext context, List<MachineRecipe> candidates,
-                                      long searchId, long coreRecipeSetVersion, WorkerSearchRequest workerRequest) {
+                                      long searchId, long coreRecipeSetVersion,
+                                      SharedSearchKey sharedKey, WorkerSearchRequest workerRequest) {
     }
 
     /** Keeps source references on the owner side; the shared continuation contains only planner values. */
@@ -1133,6 +1232,7 @@ public final class FactoryRuntime {
         patternStartReservations.clear();
         readyLanes.clear();
         pendingAsyncSearches.clear();
+        sharedSearches.clear();
         coreCatalogVersion = Long.MIN_VALUE;
         allLaneSchedulesDirty = true;
         schedulingCandidateSource = null;
@@ -1385,6 +1485,7 @@ public final class FactoryRuntime {
         MachineWorkMode workMode = controller.activeWorkMode();
         if (schedulingWorkMode != workMode) {
             pendingAsyncSearches.clear();
+            sharedSearches.values().removeIf(state -> state.inFlight);
             allLaneSchedulesDirty = true;
             schedulingWorkMode = workMode;
         }
@@ -1424,15 +1525,24 @@ public final class FactoryRuntime {
         AsyncSearchRequest pending = pendingAsyncSearches.get(lane);
         if (pending != null && pending.coreRecipeSetVersion() != lane.coreRecipeSetVersion()) {
             pendingAsyncSearches.remove(lane, pending);
+            cancelSharedSearch(pending.sharedKey(), lane);
         }
         if (!lane.isIdle() || lane.isStartPending() || lane.runtime().active() || readyLanes.contains(lane)) {
             tickingLanes.add(lane);
             return;
         }
         long idleDeadline = lane.idleTimeoutTick(gameTime);
+        SharedSearchKey key = sharedSearchKey(currentSearchContextKey(snapshot, lane), lane);
+        SharedSearchState shared = sharedSearches.get(key);
+        long sharedRetry = shared == null ? Long.MIN_VALUE : shared.nextSearchTick;
+        boolean sharedPending = shared != null && shared.inFlight;
+        long retryTick = Math.max(lane.nextSearchTick(), sharedRetry);
+        boolean canSearch = lane.canSearch(gameTime, key.context());
+        boolean sharedCanSearch = !sharedPending
+                && (gameTime >= sharedRetry || shared.owner == lane && canSearch);
         long searchDeadline = !pendingAsyncSearches.containsKey(lane) && !patternStartReservations.contains(lane)
                 && schedulingMaxParallelism > 0L && !schedulingCandidates.isEmpty() && !searchQuotaExhausted(lane)
-                ? lane.canSearch(gameTime, currentSearchContextKey(snapshot, lane)) ? gameTime : lane.nextSearchTick()
+                ? canSearch && sharedCanSearch ? gameTime : retryTick
                 : Long.MAX_VALUE;
         scheduleLaneDeadline(lane, Math.min(searchDeadline, idleDeadline));
         searchWaitingLanes.add(lane);
@@ -1493,6 +1603,19 @@ public final class FactoryRuntime {
     private record LaneDeadline(FactoryRecipeThread lane, long gameTime, long sequence) {
     }
 
+    private record SharedSearchKey(RecipeSearchContextKey context, String coreRecipeSet) {
+    }
+
+    private static final class SharedSearchState {
+        private final FactoryRecipeThread owner;
+        private boolean inFlight = true;
+        private long nextSearchTick = Long.MIN_VALUE;
+
+        private SharedSearchState(FactoryRecipeThread owner) {
+            this.owner = owner;
+        }
+    }
+
     private void tickLane(FactoryRecipeThread lane, ControllerRuntimeSnapshot snapshot) {
         laneTicksForTesting++;
         LaneTickObservation before = acquireLaneTickObservation();
@@ -1532,6 +1655,46 @@ public final class FactoryRuntime {
                 context.snapshot().modifierVersion(), context.snapshot().stateVersion(), context.catalogVersion(),
                 lane.searchResourceEpoch(context.resourceAvailabilityEpoch()),
                 lane.coreRecipeSetVersion());
+    }
+
+    private static SharedSearchKey sharedSearchKey(FactorySearchContext context, FactoryRecipeThread lane) {
+        return sharedSearchKey(searchContextKey(context, lane), lane);
+    }
+
+    private static SharedSearchKey sharedSearchKey(RecipeSearchContextKey context, FactoryRecipeThread lane) {
+        return new SharedSearchKey(context, lane.isCoreThread() ? lane.threadName() : "");
+    }
+
+    private boolean tryAcquireSharedSearch(SharedSearchKey key, FactoryRecipeThread lane, long gameTime) {
+        SharedSearchState current = sharedSearches.get(key);
+        if (current != null && (current.inFlight || gameTime < current.nextSearchTick
+                && (current.owner != lane || !lane.canSearch(gameTime, key.context())))) return false;
+        sharedSearches.values().removeIf(state -> state.owner == lane);
+        sharedSearches.put(key, new SharedSearchState(lane));
+        dirtyLaneSchedules.addAll(lanes);
+        return true;
+    }
+
+    private void completeSharedSearch(SharedSearchKey key, FactoryRecipeThread lane, StartResult result) {
+        SharedSearchState state = sharedSearches.get(key);
+        if (state == null || state.owner != lane || !state.inFlight) return;
+        if (result == StartResult.FAILED || result == StartResult.NO_MATCH) {
+            state.inFlight = false;
+            state.nextSearchTick = lane.nextSearchTick();
+        } else {
+            sharedSearches.remove(key);
+        }
+        dirtyLaneSchedules.addAll(lanes);
+        dirtySnapshotLanes.addAll(lanes);
+        markLaneStateChanged();
+    }
+
+    private void cancelSharedSearch(SharedSearchKey key, FactoryRecipeThread lane) {
+        SharedSearchState state = sharedSearches.get(key);
+        if (state != null && state.owner == lane && state.inFlight) {
+            sharedSearches.remove(key);
+            dirtyLaneSchedules.addAll(lanes);
+        }
     }
 
     private long currentGameTime() {
@@ -1729,6 +1892,7 @@ public final class FactoryRuntime {
             if (previous.active()) cachedActiveLaneCount--;
         }
         startReservations.remove(lane);
+        sharedSearches.values().removeIf(state -> state.owner == lane);
         lanePresentationCaches.remove(lane);
         laneThreadSnapshots.remove(lane);
     }
