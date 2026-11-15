@@ -61,7 +61,7 @@ import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -268,7 +268,7 @@ class FactoryRuntimeTest {
             assertThat(factory.snapshot().lanes().getFirst().tick()).isEqualTo(lane.tickCount());
             assertThat(before.lanes().getFirst().tick()).isEqualTo(tick);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -335,7 +335,7 @@ class FactoryRuntimeTest {
             assertThat(request.isStillValid()).isFalse();
             assertThat(lane.runtime().active()).isFalse();
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -425,7 +425,7 @@ class FactoryRuntimeTest {
             assertThat(running.active()).isTrue();
         } finally {
             ServerConfig.FACTORY_IDLE_TIMEOUT_TICKS.set(idleTimeout);
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -460,7 +460,7 @@ class FactoryRuntimeTest {
             assertThat(factory.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(recipe);
             assertThat(input.itemHandler().amount(0)).isZero();
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -552,7 +552,7 @@ class FactoryRuntimeTest {
                     .allSatisfy(lane -> assertThat(after.presentationLanes().get(lane.index())).isSameAs(lane));
             assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans + 1);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -598,7 +598,7 @@ class FactoryRuntimeTest {
             assertThat(factory.activeRuntimes()).singleElement()
                     .satisfies(replacement -> assertThat(replacement).isNotSameAs(active));
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -629,7 +629,7 @@ class FactoryRuntimeTest {
             assertThat(factory.activeRuntimes()).anySatisfy(runtime ->
                     assertThat(runtime.recipe()).isSameAs(second));
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -667,7 +667,7 @@ class FactoryRuntimeTest {
             factory.tick(List.of(blocked), 1L, level.getGameTime());
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(attempts + 1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -699,7 +699,7 @@ class FactoryRuntimeTest {
             factory.tick(List.of(blocked), 1L, level.getGameTime());
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -728,7 +728,7 @@ class FactoryRuntimeTest {
             factory.tick(List.of(recipe), 1L, level.getGameTime());
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -752,7 +752,7 @@ class FactoryRuntimeTest {
 
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(2L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -790,7 +790,7 @@ class FactoryRuntimeTest {
             assertThat(before.lanes().getFirst().tick()).isEqualTo(initialTick);
             assertThat(before.presentationLanes().getFirst().tick()).isEqualTo(initialTick);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -832,7 +832,7 @@ class FactoryRuntimeTest {
             assertThat(before.activeLaneCount()).isEqualTo(1);
             assertThat(before.failure()).isNull();
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1303,7 +1303,7 @@ class FactoryRuntimeTest {
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
             assertThat(input.itemHandler().amount(0)).isZero();
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1826,14 +1826,14 @@ class FactoryRuntimeTest {
                     RuntimeTestFixtures.advanceGameTime(level);
                     RuntimeTestFixtures.beginLevelTick(level, true);
                     controller.serverTick();
-                    SharedIoEvents.completeLevelTick(level);
+                    LevelTickFireEvents.completeLevelTick(level);
                 }
                 if (execution == 0 && !base.active()) {
                     // A queued ASYNC restart is admitted at its next execution boundary.
                     RuntimeTestFixtures.advanceGameTime(level);
                     RuntimeTestFixtures.beginLevelTick(level, true);
                     controller.serverTick();
-                    SharedIoEvents.completeLevelTick(level);
+                    LevelTickFireEvents.completeLevelTick(level);
                     assertThat(base.active()).isTrue();
                     assertThat(base.tickCount()).isZero();
                 }
@@ -1875,7 +1875,7 @@ class FactoryRuntimeTest {
             assertThat(lane.isStartPending()).isFalse();
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(searches);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1940,7 +1940,7 @@ class FactoryRuntimeTest {
             assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(1);
             assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1977,7 +1977,7 @@ class FactoryRuntimeTest {
             assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(1);
             assertThat(input.itemHandler().amount(0)).isEqualTo(1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -2015,7 +2015,7 @@ class FactoryRuntimeTest {
             assertThat(input.itemHandler().amount(0)).isZero();
             assertThat(runtime.searchAttemptsForTesting()).isEqualTo(searches + 1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -2053,7 +2053,7 @@ class FactoryRuntimeTest {
             assertThat(input.itemHandler().amount(0)).isZero();
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(searches + 1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -2251,7 +2251,7 @@ class FactoryRuntimeTest {
                     assertThat(lane.isStartPending()).isFalse());
             if (captureFailure) assertThat(((CaptureFailingInputBus) input).captureFailures).isEqualTo(1);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -2307,7 +2307,7 @@ class FactoryRuntimeTest {
             assertThat(input.itemHandler().amount(0)).isZero();
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(3L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -2361,7 +2361,7 @@ class FactoryRuntimeTest {
             assertThat(prepared).containsExactly(gold.id());
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(3L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -3789,7 +3789,7 @@ class FactoryRuntimeTest {
         RuntimeTestFixtures.advanceGameTime(level);
         RuntimeTestFixtures.beginLevelTick(level, true);
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> SharedIoCoordinator.get(level).resolve(level));
         MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }

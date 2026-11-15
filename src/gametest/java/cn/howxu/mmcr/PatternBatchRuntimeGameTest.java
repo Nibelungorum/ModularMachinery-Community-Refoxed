@@ -50,7 +50,7 @@ import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.recipe.MachineRecipeThread;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
@@ -628,7 +628,7 @@ public final class PatternBatchRuntimeGameTest {
             ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(next);
             SharedIoCoordinator.get(helper.getLevel()).beginExecutionRound(next, true);
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(helper.getLevel());
+            LevelTickFireEvents.completeLevelTick(helper.getLevel());
             // SYNC execution still publishes asynchronous receipts. Advance their real worker/ACK boundary explicitly.
             if (runReceiptWorkers) drainReceiptWorkers();
         }

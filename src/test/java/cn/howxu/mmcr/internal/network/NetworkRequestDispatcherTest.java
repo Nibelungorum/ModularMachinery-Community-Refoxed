@@ -17,7 +17,7 @@ import cn.howxu.mmcr.api.network.RequestFailed;
 import cn.howxu.mmcr.api.network.RequestFailureReason;
 import cn.howxu.mmcr.api.network.NetworkApi;
 import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerRuntime;
 import cn.howxu.mmcr.internal.tile.NetworkInterfaceBlockEntity;
@@ -403,8 +403,8 @@ class NetworkRequestDispatcherTest {
                     fixture.targetMachine, requestId, RequestBody.of(Map.of()), 0L));
         }
 
-        SharedIoEvents.onServerTick(new ServerTickEvent.Post(() -> true, fixture.server));
-        SharedIoEvents.onServerTick(new ServerTickEvent.Post(() -> true, fixture.server));
+        LevelTickFireEvents.onServerTick(new ServerTickEvent.Post(() -> true, fixture.server));
+        LevelTickFireEvents.onServerTick(new ServerTickEvent.Post(() -> true, fixture.server));
 
         assertEquals(ServerConfig.DEFAULT_MAX_REQUESTS_PER_TICK, fixture.processedBodies.size());
     }

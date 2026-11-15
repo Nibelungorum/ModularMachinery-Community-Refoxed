@@ -25,7 +25,7 @@ import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.config.ServerConfig;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.recipe.FactoryRecipeThread;
@@ -184,7 +184,7 @@ class AsyncFactoryExecutionTest {
         int before = (int) publicationCount.invoke(runtime);
 
         // The older Deferred batch keeps the newer lanes' grants between the two real fences.
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(lanes).extracting(CraftingRuntime::tickCount).containsExactly(1, 1, 1, 1);
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
@@ -212,7 +212,7 @@ class AsyncFactoryExecutionTest {
         MachineAsyncCoordinator coordinator = MachineAsyncCoordinator.forTesting(workers::add, 12, false);
         installCoordinator(coordinator);
         for (FactoryRecipeThread lane : lanes) lane.tick();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(lanes).allSatisfy(lane -> assertThat(lane.runtime().finishPending()).isTrue());
         for (int index = 0; index < inputs.size(); index++) {
             assertThat(inputs.get(index).energyStorage().getAmountAsLong()).isEqualTo(energyAfterStart.get(index) - 40L);
@@ -237,7 +237,7 @@ class AsyncFactoryExecutionTest {
         while (!workers.isEmpty()) workers.remove().run();
         assertThat(phases).isEmpty();
 
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(lanes).allSatisfy(lane -> assertThat(lane.runtime().active()).isFalse());
         assertThat(outputs).allSatisfy(output -> {
@@ -259,7 +259,7 @@ class AsyncFactoryExecutionTest {
         assertThat(controllers).allSatisfy(controller -> assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .allSatisfy(lane -> assertThat(lane.active()).isFalse()));
         while (!workers.isEmpty()) workers.remove().run();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(outputs).allSatisfy(output -> assertThat(output.itemHandler().amount(0)).isEqualTo(2L));
         for (int index = 0; index < inputs.size(); index++) {
             assertThat(inputs.get(index).energyStorage().getAmountAsLong()).isEqualTo(energyAfterStart.get(index) - 40L);
@@ -295,7 +295,7 @@ class AsyncFactoryExecutionTest {
         for (int worldTick = 0; worldTick < 4; worldTick++) {
             int before = lanes.stream().mapToInt(lane -> lane.runtime().tickCount()).sum();
             for (FactoryRecipeThread lane : lanes) lane.tick();
-            SharedIoEvents.completeLevelTick(level);
+            LevelTickFireEvents.completeLevelTick(level);
             List<Integer> progress = lanes.stream().map(lane -> lane.runtime().tickCount()).toList();
             commits.add(progress);
             assertThat(progress.stream().mapToInt(Integer::intValue).sum() - before).isEqualTo(budget);
@@ -305,13 +305,13 @@ class AsyncFactoryExecutionTest {
                         .isEqualTo(energyAfterStart.get(controllerIndex) - consumedTicks * 20L);
             }
             for (FactoryRecipeThread lane : lanes) lane.tick();
-            SharedIoEvents.completeLevelTick(level);
+            LevelTickFireEvents.completeLevelTick(level);
             assertThat(lanes).extracting(lane -> lane.runtime().tickCount()).containsExactlyElementsOf(progress);
             // A grant for an older request may free a lane to prepare its first request for this gameTime.
             // Once every free lane has had that opportunity, further same-time tickers are duplicates.
             List<String> callbacks = List.copyOf(phases);
             for (FactoryRecipeThread lane : lanes) lane.tick();
-            SharedIoEvents.completeLevelTick(level);
+            LevelTickFireEvents.completeLevelTick(level);
             assertThat(phases).containsExactlyElementsOf(callbacks);
             assertThat(lanes).extracting(lane -> lane.runtime().tickCount()).containsExactlyElementsOf(progress);
             for (int controllerIndex = 0; controllerIndex < controllers.size(); controllerIndex++) {
@@ -357,7 +357,7 @@ class AsyncFactoryExecutionTest {
             for (MachineControllerBlockEntity owner : controllers) {
                 for (FactoryRecipeThread attached : attachedLanes(owner)) attached.tick();
             }
-            SharedIoEvents.completeLevelTick(level);
+            LevelTickFireEvents.completeLevelTick(level);
             assertThat(lane.runtime().finishPending()).isTrue();
             RuntimeTestFixtures.advanceGameTime(level);
         }
@@ -395,7 +395,7 @@ class AsyncFactoryExecutionTest {
         }, null, MachineAsyncCoordinator.TaskHooks.defaults()))
                 .isEqualTo(MachineAsyncCoordinator.SubmissionResult.ACCEPTED);
 
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(mutations).containsExactly("state-only");
         assertThat(outputs.getFirst().itemHandler().amount(0)).isZero();
@@ -406,7 +406,7 @@ class AsyncFactoryExecutionTest {
         assertThat(((Map<?, ?>) tasksField.get(coordinator)).containsKey(oldKey)).isFalse();
         assertThat(attachedLanes(controller).getLast().runtime().active()).isTrue();
         assertThat(attachedLanes(controllers.getLast())).allSatisfy(peer -> assertThat(peer.runtime().active()).isTrue());
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(mutations).hasSize(1);
         assertThat(inputs.getFirst().energyStorage().getAmountAsLong()).isEqualTo(energy - (replacePending ? 20L : 0L));
 
@@ -414,13 +414,13 @@ class AsyncFactoryExecutionTest {
         lane.tick();
         if (finish) assertThat(workers).hasSize(1);
         for (int count = workers.size(); count > 0; count--) workers.remove().run();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         if (finish) {
             // Retrying respects the same two-step budget: the third finish stage waits for another gameTime.
             assertThat(lane.runtime().active()).isTrue();
             assertThat(outputs.getFirst().itemHandler().amount(0)).isZero();
             RuntimeTestFixtures.advanceGameTime(level);
-            SharedIoEvents.completeLevelTick(level);
+            LevelTickFireEvents.completeLevelTick(level);
             assertThat(lane.runtime().active()).isFalse();
             assertThat(outputs.getFirst().itemHandler().amount(0)).isEqualTo(1L);
             assertThat(inputs.getFirst().energyStorage().getAmountAsLong()).isEqualTo(energy);
