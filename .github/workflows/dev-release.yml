@@ -64,6 +64,11 @@ jobs:
     name: Nightly Dev Release ${{ needs.resolve-version.outputs.version }}
     needs: resolve-version
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/nibelungorum/mmcr-ci:1.21.1
+
+    env:
+      GRADLE_USER_HOME: /opt/gradle-home
 
     steps:
       - name: Checkout
@@ -72,20 +77,19 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Set up Java ${{ needs.resolve-version.outputs.java-version }}
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: ${{ needs.resolve-version.outputs.java-version }}
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
       - name: Apply CI version
         shell: bash
         run: |
           set -euo pipefail
           perl -0pi -e 's/^mod_version=.*/mod_version=${{ needs.resolve-version.outputs.mod-version }}/m' gradle.properties
+
+      - name: Restore prewarmed Gradle state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build .gradle
+          cp -a /opt/mmcr-seed/build/. build/
+          cp -a /opt/mmcr-seed/project-gradle/. .gradle/
 
       - name: Compile
         run: gradle compileJava
