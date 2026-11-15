@@ -1,0 +1,15 @@
+.git
+.codegraph
+.gradle
+.idea
+.superpowers
+.worktrees
+build
+docs
+example
+logs
+reference
+run
+src/generated
+**/build
+**/.gradle
