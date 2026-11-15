@@ -14,6 +14,11 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/nibelungorum/mmcr-ci:26.1.2
+
+    env:
+      GRADLE_USER_HOME: /opt/gradle-home
 
     steps:
       - name: Checkout
@@ -55,20 +60,19 @@ jobs:
           echo "java-version=${java_version}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Java ${{ steps.version.outputs.java-version }}
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: ${{ steps.version.outputs.java-version }}
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
       - name: Apply CI version
         shell: bash
         run: |
           set -euo pipefail
           perl -0pi -e 's/^mod_version=.*/mod_version=${{ steps.version.outputs.mod-version }}/m' gradle.properties
+
+      - name: Restore prewarmed Gradle state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build .gradle
+          cp -a /opt/mmcr-seed/build/. build/
+          cp -a /opt/mmcr-seed/project-gradle/. .gradle/
 
       - name: Compile
         run: gradle compileJava

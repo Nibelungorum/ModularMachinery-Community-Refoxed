@@ -22,6 +22,7 @@ RUN apt-get update \
 
 FROM toolchain AS warmup
 
+ENV CI=true
 ENV GRADLE_USER_HOME=/opt/gradle-home
 WORKDIR /__w/ModularMachinery-Community-Refoxed/ModularMachinery-Community-Refoxed
 
@@ -35,6 +36,11 @@ RUN gradle --no-daemon compileJava runClientData runServerData \
     && cp -a .gradle /opt/mmcr-seed/project-gradle
 
 FROM toolchain AS runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gh jq \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 LABEL org.opencontainers.image.source="https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed" \
       org.opencontainers.image.description="Prewarmed MMCR 26.1.2 NeoForge CI environment"
