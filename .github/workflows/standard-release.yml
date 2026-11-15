@@ -27,6 +27,10 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
+      - name: Trust workspace for GitHub CLI
+        shell: bash
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Resolve release version
         id: version
         shell: bash
