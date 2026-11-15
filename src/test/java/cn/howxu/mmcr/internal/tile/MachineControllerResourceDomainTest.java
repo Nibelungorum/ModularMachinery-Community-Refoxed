@@ -4,7 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.config.ServerConfig;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
@@ -57,7 +57,7 @@ class MachineControllerResourceDomainTest {
     @AfterEach
     void cleanup() throws Exception {
         try {
-            for (ServerLevel level : levels) SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            for (ServerLevel level : levels) LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         } finally {
             levels.clear();
             if (serverThreadScope != null) serverThreadScope.close();

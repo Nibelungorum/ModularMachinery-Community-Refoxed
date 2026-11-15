@@ -40,7 +40,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBloc
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.runtime.CraftingRuntime;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
@@ -471,7 +471,7 @@ public final class PatternBatchRuntimeGameTest {
             ((ServerLevelData) helper.getLevel().getLevelData()).setGameTime(next);
             SharedIoCoordinator.get(helper.getLevel()).beginExecutionRound(next, true);
             controller.serverTick();
-            SharedIoEvents.completeLevelTick(helper.getLevel());
+            LevelTickFireEvents.completeLevelTick(helper.getLevel());
             // SYNC execution still publishes asynchronous receipts. Advance their real worker/ACK boundary explicitly.
             if (runReceiptWorkers) drainReceiptWorkers();
         }

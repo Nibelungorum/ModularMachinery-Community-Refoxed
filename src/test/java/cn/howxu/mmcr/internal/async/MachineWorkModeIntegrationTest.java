@@ -20,7 +20,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.config.ServerConfig;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
@@ -136,14 +136,14 @@ class MachineWorkModeIntegrationTest {
         controller.serverTick();
         permit = coordinator.controllerPermit(controller.getBlockPos());
         assertThat(permit.eligible(round, level.getGameTime(), true)).isTrue();
-        SharedIoEvents.completeLevelTick(level);
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(coordinator.executionRoundId()).isEqualTo(round);
 
         // A loaded controller not called by the chunk ticker gets no new-round qualification.
         long unticked = RuntimeTestFixtures.beginLevelTick(level, true);
         assertThat(permit.eligible(unticked, level.getGameTime(), true)).isFalse();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(coordinator.executionRoundId()).isEqualTo(unticked);
     }
 
@@ -167,9 +167,9 @@ class MachineWorkModeIntegrationTest {
                 () -> permit.eligible(coordinator.executionRoundId(), level.getGameTime(),
                         level.tickRateManager().runsNormally()), domain::id, () -> 0L));
 
-        SharedIoEvents.onLevelTick(new LevelTickEvent.Post(() -> true, level));
+        LevelTickFireEvents.onLevelTick(new LevelTickEvent.Post(() -> true, level));
         assertThat(consumed).hasValue(1);
-        SharedIoEvents.onLevelTick(new LevelTickEvent.Post(() -> true, level));
+        LevelTickFireEvents.onLevelTick(new LevelTickEvent.Post(() -> true, level));
 
         assertThat(consumed).hasValue(1);
         assertThat(coordinator.executionRoundId()).isEqualTo(round);
@@ -189,8 +189,8 @@ class MachineWorkModeIntegrationTest {
         long frozen = RuntimeTestFixtures.beginLevelTick(level, false);
         controller.serverTick();
         assertThat(permit.eligible(frozen, level.getGameTime(), true)).isFalse();
-        SharedIoEvents.completeLevelTick(level);
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(coordinator.executionRoundId()).isEqualTo(frozen);
         long resumed = RuntimeTestFixtures.beginLevelTick(level, true);
         assertThat(permit.eligible(resumed, level.getGameTime(), true)).isFalse();
@@ -253,8 +253,8 @@ class MachineWorkModeIntegrationTest {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
         controller.serverTick();
         var replacement = coordinator.controllerPermit(controller.getBlockPos());
-        SharedIoEvents.completeLevelTick(level);
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(replacement).isNotSameAs(previous);
         assertThat(previous.eligible(round, level.getGameTime(), true)).isFalse();
@@ -372,7 +372,7 @@ class MachineWorkModeIntegrationTest {
         var permit = previous.controllerPermit(controller.getBlockPos());
         assertThat(permit.eligible(round, level.getGameTime(), true)).isTrue();
 
-        SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         SharedIoCoordinator replacement = SharedIoCoordinator.get(level);
         RuntimeTestFixtures.beginLevelTick(level, true);
 
@@ -418,10 +418,10 @@ class MachineWorkModeIntegrationTest {
 
         assertThat(async.hasPendingMainStepForTesting()).isTrue();
         assertThat(order).isEmpty();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(order).containsExactly("async-main-step", "shared-io-resolve");
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(order).containsExactly("async-main-step", "shared-io-resolve");
     }
 
@@ -484,7 +484,7 @@ class MachineWorkModeIntegrationTest {
                         result -> context -> AsyncContinuation.Yield.complete()))).isTrue();
         assertThat(hasPendingMainStep(coordinator)).isTrue();
 
-        SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         coordinator.pumpMainThreadSteps();
 
         assertThat(committed).isFalse();
@@ -548,7 +548,7 @@ class MachineWorkModeIntegrationTest {
             workers.remove().run();
         }
 
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(lane.runtime().active()).isTrue();
         assertThat(phases).containsExactly("before-start");
@@ -563,7 +563,7 @@ class MachineWorkModeIntegrationTest {
             assertThat(tasks.keySet()).anyMatch(key -> key.laneId().equals("program/base"));
             assertThat(workers).hasSize(1 + queuedReceiptWorkers(coordinator));
         }
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(phases).containsExactly("before-start");
         assertThat(lane.runtime().tickCount()).isZero();
     }
@@ -958,7 +958,7 @@ class MachineWorkModeIntegrationTest {
         RuntimeTestFixtures.beginLevelTick(level, true);
         controller.serverTick();
         drainQueuedCoordinator(async, workers);
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         drainQueuedCoordinator(async, workers);
 
         assertThat(thread.runtime().active()).isTrue();
@@ -1089,7 +1089,7 @@ class MachineWorkModeIntegrationTest {
         RuntimeTestFixtures.beginLevelTick(level, true);
         controller.serverTick();
         drainQueuedCoordinator(async, workers);
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         drainQueuedCoordinator(async, workers);
         SharedIoCoordinator.get(level).resolve(level);
 
@@ -1367,7 +1367,7 @@ class MachineWorkModeIntegrationTest {
 
     private void completeModeSwitchPost(ModeSwitchFixture fixture) {
         drainModeSwitchWorkers(fixture);
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         drainModeSwitchWorkers(fixture);
     }
 
@@ -1430,7 +1430,7 @@ class MachineWorkModeIntegrationTest {
         MachineAsyncCoordinator.get(level).completeTick(() -> 0);
 
         interrupt.accept(controller);
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(thread.isStartPending()).isFalse();
         assertThat(thread.runtime().active()).isFalse();

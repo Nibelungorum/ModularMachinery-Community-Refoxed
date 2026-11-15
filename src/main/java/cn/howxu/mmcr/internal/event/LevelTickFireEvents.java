@@ -19,9 +19,9 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class SharedIoEvents {
+public final class LevelTickFireEvents {
 
-    private SharedIoEvents() {
+    private LevelTickFireEvents() {
     }
 
     public static void onLevelPreTick(LevelTickEvent.Pre event) {

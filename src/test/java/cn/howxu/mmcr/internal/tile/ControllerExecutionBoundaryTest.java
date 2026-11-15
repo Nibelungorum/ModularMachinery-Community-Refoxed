@@ -13,7 +13,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
@@ -82,7 +82,7 @@ class ControllerExecutionBoundaryTest {
     @AfterEach
     void cleanup() throws Exception {
         try {
-            for (ServerLevel level : levels) SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            for (ServerLevel level : levels) LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
             RecipeRegistry.clearForTesting();
             ConfigTestSupport.setMachineWorkMode(previousMode);
             setBudget(previousBudget);
@@ -377,11 +377,11 @@ class ControllerExecutionBoundaryTest {
     private static void pre(ServerLevel level) {
         RuntimeTestFixtures.advanceGameTime(level);
         level.tickRateManager().tick();
-        SharedIoEvents.onLevelPreTick(new LevelTickEvent.Pre(() -> true, level));
+        LevelTickFireEvents.onLevelPreTick(new LevelTickEvent.Pre(() -> true, level));
     }
 
     private static void post(ServerLevel level) {
-        SharedIoEvents.onLevelTick(new LevelTickEvent.Post(() -> true, level));
+        LevelTickFireEvents.onLevelTick(new LevelTickEvent.Post(() -> true, level));
     }
 
     private static void setBudget(int budget) {

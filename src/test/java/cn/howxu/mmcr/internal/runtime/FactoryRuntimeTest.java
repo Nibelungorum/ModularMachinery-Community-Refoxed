@@ -61,7 +61,7 @@ import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -270,7 +270,7 @@ class FactoryRuntimeTest {
             assertThat(factory.snapshot().lanes().getFirst().tick()).isEqualTo(lane.tickCount());
             assertThat(before.lanes().getFirst().tick()).isEqualTo(tick);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -337,7 +337,7 @@ class FactoryRuntimeTest {
             assertThat(request.isStillValid()).isFalse();
             assertThat(lane.runtime().active()).isFalse();
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -426,7 +426,7 @@ class FactoryRuntimeTest {
             assertThat(running.active()).isTrue();
         } finally {
             ServerConfig.FACTORY_IDLE_TIMEOUT_TICKS.set(idleTimeout);
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -461,7 +461,7 @@ class FactoryRuntimeTest {
             assertThat(factory.activeRuntimes()).extracting(CraftingRuntime::recipe).containsExactly(recipe);
             assertThat(input.itemStorage().amount(0)).isZero();
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -553,7 +553,207 @@ class FactoryRuntimeTest {
                     .allSatisfy(lane -> assertThat(after.presentationLanes().get(lane.index())).isSameAs(lane));
             assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans + 1);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void quota_exhausted_idle_lanes_sleep_until_quota_is_released(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_quota_sleep_" + mode.name().toLowerCase()),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 1);
+            RecipeRegistry.registerStatic(recipe);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            setItem(controller.getFactoryController().itemStorage(), 0,
+                    new ItemStack(ModItems.THREAD_DISPERSER.get(), 3));
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRecipeCountFor(recipe.id())).isEqualTo(1);
+            addIdleLanes(factory, controller, 3, "factory-quota-idle-");
+            tickAttachedFactory(controller);
+
+            long searches = factory.searchAttemptsForTesting();
+            long scans = factory.asyncSearchScansForTesting();
+            long checks = factory.schedulingChecksForTesting();
+            CraftingRuntime active = factory.activeRuntimes().getFirst();
+            int progress = active.tickCount();
+            for (int tick = 0; tick < 4; tick++) tickAttachedFactory(controller);
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(searches);
+            assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans);
+            assertThat(factory.schedulingChecksForTesting()).isEqualTo(checks);
+            assertThat(active.tickCount()).isGreaterThan(progress);
+
+            factory.snapshot();
+            FactoryRecipeThread owner = laneThreadSnapshots(factory).keySet().stream()
+                    .filter(lane -> lane.runtime() == active).findFirst().orElseThrow();
+            var removeLane = FactoryRuntime.class.getDeclaredMethod("removeLane", FactoryRecipeThread.class);
+            removeLane.setAccessible(true);
+            removeLane.invoke(factory, owner);
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRuntimes()).singleElement()
+                    .satisfies(replacement -> assertThat(replacement).isNotSameAs(active));
+        } finally {
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void partially_exhausted_quota_still_admits_available_recipe() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe first = RecipeTestSupport.create(MMCR.id("factory_partial_quota_first"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 1);
+            MachineRecipe second = RecipeTestSupport.create(MMCR.id("factory_partial_quota_second"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 1);
+            RecipeRegistry.registerStatic(first);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            setItem(controller.getFactoryController().itemStorage(), 0,
+                    new ItemStack(ModItems.THREAD_DISPERSER.get(), 3));
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRecipeCountFor(first.id())).isEqualTo(1);
+            RecipeRegistry.registerStatic(second);
+            addIdleLanes(factory, controller, 3, "factory-partial-quota-idle-");
+
+            tickAttachedFactory(controller);
+
+            assertThat(factory.activeRecipeCountFor(first.id())).isEqualTo(1);
+            assertThat(factory.activeRuntimes()).anySatisfy(runtime ->
+                    assertThat(runtime.recipe()).isSameAs(second));
+        } finally {
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void same_context_idle_lanes_share_search_and_backoff() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = attachedFactoryController(energy);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        installFactoryCoordinator(level, MachineAsyncCoordinator.forTesting(workers::addLast));
+        try {
+            MachineRecipe blocked = RecipeTestSupport.create(MMCR.id("factory_shared_search_backoff"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 4,
+                    false, List.of(), List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4L)));
+            RecipeRegistry.registerStatic(blocked);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.ensureBaseLane(controller);
+            factory.setLaneLimit(4);
+            addIdleLanes(factory, controller, 3, "factory-shared-idle-");
+
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            pumpFactoryWorkers(controller, workers);
+            factory.snapshot();
+            FactoryRecipeThread representative = laneThreadSnapshots(factory).keySet().stream()
+                    .filter(lane -> lane.searchFailureKey() != null).findFirst().orElseThrow();
+            long attempts = factory.searchAttemptsForTesting();
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(attempts);
+
+            while (level.getGameTime() < representative.nextSearchTick()) RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(attempts + 1L);
+        } finally {
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "SYNC"})
+    void same_context_sync_lanes_share_failure_without_repeat_search(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = attachedFactoryController(energy);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe blocked = RecipeTestSupport.create(MMCR.id("factory_shared_sync_" + mode.name().toLowerCase()),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 4,
+                    false, List.of(), List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4L)));
+            RecipeRegistry.registerStatic(blocked);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.ensureBaseLane(controller);
+            factory.setLaneLimit(4);
+            addIdleLanes(factory, controller, 3, "factory-shared-sync-idle-");
+
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            assertThat(factory.threadSnapshots()).filteredOn(lane -> !lane.active())
+                    .allSatisfy(lane -> assertThat(lane.lastFailureUnloc())
+                            .isEqualTo("gui.mmcr.controller.failure.missing_energy"));
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+        } finally {
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void successful_shared_search_admits_next_lane_without_backoff() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        installFactoryCoordinator(level, MachineAsyncCoordinator.forTesting(workers::addLast));
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_shared_search_success"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 4);
+            RecipeRegistry.registerStatic(recipe);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.ensureBaseLane(controller);
+            factory.setLaneLimit(4);
+            addIdleLanes(factory, controller, 3, "factory-shared-success-idle-");
+
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            pumpFactoryWorkers(controller, workers);
+            assertThat(factory.activeRuntimes()).hasSize(4);
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(recipe), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+        } finally {
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void different_core_search_contexts_do_not_block_each_other() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        ItemInputBusBlockEntity input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        MachineRecipe iron = itemInputRecipe("factory_shared_context_iron", Items.IRON_INGOT);
+        MachineRecipe gold = itemInputRecipe("factory_shared_context_gold", Items.GOLD_INGOT);
+        RecipeRegistry.registerStaticBatch(List.of(iron, gold));
+        MachineControllerBlockEntity controller = sharedFactoryController(MMCR.id("test_cube"), iron.id(), input);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ArrayDeque<Runnable> workers = new ArrayDeque<>();
+        installFactoryCoordinator(level, MachineAsyncCoordinator.forTesting(workers::addLast));
+        try {
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.setLaneLimit(2);
+            factory.syncCoreLanes(controller, controller.currentStructureSnapshot().machine(), List.of(iron, gold));
+
+            factory.tick(List.of(iron, gold), 1L, level.getGameTime());
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(2L);
+        } finally {
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -591,7 +791,7 @@ class FactoryRuntimeTest {
             assertThat(before.lanes().getFirst().tick()).isEqualTo(initialTick);
             assertThat(before.presentationLanes().getFirst().tick()).isEqualTo(initialTick);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -633,7 +833,7 @@ class FactoryRuntimeTest {
             assertThat(before.activeLaneCount()).isEqualTo(1);
             assertThat(before.failure()).isNull();
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1104,7 +1304,7 @@ class FactoryRuntimeTest {
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
             assertThat(input.itemStorage().amount(0)).isZero();
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1627,14 +1827,14 @@ class FactoryRuntimeTest {
                     RuntimeTestFixtures.advanceGameTime(level);
                     RuntimeTestFixtures.beginLevelTick(level, true);
                     controller.serverTick();
-                    SharedIoEvents.completeLevelTick(level);
+                    LevelTickFireEvents.completeLevelTick(level);
                 }
                 if (execution == 0 && !base.active()) {
                     // A queued ASYNC restart is admitted at its next execution boundary.
                     RuntimeTestFixtures.advanceGameTime(level);
                     RuntimeTestFixtures.beginLevelTick(level, true);
                     controller.serverTick();
-                    SharedIoEvents.completeLevelTick(level);
+                    LevelTickFireEvents.completeLevelTick(level);
                     assertThat(base.active()).isTrue();
                     assertThat(base.tickCount()).isZero();
                 }
@@ -1676,7 +1876,7 @@ class FactoryRuntimeTest {
             assertThat(lane.isStartPending()).isFalse();
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(searches);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1742,7 +1942,7 @@ class FactoryRuntimeTest {
             assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(1);
             assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1779,7 +1979,7 @@ class FactoryRuntimeTest {
             assertThat(runtime.activeRecipeCountFor(recipe.id())).isEqualTo(1);
             assertThat(input.itemStorage().amount(0)).isEqualTo(1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1817,7 +2017,7 @@ class FactoryRuntimeTest {
             assertThat(input.itemStorage().amount(0)).isZero();
             assertThat(runtime.searchAttemptsForTesting()).isEqualTo(searches + 1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -1855,7 +2055,7 @@ class FactoryRuntimeTest {
             assertThat(input.itemStorage().amount(0)).isZero();
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(searches + 1L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -2053,7 +2253,7 @@ class FactoryRuntimeTest {
                     assertThat(lane.isStartPending()).isFalse());
             if (captureFailure) assertThat(((CaptureFailingInputBus) input).captureFailures).isEqualTo(1);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -2109,7 +2309,7 @@ class FactoryRuntimeTest {
             assertThat(input.itemStorage().amount(0)).isZero();
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(3L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -2163,7 +2363,7 @@ class FactoryRuntimeTest {
             assertThat(prepared).containsExactly(gold.id());
             assertThat(factory.searchAttemptsForTesting()).isEqualTo(3L);
         } finally {
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
         }
     }
 
@@ -3682,7 +3882,7 @@ class FactoryRuntimeTest {
         RuntimeTestFixtures.advanceGameTime(level);
         RuntimeTestFixtures.beginLevelTick(level, true);
         controller.serverTick();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         MachineAsyncCoordinator.get(level).completeUntilIdleForTesting(() -> SharedIoCoordinator.get(level).resolve(level));
         MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
     }
@@ -3726,6 +3926,15 @@ class FactoryRuntimeTest {
                     return delegate.facet(type);
                 }
             }));
+        }
+    }
+
+    private static void addIdleLanes(FactoryRuntime factory, MachineControllerBlockEntity controller,
+                                     int count, String prefix) throws ReflectiveOperationException {
+        var addLane = FactoryRuntime.class.getDeclaredMethod("addLane", FactoryRecipeThread.class);
+        addLane.setAccessible(true);
+        for (int index = 0; index < count; index++) {
+            addLane.invoke(factory, FactoryRecipeThread.simple(controller, prefix + index));
         }
     }
 

@@ -66,7 +66,7 @@ import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.event.ControllerUiEvents;
 import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
 import cn.howxu.mmcr.internal.multiblock.ComponentClaimPolicy;
@@ -222,7 +222,7 @@ class MachineControllerBlockEntityTest {
         ControllerSyncEvents.clear();
         textRegistrations.forEach(ControllerScreenTextRegistry.Registration::unregister);
         textRegistrations.clear();
-        runtimeStateBatchLevels.forEach(level -> SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level)));
+        runtimeStateBatchLevels.forEach(level -> LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level)));
         runtimeStateBatchLevels.clear();
     }
 
@@ -939,7 +939,7 @@ class MachineControllerBlockEntityTest {
         assertThat(controller.lifecycleEpoch()).isGreaterThan(lifecycle);
         assertThat(permit.eligible(round, level.getGameTime(), true)).isFalse();
         assertThat(machineStatePackets(player)).hasSize(1);
-        SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
     }
 
     @Test
@@ -1859,7 +1859,7 @@ class MachineControllerBlockEntityTest {
         MachineControllerBlockEntity.runWithBatchedAsyncRuntimeState(level, () -> {
             lane.activeRecipe().setTick(1);
             controller.syncRecipeRuntimeFailure(lane);
-            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
             MachineControllerBlockEntity.flushQueuedAsyncRuntimeState(level);
             assertThat(controller.currentRuntimeSnapshot().factory().presentationLanes().getFirst().tick()).isEqualTo(1);
             assertThat(runtime.snapshotBuildCountForTesting()).isEqualTo(publications);
@@ -1932,9 +1932,9 @@ class MachineControllerBlockEntityTest {
         controller.componentRuntime().replaceModifiers(Map.of("changed", List.of()));
         RuntimeTestFixtures.republish(controller);
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        LevelTickFireEvents.completeLevelTick((ServerLevel) controller.getLevel());
         controller.tickRuntimeWork((ServerLevel) controller.getLevel(), controller.getBlockPos());
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        LevelTickFireEvents.completeLevelTick((ServerLevel) controller.getLevel());
 
         assertThat(runtime.craftingRuntime().failure()).isNull();
         assertThat(runtime.craftingRuntime().active()).isTrue();
@@ -2512,7 +2512,7 @@ class MachineControllerBlockEntityTest {
             assertThat(scan).isNotNull();
             assertThat(scan.batchSize()).isEqualTo(expectedBudget);
             assertThat(waitForPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
-            SharedIoEvents.completeLevelTick(level);
+            LevelTickFireEvents.completeLevelTick(level);
 
             if (size < 80) {
                 assertThat(controller.structureWorkSnapshotForTesting().scan()).isNull();
@@ -2549,7 +2549,7 @@ class MachineControllerBlockEntityTest {
         beginSafetyCheck(controller);
 
         assertThat(waitForPendingMainStep(MachineAsyncCoordinator.get(level))).isTrue();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(controller.structureWorkSnapshotForTesting().scan()).isNull();
         assertThat(controller.scanBatchCountForTesting()).isEqualTo(1);
@@ -2574,7 +2574,7 @@ class MachineControllerBlockEntityTest {
         assertThat(pendingTask.get(controller)).isSameAs(task);
         assertThat(controller.isPendingStructureInvalidationForTesting()).isFalse();
         assertThat(waitForPendingMainStep(MachineAsyncCoordinator.get((ServerLevel) controller.getLevel()))).isTrue();
-        SharedIoEvents.completeLevelTick((ServerLevel) controller.getLevel());
+        LevelTickFireEvents.completeLevelTick((ServerLevel) controller.getLevel());
         assertThat(controller.structureScanCursorForTesting()).isEqualTo(scan.batchSize());
     }
 
@@ -2811,13 +2811,13 @@ class MachineControllerBlockEntityTest {
     //     while (level.getGameTime() < nextCheckTick) {
     //         RuntimeTestFixtures.advanceGameTime(level);
     //         controller.tickStructure(level, controller.getBlockPos());
-    //         SharedIoEvents.completeLevelTick(level);
+    //         LevelTickFireEvents.completeLevelTick(level);
     //     }
     //     assertThat(controller.structureWorkSnapshotForTesting().scan()).isNotNull();
     //     for (int tick = 0; tick < 40 && controller.structureWorkSnapshotForTesting().scan() != null; tick++) {
     //         RuntimeTestFixtures.advanceGameTime(level);
     //         controller.tickStructure(level, controller.getBlockPos());
-    //         SharedIoEvents.completeLevelTick(level);
+    //         LevelTickFireEvents.completeLevelTick(level);
     //     }
 
     //     
@@ -2848,13 +2848,13 @@ class MachineControllerBlockEntityTest {
                 controller.structureSnapshot().pattern().pattern().keySet().iterator().next());
         level.setBlock(changedPos, Blocks.DIRT.defaultBlockState(), 3);
         controller.handleStructureBlockChanged(changedPos);
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(controller.structureSnapshot().formed()).isTrue();
         for (int tick = 0; tick < 64 && controller.structureSnapshot().formed(); tick++) {
             RuntimeTestFixtures.advanceGameTime(level);
             controller.tickStructure(level, controller.getBlockPos());
-            SharedIoEvents.completeLevelTick(level);
+            LevelTickFireEvents.completeLevelTick(level);
         }
 
         assertThat(controller.structureSnapshot().formed()).isFalse();
@@ -2872,7 +2872,7 @@ class MachineControllerBlockEntityTest {
 
         assertThat(controller.isRedstonePaused()).isTrue();
         assertThat(MachineAsyncCoordinator.get(level).hasPendingMainStepForTesting()).isTrue();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
         assertThat(controller.structureScanCursorForTesting()).isPositive();
     }
 
@@ -2891,7 +2891,7 @@ class MachineControllerBlockEntityTest {
 
         startPendingStructureScan(controller, level);
         controller.onChunkUnloaded();
-        SharedIoEvents.completeLevelTick(level);
+        LevelTickFireEvents.completeLevelTick(level);
 
         assertThat(controller.structureScanCursorForTesting()).isEqualTo(-1);
     }

@@ -19,7 +19,7 @@ import cn.howxu.mmcr.internal.command.ExportCommand;
 import cn.howxu.mmcr.internal.command.ReloadCommand;
 import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.event.ControllerSyncEvents;
-import cn.howxu.mmcr.internal.event.SharedIoEvents;
+import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.event.StructureDirtyEvents;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.network.PktBlueprintStageUpdatePayload;
@@ -304,12 +304,12 @@ public final class ModEventRegistration {
                     StructureDirtyEvents::onChunkLoaded,
                     ControllerSyncEvents::onChunkSent,
                     ControllerSyncEvents::onChunkUnWatch,
-                    SharedIoEvents::onLevelPreTick,
-                    SharedIoEvents::onLevelTick,
-                    SharedIoEvents::onServerTick,
+                    LevelTickFireEvents::onLevelPreTick,
+                    LevelTickFireEvents::onLevelTick,
+                    LevelTickFireEvents::onServerTick,
                     event -> {
                         ControllerSyncEvents.forgetLevel(event.getLevel());
-                        SharedIoEvents.onLevelUnload(event);
+                        LevelTickFireEvents.onLevelUnload(event);
                     },
                     RuntimeContentServerBridge::onServerAboutToStart,
                     event -> {
