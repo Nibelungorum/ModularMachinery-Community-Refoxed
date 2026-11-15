@@ -397,9 +397,10 @@ public final class FactoryRuntime {
                                              List<MachineRecipe> candidates, long structureVersion) {
         SharedSearchKey key = sharedSearchKey(context, lane);
         if (!tryAcquireSharedSearch(key, lane, context.gameTime())) return StartResult.DEFERRED;
-        StartResult result = lane.searchAndStartRecipe(context, candidates, structureVersion);
-        completeSharedSearch(key, lane, result);
-        return result;
+        FactoryRecipeThread.SearchStartOutcome outcome = lane.searchAndStartRecipeDetailed(context, candidates, structureVersion);
+        shareEquivalentFailure(key, lane, context, candidates, outcome.searchResult(), outcome.startResult());
+        completeSharedSearch(key, lane, outcome.startResult());
+        return outcome.startResult();
     }
 
     private void scheduleAsyncSearches(FactorySearchContext context, List<FactoryRecipeThread> laneSnapshot,
@@ -634,15 +635,21 @@ public final class FactoryRuntime {
 
     private void shareEquivalentFailure(FactoryRecipeThread owner, AsyncSearchRequest request,
                                         FactoryRecipeThread.SearchResult searchResult, StartResult ownerResult) {
-        if (ownerResult != StartResult.FAILED && ownerResult != StartResult.NO_MATCH) return;
+        shareEquivalentFailure(request.sharedKey(), owner, request.context(), request.candidates(), searchResult, ownerResult);
+    }
+
+    private void shareEquivalentFailure(SharedSearchKey key, FactoryRecipeThread owner, FactorySearchContext context,
+                                        List<MachineRecipe> candidates, @Nullable FactoryRecipeThread.SearchResult searchResult,
+                                        StartResult ownerResult) {
+        if (searchResult == null || ownerResult != StartResult.FAILED && ownerResult != StartResult.NO_MATCH) return;
         for (FactoryRecipeThread lane : List.copyOf(lanes)) {
-            if (lane == owner || lane.lastRecipeId() != null || !equivalentContext(request, lane)
+            if (lane == owner || lane.lastRecipeId() != null || !key.equals(sharedSearchKey(context, lane))
                     || !lane.isIdle() || lane.isStartPending() || pendingAsyncSearches.containsKey(lane)
                     || patternStartReservations.contains(lane)) continue;
             List<MachineRecipe> available = filterAvailableCandidates(
-                    lane.candidatesFor(request.candidates(), request.context().catalogVersion()), activeRecipeCounts);
-            lane.startSearchResult(request.context(), available,
-                    request.context().snapshot().structure().version(), searchResult);
+                    lane.candidatesFor(candidates, context.catalogVersion()), activeRecipeCounts);
+            if (available.isEmpty()) continue;
+            lane.startSearchResult(context, available, context.snapshot().structure().version(), searchResult);
             refreshLaneAccounting(lane);
         }
     }

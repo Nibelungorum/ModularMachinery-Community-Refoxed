@@ -671,6 +671,38 @@ class FactoryRuntimeTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "SYNC"})
+    void same_context_sync_lanes_share_failure_without_repeat_search(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        EnergyInputHatchBlockEntity energy = RuntimeTestFixtures.energyInput(new BlockPos(1, 0, 0));
+        MachineControllerBlockEntity controller = attachedFactoryController(energy);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe blocked = RecipeTestSupport.create(MMCR.id("factory_shared_sync_" + mode.name().toLowerCase()),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 4,
+                    false, List.of(), List.of(new EnergyRequirement(RecipeModifier.IOType.INPUT, 4L)));
+            RecipeRegistry.registerStatic(blocked);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            factory.ensureBaseLane(controller);
+            factory.setLaneLimit(4);
+            addIdleLanes(factory, controller, 3, "factory-shared-sync-idle-");
+
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+            assertThat(factory.threadSnapshots()).filteredOn(lane -> !lane.active())
+                    .allSatisfy(lane -> assertThat(lane.lastFailureUnloc())
+                            .isEqualTo("gui.mmcr.controller.failure.missing_energy"));
+            RuntimeTestFixtures.advanceGameTime(level);
+            factory.tick(List.of(blocked), 1L, level.getGameTime());
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(1L);
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
     @Test
     void successful_shared_search_admits_next_lane_without_backoff() throws Exception {
         ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);

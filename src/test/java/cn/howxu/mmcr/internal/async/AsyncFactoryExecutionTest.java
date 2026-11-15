@@ -599,9 +599,8 @@ class AsyncFactoryExecutionTest {
         assertThat(controller.runtimeSnapshot().factory().activeLaneCount()).isEqualTo(2);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void staggered_factory_searches_do_not_count_started_lanes_twice(boolean delayFirstSearch) throws Exception {
+    @Test
+    void delayed_shared_search_does_not_count_started_lanes_twice() throws Exception {
         MachineControllerBlockEntity controller = factoryController(3);
         MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("staggered_factory_searches"), MMCR.id("test_cube"), 20,
                 List.of(), List.of(), List.of(), 0, 3);
@@ -616,17 +615,13 @@ class AsyncFactoryExecutionTest {
 
         RuntimeTestFixtures.advanceGameTime(level);
         controller.serverTick();
-        Runnable secondSearch = workers.removeLast();
-        Runnable delayedSearch = secondSearch;
-        if (delayFirstSearch) {
-            delayedSearch = workers.removeLast();
-            workers.addLast(secondSearch);
-        }
+        assertThat(workers).hasSize(1);
+        Runnable delayedSearch = workers.removeLast();
         completeQueuedAsyncLevelTick(level, workers);
         assertThat(controller.runtimeSnapshot().factory().presentationLanes())
                 .filteredOn(FactoryRuntime.ThreadSnapshot::active)
                 .extracting(FactoryRuntime.ThreadSnapshot::laneId)
-                .containsExactly("base", delayFirstSearch ? "factory-1" : "factory-0");
+                .containsExactly("base");
 
         delayedSearch.run();
         completeQueuedAsyncLevelTick(level, workers);

@@ -503,9 +503,14 @@ public final class FactoryRecipeThread extends RecipeThread {
 
     public StartResult searchAndStartRecipe(FactorySearchContext context, List<MachineRecipe> candidates,
                                          long structureVersion) {
-        if (context == null) return StartResult.NO_MATCH;
-        if (runtime.active() || isStartPending()) return StartResult.DEFERRED;
-        if (context.maxParallelism() <= 0L) return StartResult.NO_MATCH;
+        return searchAndStartRecipeDetailed(context, candidates, structureVersion).startResult();
+    }
+
+    public SearchStartOutcome searchAndStartRecipeDetailed(FactorySearchContext context,
+                                                           List<MachineRecipe> candidates, long structureVersion) {
+        if (context == null) return new SearchStartOutcome(StartResult.NO_MATCH, null);
+        if (runtime.active() || isStartPending()) return new SearchStartOutcome(StartResult.DEFERRED, null);
+        if (context.maxParallelism() <= 0L) return new SearchStartOutcome(StartResult.NO_MATCH, null);
         setSearchContextKey(contextSearchContextKey(context));
         setSearchGameTime(context.gameTime());
         List<MachineRecipe> filtered = candidatesFor(candidates, context.catalogVersion());
@@ -513,9 +518,13 @@ public final class FactoryRecipeThread extends RecipeThread {
         long epoch = controller.lifecycleEpoch();
         long coreVersion = recipeSetVersion;
         SearchResult result = search(context, filtered, structureVersion, runtime);
-        return epoch == controller.lifecycleEpoch() && coreVersion == recipeSetVersion
+        StartResult started = epoch == controller.lifecycleEpoch() && coreVersion == recipeSetVersion
                 ? startSearchResult(context, filtered, structureVersion, result)
                 : StartResult.CANCELLED;
+        return new SearchStartOutcome(started, result);
+    }
+
+    public record SearchStartOutcome(StartResult startResult, @Nullable SearchResult searchResult) {
     }
 
     /** Computes an immutable factory-lane search result without accessing the lane runtime. */
