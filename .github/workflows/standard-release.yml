@@ -60,6 +60,10 @@ jobs:
           echo "java-version=${java_version}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
+      - name: Trust workspace for GitHub CLI
+        shell: bash
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Apply CI version
         shell: bash
         run: |
