@@ -14,10 +14,6 @@
       "item": "mmcr:modularium",
       "link_recipe": true,
       "text": {"translate": "guide.mmcr_patchouli.entry.basics.acquisition.p1"}
-    },
-    {
-      "type": "patchouli:text",
-      "text": {"translate": "guide.mmcr_patchouli.entry.basics.acquisition.p2"}
     }
   ]
 }
