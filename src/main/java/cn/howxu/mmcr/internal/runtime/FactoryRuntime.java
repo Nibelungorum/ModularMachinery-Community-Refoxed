@@ -1431,7 +1431,7 @@ public final class FactoryRuntime {
         }
         long idleDeadline = lane.idleTimeoutTick(gameTime);
         long searchDeadline = !pendingAsyncSearches.containsKey(lane) && !patternStartReservations.contains(lane)
-                && schedulingMaxParallelism > 0L && !schedulingCandidates.isEmpty()
+                && schedulingMaxParallelism > 0L && !schedulingCandidates.isEmpty() && !searchQuotaExhausted(lane)
                 ? lane.canSearch(gameTime, currentSearchContextKey(snapshot, lane)) ? gameTime : lane.nextSearchTick()
                 : Long.MAX_VALUE;
         scheduleLaneDeadline(lane, Math.min(searchDeadline, idleDeadline));
@@ -1564,6 +1564,7 @@ public final class FactoryRuntime {
         ResourceLocation patternId = patternStartReservations.contains(lane) ? lane.runtime().pendingPatternRecipeId() : null;
         LaneAccounting previous = laneAccounting.get(lane);
         dirtySnapshotLanes.add(lane);
+        if (previous != null && !Objects.equals(previous.recipeId(), recipeId)) dirtyLaneSchedules.addAll(lanes);
         if (previous != null && previous.active() == active && Objects.equals(previous.recipeId(), recipeId)
                 && Objects.equals(previous.patternRecipeId(), patternId)) return;
         if (previous != null) {
@@ -1617,6 +1618,14 @@ public final class FactoryRuntime {
 
     private List<MachineRecipe> fullSearchCandidates(FactorySearchContext context, @Nullable FactoryRecipeThread lane) {
         return filterAvailableCandidates(searchCandidateScope(context, lane), activeRecipeCounts);
+    }
+
+    private boolean searchQuotaExhausted(FactoryRecipeThread lane) {
+        MachineRecipeCatalog catalog = RecipeRegistry.catalogForPool(controller.currentRecipePoolId());
+        List<MachineRecipe> ordered = orderedCandidates(lanes.getFirst().candidatesFor(
+                nonNullCandidates(schedulingCandidates), catalog.version()), catalog);
+        List<MachineRecipe> scope = lane.candidatesFor(ordered, catalog.version());
+        return !scope.isEmpty() && filterAvailableCandidates(scope, activeRecipeCounts).isEmpty();
     }
 
     private List<MachineRecipe> searchCandidateScope(FactorySearchContext context, @Nullable FactoryRecipeThread lane) {

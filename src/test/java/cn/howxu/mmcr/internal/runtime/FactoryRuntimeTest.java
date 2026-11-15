@@ -557,6 +557,83 @@ class FactoryRuntimeTest {
     }
 
     @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void quota_exhausted_idle_lanes_sleep_until_quota_is_released(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_quota_sleep_" + mode.name().toLowerCase()),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 1);
+            RecipeRegistry.registerStatic(recipe);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            setItem(controller.getFactoryController().itemHandler(), 0,
+                    new ItemStack(ModItems.THREAD_DISPERSER.get(), 3));
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRecipeCountFor(recipe.id())).isEqualTo(1);
+            addIdleLanes(factory, controller, 3, "factory-quota-idle-");
+            tickAttachedFactory(controller);
+
+            long searches = factory.searchAttemptsForTesting();
+            long scans = factory.asyncSearchScansForTesting();
+            long checks = factory.schedulingChecksForTesting();
+            CraftingRuntime active = factory.activeRuntimes().getFirst();
+            int progress = active.tickCount();
+            for (int tick = 0; tick < 4; tick++) tickAttachedFactory(controller);
+
+            assertThat(factory.searchAttemptsForTesting()).isEqualTo(searches);
+            assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans);
+            assertThat(factory.schedulingChecksForTesting()).isEqualTo(checks);
+            assertThat(active.tickCount()).isGreaterThan(progress);
+
+            factory.snapshot();
+            FactoryRecipeThread owner = laneThreadSnapshots(factory).keySet().stream()
+                    .filter(lane -> lane.runtime() == active).findFirst().orElseThrow();
+            var removeLane = FactoryRuntime.class.getDeclaredMethod("removeLane", FactoryRecipeThread.class);
+            removeLane.setAccessible(true);
+            removeLane.invoke(factory, owner);
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRuntimes()).singleElement()
+                    .satisfies(replacement -> assertThat(replacement).isNotSameAs(active));
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
+    void partially_exhausted_quota_still_admits_available_recipe() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)));
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe first = RecipeTestSupport.create(MMCR.id("factory_partial_quota_first"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 1);
+            MachineRecipe second = RecipeTestSupport.create(MMCR.id("factory_partial_quota_second"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 1);
+            RecipeRegistry.registerStatic(first);
+            FactoryRuntime factory = controllerFactoryRuntime(controller);
+            setItem(controller.getFactoryController().itemHandler(), 0,
+                    new ItemStack(ModItems.THREAD_DISPERSER.get(), 3));
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRecipeCountFor(first.id())).isEqualTo(1);
+            RecipeRegistry.registerStatic(second);
+            addIdleLanes(factory, controller, 3, "factory-partial-quota-idle-");
+
+            tickAttachedFactory(controller);
+
+            assertThat(factory.activeRecipeCountFor(first.id())).isEqualTo(1);
+            assertThat(factory.activeRuntimes()).anySatisfy(runtime ->
+                    assertThat(runtime.recipe()).isSameAs(second));
+        } finally {
+            SharedIoEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @ParameterizedTest
     @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
     void attached_base_post_start_and_progress_update_factory_snapshots_without_manual_notification(MachineWorkMode mode)
             throws Exception {
@@ -3633,6 +3710,15 @@ class FactoryRuntimeTest {
                     return delegate.facet(type);
                 }
             }));
+        }
+    }
+
+    private static void addIdleLanes(FactoryRuntime factory, MachineControllerBlockEntity controller,
+                                     int count, String prefix) throws ReflectiveOperationException {
+        var addLane = FactoryRuntime.class.getDeclaredMethod("addLane", FactoryRecipeThread.class);
+        addLane.setAccessible(true);
+        for (int index = 0; index < count; index++) {
+            addLane.invoke(factory, FactoryRecipeThread.simple(controller, prefix + index));
         }
     }
 
