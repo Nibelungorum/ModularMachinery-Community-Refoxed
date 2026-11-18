@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /**
  * Canonical terminal state sent by the server after a terminal mutation.
@@ -30,7 +31,7 @@ import java.util.Optional;
 public record PktTerminalStatePayload(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
                                         boolean ae2Available, List<Integer> stages, Component machineName,
                                         List<Integer> previewLayers, String statusKey,
-                                        @Nullable Identifier machineId, Direction facing) implements CustomPacketPayload {
+                                        @Nullable Identifier machineId, Direction facing, Optional<BoundingBox> bounds) implements CustomPacketPayload {
     public static final int MAX_PREVIEW_LAYERS = 128;
     public static final Type<PktTerminalStatePayload> TYPE = new Type<>(MMCR.id("terminal_state"));
     private static final StreamCodec<ByteBuf, List<Integer>> STAGES_CODEC =
@@ -66,7 +67,7 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
     public PktTerminalStatePayload(TerminalData data, boolean controllerAvailable, boolean storageAvailable,
             boolean ae2Available, List<Integer> stages, Component machineName, List<Integer> previewLayers, String statusKey) {
         this(data, controllerAvailable, storageAvailable, ae2Available, stages, machineName, previewLayers, statusKey,
-                null, Direction.SOUTH);
+                null, Direction.SOUTH, Optional.empty());
     }
 
     @Override
@@ -78,7 +79,7 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
         context.enqueueWork(() -> {
             TerminalClientHandler.applyState(data, controllerAvailable, storageAvailable,
                     ae2Available, stages, machineName, previewLayers, statusKey);
-            TerminalHighlightClientHandler.applyState(data, controllerAvailable ? machineId : null, facing);
+            TerminalHighlightClientHandler.applyState(data, controllerAvailable ? machineId : null, facing, bounds.orElse(null));
         });
     }
 
@@ -94,6 +95,7 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
         ByteBufCodecs.STRING_UTF8.encode(buffer, payload.statusKey);
         ByteBufCodecs.optional(Identifier.STREAM_CODEC).encode(buffer, Optional.ofNullable(payload.machineId));
         Direction.STREAM_CODEC.encode(buffer, payload.facing);
+        ByteBufCodecs.optional(BoundingBox.STREAM_CODEC).encode(buffer, payload.bounds);
     }
 
     private static PktTerminalStatePayload read(RegistryFriendlyByteBuf buffer) {
@@ -102,7 +104,7 @@ public record PktTerminalStatePayload(TerminalData data, boolean controllerAvail
                 STAGES_CODEC.decode(buffer), ComponentSerialization.STREAM_CODEC.decode(buffer), readPreviewLayers(buffer),
                 ByteBufCodecs.STRING_UTF8.decode(buffer),
                 ByteBufCodecs.optional(Identifier.STREAM_CODEC).decode(buffer).orElse(null),
-                Direction.STREAM_CODEC.decode(buffer));
+                Direction.STREAM_CODEC.decode(buffer), ByteBufCodecs.optional(BoundingBox.STREAM_CODEC).decode(buffer));
     }
 
     private static List<Integer> readPreviewLayers(RegistryFriendlyByteBuf buffer) {

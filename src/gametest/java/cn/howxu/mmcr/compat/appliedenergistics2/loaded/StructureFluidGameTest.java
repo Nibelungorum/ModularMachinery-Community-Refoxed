@@ -4,6 +4,10 @@ import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.AEItemKey;
+import java.util.List;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import net.minecraft.core.component.DataComponents;
@@ -18,6 +22,18 @@ import net.neoforged.neoforge.fluids.FluidStack;
  * @author howxu <dev@howxu.cn>
  */
 public class StructureFluidGameTest {
+    public void shortItemExtractionReturnsEntireOrder(GameTestHelper helper) {
+        MemoryStorage storage = new MemoryStorage();
+        var source = new AE2NetworkStructureItemStorage(() -> storage, IActionSource.empty());
+        var key = AEItemKey.of(Items.POLISHED_DIORITE);
+        storage.amounts.add(key, 8);
+        storage.extractionLimit = 5;
+        helper.assertFalse(source.extractAll(List.of(new ItemStack(Items.POLISHED_DIORITE, 8))),
+                "Simulated stock cannot pay when actual ME extraction is short");
+        helper.assertTrue(storage.amounts.get(key) == 8, "All five extracted blocks were returned to the ME network");
+        helper.succeed();
+    }
+
     public void failedPlacementsPreserveFluidStorage(GameTestHelper helper) {
         MemoryStorage storage = new MemoryStorage();
         boolean[] connected = {true};

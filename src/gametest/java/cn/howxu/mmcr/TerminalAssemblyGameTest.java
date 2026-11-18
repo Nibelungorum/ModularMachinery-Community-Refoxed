@@ -1,6 +1,14 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.BlockRotator;
+import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
+import cn.howxu.mmcr.api.machine.definition.DisplayStack;
+import cn.howxu.mmcr.api.machine.definition.MachineLevel;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
@@ -33,12 +41,15 @@ import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -62,6 +73,131 @@ import java.util.UUID;
  * @author howxu <dev@howxu.cn>
  */
 public class TerminalAssemblyGameTest {
+
+    private static final Identifier EXCHANGE = MMCR.id("terminal_level_exchange");
+    private static final Identifier COIL = MMCR.id("terminal_test_coil");
+    private static final Identifier FRAME = MMCR.id("terminal_test_frame");
+    private static final Identifier POLISHED = MMCR.id("terminal_test_polished");
+
+    static void registerLevelExchange(StructureRegistration event) {
+        event.registerLevelType(new LevelType(COIL, Component.translatable("block.minecraft.diorite")));
+        event.registerLevelType(new LevelType(FRAME, Component.translatable("block.minecraft.granite")));
+        event.registerLevel(new MachineLevel(MMCR.id("terminal_test_rough"), COIL, 0,
+                BlockPredicate.blockState(Blocks.DIORITE.defaultBlockState()), DisplayStack.of(new ItemStack(Items.DIORITE)),
+                ModifierDefinition.EMPTY));
+        event.registerLevel(new MachineLevel(POLISHED, COIL, 1,
+                BlockPredicate.blockState(Blocks.POLISHED_DIORITE.defaultBlockState()), DisplayStack.of(new ItemStack(Items.DIAMOND)),
+                ModifierDefinition.EMPTY));
+        event.registerLevel(new MachineLevel(FRAME, FRAME, 0,
+                BlockPredicate.blockState(Blocks.GRANITE.defaultBlockState()), DisplayStack.of(new ItemStack(Items.GRANITE)),
+                ModifierDefinition.EMPTY));
+        event.registerStructure(EXCHANGE, structure -> structure.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("AAAAB", "AACAS", "AAAA ")
+                        .where('A', BlockPredicate.block(Blocks.DIORITE))
+                        .where('B', BlockPredicate.block(Blocks.GRANITE))
+                        .where('S', BlockPredicate.block(Blocks.DIORITE))
+                        .controller('C'))
+                .requirements(requirements -> requirements.levelSlot('A', COIL).levelSlot('B', FRAME)))
+                .extension(stage -> stage.pattern(pattern -> pattern.layer("C").layer(" ").layer("L")
+                        .where('L', BlockPredicate.block(Blocks.DIORITE)).controller('C'))
+                        .requirements(requirements -> requirements.levelSlot('L', COIL))));
+    }
+
+    public void replaceLevelReservesWholeOrder(GameTestHelper helper) {
+        BlockPos origin = new BlockPos(4, 3, 4);
+        helper.setBlock(origin, ModBlocks.controllerFor(EXCHANGE).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.UP).setValue(MachineControllerBlock.ROLL_FACING, Direction.EAST));
+        var controller = helper.getBlockEntity(origin, MachineControllerBlockEntity.class);
+        Machine machine = MachineRegistry.getMachine(EXCHANGE);
+        controller.setMachine(machine);
+        ServerPlayer player = servicePlayer(helper);
+        var packets = capturePackets(helper, player);
+        player.setGameMode(GameType.SURVIVAL);
+        player.setPos(controller.getBlockPos().getCenter());
+        ItemStack terminal = new ItemStack(ModItems.TERMINAL.get());
+        player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
+        TerminalService.bindController(player, terminal, GlobalPos.of(player.level().dimension(), controller.getBlockPos()));
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.SET_LEVEL, 0, COIL, POLISHED).accepted(),
+                "Select the polished coil level");
+        List<BlockPos> slots = new ArrayList<>();
+        List<BlockPos> protectedBlocks = new ArrayList<>();
+        machine.structureStages().getFirst().pattern().symbolsByPosition().forEach((local, symbol) -> {
+            BlockPos pos = controller.getBlockPos().offset(BlockRotator.rotateSouthTo(local, Direction.UP, Direction.EAST));
+            if (symbol == 'A') slots.add(pos);
+            if (symbol == 'B' || symbol == 'S') {
+                player.level().setBlock(pos, Blocks.DIORITE.defaultBlockState(), 3);
+                protectedBlocks.add(pos);
+            }
+        });
+        var stageTwoSlot = controller.getBlockPos().offset(BlockRotator.rotateSouthTo(new BlockPos(0, 0, 2),
+                Direction.UP, Direction.EAST));
+        player.level().setBlock(stageTwoSlot, Blocks.DIORITE.defaultBlockState(), 3);
+        List<BlockPos> old = slots.subList(0, 8);
+        old.forEach(pos -> player.level().setBlock(pos, Blocks.DIORITE.defaultBlockState(), 3));
+        player.level().setBlock(slots.get(8), Blocks.POLISHED_DIORITE.defaultBlockState(), 3);
+        player.level().setBlock(slots.get(9), Blocks.GLASS.defaultBlockState(), 3);
+        player.level().removeBlock(slots.get(10), false);
+        player.getInventory().setItem(1, new ItemStack(Items.POLISHED_DIORITE, 5));
+        var missing = TerminalService.execute(player, terminal, TerminalAction.REPLACE_LEVEL, 0, null, null);
+        helper.assertTrue(!missing.accepted() && missing.messageKey().equals("message.mmcr.terminal.replace.missing"),
+                "Five blocks cannot pay for an eight-coil replacement: " + missing.messageKey());
+        helper.assertTrue(old.stream().allMatch(pos -> player.level().getBlockState(pos).is(Blocks.DIORITE))
+                        && player.getInventory().countItem(Items.POLISHED_DIORITE) == 5
+                        && player.getInventory().countItem(Items.DIORITE) == 0 && !controller.hasActiveBuildTask(),
+                "Missing materials must leave all eight old coils and the complete inventory unchanged");
+
+        player.getInventory().setItem(1, new ItemStack(Items.POLISHED_DIORITE, 8));
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.REPLACE_LEVEL, 0, null, null).accepted(),
+                "A fully paid exchange succeeds");
+        helper.assertTrue(old.stream().allMatch(pos -> player.level().getBlockState(pos).is(Blocks.POLISHED_DIORITE))
+                        && player.getInventory().countItem(Items.POLISHED_DIORITE) == 0 && player.getInventory().countItem(Items.DIORITE) == 8,
+                "Exactly eight materials consumed and eight old blocks returned");
+        helper.assertTrue(player.level().getBlockState(stageTwoSlot).is(Blocks.DIORITE),
+                "A later stage's coil is not exchanged while stage one is selected");
+        helper.assertTrue(protectedBlocks.stream().allMatch(pos -> player.level().getBlockState(pos).is(Blocks.DIORITE))
+                        && player.level().getBlockState(slots.get(9)).is(Blocks.GLASS) && player.level().getBlockState(slots.get(10)).isAir(),
+                "Other types, casings, unrelated blocks and empty slots are untouched");
+        var again = TerminalService.execute(player, player.getMainHandItem(), TerminalAction.REPLACE_LEVEL, 0, null, null);
+        helper.assertTrue(again.messageKey().equals("message.mmcr.terminal.replace.none")
+                        && player.getInventory().countItem(Items.DIORITE) == 8, "Repeated replacement is a no-op");
+
+        player.setGameMode(GameType.CREATIVE);
+        terminal = player.getMainHandItem();
+        BlockPos busPos = origin.above(3);
+        helper.setBlock(busPos, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        TerminalService.execute(player, terminal, TerminalAction.SET_INVENTORY_MODE, TerminalInventoryMode.CONTAINER.ordinal(), null, null);
+        TerminalService.bindContainer(player, terminal, GlobalPos.of(player.level().dimension(), helper.absolutePos(busPos)));
+        var bus = StructureItemStorageResolver.resolve(player, TerminalData.from(terminal)).orElseThrow();
+        old.forEach(pos -> player.level().setBlock(pos, Blocks.DIORITE.defaultBlockState(), 3));
+        bus.sink().accept(new ItemStack(Items.POLISHED_DIORITE, 5));
+        player.getInventory().setItem(2, new ItemStack(Items.POLISHED_DIORITE, 8));
+        var shortBus = TerminalService.execute(player, terminal, TerminalAction.REPLACE_LEVEL, 0, null, null);
+        helper.assertTrue(!shortBus.accepted() && old.stream().allMatch(pos -> player.level().getBlockState(pos).is(Blocks.DIORITE))
+                        && bus.source().canExtractAll(List.of(new ItemStack(Items.POLISHED_DIORITE, 5)))
+                        && player.getInventory().countItem(Items.POLISHED_DIORITE) == 8,
+                "Creative container mode neither borrows inventory nor partially empties the bus");
+        TerminalService.execute(player, terminal, TerminalAction.SET_INVENTORY_MODE, TerminalInventoryMode.INVENTORY.ordinal(), null, null);
+        int oldItems = player.getInventory().countItem(Items.DIORITE);
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.REPLACE_LEVEL, 0, null, null).accepted()
+                        && old.stream().allMatch(pos -> player.level().getBlockState(pos).is(Blocks.POLISHED_DIORITE))
+                        && player.getInventory().countItem(Items.DIORITE) == oldItems
+                        && player.getInventory().countItem(Items.POLISHED_DIORITE) == 8,
+                "Creative inventory mode replaces blocks without consuming or producing items");
+
+        TerminalService.execute(player, terminal, TerminalAction.SET_BOUNDS_ENABLED, 1, null, null);
+        var baseBounds = lastState(packets).bounds().orElseThrow();
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.SET_STAGE, 2, null, null).accepted(),
+                "The extension is selectable");
+        var fullBounds = lastState(packets).bounds().orElseThrow();
+        var expected = BoundingBox.encapsulatingPositions(machine.structureStages().get(1).pattern().pattern().keySet().stream()
+                .map(pos -> BlockRotator.rotateSouthTo(pos, Direction.UP, Direction.EAST)).toList()).orElseThrow();
+        helper.assertTrue(fullBounds.equals(expected) && !baseBounds.equals(fullBounds),
+                "Stage change projects the whole asymmetric extension using the vertical controller's roll");
+        TerminalService.execute(player, terminal, TerminalAction.REPLACE_LEVEL, 0, null, null);
+        helper.assertTrue(player.level().getBlockState(stageTwoSlot).is(Blocks.POLISHED_DIORITE),
+                "Selecting the extension now replaces its coil");
+        helper.succeed();
+    }
 
     public void terminalServiceRejectsActionsWithoutHeldTerminal(GameTestHelper helper) {
         ServerPlayer player = servicePlayer(helper);
@@ -91,15 +227,7 @@ public class TerminalAssemblyGameTest {
 
     public void terminalHighlightIsIndependentAndBindingChangesClearIt(GameTestHelper helper) {
         ServerPlayer player = servicePlayer(helper);
-        List<Packet<?>> packets = new ArrayList<>();
-        player.connection = new ServerGamePacketListenerImpl(helper.getLevel().getServer(),
-                new Connection(PacketFlow.CLIENTBOUND), player,
-                CommonListenerCookie.createInitial(player.getGameProfile(), false)) {
-            @Override
-            public void send(Packet<?> packet) {
-                packets.add(packet);
-            }
-        };
+        List<Packet<?>> packets = capturePackets(helper, player);
         ItemStack terminal = new ItemStack(ModItems.TERMINAL.get());
         player.setItemInHand(InteractionHand.MAIN_HAND, terminal);
         helper.assertTrue(!TerminalService.execute(player, terminal, TerminalAction.SET_HIGHLIGHT_ENABLED,
@@ -116,13 +244,14 @@ public class TerminalAssemblyGameTest {
                 1, null, null).accepted(), "Highlight can be enabled without ghost preview");
         helper.assertTrue(TerminalData.from(terminal).highlightEnabled() && !TerminalData.from(terminal).previewEnabled(),
                 "Highlight does not enable ghost preview");
-        PktTerminalStatePayload state = packets.stream()
-                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
-                        && custom.payload() instanceof PktTerminalStatePayload)
-                .map(packet -> (PktTerminalStatePayload) ((ClientboundCustomPayloadPacket) packet).payload())
-                .reduce((first, second) -> second).orElseThrow();
+        helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.SET_BOUNDS_ENABLED,
+                1, null, null).accepted(), "Unformed structure bounds do not require ghost preview");
+        PktTerminalStatePayload state = lastState(packets);
         helper.assertTrue(MMCR.id("test_cube").equals(state.machineId()) && state.data().highlightEnabled(),
                 "The client receives the selected machine and independent highlight setting");
+        helper.assertTrue(state.data().boundsEnabled() && state.bounds().isPresent()
+                        && controller.assemblyPattern(controller.boundMachine().orElseThrow(), 1).pattern().keySet().stream()
+                                .allMatch(state.bounds().get()::isInside), "Bounds enclose the complete selected assembly pattern");
         helper.assertTrue(state.facing() == controller.getBlockState().getValue(BlockStateProperties.FACING),
                 "The client receives the controller orientation for projection");
         helper.assertTrue(TerminalService.execute(player, terminal, TerminalAction.SET_PREVIEW_ENABLED,
@@ -134,7 +263,8 @@ public class TerminalAssemblyGameTest {
                 "Disabling highlight does not disable ghost preview");
         TerminalService.execute(player, terminal, TerminalAction.SET_HIGHLIGHT_ENABLED, 1, null, null);
         helper.assertTrue(TerminalService.bindController(player, terminal, target).accepted(), "Controller rebinds");
-        helper.assertTrue(!TerminalData.from(terminal).highlightEnabled(), "Rebinding clears the old highlight setting");
+        helper.assertTrue(!TerminalData.from(terminal).highlightEnabled() && !TerminalData.from(terminal).boundsEnabled(),
+                "Rebinding clears both old overlays");
         TerminalService.execute(player, terminal, TerminalAction.SET_HIGHLIGHT_ENABLED, 1, null, null);
         TerminalService.clear(player, terminal);
         helper.assertTrue(TerminalData.from(terminal).controller() == null && !TerminalData.from(terminal).highlightEnabled(),
@@ -803,6 +933,27 @@ public class TerminalAssemblyGameTest {
                 .filter(pos -> !previous.contains(pos))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private static PktTerminalStatePayload lastState(List<Packet<?>> packets) {
+        return packets.stream()
+                .filter(packet -> packet instanceof ClientboundCustomPayloadPacket custom
+                        && custom.payload() instanceof PktTerminalStatePayload)
+                .map(packet -> (PktTerminalStatePayload) ((ClientboundCustomPayloadPacket) packet).payload())
+                .reduce((first, second) -> second).orElseThrow();
+    }
+
+    private static List<Packet<?>> capturePackets(GameTestHelper helper, ServerPlayer player) {
+        List<Packet<?>> packets = new ArrayList<>();
+        player.connection = new ServerGamePacketListenerImpl(helper.getLevel().getServer(),
+                new Connection(PacketFlow.CLIENTBOUND), player,
+                CommonListenerCookie.createInitial(player.getGameProfile(), false)) {
+            @Override
+            public void send(Packet<?> packet) {
+                packets.add(packet);
+            }
+        };
+        return packets;
     }
 
     private static ServerPlayer servicePlayer(GameTestHelper helper) {

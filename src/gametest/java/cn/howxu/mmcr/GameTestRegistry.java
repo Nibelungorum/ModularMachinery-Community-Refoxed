@@ -330,6 +330,10 @@ public final class GameTestRegistry {
                 helper -> new TerminalAssemblyGameTest().terminalServiceRejectsActionsWithoutHeldTerminal(helper));
         register(event, "terminal_service_rejects_level_without_controller", 100,
                 helper -> new TerminalAssemblyGameTest().terminalServiceRejectsLevelSelectionWithoutController(helper));
+        register(event, "terminal_replace_level_reserves_whole_order", 100,
+                helper -> new TerminalAssemblyGameTest().replaceLevelReservesWholeOrder(helper));
+        register(event, "ae2_terminal_short_item_extraction", 100,
+                helper -> new StructureFluidGameTest().shortItemExtractionReturnsEntireOrder(helper));
         register(event, "terminal_highlight_independent_and_binding_reset", 100,
                 helper -> new TerminalAssemblyGameTest().terminalHighlightIsIndependentAndBindingChangesClearIt(helper));
         register(event, "terminal_service_normalizes_stale_stage", 100,
@@ -633,7 +637,7 @@ public final class GameTestRegistry {
                 .allowMultithreading()
                 .factory(factory -> factory.hasFactory(true).threadLimit(4)).build());
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
-                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure", "fluid_assembly")) {
+                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure", "fluid_assembly", "terminal_level_exchange")) {
             Identifier id = MMCR.id(name);
             MachineBuilder builder = MachineBuilder.machine(id);
             builder.displayNameKey("machine.mmcr_test." + name);
@@ -651,7 +655,7 @@ public final class GameTestRegistry {
                             MMCR.id("data_storage_tick_status"), Component.literal("ticks=" + (ticks + 1L)));
                 }));
             }
-            if (name.equals("expandable_structure_vertical_roll")) {
+            if (name.equals("expandable_structure_vertical_roll") || name.equals("terminal_level_exchange")) {
                 builder.controller(controller -> controller.allowVerticalFacing());
             }
             if (name.equals("upgrade_bus_test")) {
@@ -662,7 +666,7 @@ public final class GameTestRegistry {
             }
             MachineDefinition definition = builder.build();
             if (name.equals("distillation_tower_test") || name.equals("expandable_structure_stages")
-                    || name.equals("expandable_structure_vertical_roll")) {
+                    || name.equals("expandable_structure_vertical_roll") || name.equals("terminal_level_exchange")) {
                 definition = new MachineDefinition(definition.id(), definition.recipePoolId(), definition.displayNameKey(), definition.controller(),
                         definition.appearance(), definition.factory(), definition.role(), definition.acceptedModuleIds(),
                         definition.maxParallelism(), definition.parallelizable(), definition.failureAction(),
@@ -693,6 +697,7 @@ public final class GameTestRegistry {
                         .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(ControllerUiGameTest.MACHINE_ID).get()))
                         .where('F', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("factory_controller").get()))
                         .controller('C'))));
+        TerminalAssemblyGameTest.registerLevelExchange(event);
         event.registerStructure(MMCR.id("fluid_assembly"), structure -> structure.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("W W", " C ", " F ")
                         .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(MMCR.id("fluid_assembly")).get()))

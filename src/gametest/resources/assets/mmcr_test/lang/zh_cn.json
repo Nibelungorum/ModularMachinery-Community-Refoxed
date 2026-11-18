@@ -1,4 +1,5 @@
 {
+  "machine.mmcr_test.terminal_level_exchange": "终端等级替换测试",
   "machine.mmcr_test.test_cube": "测试方块",
   "machine.mmcr_test.controller_tick": "控制器 Tick",
   "machine.mmcr_test.iron_compressor": "铁压缩机",

@@ -75,10 +75,18 @@ final class AE2NetworkStructureItemStorage implements StructureItemStorage, Stru
     public boolean extractAll(List<ItemStack> requirements) {
         MEStorage storage = storageSupplier.get();
         if (storage == null || !canExtractAll(storage, requirements)) return false;
+        List<ItemStack> extracted = new ArrayList<>();
         for (ItemStack requirement : requirements) {
             if (requirement.isEmpty()) continue;
-            if (storage.extract(AEItemKey.of(requirement), requirement.getCount(), Actionable.MODULATE, actionSource)
-                    != requirement.getCount()) throw new IllegalStateException("ME network changed during terminal extraction");
+            int count = (int) storage.extract(AEItemKey.of(requirement), requirement.getCount(), Actionable.MODULATE, actionSource);
+            if (count > 0) extracted.add(requirement.copyWithCount(count));
+            if (count == requirement.getCount()) continue;
+            for (ItemStack stack : extracted) {
+                int restored = (int) storage.insert(AEItemKey.of(stack), stack.getCount(), Actionable.MODULATE, actionSource);
+                stack.shrink(restored);
+                if (!stack.isEmpty()) actionSource.player().orElseThrow().getInventory().placeItemBackInInventory(stack);
+            }
+            return false;
         }
         return true;
     }

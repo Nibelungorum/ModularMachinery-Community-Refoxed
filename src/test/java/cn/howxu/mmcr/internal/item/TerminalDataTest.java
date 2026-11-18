@@ -85,12 +85,14 @@ class TerminalDataTest {
 
     @Test
     void highlight_is_independent_and_survives_configuration_and_codec_round_trip() {
-        TerminalData data = TerminalData.DEFAULT.withHighlight(true).withStage(2).withPreview(false, -1)
+        TerminalData data = TerminalData.DEFAULT.withBounds(true).withHighlight(true).withStage(2).withPreview(false, -1)
                 .withInventoryMode(TerminalInventoryMode.CONTAINER)
                 .withController(GlobalPos.of(Level.OVERWORLD, BlockPos.ZERO))
                 .withSelectedLevel(Identifier.parse("test:coils"), Identifier.parse("test:iron"));
 
         assertThat(data.highlightEnabled()).isTrue();
+        assertThat(data.boundsEnabled()).isTrue();
+        assertThat(data.clear().boundsEnabled()).isFalse();
         assertThat(data.previewEnabled()).isFalse();
         var encoded = TerminalData.CODEC.encodeStart(JsonOps.INSTANCE, data).getOrThrow();
         assertThat(TerminalData.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow()).isEqualTo(data);
@@ -100,9 +102,10 @@ class TerminalDataTest {
 
     @Test
     void legacy_data_without_highlight_decodes_as_disabled() {
-        var encoded = TerminalData.CODEC.encodeStart(JsonOps.INSTANCE, TerminalData.DEFAULT.withHighlight(true))
+        var encoded = TerminalData.CODEC.encodeStart(JsonOps.INSTANCE, TerminalData.DEFAULT.withHighlight(true).withBounds(true))
                 .getOrThrow().getAsJsonObject();
         encoded.remove("highlight_enabled");
+        encoded.remove("bounds_enabled");
 
         assertThat(TerminalData.CODEC.parse(JsonOps.INSTANCE, encoded).getOrThrow()).isEqualTo(TerminalData.DEFAULT);
     }

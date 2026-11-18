@@ -2297,13 +2297,25 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public BlockArray assemblyPattern(Machine candidate, int stageNumber) {
         if (stageNumber < 1) throw new IllegalArgumentException("stageNumber must be >= 1");
+        return assemblyCandidate(candidate, stageNumber).pattern();
+    }
+
+    private CandidatePattern assemblyCandidate(Machine candidate, int stageNumber) {
         Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
         return candidatePatterns(candidate, facing).stream()
                 .filter(pattern -> pattern.stageNumber() == stageNumber)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown structure stage " + stageNumber
-                        + " for machine " + candidate.registryName()))
-                .pattern();
+                        + " for machine " + candidate.registryName()));
+    }
+
+    public List<BlockPos> assemblyLevelSlots(Machine machine, MachineStructureStage stage, Identifier type) {
+        Direction facing = getBlockState().getValue(MachineControllerBlock.FACING);
+        Direction roll = assemblyCandidate(machine, stage.number()).rollFacing();
+        return stage.levelSlots().entrySet().stream()
+                .filter(entry -> type.equals(entry.getValue()) && !entry.getKey().equals(BlockPos.ZERO))
+                .map(entry -> getBlockPos().offset(BlockRotator.rotateSouthTo(entry.getKey(), facing, roll)))
+                .toList();
     }
 
     public boolean assemblyStateSensitive(Machine candidate) {

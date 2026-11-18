@@ -130,6 +130,19 @@ class TerminalScreenTest {
     }
 
     @Test
+    void footer_rows_fit_the_narrow_panel_without_overlapping() {
+        var first = TerminalScreen.footerBounds(0);
+        var highlight = TerminalScreen.footerBounds(4);
+        var bounds = TerminalScreen.footerBounds(5);
+        var replace = TerminalScreen.footerBounds(6);
+        assertThat(first.left()).isEqualTo(highlight.left());
+        assertThat(first.bottom()).isLessThan(highlight.top());
+        assertThat(bounds.width()).isEqualTo(highlight.width()).isEqualTo(replace.width());
+        assertThat(bounds.left() - highlight.right()).isPositive().isEqualTo(replace.left() - bounds.right());
+        assertThat(replace.right()).isLessThan(310);
+    }
+
+    @Test
     void layer_plus_wraps_from_highest_to_lowest_and_r_wraps_to_all() {
         List<Integer> layers = List.of(-2, 0, 4);
 
@@ -141,6 +154,8 @@ class TerminalScreenTest {
     void action_buttons_close_screen_but_configuration_buttons_do_not() {
         assertThat(TerminalScreen.closesAfter(TerminalAction.BUILD)).isTrue();
         assertThat(TerminalScreen.closesAfter(TerminalAction.SET_HIGHLIGHT_ENABLED)).isTrue();
+        assertThat(TerminalScreen.closesAfter(TerminalAction.SET_BOUNDS_ENABLED)).isTrue();
+        assertThat(TerminalScreen.closesAfter(TerminalAction.REPLACE_LEVEL)).isTrue();
         assertThat(TerminalScreen.closesAfter(TerminalAction.SET_STAGE)).isFalse();
     }
 

@@ -18,6 +18,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -38,19 +40,25 @@ import java.util.function.BiConsumer;
 @EventBusSubscriber(modid = MMCR.MODID, value = Dist.CLIENT)
 public final class TerminalHighlightClientHandler {
     private static @Nullable GlobalPos controller;
+    private static @Nullable AABB bounds;
     private static Map<BlockPos, Integer> highlights = Map.of();
 
     private TerminalHighlightClientHandler() {}
 
-    public static void applyState(TerminalData data, @Nullable Identifier machineId, Direction facing) {
+    public static void applyState(TerminalData data, @Nullable Identifier machineId, Direction facing,
+            @Nullable BoundingBox relativeBounds) {
         clear();
-        if (!data.highlightEnabled() || data.controller() == null || machineId == null) return;
+        if (data.controller() == null || machineId == null) return;
+        controller = data.controller();
+        if (data.boundsEnabled() && relativeBounds != null) {
+            bounds = AABB.of(relativeBounds).move(controller.pos());
+        }
+        if (!data.highlightEnabled()) return;
         Machine machine = MachineRegistry.getMachine(machineId);
         if (machine == null) return;
         MachineStructureStage stage = machine.structureStages().stream()
                 .filter(candidate -> candidate.number() == data.stage()).findFirst().orElse(null);
         if (stage == null) return;
-        controller = data.controller();
         Map<BlockPos, Integer> projected = new LinkedHashMap<>();
         new StructurePreviewSchemaFactory().create(stage, machineId, facing).highlights().forEach((position, mask) -> {
             if (data.previewLayer() == Integer.MAX_VALUE || data.previewLayer() == position.getY()) {
@@ -70,12 +78,7 @@ public final class TerminalHighlightClientHandler {
         Minecraft minecraft = Minecraft.getInstance();
         if (highlights.isEmpty() || minecraft.level == null || controller == null
                 || !minecraft.level.dimension().equals(controller.dimension())) return;
-        double radius;
-        try {
-            radius = ClientConfig.PREVIEW_RENDER_RADIUS.get();
-        } catch (IllegalStateException ignored) {
-            radius = ClientConfig.DEFAULT_PREVIEW_RENDER_RADIUS;
-        }
+        double radius = renderRadius();
         Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
         MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
         PoseStack pose = event.getPoseStack();
@@ -84,6 +87,30 @@ public final class TerminalHighlightClientHandler {
                 drawFilledBox(vertices, pose.last(), new AABB(position).inflate(0.002D)
                         .move(-camera.x, -camera.y, -camera.z), color));
         buffers.endBatch(RenderTypes.debugFilledBox());
+    }
+
+    @SubscribeEvent
+    public static void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (bounds == null || controller == null || minecraft.level == null
+                || !minecraft.level.dimension().equals(controller.dimension())) return;
+        Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
+        AABB box = visibleBounds(camera, renderRadius());
+        if (box != null) event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.lines(),
+                (pose, buffer) -> MultiblockDetectorSelectionRenderer.renderBoxEdges(pose, buffer, camera,
+                        box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ));
+    }
+
+    private static double renderRadius() {
+        try {
+            return ClientConfig.PREVIEW_RENDER_RADIUS.get();
+        } catch (IllegalStateException ignored) {
+            return ClientConfig.DEFAULT_PREVIEW_RENDER_RADIUS;
+        }
+    }
+
+    static @Nullable AABB visibleBounds(Vec3 camera, double radius) {
+        return bounds != null && bounds.distanceToSqr(camera) <= radius * radius ? bounds : null;
     }
 
     static void forEachVisibleHighlight(Vec3 camera, double radius, BiConsumer<BlockPos, Integer> consumer) {
@@ -98,6 +125,7 @@ public final class TerminalHighlightClientHandler {
 
     static void clear() {
         controller = null;
+        bounds = null;
         highlights = Map.of();
     }
 

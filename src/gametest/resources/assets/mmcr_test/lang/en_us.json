@@ -1,4 +1,5 @@
 {
+  "machine.mmcr_test.terminal_level_exchange": "Terminal Level Exchange",
   "machine.mmcr_test.test_cube": "Test Cube",
   "machine.mmcr_test.controller_tick": "Controller Tick",
   "machine.mmcr_test.iron_compressor": "Iron Compressor",

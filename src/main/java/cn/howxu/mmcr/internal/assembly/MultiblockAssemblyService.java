@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.assembly;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.config.ServerConfig;
@@ -275,6 +276,70 @@ public final class MultiblockAssemblyService {
         }
         return new Result(InteractionResult.SUCCESS, placements.size(),
                 new ComponentKey("message.mmcr.terminal.build.accepted", placements.size()));
+    }
+
+    public static Result replaceLevel(ServerPlayer player, MachineControllerBlockEntity controller, int stage,
+            Identifier typeId, Identifier levelId, StructureItemStorage storage, boolean freeInventoryBuild) {
+        Machine machine = controller.boundMachine().orElse(null);
+        if (machine == null) return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
+        if (controller.hasActiveBuildTask()) {
+            return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
+        }
+        MachineStructureStage selected = machine.structureStages().stream().filter(s -> s.number() == stage)
+                .findFirst().orElse(null);
+        MachineLevel target = MachineLevelRegistry.getLevel(levelId);
+        if (selected == null || target == null || !target.typeId().equals(typeId) || !selected.levelSlots().containsValue(typeId)) {
+            return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.invalid_level"));
+        }
+        BlockState replacement = target.statePredicate().preferredState().orElseThrow();
+        ItemStack material = requirementFor(replacement);
+        if (material.isEmpty() || StructureInterfaceBlocks.isInterfaceBlock(replacement.getBlock())) {
+            return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.unsafe"));
+        }
+        var world = player.level();
+        List<Removal> changes = new ArrayList<>();
+        int limit = Math.min(ServerConfig.assemblyMaxBlocksPerOperation(), ServerConfig.TERMINAL_MAX_DEMOLISH_BLOCKS.get());
+        for (BlockPos pos : controller.assemblyLevelSlots(machine, selected, typeId)) {
+            if (!world.hasChunkAt(pos)) {
+                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.unsafe"));
+            }
+            BlockState current = world.getBlockState(pos);
+            if (current.isAir() || current == replacement || StructureInterfaceBlocks.isInterfaceBlock(current.getBlock())
+                    || MachineLevelRegistry.findLevel(typeId, current).isEmpty()) continue;
+            ItemStack oldItem = requirementFor(current);
+            if (oldItem.isEmpty() || current.hasBlockEntity()) {
+                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.unsafe"));
+            }
+            if (changes.size() == limit) {
+                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.limit"));
+            }
+            changes.add(new Removal(pos, current, oldItem));
+        }
+        if (changes.isEmpty()) return new Result(InteractionResult.SUCCESS, 0, new ComponentKey("message.mmcr.terminal.replace.none"));
+        if (!freeInventoryBuild && !storage.source().extractAll(List.of(material.copyWithCount(changes.size())))) {
+            return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.missing"));
+        }
+
+        List<ItemStack> returns = new ArrayList<>();
+        int changed = 0;
+        for (Removal change : changes) {
+            if (world.getBlockState(change.pos()) != change.state() || !world.setBlock(change.pos(), replacement, 3)) break;
+            changed++;
+            if (!freeInventoryBuild) merge(returns, change.drop());
+        }
+        if (!freeInventoryBuild) {
+            if (changed < changes.size()) merge(returns, material.copyWithCount(changes.size() - changed));
+            for (ItemStack batch : returns) {
+                while (!batch.isEmpty()) {
+                    ItemStack stack = batch.split(batch.getMaxStackSize());
+                    if (!storage.sink().accept(stack)) player.getInventory().placeItemBackInInventory(stack);
+                }
+            }
+        }
+        if (changed != changes.size()) {
+            return new Result(InteractionResult.FAIL, changed, new ComponentKey("message.mmcr.terminal.replace.stopped", changed));
+        }
+        return new Result(InteractionResult.SUCCESS, changed, new ComponentKey("message.mmcr.terminal.replace.success", changed));
     }
 
     private static List<Placement> applySelectedLevels(Machine machine, int stage, BlockArray pattern,
