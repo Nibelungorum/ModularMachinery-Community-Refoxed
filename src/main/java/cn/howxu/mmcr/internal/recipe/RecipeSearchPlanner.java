@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.requirement.OutputExpectation;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Candidate;
-import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Kind;
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand.Kind;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Port;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Rule;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Scope;
@@ -157,7 +157,7 @@ public final class RecipeSearchPlanner {
             if (earlier.staticFailure() != null && !earlier.staticFailure().equals(BuiltinFailureReasons.LEVEL_INSUFFICIENT.id())
                     || earlier.priority() != chosen.priority() || earlier.inputCount() <= chosen.inputCount()) continue;
             boolean overlapping;
-            if (earlier.overlap().customHandler()) {
+            if (earlier.overlap().customHandler() || chosen.overlap().customHandler()) {
                 Boolean proof = overlaps.get(pair(selected.candidateIndex(), index));
                 if (proof == null) {
                     waiting = new RecipeSearchProof.Request(++sequence, RecipeSearchProof.Kind.OVERLAP,
@@ -167,12 +167,7 @@ public final class RecipeSearchPlanner {
                 }
                 overlapping = proof;
             } else {
-                var left = earlier.overlap();
-                var right = chosen.overlap();
-                overlapping = left.hasItem() && right.hasItem() && (left.anyItem()
-                        || !left.items().isEmpty() && right.anyItem()
-                        || left.items().stream().anyMatch(right.items()::contains))
-                        || left.lightning().stream().anyMatch(right.lightning()::contains);
+                overlapping = earlier.overlap().overlaps(chosen.overlap());
             }
             if (!overlapping) continue;
             boolean inputWaiting;
@@ -201,7 +196,7 @@ public final class RecipeSearchPlanner {
     private Failure failure(int index, Scope scope, Attempt attempt, boolean inputWaiting) {
         Candidate candidate = snapshot.candidates().get(index);
         Rule rule = attempt.failedRule() < 0 ? null : candidate.rules().get(attempt.failedRule());
-        Identifier reason = rule == null ? BuiltinFailureReasons.RECIPE_SEARCH.id() : rule.failureReason();
+        Identifier reason = rule == null ? BuiltinFailureReasons.RECIPE_SEARCH.id() : rule.failureReason().id();
         if (rule != null && rule.type().equals(MekanismPortFamilies.CHEMICAL) && rule.direction() == IOType.INPUT
                 && rule.ports().stream().noneMatch(port -> scope.allows(port.sourceIndex()))) reason = BuiltinFailureReasons.MISSING_INPUT.id();
         return new Failure(index, rule == null ? -1 : rule.index(), reason,

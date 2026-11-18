@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.ae2lt.loaded;
 
+import cn.howxu.mmcr.compat.ae2lt.LightningResourceValues;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -26,7 +27,6 @@ import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.ae2lt.LightningFailureReasons;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import java.util.Map;
@@ -64,7 +64,7 @@ public final class LightningCapability implements MachineCapability, ResourceFac
                         .mapToObj(slot -> {
                             LightningTier tier = storage.resource(slot);
                             return new AsyncCapabilitySnapshot.ResourceSlot(tier == null ? Optional.empty()
-                                    : Optional.of(NativeAsyncResourceValues.lightning(tier)),
+                                    : Optional.of(LightningResourceValues.lightning(tier)),
                                     tier == null ? 0L : storage.amount(slot), storage.capacity(slot, tier));
                         }).toList());
             }
@@ -144,7 +144,7 @@ public final class LightningCapability implements MachineCapability, ResourceFac
                     && resource.slot() < storage.size()) {
                 LightningTier tier;
                 try {
-                    tier = NativeAsyncResourceValues.lightning(resource.resource());
+                    tier = LightningResourceValues.lightning(resource.resource());
                 } catch (IllegalArgumentException exception) {
                     return failure(BuiltinFailureReasons.WRONG_RESOURCE_TYPE);
                 }

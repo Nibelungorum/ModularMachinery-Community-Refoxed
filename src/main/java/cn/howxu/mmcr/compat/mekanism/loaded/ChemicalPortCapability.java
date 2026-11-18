@@ -29,7 +29,6 @@ import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.AutomationType;
 import mekanism.api.MekanismAPI;
@@ -96,7 +95,7 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
                 boolean empty = resource.isEmpty();
                 return new AsyncCapabilitySnapshot.Resource(type().id(), List.of(
                         new AsyncCapabilitySnapshot.ResourceSlot(empty ? Optional.empty()
-                                : Optional.of(NativeAsyncResourceValues.chemical(resource)),
+                                : Optional.of(ChemicalResourceValues.chemical(resource)),
                                 empty ? 0L : chemicalTank.amountAsLong(), chemicalTank.capacityAsLong(resource))));
             }
 
@@ -351,7 +350,7 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
         }
         ChemicalResource nativeResource;
         try {
-            nativeResource = NativeAsyncResourceValues.chemical(resource.resource());
+            nativeResource = ChemicalResourceValues.chemical(resource.resource());
         } catch (IllegalArgumentException exception) {
             return failure(MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
         }

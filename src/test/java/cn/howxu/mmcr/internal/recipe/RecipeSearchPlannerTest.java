@@ -9,6 +9,7 @@ import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Rule;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Candidate;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Port;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Overlap;
+import cn.howxu.mmcr.api.recipe.requirement.SearchOverlap;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -227,8 +228,8 @@ class RecipeSearchPlannerTest {
     void overlap_preserves_the_direction_of_unsupported_item_enumeration() {
         var ports = List.of(new Port(0, 0, 0L, Long.MAX_VALUE));
         var firstRules = List.of(input(0, 2L, 1F, ports), input(1, 1L, 1F, ports));
-        var emptyDeclaration = new Overlap(Set.of(), false, true, false);
-        var unsupportedDeclaration = new Overlap(Set.of(), true, true, false);
+        var emptyDeclaration = new Overlap(List.of(new SearchOverlap(ITEM, Set.of(), false)), false);
+        var unsupportedDeclaration = new Overlap(List.of(new SearchOverlap(ITEM, Set.of(), true)), false);
         var first = new Candidate(candidate("earlier", 1L, firstRules, List.of(LEGACY)).id(), 0, 2, 1L, null,
                 firstRules, List.of(LEGACY), emptyDeclaration, null, -1);
         var second = new Candidate(candidate("later", 1L, List.of(), List.of(LEGACY)).id(), 0, 1, 1L, null,

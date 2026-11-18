@@ -153,7 +153,9 @@ public final class LightningRecipeTypes {
                         && lightning.tier() == tier && !lightning.io().isInput(),
                 requirement -> requirement instanceof LightningRequirement lightning
                         && lightning.tier() == tier && !lightning.io().isInput()
-                        ? new LightningOutput(tier, lightning.amount(), lightning.chance()) : null);
+                        ? new LightningOutput(tier, lightning.amount(), lightning.chance()) : null) {
+            @Override public Object conversionToken() { return this; }
+        };
     }
 
     private static Codec<String> discriminator(LightningTier tier) {

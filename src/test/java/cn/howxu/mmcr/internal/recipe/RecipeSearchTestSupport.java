@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand.Kind;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.*;
 import cn.howxu.mmcr.util.IOType;
@@ -19,7 +20,7 @@ final class RecipeSearchTestSupport {
     static final Identifier ITEM = BuiltinCapabilityDefinitions.ITEM_TYPE.id();
     static final AsyncResourceValue IRON = new AsyncResourceValue(Identifier.parse("minecraft:iron_ingot"), "{}");
     static final Scope LEGACY = new Scope(InputScope.legacy(), Set.of());
-    static final Overlap NO_OVERLAP = new Overlap(Set.of(), false, false, false);
+    static final Overlap NO_OVERLAP = new Overlap(List.of(), false);
 
     private RecipeSearchTestSupport() {}
 
@@ -44,12 +45,12 @@ final class RecipeSearchTestSupport {
 
     static Rule input(int index, long amount, float consume, List<Port> ports) {
         return new Rule(index, ITEM, Kind.RESOURCE, IOType.INPUT, amount, 0D, 1F, consume,
-                false, true, Set.of(IRON), null, ports, BuiltinFailureReasons.MISSING_INPUT.id(), true);
+                false, true, Set.of(IRON), null, ports, BuiltinFailureReasons.MISSING_INPUT, true);
     }
 
     static Rule output(int index, long amount, boolean partial, float chance, List<Port> ports) {
         return new Rule(index, ITEM, Kind.RESOURCE, IOType.OUTPUT, amount, 0D, chance, 1F,
-                partial, true, Set.of(), IRON, ports, BuiltinFailureReasons.MISSING_OUTPUT.id(), false);
+                partial, true, Set.of(), IRON, ports, BuiltinFailureReasons.MISSING_OUTPUT, false);
     }
 
     static Candidate candidate(String id, long maximum, List<Rule> rules, List<Scope> scopes) {

@@ -36,6 +36,9 @@ public interface OutputType<O extends MachineOutput> {
         return RecipeSyncCodec.json(codec().codec());
     }
 
+    /** Identity token for a stable output-to-requirement conversion; null means derive on every use. */
+    default Object conversionToken() { return null; }
+
     default MachineOutput fromRequirement(MachineRequirement requirement) {
         return null;
     }
@@ -75,7 +78,7 @@ public interface OutputType<O extends MachineOutput> {
     }
 
     /** Standard immutable implementation for custom and built-in output declarations. */
-    final class Definition<O extends MachineOutput> implements OutputType<O> {
+    class Definition<O extends MachineOutput> implements OutputType<O> {
         private final Identifier id;
         private final MapCodec<O> codec;
         private final BiFunction<O, Float, O> chanceTransformer;

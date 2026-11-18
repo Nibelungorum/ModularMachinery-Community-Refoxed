@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism;
 
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalResourceValues;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
@@ -19,7 +20,6 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -39,6 +39,8 @@ import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterAll;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -55,9 +57,22 @@ import static org.assertj.core.api.Assertions.assertThat;
  * @author howxu <dev@howxu.cn>
  */
 class AsyncChemicalPlanningTest {
+    private static RequirementHandlerRegistry.TestScope registry;
+    private static boolean wasNative;
+
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrapCapabilities();
+        registry = RequirementHandlerRegistry.openTestScope();
+        RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
+        wasNative = LoadedChemicalRequirement.supportsSearchSnapshot();
+        LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+    }
+
+    @AfterAll
+    static void resetHandler() {
+        if (!wasNative) LoadedChemicalRequirement.installUnavailableHandler();
+        registry.close();
     }
 
     @Test
@@ -93,8 +108,19 @@ class AsyncChemicalPlanningTest {
         AsyncCapabilityRequest.Resource request = (AsyncCapabilityRequest.Resource) requirement.requests().getFirst();
         assertThat(request.capabilityId()).isEqualTo(MekanismRecipeTypes.CHEMICAL);
         assertThat(request.parallelism()).isEqualTo(3L);
-        assertThat(request.actions()).containsExactly(new AsyncResourceAction(NativeAsyncResourceValues.chemical(oxygen),
+        assertThat(request.actions()).containsExactly(new AsyncResourceAction(ChemicalResourceValues.chemical(oxygen),
                 300L, false));
+    }
+
+    @Test
+    void replacing_the_chemical_handler_removes_its_async_shortcut() throws Exception {
+        ChemicalResource oxygen = ChemicalResource.of(registerChemical("replaced_handler_oxygen"));
+        LoadedChemicalRequirement.installUnavailableHandler();
+        try {
+            assertThat(prepareChemicalInput(oxygen, 1F)).isNull();
+        } finally {
+            LoadedChemicalRequirement.installHandler(LoadedMekanismBridge.chemicalHandler());
+        }
     }
 
     @Test
@@ -215,7 +241,7 @@ class AsyncChemicalPlanningTest {
         AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
                 new AsyncCapabilityPlanner.Resource(input.type().id()),
                 new AsyncCapabilitySnapshot.Resource(input.type().id(), List.of(
-                        new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(NativeAsyncResourceValues.chemical(chemical)),
+                        new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(ChemicalResourceValues.chemical(chemical)),
                                 1_000L, 1_000L))), Set.of(IOType.INPUT));
         Method method = CraftingContext.class.getDeclaredMethod("prepareAsyncRequirement", int.class,
                 MachineRequirement.class, long.class, List.class);

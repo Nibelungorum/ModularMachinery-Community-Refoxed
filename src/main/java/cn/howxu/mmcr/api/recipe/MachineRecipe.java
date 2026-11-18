@@ -34,6 +34,7 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Objects;
@@ -370,12 +371,21 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
      */
     public List<MachineRequirement> runtimeRequirements(List<RecipeModifier> extraModifiers,
                                                         double energyMultiplier, double outputMultiplier) {
+        return deriveRequirements(extraModifiers, energyMultiplier, outputMultiplier, ignored -> {});
+    }
+
+    /** Records the actual source and intermediate types, including requirements introduced by outputs. */
+    public List<MachineRequirement> deriveRequirements(List<RecipeModifier> extraModifiers, double energyMultiplier,
+            double outputMultiplier, Consumer<MachineRequirement> dependency) {
         List<RecipeModifier> effective = combineModifiers(extraModifiers);
         List<MachineRequirement> derived = new ArrayList<>();
         for (MachineRequirement requirement : runtimeRequirementSource()) {
-            derived.add(RequirementHandlerRegistry.applyModifiers(
-                    RequirementHandlerRegistry.applyLevelModifiers(requirement, energyMultiplier, outputMultiplier),
-                    effective));
+            dependency.accept(requirement);
+            var adjusted = RequirementHandlerRegistry.applyLevelModifiers(requirement, energyMultiplier, outputMultiplier);
+            if (adjusted.type() != requirement.type()) dependency.accept(adjusted);
+            var result = RequirementHandlerRegistry.applyModifiers(adjusted, effective);
+            if (result.type() != adjusted.type()) dependency.accept(result);
+            derived.add(result);
         }
         validateRecipe(derived);
         return List.copyOf(derived);

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.EnergyOutputAdmissionFacet;
@@ -29,6 +30,26 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class EnergyRequirementHandler implements RequirementHandler<EnergyRequirement> {
+    @Override
+    public TickCapture.Demand captureTick(EnergyRequirement energy, long parallelism, TickCapture capture) {
+        if (energy.fePerTick() <= 0L) return null;
+        return new TickCapture.Demand(RequirementHandlerSupport.scaled(energy.fePerTick(), parallelism), List.of(new AsyncCapabilityRequest.Scalar(energy.type().id(),
+                parallelism, RequirementHandlerSupport.scaled(energy.fePerTick(), parallelism), energy.io() == RecipeModifier.IOType.OUTPUT)));
+    }
+
+    @Override
+    public List<SearchOverlap> captureOverlap(EnergyRequirement requirement) {
+        return List.of();
+    }
+
+    @Override
+    public SearchDemand captureSearch(EnergyRequirement requirement) {
+        return SearchDemand.operation(SearchDemand.Kind.SCALAR, requirement.fePerTick(), 0D,
+                requirement.io() == RecipeModifier.IOType.INPUT ? BuiltinFailureReasons.MISSING_ENERGY : BuiltinFailureReasons.MISSING_OUTPUT);
+    }
+
+    @Override public Object derivationToken() { return this; }
+
     @Override
     public EnergyRequirement applyModifiers(EnergyRequirement requirement, List<RecipeModifier> modifiers) {
         return new EnergyRequirement(requirement.io(),

@@ -9,7 +9,11 @@ import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
+import cn.howxu.mmcr.api.recipe.OutputType;
+import com.mojang.serialization.MapCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
@@ -20,6 +24,8 @@ import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.CrystalShard;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.internal.runtime.StructureSnapshot;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.test.ServerThreadTestScope;
@@ -75,6 +81,53 @@ class RecipeSearchCaptureTest {
     void restoreServer() throws Exception { server.close(); }
 
     @Test
+    void shard_search_uses_the_declared_color_and_asks_for_proof_when_its_handler_declines() {
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(CrystalShard.TYPE);
+            var store = new CrystalShard.Store();
+            store.cell("blue").setAmount(2);
+            var caps = capabilities(store);
+            assertEquivalent(caps, recipe(List.of(new CrystalShard(RecipeModifier.IOType.INPUT, "blue", 2, 1F)), false));
+            assertEquivalent(caps, recipe(List.of(new CrystalShard(RecipeModifier.IOType.INPUT, "amber", 2, 1F)), false));
+            var retained = recipe(List.of(new CrystalShard(RecipeModifier.IOType.INPUT, "blue", 2, 0F)), false);
+            var snapshot = capture(caps, List.of(retained));
+            assertThat(CompletableFuture.supplyAsync(() -> new RecipeSearchPlanner(snapshot).advance()).join())
+                    .isInstanceOfSatisfying(RecipeSearchPlanner.NeedsProof.class, proof ->
+                            assertThat(proof.request().reason()).isEqualTo(RecipeSearchProof.Reason.OPAQUE_REQUIREMENT));
+            assertThat(new CraftingContext(caps).planStartResult(retained, 1L).successful()).isTrue();
+            assertThat(store.cell("blue").amount()).isEqualTo(2);
+        }
+    }
+
+    @Test
+    void dynamic_output_conversion_requires_live_proof_even_when_it_produces_a_native_requirement() {
+        record DynamicOutput(OutputType<DynamicOutput> outputType, float chance) implements MachineOutput {}
+        try (var ignored = OutputRegistry.openTestScope()) {
+            var id = MMCR.id("changing_output");
+            var count = new AtomicInteger();
+            var type = new OutputType.Definition<DynamicOutput>(id, MapCodec.unit(() -> new DynamicOutput(null, 1F)),
+                    (value, chance) -> new DynamicOutput(value.outputType(), chance), (value, mods) -> value,
+                    value -> value, OutputType.Presentation.defaults(id), id.toString(),
+                    (value, tags) -> output(Items.GOLD_INGOT, count.incrementAndGet()), requirement -> false);
+            OutputRegistry.register(type);
+            var recipe = MachineRecipe.fromCanonical(id, MMCR.id("capture_pool"), 20, List.of(),
+                    List.of(new DynamicOutput(type, 1F)), List.of(), 0, 1, false, true, false, Set.of());
+            var cache = new EffectiveRecipeSet.Cache();
+            var first = cache.resolve(snapshot(), 1L, List.of(recipe), List.of());
+            var second = cache.resolve(snapshot(), 1L, List.of(recipe), List.of());
+            int firstCount = ((ItemRequirement) first.recipes().getFirst().requirements().getFirst()).stack().getCount();
+            assertThat(((ItemRequirement) second.recipes().getFirst().requirements().getFirst()).stack().getCount())
+                    .isGreaterThan(firstCount);
+            var snapshot = capture(capabilities(), List.of(recipe));
+            var callsAtCapture = count.get();
+            assertThat(CompletableFuture.supplyAsync(() -> new RecipeSearchPlanner(snapshot).advance()).join())
+                    .isInstanceOfSatisfying(RecipeSearchPlanner.NeedsProof.class, proof ->
+                            assertThat(proof.request().reason()).isEqualTo(RecipeSearchProof.Reason.DYNAMIC_OUTPUT));
+            assertThat(count).hasValue(callsAtCapture);
+        }
+    }
+
+    @Test
     void reordered_alias_views_share_physical_cells_and_do_not_lose_resources() {
         Slot[] slots = {new Slot(ItemResource.of(Items.IRON_INGOT), 8L, 64L, null),
                 new Slot(ItemResource.of(Items.GOLD_INGOT), 4L, 64L, null)};
@@ -84,6 +137,16 @@ class RecipeSearchCaptureTest {
         assertEquivalent(capabilities, recipe(List.of(input(Items.IRON_INGOT, 1), input(Items.IRON_INGOT, 1)), false));
         assertEquivalent(capabilities, recipe(List.of(input(Items.GOLD_INGOT, 1)), false));
         assertThat(slots[0].amount()).isEqualTo(8L);
+    }
+
+    @Test
+    void disjoint_views_of_one_storage_do_not_reuse_each_others_slot_snapshots() {
+        Slot[] slots = {new Slot(ItemResource.of(Items.IRON_INGOT), 8L, 64L, null),
+                new Slot(ItemResource.of(Items.GOLD_INGOT), 4L, 64L, null)};
+        var capabilities = capabilities(new ItemBusCapability(new GuardedStorage(slots, 0), IOType.INPUT),
+                new ItemBusCapability(new GuardedStorage(slots, 1), IOType.INPUT));
+        assertEquivalent(capabilities, recipe(List.of(input(Items.GOLD_INGOT, 2)), false));
+        assertEquivalent(capabilities, recipe(List.of(input(Items.IRON_INGOT, 9)), false));
     }
 
     @Test
@@ -300,12 +363,16 @@ class RecipeSearchCaptureTest {
     }
 
     private static RecipeSearchSnapshot capture(CapabilitySnapshot capabilities, List<MachineRecipe> recipes) {
-        ControllerRuntimeSnapshot runtime = new ControllerRuntimeSnapshot(StructureSnapshot.empty(), 0L, 0L, 0L,
-                Map.of(), Map.of(), Set.of(), ModuleConnectionStatus.notRequired(), 0, null, null,
-                List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 16L);
+        var runtime = snapshot();
         var resolver = new EffectiveRecipeResolver();
         return RecipeSearchCapture.capture(runtime, 0L, 16L, recipes.stream()
                 .map(recipe -> resolver.resolve(recipe, runtime, List.of())).toList(), capabilities, false);
+    }
+
+    private static ControllerRuntimeSnapshot snapshot() {
+        return new ControllerRuntimeSnapshot(StructureSnapshot.empty(), 0L, 0L, 0L,
+                Map.of(), Map.of(), Set.of(), ModuleConnectionStatus.notRequired(), 0, null, null,
+                List.of(), List.of(), List.of(), "", "", 0, false, false, 0, 0, 16L);
     }
 
     private static CapabilitySnapshot capabilities(MachineCapability... capabilities) {

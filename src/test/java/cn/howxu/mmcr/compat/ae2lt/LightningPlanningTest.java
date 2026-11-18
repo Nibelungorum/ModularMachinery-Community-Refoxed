@@ -19,7 +19,6 @@ import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LightningCapability;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.test.ServerThreadTestScope;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -250,7 +249,7 @@ class LightningPlanningTest {
             var snapshot = facet.captureSnapshot();
             var planner = facet.workerPlanner();
             var request = new AsyncCapabilityRequest.Resource(LightningRecipeTypes.LIGHTNING, 1L,
-                    List.of(new AsyncResourceAction(NativeAsyncResourceValues.lightning(HIGH), 60L, false)));
+                    List.of(new AsyncResourceAction(LightningResourceValues.lightning(HIGH), 60L, false)));
             var operation = CompletableFuture.supplyAsync(() -> planner.plan(snapshot, request).orElseThrow()).join();
             assertThat(storage.amount(0)).isEqualTo(40L);
             storage.setContents(1, HIGH, 10L);
@@ -281,12 +280,12 @@ class LightningPlanningTest {
             var storage = storage(100L);
             storage.setContents(0, HIGH, 50L);
             var facet = new LightningCapability(storage, IOType.INPUT).facet(AsyncPlanningFacet.class).orElseThrow();
-            var value = NativeAsyncResourceValues.lightning(HIGH);
+            var value = LightningResourceValues.lightning(HIGH);
             List<AsyncCapabilityOperation> invalid = List.of(
                     new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0, value, 1L, true),
                     new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 1, value, 1L, false),
                     new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0,
-                            NativeAsyncResourceValues.lightning(EXTREME), 1L, false),
+                            LightningResourceValues.lightning(EXTREME), 1L, false),
                     new AsyncCapabilityOperation.Resource(LightningRecipeTypes.LIGHTNING, 0,
                             new AsyncResourceValue(HIGH.requirementId(), "unexpected data"), 1L, false));
             for (var operation : invalid) {

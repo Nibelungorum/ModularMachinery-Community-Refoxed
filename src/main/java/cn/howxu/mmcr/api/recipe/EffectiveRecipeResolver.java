@@ -8,6 +8,8 @@ import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 
 /** Pure resolver for one source recipe and one immutable controller modifier snapshot.
  * @author howxu <dev@howxu.cn>
@@ -16,6 +18,11 @@ public final class EffectiveRecipeResolver {
 
     public EffectiveRecipe resolve(MachineRecipe recipe, ControllerRuntimeSnapshot snapshot,
                                    List<MachineModifier> modifiers) {
+        return resolve(recipe, snapshot, modifiers, ignored -> {});
+    }
+
+    public EffectiveRecipe resolve(MachineRecipe recipe, ControllerRuntimeSnapshot snapshot,
+                                   List<MachineModifier> modifiers, Consumer<MachineRequirement> dependency) {
         Objects.requireNonNull(recipe, "recipe");
         Objects.requireNonNull(snapshot, "snapshot");
         List<MachineModifier> effectiveModifiers = List.copyOf(modifiers == null ? List.of() : modifiers);
@@ -34,7 +41,7 @@ public final class EffectiveRecipeResolver {
         int recipeThreads = boundedInt(MachineModifier.apply(effectiveModifiers, ModifierTarget.RECIPE_THREADS,
                 sourceRecipeThreads, false), 1, Integer.MAX_VALUE);
 
-        return new EffectiveRecipe(recipe, recipe.runtimeRequirements(recipeModifiers),
+        return new EffectiveRecipe(recipe, recipe.deriveRequirements(recipeModifiers, 1D, 1D, dependency),
                 recipe.runtimeMachineOutputs(recipeModifiers), duration, parallelism, factoryThreads, recipeThreads,
                 parallelized, snapshot.structure().version(), snapshot.capabilityVersion(), snapshot.modifierVersion(),
                 snapshot.stateVersion());

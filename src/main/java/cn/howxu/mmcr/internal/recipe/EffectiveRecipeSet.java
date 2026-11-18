@@ -43,9 +43,9 @@ public record EffectiveRecipeSet(Key key, List<EffectiveRecipe> recipes) {
         private long upgradeRevision;
         private long maxParallelism;
         private int laneLimit;
-        private List<MachineRecipe> sources = List.of();
+        private List<Cached> last = List.of();
         private List<MachineModifier> modifiers = List.of();
-        private final Map<Identifier, EffectiveRecipe> recipesById = new HashMap<>();
+        private final Map<Identifier, Cached> recipesById = new HashMap<>();
         private final EffectiveRecipeResolver resolver = new EffectiveRecipeResolver();
         private @Nullable EffectiveRecipeSet value;
 
@@ -55,23 +55,39 @@ public record EffectiveRecipeSet(Key key, List<EffectiveRecipe> recipes) {
             List<MachineRecipe> copiedRecipes = List.copyOf(recipes == null ? List.of() : recipes);
             prepare(snapshot, catalogVersion, copiedRecipes.isEmpty() ? pool : copiedRecipes.getFirst().recipePoolId(),
                     machineModifiers);
-            if (copiedRecipes.equals(sources) && value != null) return value;
-            List<EffectiveRecipe> resolved = copiedRecipes.stream()
-                    .map(recipe -> resolveOne(snapshot, catalogVersion, recipe, machineModifiers)).toList();
-            sources = copiedRecipes;
-            value = new EffectiveRecipeSet(key, resolved);
-            return value;
+            boolean same = value != null && copiedRecipes.size() == last.size();
+            for (int i = 0; same && i < last.size(); i++) {
+                same = last.get(i).current(copiedRecipes.get(i));
+            }
+            if (same) return value;
+            var entries = copiedRecipes.stream().map(recipe -> entry(snapshot, recipe)).toList();
+            var result = new EffectiveRecipeSet(key, entries.stream().map(Cached::view).toList());
+            boolean stable = entries.stream().allMatch(entry -> entry.evidence().current());
+            value = stable ? result : null;
+            last = stable ? entries : List.of();
+            return result;
         }
 
         public synchronized EffectiveRecipe resolveOne(ControllerRuntimeSnapshot snapshot, long catalogVersion,
                                                         MachineRecipe recipe, List<MachineModifier> machineModifiers) {
             prepare(snapshot, catalogVersion, recipe.recipePoolId(), machineModifiers);
-            EffectiveRecipe cached = recipesById.get(recipe.id());
-            if (cached != null && cached.source() == recipe) return cached;
-            EffectiveRecipe resolved = resolver.resolve(recipe, snapshot, modifiers);
-            // Only the current catalog owns long-lived entries; temporary pattern recipes cannot grow this map.
-            if (RecipeRegistry.getRecipe(recipe.id()) == recipe) recipesById.put(recipe.id(), resolved);
-            return resolved;
+            return entry(snapshot, recipe).view();
+        }
+
+        private record Cached(EffectiveRecipe view, DerivationEvidence evidence) {
+            boolean current(MachineRecipe source) { return source == view.source() && evidence.current(); }
+        }
+
+        private Cached entry(ControllerRuntimeSnapshot snapshot, MachineRecipe recipe) {
+            var cached = recipesById.get(recipe.id());
+            if (cached != null && cached.current(recipe)) return cached;
+            recipesById.remove(recipe.id());
+            var evidence = new DerivationEvidence(recipe);
+            var view = resolver.resolve(recipe, snapshot, modifiers, evidence::record);
+            view.outputs().forEach(evidence::record);
+            var entry = new Cached(view, evidence);
+            if (RecipeRegistry.getRecipe(recipe.id()) == recipe && evidence.current()) recipesById.put(recipe.id(), entry);
+            return entry;
         }
 
         private void prepare(ControllerRuntimeSnapshot snapshot, long catalogVersion, @Nullable Identifier requestedPool,
@@ -89,7 +105,7 @@ public record EffectiveRecipeSet(Key key, List<EffectiveRecipe> recipes) {
             maxParallelism = snapshot.maxParallelism();
             laneLimit = snapshot.factory().laneLimit();
             modifiers = requestedModifiers;
-            sources = List.of();
+            last = List.of();
             value = null;
             recipesById.clear();
         }

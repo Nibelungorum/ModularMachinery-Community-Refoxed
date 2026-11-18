@@ -12,6 +12,9 @@ import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand;
+import cn.howxu.mmcr.api.recipe.requirement.SearchOverlap;
+import cn.howxu.mmcr.api.recipe.requirement.TickCapture;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
@@ -39,6 +42,24 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
             (requirement, capabilities, context) -> unavailable(requirement, context);
     private static volatile RequirementHandler<LoadedHeatRequirement> delegate = UNAVAILABLE;
     private static final RequirementHandler<LoadedHeatRequirement> DELEGATING_HANDLER = new RequirementHandler<>() {
+        @Override
+        public List<SearchOverlap> captureOverlap(LoadedHeatRequirement requirement) {
+            return delegate.captureOverlap(requirement);
+        }
+
+        @Override
+        public SearchDemand captureSearch(LoadedHeatRequirement requirement) {
+            return delegate.captureSearch(requirement);
+        }
+
+        @Override
+        public TickCapture.Demand captureTick(LoadedHeatRequirement requirement, long parallelism, TickCapture capture) {
+            return delegate.captureTick(requirement, parallelism, capture);
+        }
+
+        @Override
+        public Object derivationToken() { return delegate.derivationToken(); }
+
         @Override
         public RequirementPlan plan(LoadedHeatRequirement requirement, List<MachineCapability> capabilities,
                                     PlanningContext context) {

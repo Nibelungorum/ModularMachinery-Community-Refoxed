@@ -146,7 +146,9 @@ public interface MachineOutput {
                         && item.io() == RecipeModifier.IOType.OUTPUT,
                 requirement -> requirement instanceof ItemRequirement item
                         && item.io() == RecipeModifier.IOType.OUTPUT
-                        ? new ItemOutput(item.stack(), item.chance(), item.components()) : null);
+                        ? new ItemOutput(item.stack(), item.chance(), item.components()) : null) {
+            @Override public Object conversionToken() { return this; }
+        };
 
         public ItemOutput(ItemStack stack, float chance) {
             this(stack, chance, DataComponentPredicateSet.EMPTY);
@@ -211,7 +213,9 @@ public interface MachineOutput {
                         && fluid.io() == RecipeModifier.IOType.OUTPUT,
                 requirement -> requirement instanceof FluidRequirement fluid
                         && fluid.io() == RecipeModifier.IOType.OUTPUT
-                        ? new FluidOutput(fluid.stack(), fluid.chance()) : null);
+                        ? new FluidOutput(fluid.stack(), fluid.chance()) : null) {
+            @Override public Object conversionToken() { return this; }
+        };
 
         public FluidOutput {
             stack = stack == null ? FluidStack.EMPTY : stack.copy();

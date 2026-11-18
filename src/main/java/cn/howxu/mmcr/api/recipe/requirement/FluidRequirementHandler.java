@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.plan.CapabilityRequests;
@@ -29,6 +32,54 @@ import java.util.function.Predicate;
  * @author howxu <dev@howxu.cn>
  */
 public final class FluidRequirementHandler implements RequirementHandler<FluidRequirement> {
+    @Override
+    public List<SearchOverlap> captureOverlap(FluidRequirement requirement) {
+        return List.of();
+    }
+
+    @Override
+    public SearchDemand captureSearch(FluidRequirement fluid) {
+        boolean output = fluid.io() == RecipeModifier.IOType.OUTPUT;
+        var stack = fluid.stack();
+        var resource = !output || stack.isEmpty() ? null : FluidResource.of(stack);
+        var captured = resource == null ? null : new SearchDemand.Output(resource, NativeAsyncResourceValues.fluid(resource));
+        var matcher = output || fluid.fluid() == null ? null : new SearchDemand.Matcher(
+                fluid.fluid(), values -> values.matching(fluid));
+        return new SearchDemand(SearchDemand.Kind.RESOURCE, output ? stack.getAmount() : fluid.amount(),
+                0D, fluid.chance(), fluid.consumeChance(), output || matcher != null,
+                output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                captured, matcher, SearchDemand.Ports.STANDARD);
+    }
+
+    @Override
+    public TickCapture.Demand captureTick(FluidRequirement fluid, long parallelism, TickCapture capture) {
+        if (fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.chance() != 1F) return null;
+        long amount = fluid.io() == RecipeModifier.IOType.INPUT
+                ? RequirementHandlerSupport.scaled(fluid.amount(), parallelism) : RequirementHandlerSupport.scaled(fluid.stack().getAmount(), parallelism);
+        if (amount <= 0L || (fluid.io() == RecipeModifier.IOType.INPUT
+                && (fluid.fluid() == null || fluid.consumeChance() < 1F))) return null;
+        List<AsyncCapabilityRequest> requests = new ArrayList<>();
+        if (fluid.io() == RecipeModifier.IOType.INPUT) {
+            for (AsyncResourceValue value : capture.resources(fluid.type().id(), IOType.INPUT)) {
+                FluidResource resource;
+                try {
+                    resource = NativeAsyncResourceValues.fluid(value);
+                } catch (IllegalArgumentException exception) {
+                    continue;
+                }
+                if (fluid.fluid().test(resource.toStack(1))) {
+                    requests.add(TickCapture.request(fluid.type().id(), parallelism, value, amount, false));
+                }
+            }
+        } else if (!fluid.stack().isEmpty()) {
+            requests.add(TickCapture.request(fluid.type().id(), parallelism,
+                    NativeAsyncResourceValues.fluid(FluidResource.of(fluid.stack())), amount, true));
+        }
+        return requests.isEmpty() ? null : new TickCapture.Demand(amount, requests);
+    }
+
+    @Override public Object derivationToken() { return this; }
+
     @Override
     public FluidRequirement applyModifiers(FluidRequirement requirement, List<RecipeModifier> modifiers) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {

@@ -34,7 +34,9 @@ public record LoadedHeatOutput(double heat) implements MachineOutput {
             requirement -> requirement instanceof LoadedHeatRequirement heat
                     && heat.type() == LoadedHeatRequirement.HEAT_TYPE
                     ? new LoadedHeatOutput(heat.heat().value()) : null,
-            RecipeSyncCodec.json(codec().codec()));
+            RecipeSyncCodec.json(codec().codec())) {
+        @Override public Object conversionToken() { return this; }
+    };
 
     public LoadedHeatOutput {
         if (!Double.isFinite(heat) || heat < 0D) throw new IllegalArgumentException("heat must be non-negative");

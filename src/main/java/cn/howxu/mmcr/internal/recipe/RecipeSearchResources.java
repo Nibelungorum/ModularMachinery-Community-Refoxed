@@ -3,6 +3,7 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.Holder;
@@ -24,7 +25,7 @@ import java.util.Set;
 /** Capture-local resource index. Native objects and predicates never enter the worker snapshot.
  * @author howxu <dev@howxu.cn>
  */
-final class RecipeSearchResources {
+final class RecipeSearchResources implements SearchDemand.Resources {
     private final Map<Identifier, Set<AsyncResourceValue>> universe = new HashMap<>();
     private final Map<Identifier, Map<Identifier, Set<AsyncResourceValue>>> byId = new HashMap<>();
     private final Map<Object, List<Identifier>> memberships = new IdentityHashMap<>();
@@ -38,11 +39,13 @@ final class RecipeSearchResources {
                 .computeIfAbsent(value.resourceId(), ignored -> new LinkedHashSet<>()).add(value);
     }
 
-    Set<AsyncResourceValue> all(Identifier type) {
+    @Override
+    public Set<AsyncResourceValue> all(Identifier type) {
         return universe.getOrDefault(type, Set.of());
     }
 
-    Set<AsyncResourceValue> matching(ItemRequirement requirement) {
+    @Override
+    public Set<AsyncResourceValue> matching(ItemRequirement requirement) {
         Ingredient ingredient = requirement.item();
         if (ingredient == null) return Set.of();
         boolean indexed = ingredient.getClass() == Ingredient.class && !ingredient.isCustom()
@@ -60,7 +63,8 @@ final class RecipeSearchResources {
         return Set.copyOf(accepted);
     }
 
-    Set<AsyncResourceValue> matching(FluidRequirement requirement) {
+    @Override
+    public Set<AsyncResourceValue> matching(FluidRequirement requirement) {
         var ingredient = requirement.fluid();
         if (ingredient == null) return Set.of();
         if (ingredient.getClass() == SimpleFluidIngredient.class

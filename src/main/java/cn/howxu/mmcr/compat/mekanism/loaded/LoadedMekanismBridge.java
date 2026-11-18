@@ -1,11 +1,14 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand;
+import cn.howxu.mmcr.api.recipe.requirement.SearchOverlap;
+import cn.howxu.mmcr.api.recipe.requirement.TickCapture;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
@@ -519,7 +522,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                                                  AsyncResourceValue value) {
         ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
         return matcher != null && matcher.matches(
-                NativeAsyncResourceValues.chemical(value).typeHolder());
+                ChemicalResourceValues.chemical(value).typeHolder());
     }
 
     public static Set<AsyncResourceValue> matchingChemicalSearchResources(LoadedChemicalRequirement requirement,
@@ -528,7 +531,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         if (matcher == null) return Set.of();
         Set<AsyncResourceValue> matching = new HashSet<>();
         for (AsyncResourceValue value : values) {
-            if (matcher.matches(NativeAsyncResourceValues.chemical(value).typeHolder())) matching.add(value);
+            if (matcher.matches(ChemicalResourceValues.chemical(value).typeHolder())) matching.add(value);
         }
         return Set.copyOf(matching);
     }
@@ -549,7 +552,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
     public static AsyncResourceValue chemicalSearchValue(Object resource) {
         return resource instanceof ChemicalResource chemical && !chemical.isEmpty()
-                ? NativeAsyncResourceValues.chemical(chemical) : null;
+                ? ChemicalResourceValues.chemical(chemical) : null;
     }
 
     /** Captured on the server thread; no tank, matcher or callback is retained in the search values.
@@ -576,6 +579,54 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     private static final class ChemicalHandler implements RequirementHandler<LoadedChemicalRequirement> {
+        @Override
+        public List<SearchOverlap> captureOverlap(LoadedChemicalRequirement requirement) { return List.of(); }
+
+        @Override
+        public SearchDemand captureSearch(LoadedChemicalRequirement chemical) {
+            boolean output = chemical.io() == RecipeModifier.IOType.OUTPUT;
+            boolean valid = validChemicalSearch(chemical);
+            var key = List.of(chemical.ingredient().kind(), chemical.ingredient().id());
+            Object resource = output ? chemicalSearchOutput(chemical) : null;
+            var ports = new SearchDemand.Ports() {
+                @Override public Object key() { return key; }
+                @Override public boolean accepts(MachineCapability port) { return acceptsChemicalSearchPort(chemical, port); }
+                @Override public SearchDemand.Admission admission(MachineCapability port) {
+                    var policy = chemicalSearchPolicy(chemical, port);
+                    return new SearchDemand.Admission(policy.inputLimit(), policy.outputAllowed(), policy.radioactiveRejected()
+                            ? MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED : null);
+                }
+                @Override public FailureReason failure(FailureReason reason, boolean missing, FailureReason rejection) {
+                    if (!valid) return reason;
+                    if (missing) return output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT;
+                    return rejection == null ? reason : rejection;
+                }
+            };
+            return new SearchDemand(SearchDemand.Kind.RESOURCE, chemical.ingredient().amount(), 0D, chemical.chance(),
+                    chemical.consumeChance(), valid, !valid ? MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH
+                    : output ? MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED : MekanismFailureReasons.CHEMICAL_INPUT_MISSING,
+                    resource == null ? null : new SearchDemand.Output(resource, chemicalSearchValue(resource)),
+                    !valid || output ? null : new SearchDemand.Matcher(key, values ->
+                            matchingChemicalSearchResources(chemical, values.all(chemical.type().id()))), ports);
+        }
+
+        @Override
+        public TickCapture.Demand captureTick(LoadedChemicalRequirement chemical, long parallelism, TickCapture capture) {
+            if (chemical.io() != RecipeModifier.IOType.INPUT || chemical.consumeChance() < 1F
+                    || chemical.ingredient().kind() != ChemicalIngredient.Kind.CHEMICAL) return null;
+            long amount = RequirementHandlerSupport.scaled(chemical.ingredient().amount(), parallelism);
+            if (amount <= 0L) return null;
+            List<AsyncCapabilityRequest> requests = new ArrayList<>();
+            for (AsyncResourceValue value : capture.resources(chemical.type().id(), IOType.INPUT)) {
+                if (chemical.ingredient().id().equals(value.resourceId())) {
+                    requests.add(TickCapture.request(chemical.type().id(), parallelism, value, amount, false));
+                }
+            }
+            return requests.isEmpty() ? null : new TickCapture.Demand(amount, requests);
+        }
+
+        @Override public Object derivationToken() { return this; }
+
         private final Map<ChemicalPort, ResourceStorage<ChemicalResource>> storages = new IdentityHashMap<>();
 
         @Override
@@ -803,6 +854,34 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     private static final class HeatHandler implements RequirementHandler<LoadedHeatRequirement> {
+        private static final SearchDemand.Ports PORTS = new SearchDemand.Ports() {
+            @Override public boolean accepts(MachineCapability port) { return acceptsHeatSearchPort(port); }
+        };
+
+        @Override
+        public List<SearchOverlap> captureOverlap(LoadedHeatRequirement requirement) { return List.of(); }
+
+        @Override
+        public SearchDemand captureSearch(LoadedHeatRequirement requirement) {
+            boolean minimum = requirement.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE;
+            return new SearchDemand(minimum ? SearchDemand.Kind.TEMPERATURE : SearchDemand.Kind.HEAT, 0L,
+                    requirement.heat().value(), 1F, 1F, requirement.heat().value() >= 0D,
+                    minimum ? MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT : MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
+                    null, null, PORTS);
+        }
+
+        @Override
+        public TickCapture.Demand captureTick(LoadedHeatRequirement heat, long parallelism, TickCapture capture) {
+            boolean minimumTemperature = heat.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE;
+            double value = minimumTemperature ? heat.heat().value() : saturatingHeatMultiply(heat.heat().value(), parallelism);
+            if (value < 0D) return null;
+            long accountingAmount = Math.max(1L, value >= Long.MAX_VALUE ? Long.MAX_VALUE : (long) Math.ceil(value));
+            return new TickCapture.Demand(accountingAmount, List.of(new AsyncCapabilityRequest.Heat(MekanismRecipeTypes.HEAT, parallelism, value,
+                        minimumTemperature, accountingAmount)));
+        }
+
+        @Override public Object derivationToken() { return this; }
+
         @Override
         public RequirementPlan plan(LoadedHeatRequirement requirement, List<MachineCapability> capabilities,
                                     PlanningContext context) {

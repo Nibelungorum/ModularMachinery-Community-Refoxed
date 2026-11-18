@@ -25,6 +25,14 @@ import java.util.function.Predicate;
 public interface RequirementHandler<R extends MachineRequirement> {
     RequirementPlan plan(R requirement, List<MachineCapability> capabilities, PlanningContext context);
 
+    /** An exact worker-search operation, or null when the server must prove this candidate. */
+    default @Nullable SearchDemand captureSearch(R requirement) { return null; }
+
+    /** Captures an exact tick demand on the server. Null asks the live planner to decide. */
+    default @Nullable TickCapture.Demand captureTick(R requirement, long parallelism, TickCapture capture) {
+        return null;
+    }
+
     /** Opt in only when reserving this many FE replaces all per-tick input operations. */
     default OptionalLong prefetchEnergyPerTick(R requirement) { return OptionalLong.empty(); }
 
@@ -33,6 +41,12 @@ public interface RequirementHandler<R extends MachineRequirement> {
                                                               PlanningContext context) {
         return null;
     }
+
+    /**
+     * Identity token for source-only modifier results. Null keeps dynamic handlers uncached.
+     * A mutable/delegating handler must change the token when its derivation semantics change.
+     */
+    default @Nullable Object derivationToken() { return null; }
 
     /** Applies recipe modifiers to the handler-owned requirement representation. */
     default R applyModifiers(R requirement, List<RecipeModifier> modifiers) {
@@ -43,6 +57,9 @@ public interface RequirementHandler<R extends MachineRequirement> {
     default R applyLevelModifiers(R requirement, double energyMultiplier, double outputMultiplier) {
         return requirement;
     }
+
+    /** Null means this input needs a live overlap proof; an empty list proves no overlap. */
+    default @Nullable List<SearchOverlap> captureOverlap(R requirement) { return null; }
 
     /** Reports input overlap without making recipe code depend on a concrete requirement type. */
     default boolean overlaps(R requirement, MachineRequirement other) {

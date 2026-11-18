@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
@@ -22,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import net.minecraft.core.registries.BuiltInRegistries;
 import java.util.function.Predicate;
 
 /**
@@ -30,6 +35,61 @@ import java.util.function.Predicate;
  * @author howxu <dev@howxu.cn>
  */
 public final class ItemRequirementHandler implements RequirementHandler<ItemRequirement> {
+    @Override
+    public List<SearchOverlap> captureOverlap(ItemRequirement requirement) {
+        if (requirement.item() == null) return List.of();
+        try {
+            var ids = requirement.item().items().map(holder -> BuiltInRegistries.ITEM.getKey(holder.value()))
+                    .collect(Collectors.toSet());
+            return List.of(new SearchOverlap(requirement.type().id(), ids, false));
+        } catch (UnsupportedOperationException ignored) {
+            return List.of(new SearchOverlap(requirement.type().id(), Set.of(), true));
+        }
+    }
+
+    @Override
+    public SearchDemand captureSearch(ItemRequirement item) {
+        boolean output = item.io() == RecipeModifier.IOType.OUTPUT;
+        var stack = item.stack(null);
+        var resource = !output || stack.isEmpty() ? null : ItemResource.of(stack);
+        var captured = resource == null ? null : new SearchDemand.Output(resource, NativeAsyncResourceValues.item(resource));
+        var matcher = output || item.item() == null ? null : new SearchDemand.Matcher(
+                List.of(item.item(), item.components()), values -> values.matching(item));
+        return new SearchDemand(SearchDemand.Kind.RESOURCE, output ? stack.getCount() : item.count(),
+                0D, item.chance(), item.consumeChance(), output || matcher != null,
+                output ? BuiltinFailureReasons.MISSING_OUTPUT : BuiltinFailureReasons.MISSING_INPUT,
+                captured, matcher, SearchDemand.Ports.STANDARD);
+    }
+
+    @Override
+    public TickCapture.Demand captureTick(ItemRequirement item, long parallelism, TickCapture capture) {
+        if (item.io() == RecipeModifier.IOType.OUTPUT && item.chance() != 1F) return null;
+        long amount = item.io() == RecipeModifier.IOType.INPUT
+                ? RequirementHandlerSupport.scaled(item.count(), parallelism) : RequirementHandlerSupport.scaled(item.stack(null).getCount(), parallelism);
+        if (amount <= 0L || (item.io() == RecipeModifier.IOType.INPUT
+                && (item.item() == null || item.consumeChance() < 1F))) return null;
+        List<AsyncCapabilityRequest> requests = new ArrayList<>();
+        if (item.io() == RecipeModifier.IOType.INPUT) {
+            for (AsyncResourceValue value : capture.resources(item.type().id(), IOType.INPUT)) {
+                ItemResource resource;
+                try {
+                    resource = NativeAsyncResourceValues.item(value);
+                } catch (IllegalArgumentException exception) {
+                    continue;
+                }
+                if (item.item().test(resource.toStack(1)) && item.components().matches(resource.toStack(1))) {
+                    requests.add(TickCapture.request(item.type().id(), parallelism, value, amount, false));
+                }
+            }
+        } else if (!item.stack(null).isEmpty()) {
+            requests.add(TickCapture.request(item.type().id(), parallelism,
+                    NativeAsyncResourceValues.item(ItemResource.of(item.stack(null))), amount, true));
+        }
+        return requests.isEmpty() ? null : new TickCapture.Demand(amount, requests);
+    }
+
+    @Override public Object derivationToken() { return this; }
+
     @Override
     public ItemRequirement applyModifiers(ItemRequirement requirement, List<RecipeModifier> modifiers) {
         if (requirement.io() == RecipeModifier.IOType.INPUT) {

@@ -198,6 +198,33 @@ class FailureRequirementCacheTest {
     }
 
     @Test
+    void a_changed_converter_token_invalidates_even_when_its_output_type_is_still_canonical() {
+        try (var scope = OutputRegistry.openTestScope()) {
+            var id = MMCR.id("versioned_converter");
+            AtomicInteger amount = new AtomicInteger(2);
+            AtomicReference<Object> token = new AtomicReference<>(new Object());
+            OutputType<TestOutput> type = new OutputType.Definition<>(id,
+                    MapCodec.unit(() -> new TestOutput(null, 1F)), (value, chance) -> value,
+                    (value, mods) -> value, value -> value, OutputType.Presentation.defaults(id), id.toString(),
+                    (value, tags) -> new ItemRequirement(IOType.OUTPUT, null, 0, new ItemStack(Items.GOLD_INGOT, amount.get())),
+                    ignored -> false) {
+                @Override public Object conversionToken() { return token.get(); }
+            };
+            OutputRegistry.register(type);
+            var recipe = recipe("versioned_converter", List.of(), List.of(new TestOutput(type, 1F)), List.of());
+            var cache = new FailureRequirementCache();
+            var first = cache.resolve(recipe);
+            assertThat(cache.resolve(recipe)).isSameAs(first);
+            amount.set(7);
+            token.set(new Object());
+            var second = cache.resolve(recipe);
+            assertThat(second).isNotSameAs(first);
+            assertThat(((ItemRequirement) second.getFirst()).stack().getCount()).isEqualTo(7);
+            assertThat(cache.resolve(recipe)).isSameAs(second);
+        }
+    }
+
+    @Test
     void empty_declared_outputs_do_not_enumerate_custom_output_matchers() {
         try (var ignored = OutputRegistry.openTestScope()) {
             AtomicInteger matches = new AtomicInteger();

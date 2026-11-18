@@ -12,6 +12,9 @@ import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.StartMaterial;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand;
+import cn.howxu.mmcr.api.recipe.requirement.SearchOverlap;
+import cn.howxu.mmcr.api.recipe.requirement.TickCapture;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
@@ -41,6 +44,24 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
             (requirement, capabilities, context) -> unavailable(requirement, context);
     private static volatile RequirementHandler<LoadedChemicalRequirement> delegate = UNAVAILABLE;
     private static final RequirementHandler<LoadedChemicalRequirement> DELEGATING_HANDLER = new RequirementHandler<>() {
+        @Override
+        public List<SearchOverlap> captureOverlap(LoadedChemicalRequirement requirement) {
+            return delegate.captureOverlap(requirement);
+        }
+
+        @Override
+        public SearchDemand captureSearch(LoadedChemicalRequirement requirement) {
+            return delegate.captureSearch(requirement);
+        }
+
+        @Override
+        public TickCapture.Demand captureTick(LoadedChemicalRequirement requirement, long parallelism, TickCapture capture) {
+            return delegate.captureTick(requirement, parallelism, capture);
+        }
+
+        @Override
+        public Object derivationToken() { return delegate.derivationToken(); }
+
         @Override
         public RequirementPlan plan(LoadedChemicalRequirement requirement, List<MachineCapability> capabilities,
                                     PlanningContext context) {

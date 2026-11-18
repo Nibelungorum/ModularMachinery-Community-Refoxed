@@ -1,11 +1,12 @@
 package cn.howxu.mmcr.api.recipe;
 
+import java.util.stream.Collectors;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
-import cn.howxu.mmcr.api.capability.async.AsyncResourceAction;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
@@ -17,18 +18,9 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
-import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
-import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
@@ -37,8 +29,6 @@ import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -207,10 +197,7 @@ public final class CraftingContext {
         List<OutputPolicy> policies = new ArrayList<>(requirements.size());
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            boolean probabilisticOutput = requirement.io() == RecipeModifier.IOType.OUTPUT
-                    && (requirement instanceof ItemRequirement item && item.chance() != 1F
-                    || requirement instanceof FluidRequirement fluid && fluid.chance() != 1F);
-            AsyncRequirementPlanner.Requirement description = probabilisticOutput || !requirement.tags().isEmpty() ? null
+            AsyncRequirementPlanner.Requirement description = !requirement.tags().isEmpty() ? null
                     : prepareAsyncRequirement(index, requirement, parallelism, asyncCapabilities);
             if (description == null) fallback.add(index);
             else prepared.add(description);
@@ -385,95 +372,13 @@ public final class CraftingContext {
                                                                                 MachineRequirement requirement,
                                                                                 long parallelism,
                                                                                 List<AsyncRequirementPlanner.Capability> capabilities) {
-        if (requirement instanceof ItemRequirement item) {
-            if (item.io() == RecipeModifier.IOType.OUTPUT && item.chance() != 1F) return null;
-            long amount = item.io() == RecipeModifier.IOType.INPUT
-                    ? scaled(item.count(), parallelism) : scaled(item.stack(null).getCount(), parallelism);
-            if (amount <= 0L || (item.io() == RecipeModifier.IOType.INPUT
-                    && (item.item() == null || item.consumeChance() < 1F))) return null;
-            List<AsyncCapabilityRequest> requests = new ArrayList<>();
-            if (item.io() == RecipeModifier.IOType.INPUT) {
-                for (AsyncResourceValue value : resources(capabilities, item.type().id(), IOType.INPUT)) {
-                    ItemResource resource;
-                    try {
-                        resource = NativeAsyncResourceValues.item(value);
-                    } catch (IllegalArgumentException exception) {
-                        continue;
-                    }
-                    if (item.item().test(resource.toStack(1)) && item.components().matches(resource.toStack(1))) {
-                        requests.add(resourceRequest(item.type().id(), parallelism, value, amount, false));
-                    }
-                }
-            } else if (!item.stack(null).isEmpty()) {
-                requests.add(resourceRequest(item.type().id(), parallelism,
-                        NativeAsyncResourceValues.item(ItemResource.of(item.stack(null))), amount, true));
-            }
-            return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount,
-                    IOType.valueOf(item.io().name()), requests);
-        }
-        if (requirement instanceof FluidRequirement fluid) {
-            if (fluid.io() == RecipeModifier.IOType.OUTPUT && fluid.chance() != 1F) return null;
-            long amount = fluid.io() == RecipeModifier.IOType.INPUT
-                    ? scaled(fluid.amount(), parallelism) : scaled(fluid.stack().getAmount(), parallelism);
-            if (amount <= 0L || (fluid.io() == RecipeModifier.IOType.INPUT
-                    && (fluid.fluid() == null || fluid.consumeChance() < 1F))) return null;
-            List<AsyncCapabilityRequest> requests = new ArrayList<>();
-            if (fluid.io() == RecipeModifier.IOType.INPUT) {
-                for (AsyncResourceValue value : resources(capabilities, fluid.type().id(), IOType.INPUT)) {
-                    FluidResource resource;
-                    try {
-                        resource = NativeAsyncResourceValues.fluid(value);
-                    } catch (IllegalArgumentException exception) {
-                        continue;
-                    }
-                    if (fluid.fluid().test(resource.toStack(1))) {
-                        requests.add(resourceRequest(fluid.type().id(), parallelism, value, amount, false));
-                    }
-                }
-            } else if (!fluid.stack().isEmpty()) {
-                requests.add(resourceRequest(fluid.type().id(), parallelism,
-                        NativeAsyncResourceValues.fluid(FluidResource.of(fluid.stack())), amount, true));
-            }
-            return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount,
-                    IOType.valueOf(fluid.io().name()), requests);
-        }
-        if (requirement instanceof LoadedChemicalRequirement chemical) {
-            if (chemical.io() != RecipeModifier.IOType.INPUT || chemical.consumeChance() < 1F
-                    || chemical.ingredient().kind() != ChemicalIngredient.Kind.CHEMICAL) return null;
-            long amount = scaled(chemical.ingredient().amount(), parallelism);
-            if (amount <= 0L) return null;
-            List<AsyncCapabilityRequest> requests = new ArrayList<>();
-            for (AsyncResourceValue value : resources(capabilities, chemical.type().id(), IOType.INPUT)) {
-                if (chemical.ingredient().id().equals(value.resourceId())) {
-                    requests.add(resourceRequest(chemical.type().id(), parallelism, value, amount, false));
-                }
-            }
-            return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount, IOType.INPUT,
-                    requests);
-        }
-        if (requirement instanceof EnergyRequirement energy && energy.fePerTick() > 0L) {
-            return new AsyncRequirementPlanner.Requirement(index, scaled(energy.fePerTick(), parallelism),
-                    IOType.valueOf(energy.io().name()), List.of(new AsyncCapabilityRequest.Scalar(energy.type().id(),
-                    parallelism, scaled(energy.fePerTick(), parallelism), energy.io() == RecipeModifier.IOType.OUTPUT)));
-        }
-        if (requirement instanceof LoadedHeatRequirement heat) {
-            boolean minimumTemperature = heat.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE;
-            double value = minimumTemperature ? heat.heat().value() : saturatingHeatMultiply(heat.heat().value(), parallelism);
-            if (value < 0D) return null;
-            long accountingAmount = Math.max(1L, value >= Long.MAX_VALUE ? Long.MAX_VALUE : (long) Math.ceil(value));
-            return new AsyncRequirementPlanner.Requirement(index, accountingAmount,
-                    minimumTemperature ? IOType.INPUT : IOType.OUTPUT,
-                    List.of(new AsyncCapabilityRequest.Heat(MekanismRecipeTypes.HEAT, parallelism, value,
-                            minimumTemperature, accountingAmount)));
-        }
-        return null;
-    }
-
-    private static AsyncCapabilityRequest.Resource resourceRequest(Identifier capabilityId,
-                                                                    long parallelism, AsyncResourceValue resource,
-                                                                    long amount, boolean insert) {
-        return new AsyncCapabilityRequest.Resource(capabilityId, parallelism,
-                List.of(new AsyncResourceAction(resource, amount, insert)));
+        var demand = RequirementHandlerRegistry.captureTick(requirement, parallelism,
+                (family, direction) -> resources(capabilities, family, direction));
+        if (demand == null) return null;
+        var scoped = demand.requests().stream().map(AsyncCapabilityRequest::capabilityId)
+                .filter(requirement::usesInputScope).collect(Collectors.toUnmodifiableSet());
+        return new AsyncRequirementPlanner.Requirement(index, demand.amount(), IOType.valueOf(requirement.io().name()),
+                demand.requests(), scoped);
     }
 
     private static List<AsyncResourceValue> resources(List<AsyncRequirementPlanner.Capability> capabilities,
@@ -492,16 +397,6 @@ public final class CraftingContext {
         return values;
     }
 
-    private static long scaled(long amount, long parallelism) {
-        if (amount <= 0L) return 0L;
-        return amount > Long.MAX_VALUE / parallelism ? Long.MAX_VALUE : amount * parallelism;
-    }
-
-    private static double saturatingHeatMultiply(double amount, long multiplier) {
-        if (amount <= 0D || multiplier <= 0L) return 0D;
-        return amount >= Double.MAX_VALUE / multiplier ? Double.MAX_VALUE : amount * multiplier;
-    }
-
     private PlanningResult plan(List<MachineRequirement> source, long parallelism, RecipeModifier.IOType direction,
                                 Set<Integer> consumedAtStart, Set<Integer> retainedInputs,
                                 Map<Integer, OutputPolicy> outputPolicies) {
@@ -512,15 +407,7 @@ public final class CraftingContext {
             MachineRequirement requirement = source.get(index);
             if (direction != null && requirement.io() != direction) continue;
             if (consumedAtStart.contains(index)) continue;
-            if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
-                    RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
-                    net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,
-                    cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components, float consumeChance
-            )
-                    && io == RecipeModifier.IOType.INPUT && consumeChance > 0F) {
-                requirement = new ItemRequirement(io, item1, count,
-                        stack, chance, tags, components, 0F);
-            }
+            if (retainedInputs.contains(index)) requirement = requirement.retainedInput();
             requirements.add(requirement);
             requirementIndexes.add(index);
         }

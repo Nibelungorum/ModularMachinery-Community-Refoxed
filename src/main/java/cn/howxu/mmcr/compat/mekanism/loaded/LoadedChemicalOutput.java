@@ -37,7 +37,9 @@ public record LoadedChemicalOutput(Identifier id, long amount, float chance) imp
                     && chemical.io() == RecipeModifier.IOType.OUTPUT
                     ? new LoadedChemicalOutput(chemical.ingredient().id(), chemical.ingredient().amount(), chemical.chance())
                     : null,
-            RecipeSyncCodec.json(codec().codec()));
+            RecipeSyncCodec.json(codec().codec())) {
+        @Override public Object conversionToken() { return this; }
+    };
 
     @Override
     public Object displayAggregationKey() { return List.of(TYPE, id); }

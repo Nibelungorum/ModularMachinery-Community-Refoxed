@@ -21,6 +21,8 @@ import cn.howxu.mmcr.internal.recipe.OutputResourceStorage;
 import cn.howxu.mmcr.util.IOType;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand;
+import cn.howxu.mmcr.api.recipe.requirement.SearchOverlap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +30,24 @@ import java.util.Set;
 /** Plans both lightning tiers through existing transactional resource reservations.
  * @author howxu <dev@howxu.cn> */
 public final class LightningRequirementHandler implements RequirementHandler<LightningRequirement> {
+    @Override
+    public List<SearchOverlap> captureOverlap(LightningRequirement requirement) {
+        return List.of(new SearchOverlap(requirement.type().id(), Set.of(requirement.tier().requirementId()), false));
+    }
+
+    @Override
+    public SearchDemand captureSearch(LightningRequirement lightning) {
+        if (!LightningBridge.get().available()) return null;
+        boolean output = lightning.io() == RecipeModifier.IOType.OUTPUT;
+        var value = LightningResourceValues.lightning(lightning.tier());
+        return new SearchDemand(SearchDemand.Kind.RESOURCE, lightning.amount(), 0D, lightning.chance(), 1F,
+                true, output ? LightningFailureReasons.OUTPUT_BLOCKED : LightningFailureReasons.INPUT_MISSING,
+                output ? new SearchDemand.Output(lightning.tier(), value) : null,
+                output ? null : new SearchDemand.Matcher(value, ignored -> Set.of(value)), SearchDemand.Ports.STANDARD);
+    }
+
+    @Override public Object derivationToken() { return this; }
+
     @Override
     public RequirementPlan plan(LightningRequirement requirement, List<MachineCapability> capabilities,
                                 PlanningContext context) {

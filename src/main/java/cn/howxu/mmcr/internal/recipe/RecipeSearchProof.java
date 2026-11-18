@@ -15,7 +15,7 @@ public final class RecipeSearchProof {
     private RecipeSearchProof() {}
 
     public enum Kind { CANDIDATE, OVERLAP }
-    public enum Reason { OPAQUE_REQUIREMENT, LIVE_CAPABILITY, INCOMPLETE_ROUTING, UNSAFE_OVERLAP }
+    public enum Reason { OPAQUE_REQUIREMENT, DYNAMIC_OUTPUT, LIVE_CAPABILITY, INCOMPLETE_ROUTING, UNSAFE_OVERLAP }
 
     public record Request(long sequence, Kind kind, Reason reason, int candidateIndex, int relatedCandidateIndex,
                           int requirementIndex, long maximumParallelism, List<InputScope> scopes) {

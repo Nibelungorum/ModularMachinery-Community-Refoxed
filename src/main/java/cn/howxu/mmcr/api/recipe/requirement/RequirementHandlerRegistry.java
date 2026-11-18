@@ -80,6 +80,14 @@ public final class RequirementHandlerRegistry {
         return resourceWakeups(canonical, requirement);
     }
 
+    public static SearchDemand captureSearch(MachineRequirement requirement) {
+        return dispatch(requirement, RequirementHandler::captureSearch);
+    }
+
+    public static TickCapture.Demand captureTick(MachineRequirement requirement, long parallelism, TickCapture capture) {
+        return dispatch(requirement, (handler, value) -> handler.captureTick(value, parallelism, capture));
+    }
+
     static OptionalLong prefetchEnergyPerTick(MachineRequirement requirement) {
         OptionalLong rate = dispatch(requirement, RequirementHandler::prefetchEnergyPerTick);
         return rate == null ? OptionalLong.empty() : rate;
@@ -94,6 +102,10 @@ public final class RequirementHandlerRegistry {
                                                          double energyMultiplier, double outputMultiplier) {
         return dispatch(requirement, (handler, value) ->
                 handler.applyLevelModifiers(value, energyMultiplier, outputMultiplier));
+    }
+
+    public static List<SearchOverlap> captureOverlap(MachineRequirement requirement) {
+        return dispatch(requirement, RequirementHandler::captureOverlap);
     }
 
     public static boolean overlaps(MachineRequirement requirement, MachineRequirement other) {

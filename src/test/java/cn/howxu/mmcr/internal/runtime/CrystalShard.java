@@ -1,5 +1,13 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
+import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
+import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
@@ -19,6 +27,9 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 import cn.howxu.mmcr.api.recipe.requirement.StartMaterial;
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
@@ -33,6 +44,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
+import java.util.Optional;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +53,7 @@ import java.util.Map;
 /** A test-only resource family. Colors share a port but cannot pay for one another.
  * @author howxu <dev@howxu.cn>
  */
-record CrystalShard(RecipeModifier.IOType io, String color, int amount, float chance) implements StartMaterial {
+public record CrystalShard(RecipeModifier.IOType io, String color, int amount, float chance) implements StartMaterial {
     static final Identifier ID = PortFamily.declare(Identifier.parse("mmcr_test:crystal_shard"), true).id();
     static final MapCodec<CrystalShard> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> ID.toString()),
@@ -49,7 +62,23 @@ record CrystalShard(RecipeModifier.IOType io, String color, int amount, float ch
             Codec.INT.fieldOf("amount").forGetter(CrystalShard::amount),
             Codec.FLOAT.fieldOf("chance").forGetter(CrystalShard::chance)
     ).apply(instance, (id, io, color, amount, chance) -> new CrystalShard(io, color, amount, chance)));
-    static final RequirementType<CrystalShard> TYPE = new RequirementType.Definition<>(ID, CODEC, CrystalShard::plan);
+    public static final RequirementType<CrystalShard> TYPE = new RequirementType.Definition<>(ID, CODEC, new RequirementHandler<>() {
+        @Override public RequirementPlan plan(CrystalShard shard, List<MachineCapability> capabilities, PlanningContext context) {
+            return shard.plan(capabilities, context);
+        }
+
+        @Override public SearchDemand captureSearch(CrystalShard shard) {
+            if (!shard.io.isInput() || shard.consumeChance() != 1F) return null;
+            var value = identity(shard.color);
+            return new SearchDemand(SearchDemand.Kind.RESOURCE, shard.amount, 0D, 1F, 1F, true,
+                    shard.shortageReason(), null, new SearchDemand.Matcher(value, ignored -> Set.of(value)),
+                    SearchDemand.Ports.STANDARD);
+        }
+    });
+
+    private static AsyncResourceValue identity(String color) {
+        return new AsyncResourceValue(ID.withPath(color), "{}");
+    }
 
     @Override public RequirementType<CrystalShard> type() { return TYPE; }
     @Override public float consumeChance() { return io.isInput() ? chance : 1F; }
@@ -86,10 +115,40 @@ record CrystalShard(RecipeModifier.IOType io, String color, int amount, float ch
         @Override public Object resourceIdentity() { return color; }
     }
 
-    static final class Store implements MachineCapability {
+    public static final class Store implements MachineCapability, ResourceFacet<String>, ResourceStorage<String> {
+        private static final List<String> COLORS = List.of("blue", "amber");
+        private final AsyncPlanningFacet search = new AsyncPlanningFacet() {
+            @Override protected AsyncCapabilitySnapshot captureSnapshotOnServerThread() {
+                return new AsyncCapabilitySnapshot.Resource(ID, COLORS.stream().map(color ->
+                        new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(identity(color)), cell(color).amount(),
+                                cell(color).capacity())).toList());
+            }
+            @Override protected AsyncCapabilityPlanner workerPlannerOnServerThread() { throw new UnsupportedOperationException(); }
+            @Override protected CapabilityResult commitOnServerThread(AsyncCapabilityOperation op, TransactionContext tx) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        @Override public <F extends CapabilityFacet> Optional<F> facet(Class<F> type) {
+            if (type == AsyncPlanningFacet.class) return Optional.of(type.cast(search));
+            if (type == ResourceFacet.class) return Optional.of(type.cast(this));
+            return MachineCapability.super.facet(type);
+        }
+        @Override public ResourceStorage<String> storage() { return this; }
+        @Override public Class<String> resourceType() { return String.class; }
+        @Override public int size() { return COLORS.size(); }
+        @Override public String resource(int slot) { return COLORS.get(slot); }
+        @Override public long amount(int slot) { return cell(resource(slot)).amount(); }
+        @Override public long capacity(int slot, String resource) { return cell(resource(slot)).capacity(); }
+        @Override public boolean isValid(int slot, String resource) { return resource(slot).equals(resource); }
+        @Override public long insert(int slot, String resource, long amount, TransactionContext tx) {
+            return isValid(slot, resource) ? cell(resource).insert(amount, tx) : 0L;
+        }
+        @Override public long extract(int slot, String resource, long amount, TransactionContext tx) {
+            return isValid(slot, resource) ? cell(resource).extract(amount, tx) : 0L;
+        }
         private final Map<String, LongValueStorage> cells = new HashMap<>();
         private final CapabilityView view = CapabilityFactories.view(new CapabilityType(ID), CapabilityDirections.input());
-        LongValueStorage cell(String color) {
+        public LongValueStorage cell(String color) {
             return cells.computeIfAbsent(color, ignored -> new LongValueStorage(64L, 64L, null));
         }
         @Override public CapabilityType type() { return view.type(); }

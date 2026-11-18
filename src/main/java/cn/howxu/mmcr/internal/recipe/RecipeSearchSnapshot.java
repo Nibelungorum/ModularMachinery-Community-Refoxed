@@ -3,6 +3,9 @@ package cn.howxu.mmcr.internal.recipe;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.recipe.InputScope;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
+import cn.howxu.mmcr.api.recipe.requirement.SearchDemand.Kind;
+import cn.howxu.mmcr.api.recipe.requirement.SearchOverlap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
@@ -35,12 +38,10 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
         }
     }
 
-    public enum Kind { RESOURCE, SCALAR, TEMPERATURE, HEAT, NOOP }
-
     public record Rule(int index, Identifier type, Kind kind, IOType direction, long amount,
                        double heat, float chance, float consumeChance, boolean partial, boolean valid,
                        Set<AsyncResourceValue> resources, @Nullable AsyncResourceValue output,
-                       List<Port> ports, Identifier failureReason, boolean scopedInput) {
+                       List<Port> ports, FailureReason failureReason, boolean scopedInput) {
         public Rule {
             resources = Set.copyOf(resources);
             ports = List.copyOf(ports);
@@ -60,16 +61,11 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
         }
     }
 
-    /** Native overlap ignores item quantities/components and compares lightning tiers by identity. */
-    public record Overlap(Set<Identifier> items, boolean anyItem, boolean hasItem, boolean customHandler,
-                          Set<Identifier> lightning) {
-        public Overlap(Set<Identifier> items, boolean anyItem, boolean hasItem, boolean customHandler) {
-            this(items, anyItem, hasItem, customHandler, Set.of());
-        }
+    public record Overlap(List<SearchOverlap> inputs, boolean customHandler) {
+        public Overlap { inputs = List.copyOf(inputs); }
 
-        public Overlap {
-            items = Set.copyOf(items);
-            lightning = Set.copyOf(lightning);
+        public boolean overlaps(Overlap right) {
+            return inputs.stream().anyMatch(left -> right.inputs.stream().anyMatch(left::overlaps));
         }
     }
 }

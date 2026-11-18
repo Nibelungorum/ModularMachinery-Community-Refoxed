@@ -22,7 +22,6 @@ import cn.howxu.mmcr.api.capability.plan.CraftingPlan;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.compat.ae2lt.LightningFailureReasons;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
@@ -34,7 +33,6 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
-import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.api.port.PortFamily;
@@ -379,15 +377,12 @@ public final class AsyncRequirementPlanner {
             for (FailureReason reason : List.of(BuiltinFailureReasons.MISSING_INPUT, BuiltinFailureReasons.MISSING_OUTPUT,
                     BuiltinFailureReasons.MISSING_ENERGY, BuiltinFailureReasons.LEVEL_INSUFFICIENT,
                     BuiltinFailureReasons.STAGE_INSUFFICIENT, BuiltinFailureReasons.MODULE_CONNECTION,
-                    BuiltinFailureReasons.RECIPE_SEARCH, MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH,
-                    MekanismFailureReasons.CHEMICAL_INPUT_MISSING, MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED,
-                    MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED,
-                    MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT, MekanismFailureReasons.HEAT_OUTPUT_BLOCKED,
-                    LightningFailureReasons.INPUT_MISSING, LightningFailureReasons.OUTPUT_BLOCKED)) {
+                    BuiltinFailureReasons.RECIPE_SEARCH)) {
                 reasons.put(reason.id(), reason);
             }
-            // Value-captured native rules use only the reasons above. Opaque extensions return
-            // their original ExecutionStatus through proofFailures, not through this native table.
+            for (var candidate : values.candidates()) {
+                for (var rule : candidate.rules()) reasons.put(rule.failureReason().id(), rule.failureReason());
+            }
         }
 
         public ControllerRuntimeSnapshot snapshot() { return snapshot; }
