@@ -16,6 +16,7 @@ import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.component.ComponentPredicate;
@@ -75,6 +76,16 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler.FluidAction;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.EffectiveRecipeSet;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchPlanner;
+import example.addon.ShardAddon;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
+import example.addon.ShardAddon.Shard;
+import cn.howxu.mmcr.internal.api.facade.recipe.RequirementAdapters;
+import cn.howxu.mmcr.internal.api.facade.recipe.OutputAdapters;
+import cn.howxu.mmcr.publicapi.recipe.Outputs;
+import cn.howxu.mmcr.publicapi.recipe.requirement.Requirements;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -251,6 +262,83 @@ public final class InputIsolationGameTest {
         helper.assertTrue(firstClient.inputIsolation().enabled() && secondClient.inputIsolation().enabled(), "NBT reload republishes persisted state");
     }
 
+    public static void downstreamShardSurvivesReload(GameTestHelper helper, boolean retained) {
+        try (var fixture = fixture(helper, "shard_" + retained, "item_input_bus", "item_input_bus", "item_output_bus")) {
+            var selected = fixture.ports.getFirst();
+            var outside = fixture.ports.get(1);
+            var output = fixture.ports.getLast();
+            selected.setInputIsolated(retained);
+            outside.setInputIsolated(!retained);
+            insertItem(helper, outside, new ItemStack(Items.RED_DYE, 1));
+            var input = new Shard(true, false, 2, retained ? 0F : 1F, !retained);
+            var red = new Shard(true, true, 3, 0.25F, true);
+            var blue = new Shard(false, true, 40, 0.25F, true);
+            var redOutput = OutputAdapters.unwrap(Outputs.extension(ShardAddon.OUTPUT, red));
+            var blueOutput = OutputAdapters.unwrap(Outputs.extension(ShardAddon.OUTPUT, blue));
+            helper.assertTrue(!redOutput.aggregationIdentity().equals(blueOutput.aggregationIdentity()) && blueOutput.chance() == 0.25F,
+                    "The two colors of the same output kind retain distinct identities and their chance");
+            var requirement = RequirementAdapters.unwrap(Requirements.extension(ShardAddon.INPUT, input));
+            var legacy = RequirementAdapters.unwrap(Requirements.extension(ShardAddon.LEGACY, input));
+            helper.assertTrue(!legacy.execution().recordsStartPayment() && legacy.searchProjection() == legacy,
+                    "Legacy extension shares the carrier but does not inherit payment or search proof");
+            var recipe = recipe(fixture, "downstream", List.of(requirement, OutputRegistry.toRequirement(blueOutput, List.of())), List.of(blueOutput));
+            fixture.registerRecipe(recipe);
+            var snapshot = fixture.controller.componentRuntime().capabilitySnapshot();
+            var view = fixture.controller.currentRuntimeSnapshot();
+            for (boolean funded : List.of(false, true)) {
+                if (funded) insertItem(helper, selected, new ItemStack(Items.RED_DYE, 2));
+                var request = AsyncRequirementPlanner.captureRecipeSearch(view, List.of(recipe), 1, snapshot,
+                        List.of(), 0, new EffectiveRecipeSet.Cache());
+                var worker = request.newPlanner();
+                var outcome = worker.advance();
+                helper.assertTrue((outcome instanceof RecipeSearchPlanner.NeedsProof) == retained,
+                        "Only the extension without an exact projection requests synchronous proof");
+                if (outcome instanceof RecipeSearchPlanner.NeedsProof proof) {
+                    worker.acceptProof(request.prove(proof.request()));
+                    outcome = worker.advance();
+                }
+                var sync = fixture.context().planStartResult(recipe, 1);
+                helper.assertTrue(sync.successful() == funded && (outcome instanceof RecipeSearchPlanner.Match) == funded,
+                        "Worker and synchronous admission agree on shard availability");
+                if (!funded) helper.assertTrue(outcome instanceof RecipeSearchPlanner.NoMatch missing
+                        && missing.failures().stream().anyMatch(f -> f.reasonId().equals(sync.failure().reason().id())),
+                        "A missing shard retains its actual planning failure");
+            }
+            // Exercise a fixed fractional draw against the real bus in the presence of alternative input scopes.
+            var fixed = new CraftingContext(snapshot, List.of(), null, new Sampling(() -> 0.5D));
+            var trial = fixed.planOutputs(List.of(blueOutput), 1L);
+            helper.assertTrue(trial.successful() && trial.plan().commitOutputs() && items(output) == 10,
+                    "The same declared 25% output produces exactly ten of forty at the midpoint sample");
+            output.nativeItemHandler().extractItem(0, 10, false);
+            var runtime = fixture.runtime;
+            helper.assertTrue(runtime.start(recipe, 1).isCrafting(), "Start downstream recipe with isolated and ordinary buses");
+            var scope = runtime.activeInputScope();
+            helper.assertTrue(scope.kind() == (retained ? InputScope.Kind.ISOLATED : InputScope.Kind.ORDINARY)
+                    && scope.sources().equals(List.of(selected.getBlockPos())), "Only the funded bus is pinned");
+            helper.assertTrue(items(selected) == (retained ? 2 : 0) && items(outside) == 1
+                    && runtime.activeRecipe().inputConsumptionPlan().consumedInputBatches().getFirst() == (retained ? 0 : 1),
+                    "The selected inventory and original payment bit agree");
+            var saved = new CompoundTag();
+            runtime.save(saved, helper.getLevel().registryAccess());
+            runtime.invalidate();
+            runtime.load(saved, fixture.controller.resourceDomain(), helper.getLevel().registryAccess());
+            runtime.rebindCurrentVersions();
+            helper.assertTrue(runtime.active() && runtime.activeInputScope().equals(scope), "Restored shard keeps its physical scope");
+            var program = runtime.ensureInstalledProgram();
+            for (int i = 0; i < 4; i++) {
+                helper.assertTrue(program != null && program.tryAttempt(fixture.nextRound(), helper.getLevel().getGameTime())
+                        && program.advance(), "Restored shard advances without charging twice");
+            }
+            runtime.finish();
+            long produced = items(output);
+            runtime.finish();
+            helper.assertTrue(!runtime.active() && items(selected) == (retained ? 2 : 0) && items(outside) == 1
+                    && output.nativeItemHandler().getStackInSlot(0).is(Items.BLUE_DYE) && produced >= 6 && produced <= 14 && items(output) == produced,
+                    "The sampled 25% blue output is committed exactly once");
+        }
+        helper.succeed();
+    }
+
     public static void paidOrdinaryScopeSurvivesReload(GameTestHelper helper) { paidScopeSurvivesReload(helper, false); }
     public static void paidIsolatedScopeSurvivesReload(GameTestHelper helper) { paidScopeSurvivesReload(helper, true); }
 
@@ -288,7 +376,12 @@ public final class InputIsolationGameTest {
             var portSave = first.saveWithoutMetadata(helper.getLevel().registryAccess());
             runtime.invalidate();
             first.loadWithComponents(portSave, helper.getLevel().registryAccess());
-            runtime.load(saved, fixture.controller.resourceDomain(), helper.getLevel().registryAccess());
+            var old = LegacyContracts.load("scope-" + isolated);
+            // Only relocate the physical bus; keep the old ledger, recipe fingerprint and payment bits.
+            var oldSources = old.getCompound("input_scope").getList("sources", net.minecraft.nbt.Tag.TAG_INT_ARRAY);
+            helper.assertTrue(oldSources.size() == 1, "The old save identifies one pinned physical bus");
+            oldSources.set(0, saved.getCompound("input_scope").getList("sources", net.minecraft.nbt.Tag.TAG_INT_ARRAY).get(0).copy());
+            runtime.load(old, fixture.controller.resourceDomain(), helper.getLevel().registryAccess());
             runtime.rebindCurrentVersions();
             helper.assertTrue(runtime.active() && runtime.activeInputScope().equals(scope) && runtime.ledger().state().equals(ledger)
                     && ItemStack.isSameItemSameComponents(first.nativeItemHandler().getStackInSlot(0), catalyst),

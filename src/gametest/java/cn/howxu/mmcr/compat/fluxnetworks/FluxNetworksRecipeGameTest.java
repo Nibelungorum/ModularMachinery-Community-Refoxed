@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.fluxnetworks;
 
+import cn.howxu.mmcr.LegacyContracts;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
@@ -139,7 +141,8 @@ public final class FluxNetworksRecipeGameTest {
                     "One real settlement consumes 20 FE before saving the active allocation");
             CompoundTag savedRuntime = new CompoundTag();
             original.save(savedRuntime, helper.getLevel().registryAccess());
-            var allocations = original.activeRecipe().getDataCompound().getList("prefetched_energy_allocations", Tag.TAG_COMPOUND);
+            var allocations = savedRuntime.getCompound("recipe").getCompound("data")
+                    .getList("prefetched_energy_allocations", Tag.TAG_COMPOUND);
             String key = rig.input().capabilitySnapshot().facets(RecipeEnergyPrefetchFacet.class).getFirst().reservationKey();
             helper.assertTrue(allocations.size() == 1 && allocations.getCompound(0).getString("key").equals(key)
                             && allocations.getCompound(0).getLong("amount") == 80L,
@@ -155,7 +158,10 @@ public final class FluxNetworksRecipeGameTest {
                             && supply.getTransferBuffer() == 300L
                             && input.getNetwork() == network && network.getConnectionByPos(input.getGlobalPos()) == input,
                     "Actual runtime load rebinds the remaining allocation and prefetches exactly one next batch");
-            restored.load(savedRuntime, rig.controller().resourceDomain(), helper.getLevel().registryAccess());
+            var old = LegacyContracts.load("flux");
+            old.getCompound("recipe").getCompound("data").getList("prefetched_energy_allocations", Tag.TAG_COMPOUND)
+                    .getCompound(0).putString("key", key); // same endpoint, relocated GameTest arena
+            restored.load(old, rig.controller().resourceDomain(), helper.getLevel().registryAccess());
             restored.rebindCurrentVersions();
             restored.start(recipe, 2);
             network.onEndServerTick();

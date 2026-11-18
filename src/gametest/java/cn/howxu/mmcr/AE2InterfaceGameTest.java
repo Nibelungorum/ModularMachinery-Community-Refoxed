@@ -388,6 +388,7 @@ public class AE2InterfaceGameTest {
         host.getConfig().setStack(0, null);
         host.getConfig().setStack(tank, null);
         reloadBlockEntity(host, helper);
+        host.loadWithComponents(LegacyContracts.load("slots-" + kind), helper.getLevel().registryAccess());
         slots.setStack(0, null);
         slots.setStack(tank, new GenericStack(iron, 1));
         helper.assertTrue(slots.getStack(0) == null && slots.extract(tank, water, 500, Actionable.MODULATE) == 0

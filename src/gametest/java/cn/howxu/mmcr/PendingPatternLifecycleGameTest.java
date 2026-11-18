@@ -188,6 +188,9 @@ public final class PendingPatternLifecycleGameTest {
         var saved = restored.saveWithoutMetadata(helper.getLevel().registryAccess());
         restored.loadWithComponents(saved.copy(), helper.getLevel().registryAccess());
         restored.loadWithComponents(saved.copy(), helper.getLevel().registryAccess());
+        if (!chemicals.isEmpty() && (kind.equals("ae2_me_pattern_interface") || kind.equals("eae_me_extended_pattern_interface"))) {
+            restored.loadWithComponents(LegacyContracts.load("queue-" + kind), helper.getLevel().registryAccess());
+        }
         var restoredQueue = new KeyCounter();
         for (var holder : restored.pendingPatterns().groups().getFirst().inputs(1)) restoredQueue.addAll(holder);
         for (var balance : queued) helper.assertTrue(restoredQueue.get(balance.getKey()) == balance.getLongValue(),

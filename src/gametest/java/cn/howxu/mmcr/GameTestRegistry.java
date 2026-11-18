@@ -1,5 +1,7 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.internal.registration.StructureProtocolGameTest;
+
 import cn.howxu.mmcr.compat.appmek.AppMekAdapterGameTest;
 import cn.howxu.mmcr.compat.appmek.AppMekInterfaceGameTest;
 import cn.howxu.mmcr.compat.appmek.AppMekPatternGameTest;
@@ -105,6 +107,9 @@ public final class GameTestRegistry {
         register(event, "input_isolation_combined_atomic", 20, InputIsolationGameTest::combinedInputSharesEnergyAndOutputAtomically);
         register(event, "input_isolation_full_local_replacement", 20, InputIsolationGameTest::fullIsolationPreservesLocalAndIncludesReplacement);
         register(event, "input_isolation_menu_two_viewers", 20, InputIsolationGameTest::menusPersistAndSynchronizeTwoViewers);
+        register(event, "structure_protocol_negotiation", 20, StructureProtocolGameTest::negotiate);
+        register(event, "input_isolation_downstream_shard_payment_restore", 20, helper -> InputIsolationGameTest.downstreamShardSurvivesReload(helper, false));
+        register(event, "input_isolation_downstream_shard_retained_restore", 20, helper -> InputIsolationGameTest.downstreamShardSurvivesReload(helper, true));
         register(event, "input_isolation_paid_ordinary_reload", 20, InputIsolationGameTest::paidOrdinaryScopeSurvivesReload);
         register(event, "input_isolation_paid_isolated_reload", 20, InputIsolationGameTest::paidIsolatedScopeSurvivesReload);
         if (ModList.get().isLoaded("ae2")) {
@@ -922,6 +927,13 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:ae2_terminal_")
                     || name.startsWith("mmcr:running_")
                     || name.startsWith("mmcr:input_isolation_")
+                    || name.equals("mmcr:structure_protocol_negotiation")
+                    || name.startsWith("mmcr:port_container_")
+                    || name.startsWith("mmcr:pneumatic_air_")
+                    || name.equals("mmcr:pneumatic_native_signed_wakeups")
+                    || name.equals("mmcr:ars_source_recipe_restore_wakeups")
+                    || name.equals("mmcr:botania_mana_recipe_active_controller_restore")
+                    || name.equals("mmcr:botania_mana_recipe_stale_async_commit")
                     || name.startsWith("mmcr:fluxnetworks_")
                     || name.startsWith("mmcr:appflux_")
                     || name.equals("mmcr:detector_data_reset_recipe")

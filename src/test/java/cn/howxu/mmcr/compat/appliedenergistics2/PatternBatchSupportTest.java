@@ -1,5 +1,19 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
+import example.addon.ShardAddon;
+import example.addon.ShardAddon.Shard;
+import example.addon.ShardConsumers;
+import cn.howxu.mmcr.compat.jei.JeiIngredientAdapterRegistry;
+import mezz.jei.api.recipe.RecipeIngredientRole;
+import cn.howxu.mmcr.internal.api.facade.recipe.RequirementAdapters;
+import cn.howxu.mmcr.internal.api.facade.recipe.OutputAdapters;
+import cn.howxu.mmcr.publicapi.recipe.Outputs;
+import cn.howxu.mmcr.publicapi.recipe.requirement.Requirements;
+import cn.howxu.mmcr.client.gui.OutputFormats;
+import cn.howxu.mmcr.compat.jei.MachineRecipeDisplay;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jei.PatternEncodingContribution;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEFluidKey;
@@ -244,6 +258,52 @@ class PatternBatchSupportTest {
         assertThat(PatternBatchSupport.inspectRecipe(recipe, effective, huge).maxMultiplier()).isOne();
         var small = pattern(AEItemKey.of(Items.IRON_INGOT), 1, List.of(stack(Items.GOLD_INGOT, 1)));
         assertThat(PatternBatchSupport.inspectRecipe(recipe, effective, small).maxMultiplier()).isEqualTo((long) Integer.MAX_VALUE);
+    }
+
+    @Test
+    void downstreamContributionsRespectColorChanceTerminalAmountsAndExternalSlotPermission() {
+        try (var requirements = RequirementHandlerRegistry.openTestScope(); var outputs = OutputRegistry.openTestScope()) {
+            var input = RequirementAdapters.unwrap(Requirements.extension(ShardAddon.INPUT, new Shard(true, false, 2, 1F, true)));
+            var output = OutputAdapters.unwrap(Outputs.extension(ShardAddon.OUTPUT, new Shard(false, true, 3, 0.25F, true)));
+            var recipe = recipe("shard_consumers", List.of(input, OutputRegistry.toRequirement(output, List.of())), List.of(output));
+            var pattern = pattern(ShardConsumers.Key.RED, 2, List.of(new GenericStack(ShardConsumers.Key.BLUE, 3)));
+            var profile = PatternBatchSupport.inspectRecipe(recipe, effective(recipe, 4), pattern);
+            assertThat(profile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
+            var wrong = pattern(ShardConsumers.Key.BLUE, 2, List.of(new GenericStack(ShardConsumers.Key.BLUE, 3)));
+            assertThat(PatternBatchSupport.inspectRecipe(recipe, effective(recipe, 4), wrong)).isNull();
+            assertThat(AE2ResourceFamilies.exposesLocalSlots(ShardConsumers.TYPE)).isFalse();
+
+            var opaque = RequirementAdapters.unwrap(Requirements.extension(ShardAddon.INPUT, new Shard(true, false, 2, 1F, false)));
+            var unproven = recipe("unproven_shard", List.of(opaque, OutputRegistry.toRequirement(output, List.of())), List.of(output));
+            assertThat(PatternBatchSupport.inspectRecipe(unproven, effective(unproven, 4), pattern).safety()).isEqualTo(Safety.UNPROVEN);
+            assertThat(PatternEncodingContribution.collect(MachineRecipeDisplay.from(unproven)))
+                    .noneMatch(slot -> !slot.output());
+
+            var display = MachineRecipeDisplay.from(recipe);
+            assertThat(display.entries()).hasSize(2).allMatch(entry -> entry.isTextOnly() && !entry.transferable());
+            JeiIngredientAdapterRegistry.register(new ShardConsumers.Display());
+            assertThat(display.entries()).filteredOn(entry -> entry.role() == RecipeIngredientRole.OUTPUT)
+                    .singleElement().satisfies(entry -> {
+                        assertThat(entry.chance()).isEqualTo(0.25F);
+                        assertThat(entry.exactAmount()).isEqualTo(3L);
+                        assertThat(((ItemStack) entry.ingredient()).is(Items.BLUE_DYE)).isTrue();
+                        assertThat(entry.transferable()).isFalse();
+                    });
+            var contributions = PatternEncodingContribution.collect(display);
+            var encoded = PatternEncodingContribution.prepare(contributions,
+                    List.of(List.of(new GenericStack(ShardConsumers.Key.RED, 1))), List.of(new GenericStack(ShardConsumers.Key.BLUE, 1)));
+            assertThat(encoded.inputs()).containsExactly(List.of(new GenericStack(ShardConsumers.Key.RED, 2)));
+            assertThat(encoded.outputs()).containsExactly(new GenericStack(ShardConsumers.Key.BLUE, 3));
+            assertThat(encoded.fits(1, 0)).isFalse();
+
+            assertThat(OutputFormats.line(output, 9)).isNull();
+            OutputFormats.register(ShardAddon.OUTPUT, (shard, total) -> new OutputFormats.Line(
+                    Component.literal(Long.toString(total)), List.of(), new ItemStack(shard.red() ? Items.RED_DYE : Items.BLUE_DYE)));
+            var line = OutputFormats.line(output, 9);
+            assertThat(line.icon().is(Items.BLUE_DYE)).isTrue();
+            assertThat(line.text().getString()).isEqualTo("9");
+            assertThat(output.chance()).isEqualTo(0.25F);
+        }
     }
 
     private static MachineRecipe recipe(String name, List<MachineRequirement> requirements, List<MachineOutput> outputs) {

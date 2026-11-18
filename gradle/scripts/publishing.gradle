@@ -42,6 +42,11 @@ tasks.register('compileApiUsage', JavaCompile) {
     destinationDirectory = layout.buildDirectory.dir('classes/java/apiUsage')
 }
 
+// Exercise the same downstream source against the published API and the real server runtime.
+['compileGametestJava', 'compileTestJava'].each { taskName ->
+    tasks.named(taskName, JavaCompile) { source file('src/apiUsage/java/example/addon/ShardAddon.java') }
+}
+
 tasks.named('test') {
     dependsOn tasks.named('compileApiUsage')
     def apiArguments = objects.newInstance(PublicApiTestArguments)
