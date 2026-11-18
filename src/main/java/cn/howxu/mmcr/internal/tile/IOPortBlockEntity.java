@@ -40,6 +40,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
@@ -76,6 +77,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     private final Map<AvailabilityKey, AvailabilityState> availabilityStates = new LinkedHashMap<>();
     private long storageRevision;
     private boolean storageChangesPending;
+    private boolean storageChangeQueued;
     private boolean flushingStorageChanges;
 
     protected IOPortBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
@@ -161,10 +163,17 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         return storageRevision;
     }
 
+    @Override
+    public void setLevel(Level level) {
+        if (this.level != level) storageChangeQueued = false;
+        super.setLevel(level);
+    }
+
     private void enqueueStorageChanges() {
-        if (level instanceof ServerLevel serverLevel && !isRemoved()) {
+        if (!storageChangeQueued && level instanceof ServerLevel serverLevel && !isRemoved()) {
             DIRTY_PORTS.computeIfAbsent(serverLevel,
                     ignored -> Collections.newSetFromMap(new WeakHashMap<>())).add(this);
+            storageChangeQueued = true;
         }
     }
 
@@ -172,7 +181,10 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     public static void flushStorageChanges(ServerLevel level) {
         Set<IOPortBlockEntity> dirty = DIRTY_PORTS.remove(level);
         if (dirty == null) return;
-        for (IOPortBlockEntity port : new ArrayList<>(dirty)) {
+        var batch = new ArrayList<>(dirty);
+        // Detach the entire batch before any observer can requeue (or flush) another port.
+        for (IOPortBlockEntity port : batch) if (port.level == level) port.storageChangeQueued = false;
+        for (IOPortBlockEntity port : batch) {
             if (port.level != level || port.isRemoved() || level.getBlockEntity(port.getBlockPos()) != port) continue;
             try {
                 port.flushStorageChanges();

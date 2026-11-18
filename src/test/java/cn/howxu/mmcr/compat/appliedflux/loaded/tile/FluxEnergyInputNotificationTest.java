@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -51,6 +52,10 @@ class FluxEnergyInputNotificationTest {
         Fixture fixture = new Fixture(true);
         long revision = fixture.port.storageRevision();
         long content = fixture.controller.componentRuntime().capabilityContentRevision();
+        List<Long> neighborBalances = new ArrayList<>();
+        LevelStub.onOutputSignalUpdate(fixture.level, pos -> {
+            if (pos.equals(fixture.port.getBlockPos())) neighborBalances.add(fixture.port.getEnergyStorage().amount());
+        });
         fixture.onAlert = () -> {
             assertThat(fixture.port.getEnergyStorage().amount()).isEqualTo(40L);
             assertThat(fixture.controller.componentRuntime().capabilityContentRevision()).isGreaterThan(content);
@@ -61,6 +66,7 @@ class FluxEnergyInputNotificationTest {
         fixture.port.getEnergyStorage().extract(10L, false);
 
         assertThat(fixture.port.getEnergyStorage().amount()).isEqualTo(30L);
+        assertThat(neighborBalances).containsExactly(40L, 30L);
         assertThat(fixture.port.storageRevision()).isEqualTo(revision + 2);
         assertThat(fixture.controller.componentRuntime().capabilityContentRevision()).isEqualTo(content + 2);
         assertThat(fixture.alerts).isEqualTo(1);

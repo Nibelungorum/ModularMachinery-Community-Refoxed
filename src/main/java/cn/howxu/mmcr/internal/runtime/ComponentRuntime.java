@@ -100,6 +100,7 @@ public final class ComponentRuntime {
     private long capabilityPresentationEpoch;
     private long capabilityContentRevision;
     private final Set<BlockPos> pendingCapabilitySources = new LinkedHashSet<>();
+    private @Nullable BlockPos lastPendingSource;
     private long levelVersion;
     private long cachedComponentPresentationEpoch = Long.MIN_VALUE;
     private List<ControllerRuntimeSnapshot.ComponentPresentation> cachedComponentPresentations = List.of();
@@ -185,6 +186,7 @@ public final class ComponentRuntime {
             // Removed facets need not be readable. Conservatively retain all historical/current alias invalidation.
             for (CapabilityPresentationSegment segment : capabilityPresentationSegments) segment.dirty = true;
             pendingCapabilitySources.clear();
+            lastPendingSource = null;
             cachedCapabilityPresentationEpoch = Long.MIN_VALUE;
         }
         if (presentationsChanged) {
@@ -408,13 +410,17 @@ public final class ComponentRuntime {
     public void markCapabilitySourceChanged(BlockPos sourcePos) {
         capabilityContentRevision++;
         capabilityPresentationEpoch++;
-        pendingCapabilitySources.add(sourcePos.immutable());
+        if (lastPendingSource != null && sourcePos == lastPendingSource) return;
+        BlockPos immutable = sourcePos.immutable();
+        pendingCapabilitySources.add(immutable);
+        lastPendingSource = immutable;
     }
 
     private void invalidatePendingCapabilitySources() {
         if (pendingCapabilitySources.isEmpty()) return;
         List<BlockPos> sources = List.copyOf(pendingCapabilitySources);
         pendingCapabilitySources.clear();
+        lastPendingSource = null;
         try {
             for (BlockPos source : sources) invalidateCapabilitySource(source);
         } catch (RuntimeException exception) {
