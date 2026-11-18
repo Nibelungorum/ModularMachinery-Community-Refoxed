@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
@@ -73,7 +75,16 @@ class ModCapabilitiesTest {
             }
         };
 
-        assertThat(ModCapabilities.externalBindings(kind)).containsExactly(binding);
+        var adapters = new ExternalCapabilityContext();
+        var id = binding.externalExposure().orElseThrow().id();
+        adapters.bind(binding.type(), new CapabilityBinding.ExternalExposure<>(id, String.class,
+                (host, direction, side) -> "adapter"));
+        var route = ModCapabilities.routes(kind, adapters).get(id);
+        assertThat(route.exposure().resolver().resolve(null, IOType.INPUT, Direction.NORTH)).isEqualTo("exposed");
+        var plain = new CapabilityBinding(binding.type(), CapabilityDirections.input(), ignored -> null, PortTierPolicy.always());
+        var secondHost = new ResourceOnlyPort(plain, new ResourceOnlyCapability());
+        var other = ModCapabilities.routes(secondHost.kind(), adapters).get(id);
+        assertThat(other.exposure().resolver().resolve(secondHost, IOType.INPUT, Direction.NORTH)).isEqualTo("adapter");
     }
 
     @Test
@@ -91,7 +102,7 @@ class ModCapabilitiesTest {
             @Override public PortDefinition definition() { return definition; }
         };
 
-        assertThat(ModCapabilities.nativeTransferBindings(kind, Set.of())).isEmpty();
+        assertThat(ModCapabilities.externalBindings(kind)).isEmpty();
     }
 
     @Test

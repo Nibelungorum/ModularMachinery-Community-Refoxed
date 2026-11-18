@@ -2,7 +2,6 @@ package cn.howxu.mmcr.internal.event;
 
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 
-import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -22,7 +21,9 @@ import cn.howxu.mmcr.util.IOType;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.BlockCapability;
@@ -43,7 +44,6 @@ public final class ModCapabilities {
 
     public static void register(RegisterCapabilitiesEvent event) {
         ExternalCapabilityContext context = new ExternalCapabilityContext();
-        bindNativeExposures(context);
         ExternalCapabilityRegistry.global().freeze(context);
         for (IOPortKind kind : nativeCapabilityPorts()) {
             registerNativePort(event, kind, context);
@@ -76,45 +76,41 @@ public final class ModCapabilities {
 
     private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind,
                                            ExternalCapabilityContext context) {
-        List<CapabilityBinding> externalBindings = externalBindings(kind);
-        Set<CapabilityType> externallyExposed = externalBindings.stream()
-                .filter(binding -> !context.bindings(binding.type()).isEmpty())
-                .map(CapabilityBinding::type)
-                .collect(Collectors.toSet());
-        for (CapabilityBinding binding : externalBindings) {
-            context.bindings(binding.type()).forEach(exposure -> registerExternalPort(event, kind, binding, exposure));
-        }
-        List<CapabilityBinding> nativeBindings = nativeTransferBindings(kind, externallyExposed);
-        if (!nativeBindings.isEmpty()) registerFacetProviders(event, kind, nativeBindings);
+        var routes = routes(kind, context);
+        routes.values().forEach(route -> registerExternalPort(event, kind, route.binding(), route.exposure()));
+        var fallback = externalBindings(kind).stream().filter(binding -> binding.externalExposure().isEmpty()).toList();
+        if (!fallback.isEmpty()) registerFacetProviders(event, kind, fallback, routes.keySet());
     }
 
-    static List<CapabilityBinding> nativeTransferBindings(IOPortKind kind, Set<CapabilityType> externallyExposed) {
-        if (kind == null) return List.of();
-        Set<CapabilityType> exposed = externallyExposed == null ? Set.of() : externallyExposed;
-        return kind.definition().bindings().stream()
-                .filter(CapabilityBinding::nativeTransferExposure)
-                .filter(binding -> !exposed.contains(binding.type()))
-                .toList();
+    record Route(CapabilityBinding binding, CapabilityBinding.ExternalExposure<?> exposure) {}
+
+    static Map<ResourceLocation, Route> routes(IOPortKind kind, ExternalCapabilityContext context) {
+        Map<ResourceLocation, Route> local = new LinkedHashMap<>();
+        Map<ResourceLocation, Route> global = new LinkedHashMap<>();
+        for (CapabilityBinding binding : externalBindings(kind)) {
+            binding.externalExposure().ifPresent(exposure -> addRoute(local, kind, new Route(binding, exposure)));
+            for (var exposure : context.bindings(binding.type()))
+                addRoute(global, kind, new Route(binding, exposure));
+        }
+        local.forEach((id, override) -> global.merge(id, override, (prior, next) -> {
+            if (prior.exposure().valueType() != next.exposure().valueType())
+                throw new IllegalArgumentException("Conflicting interface for " + id + " on " + kind.id());
+            return next;
+        }));
+        return global;
+    }
+
+    private static void addRoute(Map<ResourceLocation, Route> routes, IOPortKind kind, Route route) {
+        if (routes.putIfAbsent(route.exposure().id(), route) != null)
+            throw new IllegalArgumentException("Ambiguous provider for " + route.exposure().id() + " on " + kind.id());
     }
 
     static List<CapabilityBinding> externalBindings(IOPortKind kind) {
         if (kind == null) return List.of();
         return kind.definition().bindings().stream()
                 .filter(CapabilityBinding::nativeTransferExposure)
-                .filter(binding -> binding.externalExposure().isPresent())
+                .filter(binding -> binding.directions().supports(kind.ioType()))
                 .toList();
-    }
-
-    private static void bindNativeExposures(ExternalCapabilityContext context) {
-        PortKinds.all().forEach(kind -> kind.definition().bindings().stream()
-                .filter(CapabilityBinding::nativeTransferExposure)
-                .forEach(binding -> binding.externalExposure()
-                        .ifPresent(exposure -> bindExposure(context, binding.type(), exposure))));
-    }
-
-    private static <T> void bindExposure(ExternalCapabilityContext context, CapabilityType type,
-                                         CapabilityBinding.ExternalExposure<T> exposure) {
-        context.bind(type, exposure);
     }
 
     private static <T> void registerExternalPort(RegisterCapabilitiesEvent event, IOPortKind kind,
@@ -128,19 +124,19 @@ public final class ModCapabilities {
     }
 
     private static void registerFacetProviders(RegisterCapabilitiesEvent event, IOPortKind kind,
-                                               List<CapabilityBinding> bindings) {
+                                               List<CapabilityBinding> bindings, Set<ResourceLocation> explicit) {
         boolean canInsert = kind.ioType() == IOType.INPUT;
-        event.registerBlockEntity(ITEM_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
+        if (!explicit.contains(ITEM_BLOCK.name())) event.registerBlockEntity(ITEM_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
             if (!(be instanceof IOPortBlockEntity port)) return null;
             IItemHandler handler = itemHandler(port, bindings, side);
             return handler == null ? null : new DirectionalItemHandler(handler, canInsert, !canInsert);
         });
-        event.registerBlockEntity(FLUID_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
+        if (!explicit.contains(FLUID_BLOCK.name())) event.registerBlockEntity(FLUID_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
             if (!(be instanceof IOPortBlockEntity port)) return null;
             IFluidHandler handler = fluidHandler(port, bindings, side);
             return handler == null ? null : new DirectionalFluidHandler(handler, canInsert, !canInsert);
         });
-        event.registerBlockEntity(ENERGY_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
+        if (!explicit.contains(ENERGY_BLOCK.name())) event.registerBlockEntity(ENERGY_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
             if (!(be instanceof IOPortBlockEntity port)) return null;
             IEnergyStorage storage = energyStorage(port, bindings, side);
             return storage == null ? null : new DirectionalEnergyStorage(storage, canInsert, !canInsert);
