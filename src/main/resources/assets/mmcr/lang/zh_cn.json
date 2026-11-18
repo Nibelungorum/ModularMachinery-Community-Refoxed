@@ -421,6 +421,7 @@
   "gui.mmcr.controller.recipe.heat_output_exact": "精确热量输出: %s %s/t",
   "gui.mmcr.controller.recipe_output.item": "%s%s",
   "gui.mmcr.controller.recipe_output.title": "配方输出:",
+  "gui.mmcr.controller.recipe_output.generic": "%s x %s",
   "gui.mmcr.controller.recipe_output.amount_mb": "%s mB",
   "gui.mmcr.controller.recipe_output.fluid": "%s %s",
   "gui.mmcr.controller.recipe_output.chemical": "%s %s",
