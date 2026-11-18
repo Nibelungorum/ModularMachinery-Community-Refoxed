@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.internal.menu.PortMenu;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
@@ -20,7 +23,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class HeatPortMenu extends AbstractMachineMenu {
+public final class HeatPortMenu extends AbstractMachineMenu implements PortMenu {
     private final HeatPortBlockEntity owner;
     private final Level level;
     private final BlockPos pos;
@@ -56,6 +59,8 @@ public final class HeatPortMenu extends AbstractMachineMenu {
     public HeatPortBlockEntity owner() {
         return owner;
     }
+
+    @Override public Identifier displayedCapability() { return MekanismRecipeTypes.HEAT; }
 
     public BlockPos pos() {
         return pos;

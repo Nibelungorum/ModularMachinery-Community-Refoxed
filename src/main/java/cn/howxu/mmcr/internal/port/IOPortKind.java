@@ -15,6 +15,16 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 
+import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.transfer.access.ItemAccess;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import org.jetbrains.annotations.Nullable;
+import net.minecraft.resources.Identifier;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -46,7 +56,7 @@ public interface IOPortKind {
 
     static CapabilityBinding binding(CapabilityType type, IOType ioType, List<PortFamilyDescriptor> families) {
         return new CapabilityBinding(type, CapabilityDirections.of(ioType), capabilityFactory(type), (binding, tier) -> families.stream()
-                .filter(family -> family.matches(binding) && family.familyId().equals(type.id()))
+                .filter(family -> family.matches(binding))
                 .findFirst()
                 .map(family -> tier >= family.detectionTier())
                 .orElse(true));
@@ -79,6 +89,17 @@ public interface IOPortKind {
     default Optional<ExtendedCombinedPortSize> extendedCombinedPortSize() { return Optional.empty(); }
 
     default List<PortFamilyDescriptor> families() { return List.of(); }
+
+    default List<Identifier> overlayTextures() { return List.of(); }
+
+    default List<Component> tooltipLines() { return List.of(); }
+
+    default @Nullable AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) { return null; }
+    default void writeOpenData(FriendlyByteBuf buffer, BlockPos pos) { buffer.writeBlockPos(pos); }
+    default boolean handlesContainerInteraction() { return false; }
+    default int interactWithContainer(ItemAccess access, IOPortBlockEntity port, TransactionContext tx) { return 0; }
+
+    default boolean availableForStructure() { return true; }
 
     default int outputPriority() {
         return families().stream().mapToInt(PortFamilyDescriptor::detectionTier).max().orElse(0);

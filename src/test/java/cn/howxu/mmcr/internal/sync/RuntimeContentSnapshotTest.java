@@ -70,6 +70,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import com.mojang.serialization.Lifecycle;
 
+import java.util.stream.Stream;
 import java.util.Collections;
 
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
@@ -156,6 +157,10 @@ class RuntimeContentSnapshotTest {
         var tiers = PortTierRequirementSpec.builder().anyItemInput().anyFluidOutput().anyEnergyInput()
                 .minChemicalInput(PortTiers.ChemicalTier.ADVANCED).minChemicalOutput(PortTiers.ChemicalTier.ULTIMATE)
                 .anyRadioactiveChemicalInput().anyRadioactiveChemicalOutput().anyHeatInput().anyHeatOutput().build();
+        var generic = new PortTierRequirementSpec.Requirement(PortTierRequirementSpec.PortCategory.CUSTOM,
+                cn.howxu.mmcr.util.IOType.INPUT, 3, "3", MMCR.id("test_shard"));
+        tiers = new PortTierRequirementSpec(Stream.concat(tiers.requirements().stream(),
+                Stream.of(generic)).toList());
         var counts = PortRequirementSpec.builder().range("chemical_input_hatch", 1, 2)
                 .min("radioactive_chemical_output_hatch", 1).range("heat_input_hatch", 0, 1).build();
         var original = new MachineStructureDefinition(MMCR.id("mixed_port_sync"),

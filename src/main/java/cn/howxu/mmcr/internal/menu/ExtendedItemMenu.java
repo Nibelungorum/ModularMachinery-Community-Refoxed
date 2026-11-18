@@ -20,7 +20,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ExtendedItemMenu extends AbstractMachineMenu {
+public final class ExtendedItemMenu extends AbstractMachineMenu implements PortMenu {
     private final ExtendedItemBusBlockEntity owner;
     private final BlockPos pos;
     private final String kind;

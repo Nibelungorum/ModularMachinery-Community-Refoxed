@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.extendedae.loaded.kind;
 
+import net.minecraft.resources.Identifier;
 import appeng.api.networking.IManagedGridNode;
 import appeng.helpers.InterfaceLogic;
 import appeng.helpers.InterfaceLogicHost;
@@ -20,6 +21,8 @@ public final class OversizeInputInterfaceKind implements InterfaceLogicKind {
     public static final OversizeInputInterfaceKind INSTANCE = new OversizeInputInterfaceKind();
     private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), AE2ResourceFamilies.inputBindings());
     private OversizeInputInterfaceKind() {}
+    @Override public List<Identifier> overlayTextures() { return List.of(MMCR.id("block/extendedae/" + id())); }
+
     @Override public String id() { return "eae_me_oversize_input_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }
     @Override public List<PortFamilyDescriptor> families() { return AE2ResourceFamilies.inputFamilies(); }

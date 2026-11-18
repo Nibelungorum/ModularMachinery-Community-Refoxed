@@ -13,7 +13,7 @@ public interface PortTierLimits {
     /** Independently tiered port families.
      * @author howxu <dev@howxu.cn>
      */
-    enum PortCategory { ITEM, FLUID, ENERGY, CHEMICAL, RADIOACTIVE_CHEMICAL, HEAT }
+    enum PortCategory { ITEM, FLUID, ENERGY, CHEMICAL, RADIOACTIVE_CHEMICAL, HEAT, CUSTOM }
     /** Item bus tiers.
      * @author howxu <dev@howxu.cn>
      */
@@ -43,6 +43,7 @@ public interface PortTierLimits {
         public String id() { return TierAdapters.id(this); }
     }
 
+    static PortTierLimits parse(String expression) { return TierAdapters.parse(expression); }
     static PortTierLimits none() { return TierAdapters.none(); }
     static Builder builder() { return TierAdapters.builder(); }
     static PortTierLimits combine(PortTierLimits... declarations) { return TierAdapters.combine(declarations); }
@@ -92,6 +93,7 @@ public interface PortTierLimits {
     @ApiStatus.NonExtendable
     interface RequirementView {
         PortCategory category();
+        String familyId();
         IoDirection ioType();
         int minTier();
         String minTierId();

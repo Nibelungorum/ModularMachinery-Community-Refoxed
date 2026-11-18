@@ -1,12 +1,10 @@
 package cn.howxu.mmcr.api.machine;
 
-import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
-import cn.howxu.mmcr.internal.port.PortFamilyIds;
 import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
@@ -38,14 +36,8 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         if (tiers.requirements().isEmpty()) return none();
         return new PortTierRequirementSpec(tiers.requirements().stream()
                 .map(requirement -> new Requirement(
-                        switch (requirement.category()) {
-                            case ITEM -> PortCategory.ITEM;
-                            case FLUID -> PortCategory.FLUID;
-                            case ENERGY -> PortCategory.ENERGY;
-                            case CHEMICAL -> PortCategory.CHEMICAL;
-                            case RADIOACTIVE_CHEMICAL -> PortCategory.RADIOACTIVE_CHEMICAL;
-                            case HEAT -> PortCategory.HEAT;
-                        }, requirement.ioType(), requirement.minTier(), requirement.minTierId()))
+                        PortCategory.valueOf(requirement.category().name()), requirement.ioType(), requirement.minTier(),
+                        requirement.minTierId(), requirement.familyId()))
                 .toList());
     }
 
@@ -82,23 +74,27 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         ENERGY,
         CHEMICAL,
         RADIOACTIVE_CHEMICAL,
-        HEAT
+        HEAT,
+        CUSTOM
     }
 
-    public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
+    public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId, Identifier familyId) {
+        public Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
+            this(category, ioType, minTier, minTierId,
+                    category == null ? null : PortTiers.PortCategory.valueOf(category.name()).familyId());
+        }
+
         public Requirement {
             if (category == null) throw new IllegalArgumentException("category null");
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (minTier < 0) throw new IllegalArgumentException("minTier must be >= 0");
             if (minTierId == null || minTierId.isBlank()) throw new IllegalArgumentException("minTierId blank");
-            PortTiers.PortCategory declarationCategory = switch (category) {
-                case CHEMICAL -> PortTiers.PortCategory.CHEMICAL;
-                case RADIOACTIVE_CHEMICAL -> PortTiers.PortCategory.RADIOACTIVE_CHEMICAL;
-                case HEAT -> PortTiers.PortCategory.HEAT;
-                default -> null;
-            };
-            if (declarationCategory != null) {
-                new PortTiers.Requirement(declarationCategory, ioType, minTier, minTierId);
+            var declarationCategory = PortTiers.PortCategory.valueOf(category.name());
+            if (familyId == null || category != PortCategory.CUSTOM && !familyId.equals(declarationCategory.familyId())) {
+                throw new IllegalArgumentException("familyId does not match category");
+            }
+            if (category != PortCategory.ITEM && category != PortCategory.FLUID && category != PortCategory.ENERGY) {
+                new PortTiers.Requirement(declarationCategory, ioType, minTier, minTierId, familyId);
             }
         }
 
@@ -108,22 +104,15 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         }
 
         private String baseId() {
-            return switch (category) {
-                case ITEM -> ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus";
-                case FLUID -> ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch";
-                case ENERGY -> ioType == IOType.INPUT ? "energy_input_hatch" : "energy_output_hatch";
-                case CHEMICAL -> ioType == IOType.INPUT ? "chemical_input_hatch" : "chemical_output_hatch";
-                case RADIOACTIVE_CHEMICAL -> ioType == IOType.INPUT ? "radioactive_chemical_input_hatch" : "radioactive_chemical_output_hatch";
-                case HEAT -> ioType == IOType.INPUT ? "heat_input_hatch" : "heat_output_hatch";
-            };
+            return category == PortCategory.CUSTOM ? PortTiers.qualified(familyId, ioType)
+                    : PortTiers.PortCategory.valueOf(category.name()).alias(ioType);
         }
 
         private boolean matches(IOPortKind port) {
-            return sameFamily(port) && tier(port) >= minTier;
+            return tier(port) >= minTier;
         }
 
         private boolean sameFamily(IOPortKind port) {
-            if (port.bindings().stream().noneMatch(binding -> binding.directions().supports(ioType))) return false;
             return family(port).isPresent();
         }
 
@@ -132,16 +121,9 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         }
 
         private Optional<PortFamilyDescriptor> family(IOPortKind port) {
-            Identifier familyId = switch (category) {
-                case ITEM -> PortFamilyIds.ITEM;
-                case FLUID -> PortFamilyIds.FLUID;
-                case ENERGY -> PortFamilyIds.ENERGY;
-                case CHEMICAL -> MekanismPortFamilies.CHEMICAL;
-                case RADIOACTIVE_CHEMICAL -> MekanismPortFamilies.RADIOACTIVE_CHEMICAL;
-                case HEAT -> MekanismPortFamilies.HEAT;
-            };
             return port.families().stream()
-                    .filter(family -> family.familyId().equals(familyId) && family.ioType() == ioType)
+                    .filter(family -> family.familyId().equals(familyId) && family.ioType() == ioType
+                            && port.bindings().stream().anyMatch(family::matches))
                     .findFirst();
         }
     }

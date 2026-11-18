@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.extendedae.loaded.kind;
 
+import net.minecraft.resources.Identifier;
 import appeng.api.networking.IManagedGridNode;
 import appeng.helpers.InterfaceLogic;
 import appeng.helpers.InterfaceLogicHost;
@@ -28,6 +29,8 @@ public final class OversizeOutputInterfaceKind implements InterfaceLogicKind {
             AE2ResourceFamilies.ITEM.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).itemStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).itemStorage(), false, true))),
             AE2ResourceFamilies.FLUID.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).fluidStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))), AE2ResourceFamilies.additionalOutputBindings().stream()).toList());
     private OversizeOutputInterfaceKind() {}
+    @Override public List<Identifier> overlayTextures() { return List.of(MMCR.id("block/extendedae/" + id())); }
+
     @Override public String id() { return "eae_me_oversize_output_interface"; }
     @Override public IOType ioType() { return IOType.OUTPUT; }
     @Override public List<PortFamilyDescriptor> families() { return AE2ResourceFamilies.outputFamilies(); }

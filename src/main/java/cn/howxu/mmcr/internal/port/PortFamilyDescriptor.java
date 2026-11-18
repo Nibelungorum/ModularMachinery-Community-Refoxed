@@ -18,13 +18,19 @@ public record PortFamilyDescriptor(
         Identifier familyId,
         IOType ioType,
         int detectionTier,
-        List<String> countAliases) {
+        List<String> countAliases,
+        Identifier bindingId) {
+
+    public PortFamilyDescriptor(Identifier familyId, IOType ioType, int detectionTier, List<String> countAliases) {
+        this(familyId, ioType, detectionTier, countAliases, familyId);
+    }
 
     public boolean scopedInput() {
         return ioType == IOType.INPUT && PortFamily.scopesInputs(familyId);
     }
 
     public PortFamilyDescriptor {
+        if (bindingId == null) throw new IllegalArgumentException("bindingId null");
         if (familyId == null) throw new IllegalArgumentException("familyId null");
         if (ioType == null) throw new IllegalArgumentException("ioType null");
         if (detectionTier < 0) throw new IllegalArgumentException("detectionTier must be >= 0");
@@ -41,6 +47,6 @@ public record PortFamilyDescriptor(
     }
 
     public boolean matches(CapabilityBinding binding) {
-        return binding != null && familyId.equals(binding.type().id()) && binding.directions().supports(ioType);
+        return binding != null && bindingId.equals(binding.type().id()) && binding.directions().supports(ioType);
     }
 }

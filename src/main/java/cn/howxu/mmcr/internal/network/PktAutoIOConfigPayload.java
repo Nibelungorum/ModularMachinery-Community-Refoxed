@@ -2,16 +2,9 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.internal.menu.PortMenu;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
-import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
-import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
-import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
-import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
@@ -65,14 +58,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
     public static boolean canUpdate(ServerPlayer player, BlockPos pos, AutoIOAction action, @Nullable Direction side) {
         if (player == null || pos == null || action == null) return false;
         AbstractContainerMenu menu = player.containerMenu;
-        boolean portMenu = menu instanceof ItemBusMenu itemBus && itemBus.pos().equals(pos)
-                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.pos().equals(pos)
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos)
-                || menu instanceof ExtendedItemMenu extendedItem && extendedItem.pos().equals(pos)
-                || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.pos().equals(pos)
-                || menu instanceof CombinedPortMenu combined && combined.pos().equals(pos)
-                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.pos().equals(pos)
-                || MekanismBridge.get().isPortMenuAt(menu, pos, null);
+        boolean portMenu = menu instanceof PortMenu opened && pos.equals(opened.pos());
         if (!portMenu) return false;
         return menu.stillValid(player) && (!action.requiresSide() || side != null);
     }
@@ -89,14 +75,7 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
     }
 
     static boolean ownsMenu(AbstractContainerMenu menu, IOPortBlockEntity port) {
-        return menu instanceof ItemBusMenu itemBus && itemBus.owner() == port
-                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.owner() == port
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.owner() == port
-                || menu instanceof ExtendedItemMenu extendedItem && extendedItem.owner() == port
-                || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.owner() == port
-                || menu instanceof CombinedPortMenu combined && combined.owner() == port
-                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.owner() == port
-                || MekanismBridge.get().isPortMenuAt(menu, port == null ? null : port.getBlockPos(), port);
+        return port != null && menu instanceof PortMenu opened && opened.owner() == port;
     }
 
     private static <T> T readEnum(T[] values, int index) {

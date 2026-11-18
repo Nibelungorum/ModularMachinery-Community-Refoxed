@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.kubejs;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
+import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
@@ -269,7 +270,7 @@ public final class KubeJSApi {
 
     public PortTierRequirementSpec portTierRequirements(List<String> minimums) {
         List<PortTierRequirementSpec.Requirement> requirements = new ArrayList<>();
-        for (String minimum : minimums) requirements.addAll(parseTierRequirement(minimum).requirements());
+        for (String minimum : minimums) requirements.addAll(PortTierRequirementSpec.from(PortTiers.parse(minimum)).requirements());
         return requirements.isEmpty() ? PortTierRequirementSpec.none() : new PortTierRequirementSpec(requirements);
     }
 
@@ -686,28 +687,5 @@ public final class KubeJSApi {
         };
     }
 
-    private static PortTierRequirementSpec parseTierRequirement(String minimum) {
-        String[] parts = minimum.split(">=", -1);
-        if (parts.length == 1) {
-            return switch (minimum) {
-                case "radioactive_chemical_input_hatch" -> KubeJSInterfaceHelpers.radioactiveChemicalInputTier();
-                case "radioactive_chemical_output_hatch" -> KubeJSInterfaceHelpers.radioactiveChemicalOutputTier();
-                case "heat_input_hatch" -> KubeJSInterfaceHelpers.heatInputTier();
-                case "heat_output_hatch" -> KubeJSInterfaceHelpers.heatOutputTier();
-                default -> throw new IllegalArgumentException("Invalid port tier requirement: " + minimum);
-            };
-        }
-        if (parts.length != 2) throw new IllegalArgumentException("Invalid port tier requirement: " + minimum);
-        return switch (parts[0]) {
-            case "item_input_bus" -> KubeJSInterfaceHelpers.itemInputTier(parts[1]);
-            case "item_output_bus" -> KubeJSInterfaceHelpers.itemOutputTier(parts[1]);
-            case "fluid_input_hatch" -> KubeJSInterfaceHelpers.fluidInputTier(parts[1]);
-            case "fluid_output_hatch" -> KubeJSInterfaceHelpers.fluidOutputTier(parts[1]);
-            case "energy_input_hatch" -> KubeJSInterfaceHelpers.energyInputTier(parts[1]);
-            case "energy_output_hatch" -> KubeJSInterfaceHelpers.energyOutputTier(parts[1]);
-            case "chemical_input_hatch" -> KubeJSInterfaceHelpers.chemicalInputTier(parts[1]);
-            case "chemical_output_hatch" -> KubeJSInterfaceHelpers.chemicalOutputTier(parts[1]);
-            default -> throw new IllegalArgumentException("Invalid port family: " + parts[0]);
-        };
-    }
+
 }

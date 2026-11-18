@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.appliedflux.loaded.kind;
 
+import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -39,6 +40,8 @@ public final class FluxEnergyInputKind implements IOPortKind {
 
     private FluxEnergyInputKind() {
     }
+
+    @Override public List<Identifier> overlayTextures() { return List.of(MMCR.id("block/appliedflux/appflux_input")); }
 
     @Override
     public String id() {

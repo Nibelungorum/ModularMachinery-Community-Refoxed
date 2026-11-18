@@ -233,21 +233,7 @@ public final class MachineDefinitionConverter {
     }
 
     private static PortTierRequirementSpec toPortTierRequirementSpec(PortTiers requirements) {
-        if (requirements.requirements().isEmpty()) return PortTierRequirementSpec.none();
-        return new PortTierRequirementSpec(requirements.requirements().stream()
-                .map(requirement -> new PortTierRequirementSpec.Requirement(
-                        switch (requirement.category()) {
-                            case ITEM -> PortTierRequirementSpec.PortCategory.ITEM;
-                            case FLUID -> PortTierRequirementSpec.PortCategory.FLUID;
-                            case ENERGY -> PortTierRequirementSpec.PortCategory.ENERGY;
-                            case CHEMICAL -> PortTierRequirementSpec.PortCategory.CHEMICAL;
-                            case RADIOACTIVE_CHEMICAL -> PortTierRequirementSpec.PortCategory.RADIOACTIVE_CHEMICAL;
-                            case HEAT -> PortTierRequirementSpec.PortCategory.HEAT;
-                        },
-                        requirement.ioType(),
-                        requirement.minTier(),
-                        requirement.minTierId()))
-                .toList());
+        return PortTierRequirementSpec.from(requirements);
     }
 
     private static MachineStructureRequirements toStructureRequirements(StructureRequirements requirements) {

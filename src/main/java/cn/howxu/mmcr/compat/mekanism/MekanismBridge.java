@@ -1,6 +1,15 @@
 package cn.howxu.mmcr.compat.mekanism;
 
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.internal.item.InterfaceTooltips;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
@@ -126,7 +135,55 @@ public interface MekanismBridge {
     }
 
     record PortDeclaration(String id, PortType type, IOType ioType, int tier, long capacity,
-                           boolean radioactive) {
+                           boolean radioactive) implements IOPortKind {
+        @Override public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return get().createMenu(id, containerId, inventory, level, pos);
+        }
+        @Override public void writeOpenData(FriendlyByteBuf buffer, BlockPos pos) { get().writeClientOpenData(buffer, id, pos); }
+        @Override public boolean handlesContainerInteraction() { return true; }
+        @Override public int interactWithContainer(ItemAccess access, IOPortBlockEntity port, TransactionContext tx) {
+            return get().interactWithChemicalContainer(access, port, tx);
+        }
+        @Override public boolean availableForStructure() { return MekanismBridge.get().available(); }
+        @Override public List<String> modDependencies() { return List.of("mekanism"); }
+
+        @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+            return type == PortType.HEAT ? (pos, state) -> get().createHeatPort(pos, state, this)
+                    : (pos, state) -> get().createChemicalPort(pos, state, this, capacity, radioactive);
+        }
+
+        private Identifier bindingId() {
+            return type == PortType.HEAT ? MekanismPortFamilies.HEAT : MekanismPortFamilies.CHEMICAL;
+        }
+
+        @Override public PortDefinition definition() {
+            return PortDefinition.of(MMCR.id(id), new CapabilityBinding(new CapabilityType(bindingId()),
+                    CapabilityDirections.of(ioType), context -> type == PortType.HEAT
+                    ? get().createHeatCapability(context) : get().createChemicalCapability(context),
+                    (binding, currentTier) -> currentTier >= tier));
+        }
+
+        @Override public List<PortFamilyDescriptor> families() {
+            String family = type == PortType.HEAT ? "heat" : radioactive ? "radioactive_chemical" : "chemical";
+            String alias = family + (ioType == IOType.INPUT ? "_input_hatch" : "_output_hatch");
+            return List.of(new PortFamilyDescriptor(radioactive ? MekanismPortFamilies.RADIOACTIVE_CHEMICAL : bindingId(),
+                    ioType, tier, List.of(alias), bindingId()));
+        }
+
+        @Override public List<Component> tooltipLines() {
+            return List.of(type == PortType.HEAT ? InterfaceTooltips.capacityTooltip((double) capacity, "J/K")
+                    : InterfaceTooltips.capacityTooltip(capacity, "mB"));
+        }
+
+        @Override public List<Identifier> overlayTextures() {
+            String base = type == PortType.HEAT ? "heat" : radioactive ? "raditional_chemical" : "chemical";
+            String tierTexture = type == PortType.HEAT ? "huge" : radioactive ? "ludicrous"
+                    : "extended/" + id.substring(id.lastIndexOf('_') + 1);
+            return List.of(MMCR.id("block/overlay/base/mekanism/" + base),
+                    MMCR.id("block/overlay/direction/" + (ioType == IOType.INPUT ? "input" : "output")),
+                    MMCR.id("block/overlay/tier/" + tierTexture));
+        }
+
         public PortDeclaration {
             if (id == null || id.isBlank()) throw new IllegalArgumentException("id must not be blank");
             if (type == null) throw new IllegalArgumentException("type must not be null");

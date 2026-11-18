@@ -25,7 +25,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class CombinedPortMenu extends AbstractMachineMenu {
+public final class CombinedPortMenu extends AbstractMachineMenu implements PortMenu {
     public static final int FIRST_TANK_X = 15;
     public static final int FIRST_TANK_Y = 10;
     public static final int SECOND_TANK_X = 42;

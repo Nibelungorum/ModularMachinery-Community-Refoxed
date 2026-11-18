@@ -113,7 +113,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                     case ExtendedCombinedMenu combined -> ExtendedCombinedMenu.writeClientOpenData(buffer, combined.owner());
                     case FluidHatchMenu ignored -> buffer.writeBlockPos(pos);
                     case EnergyHatchMenu ignored -> buffer.writeBlockPos(pos);
-                    default -> MekanismBridge.get().writeClientOpenData(buffer, kind.id(), pos);
+                    default -> kind.writeOpenData(buffer, pos);
                 }
             }
         };
@@ -129,7 +129,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                 && level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
             if (level.isClientSide()) return InteractionResult.TRY_WITH_EMPTY_HAND;
             if (port.kind().fluidHatchSize().isPresent() && port.kind().extendedFluidHatchSize().isEmpty()
-                    || port.kind().combinedPortSize().isPresent() || MekanismBridge.get().isPort(port.kind().id())) {
+                    || port.kind().combinedPortSize().isPresent() || port.kind().handlesContainerInteraction()) {
                 return interactWithContainer(player, hand, port)
                         ? InteractionResult.SUCCESS : InteractionResult.TRY_WITH_EMPTY_HAND;
             }
@@ -157,7 +157,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                             port.getBlockPos().getCenter(), player, result.extract())).updateSnapshots(transaction);
                 }
             } else {
-                moved = MekanismBridge.get().interactWithChemicalContainer(access, port, transaction);
+                moved = port.kind().interactWithContainer(access, port, transaction);
             }
             if (moved > 0) transaction.commit();
             return moved > 0;
@@ -258,7 +258,7 @@ public class IOPortBlock extends Block implements EntityBlock {
                     ? new CombinedPortMenu(containerId, playerInv, combined) : null;
             case EXTENDED_COMBINED -> port instanceof ExtendedCombinedPortBlockEntity combined
                     ? new ExtendedCombinedMenu(containerId, playerInv, combined) : null;
-            case NONE -> MekanismBridge.get().createMenu(kind, containerId, playerInv, level, pos);
+            case NONE -> port.kind().createMenu(containerId, playerInv, level, pos);
         };
     }
 

@@ -15,7 +15,7 @@ import net.neoforged.neoforge.transfer.energy.EnergyHandler;
 import java.util.List;
 import java.util.Optional;
 
-public class EnergyHatchMenu extends AbstractMachineMenu {
+public class EnergyHatchMenu extends AbstractMachineMenu implements PortMenu {
 
     private final EnergyHatchBlockEntity owner;
     private final Level level;

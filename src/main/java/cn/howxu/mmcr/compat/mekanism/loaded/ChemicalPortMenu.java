@@ -1,5 +1,10 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.internal.menu.PortMenu;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
@@ -25,7 +30,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ChemicalPortMenu extends AbstractMachineMenu {
+public final class ChemicalPortMenu extends AbstractMachineMenu implements PortMenu {
     private final ChemicalPortBlockEntity owner;
     private final Level level;
     private final BlockPos pos;
@@ -63,6 +68,12 @@ public final class ChemicalPortMenu extends AbstractMachineMenu {
 
     public ChemicalPortBlockEntity owner() {
         return owner;
+    }
+
+    @Override public Identifier displayedCapability() { return MekanismRecipeTypes.CHEMICAL; }
+
+    @Override public int transferContainer(ServerPlayer player, int slot, boolean extract, TransactionContext tx) {
+        return MekanismBridge.get().transferChemicalContainer(player, this, slot, extract, tx);
     }
 
     public BlockPos pos() {

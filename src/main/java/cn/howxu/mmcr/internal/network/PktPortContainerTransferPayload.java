@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
+import cn.howxu.mmcr.internal.menu.PortMenu;
 import cn.howxu.mmcr.internal.menu.MenuSupport;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
@@ -71,10 +72,10 @@ public record PktPortContainerTransferPayload(int containerId, int tankIndex, bo
                         || payload.tankIndex >= port.fluidStorage().size()) return 0;
                 moved = transferFluid(player, menu, port, port.getResourceHandler(null),
                         payload.tankIndex, payload.extract, transaction);
-            } else {
-                moved = MekanismBridge.get().transferChemicalContainer(player, menu,
-                        payload.tankIndex, payload.extract, transaction);
-            }
+            } else if (menu instanceof PortMenu opened && validTarget(player, menu, opened.owner())
+                    && opened.pos().equals(opened.owner().getBlockPos())) {
+                moved = opened.transferContainer(player, payload.tankIndex, payload.extract, transaction);
+            } else return 0;
             if (moved > 0) transaction.commit();
         }
         if (moved > 0) menu.broadcastChanges();

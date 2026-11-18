@@ -16,7 +16,7 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import java.util.List;
 import java.util.Optional;
 
-public class FluidHatchMenu extends AbstractMachineMenu {
+public class FluidHatchMenu extends AbstractMachineMenu implements PortMenu {
 
     private final FluidHatchBlockEntity owner;
     private final Level level;

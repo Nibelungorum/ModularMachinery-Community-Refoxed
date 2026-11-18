@@ -12,7 +12,6 @@ import cn.howxu.mmcr.internal.port.ExtendedFluidHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
-import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.ReadableNumber;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -32,8 +31,8 @@ public final class InterfaceTooltips {
     public static List<Component> tooltipLines(Block block) {
         if (block instanceof IOPortBlock port) {
             var kind = port.kind();
-            if (kind instanceof PortKinds.ChemicalKind chemical) return chemicalTooltip(chemical);
-            if (kind instanceof PortKinds.HeatKind heat) return heatTooltip(heat);
+            var lines = kind.tooltipLines();
+            if (!lines.isEmpty()) return lines;
             return kind.itemBusSize().map(InterfaceTooltips::itemTooltip)
                     .or(() -> kind.extendedItemBusSize().map(InterfaceTooltips::itemTooltip))
                     .or(() -> kind.fluidHatchSize().map(InterfaceTooltips::fluidTooltip))
@@ -103,13 +102,8 @@ public final class InterfaceTooltips {
         return lines;
     }
 
-    private static List<Component> chemicalTooltip(PortKinds.ChemicalKind kind) {
-        return List.of(capacityLine(formatAmount(kind.capacity(), "mB")));
-    }
-
-    private static List<Component> heatTooltip(PortKinds.HeatKind kind) {
-        return List.of(capacityLine(formatAmount(kind.capacity(), "J/K")));
-    }
+    public static Component capacityTooltip(long capacity, String unit) { return capacityLine(formatAmount(capacity, unit)); }
+    public static Component capacityTooltip(double capacity, String unit) { return capacityLine(formatAmount(capacity, unit)); }
 
     private static List<Component> combinedTooltip(int itemTypes, int fluidTypes) {
         return List.of(

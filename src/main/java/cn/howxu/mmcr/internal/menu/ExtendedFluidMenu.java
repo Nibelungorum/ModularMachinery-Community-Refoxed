@@ -20,7 +20,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ExtendedFluidMenu extends AbstractMachineMenu {
+public final class ExtendedFluidMenu extends AbstractMachineMenu implements PortMenu {
     private final ExtendedFluidHatchBlockEntity owner;
     private final BlockPos pos;
     private final String kind;

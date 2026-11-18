@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
+import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
@@ -24,6 +25,8 @@ public final class InputInterfaceKind implements InterfaceLogicKind {
     private final PortDefinition definition = PortDefinition.of(MMCR.id(ID), AE2ResourceFamilies.inputBindings());
 
     private InputInterfaceKind() {}
+
+    @Override public List<Identifier> overlayTextures() { return List.of(MMCR.id("block/appliedenergistics2/ae2_input")); }
 
     @Override
     public String id() {

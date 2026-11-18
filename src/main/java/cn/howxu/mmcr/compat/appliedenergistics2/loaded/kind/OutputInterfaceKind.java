@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
+import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -45,6 +46,8 @@ public final class OutputInterfaceKind implements InterfaceLogicKind {
             AE2ResourceFamilies.additionalOutputBindings().stream()).toList());
 
     private OutputInterfaceKind() {}
+
+    @Override public List<Identifier> overlayTextures() { return List.of(MMCR.id("block/appliedenergistics2/ae2_output")); }
 
     @Override
     public String id() {

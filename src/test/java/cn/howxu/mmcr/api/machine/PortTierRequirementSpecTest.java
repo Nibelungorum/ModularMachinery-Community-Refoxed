@@ -4,7 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.machine.definition.PortTiers;
-import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.kubejs.KubeJSApi;
+import cn.howxu.mmcr.publicapi.structure.PortTierLimits;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.FluidHatchSize;
@@ -25,6 +26,36 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class PortTierRequirementSpecTest {
+
+    @Test
+    void registered_families_resolve_by_alias_or_qualified_id_without_a_new_category() {
+        var shard = new PortFamilyDescriptor(MMCR.id("test_shard"), IOType.INPUT, 3, List.of("shard_in"));
+        var dust = new PortFamilyDescriptor(MMCR.id("test_dust"), IOType.INPUT, 1, List.of("dust_in"));
+        var families = List.of(shard, dust);
+        var kind = new PortKinds.CombinedKind("shard_and_dust", IOType.INPUT, families, PortKinds.ITEM_INPUT.entityFactory(),
+                PortDefinition.of(MMCR.id("shard_and_dust"), families.stream()
+                        .map(family -> IOPortKind.binding(new CapabilityType(family.familyId()), IOType.INPUT, families)).toList()));
+        PortKinds.clearForTesting();
+        try {
+            PortKinds.register(kind);
+            var api = new KubeJSApi();
+            var byId = api.portTierRequirements(List.of("mmcr:test_shard@input>=3"));
+            assertThat(byId).isEqualTo(api.portTierRequirements(List.of("shard_in>=3")));
+            assertThat(byId.validate(List.of(kind))).isEmpty();
+            assertThat(byId.validate(List.of(PortKinds.ITEM_INPUT))).isPresent();
+            assertThat(api.portTierRequirements(List.of("dust_in>=2")).validate(List.of(kind))).isPresent();
+            assertThat(PortTierLimits.parse("shard_in>=3").requirements().getFirst().familyId()).isEqualTo(shard.familyId().toString());
+            assertThatIllegalArgumentException().isThrownBy(() -> PortTiers.parse("mmcr:test_shard@output>=3"));
+            assertThatIllegalArgumentException().isThrownBy(() -> PortTiers.parse("mmcr:missing@input>=3"));
+            var conflict = List.of(shard, new PortFamilyDescriptor(dust.familyId(), IOType.INPUT, 1, List.of("shard_in")));
+            PortKinds.register(new PortKinds.CombinedKind("ambiguous_shard_port", IOType.INPUT, conflict,
+                    kind.entityFactory(), PortDefinition.of(MMCR.id("ambiguous_shard_port"), kind.bindings())));
+            assertThatIllegalArgumentException().isThrownBy(() -> PortTiers.parse("shard_in>=1"))
+                    .withMessageContaining(shard.familyId().toString()).withMessageContaining(dust.familyId().toString());
+        } finally {
+            PortKinds.clearForTesting();
+        }
+    }
 
     @Test
     void none_accepts_empty_ports() {
@@ -234,10 +265,7 @@ class PortTierRequirementSpecTest {
     private static IOPortKind mekanismKind(String id) {
         var declaration = MekanismBridgeBootstrap.selectForTesting(true).portDeclarations().stream()
                 .filter(port -> port.id().equals(id)).findFirst().orElseThrow();
-        return declaration.type() == MekanismBridge.PortType.CHEMICAL
-                ? new PortKinds.ChemicalKind(id, declaration.ioType(), declaration.tier(),
-                        declaration.capacity(), declaration.radioactive())
-                : new PortKinds.HeatKind(id, declaration.ioType(), declaration.tier(), declaration.capacity());
+        return declaration;
     }
 
     private static IOPortKind kind(String id) {

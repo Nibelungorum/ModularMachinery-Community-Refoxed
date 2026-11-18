@@ -1,10 +1,7 @@
 package cn.howxu.mmcr.registry;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
-import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
@@ -256,58 +253,6 @@ public final class PortKinds {
         }
     }
 
-    public record ChemicalKind(String id, IOType ioType, int tier, long capacity, boolean radioactive)
-            implements IOPortKind {
-        @Override
-        public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-            return (pos, state) -> MekanismBridge.get().createChemicalPort(pos, state, this, capacity, radioactive);
-        }
-
-        @Override
-        public List<PortFamilyDescriptor> families() {
-            return List.of(new PortFamilyDescriptor(
-                    radioactive ? MekanismPortFamilies.RADIOACTIVE_CHEMICAL : MekanismPortFamilies.CHEMICAL,
-                    ioType, tier,
-                    List.of(ioType == IOType.INPUT
-                            ? radioactive ? "radioactive_chemical_input_hatch" : "chemical_input_hatch"
-                            : radioactive ? "radioactive_chemical_output_hatch" : "chemical_output_hatch")));
-        }
-
-        @Override
-        public PortDefinition definition() {
-            return PortDefinition.of(MMCR.id(id), chemicalBinding(ioType, tier));
-        }
-
-        @Override
-        public List<String> modDependencies() {
-            return List.of("mekanism");
-        }
-    }
-
-    public record HeatKind(String id, IOType ioType, int tier, double capacity)
-            implements IOPortKind {
-        @Override
-        public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-            return (pos, state) -> MekanismBridge.get().createHeatPort(pos, state, this);
-        }
-
-        @Override
-        public List<PortFamilyDescriptor> families() {
-            return List.of(new PortFamilyDescriptor(MekanismPortFamilies.HEAT, ioType, tier,
-                    List.of(ioType == IOType.INPUT ? "heat_input_hatch" : "heat_output_hatch")));
-        }
-
-        @Override
-        public PortDefinition definition() {
-            return PortDefinition.of(MMCR.id(id), heatBinding(ioType, tier));
-        }
-
-        @Override
-        public List<String> modDependencies() {
-            return List.of("mekanism");
-        }
-    }
-
     public record CombinedKind(
             String id,
             IOType ioType,
@@ -475,30 +420,8 @@ public final class PortKinds {
         }
         defaults.addAll(AE2Bridge.get().portKinds());
         defaults.addAll(AppliedFluxBridge.get().portKinds());
-        for (MekanismBridge.PortDeclaration declaration : MekanismBridge.get().portDeclarations()) {
-            if (declaration.type() == MekanismBridge.PortType.CHEMICAL) {
-                defaults.add(new ChemicalKind(declaration.id(), declaration.ioType(), declaration.tier(),
-                        declaration.capacity(), declaration.radioactive()));
-            } else if (declaration.type() == MekanismBridge.PortType.HEAT) {
-                defaults.add(new HeatKind(declaration.id(), declaration.ioType(), declaration.tier(),
-                        declaration.capacity()));
-            }
-        }
+        defaults.addAll(MekanismBridge.get().portDeclarations());
         return List.copyOf(defaults);
-    }
-
-    private static CapabilityBinding chemicalBinding(IOType ioType, int tier) {
-        CapabilityType type = new CapabilityType(MekanismPortFamilies.CHEMICAL);
-        return new CapabilityBinding(type, CapabilityDirections.of(ioType),
-                context -> MekanismBridge.get().createChemicalCapability(context),
-                (binding, currentTier) -> currentTier >= tier);
-    }
-
-    private static CapabilityBinding heatBinding(IOType ioType, int tier) {
-        CapabilityType type = new CapabilityType(MekanismPortFamilies.HEAT);
-        return new CapabilityBinding(type, CapabilityDirections.of(ioType),
-                context -> MekanismBridge.get().createHeatCapability(context),
-                (binding, currentTier) -> currentTier >= tier);
     }
 
     private static String itemAlias(IOType ioType) {

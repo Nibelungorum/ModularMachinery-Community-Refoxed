@@ -12,7 +12,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
-public class ItemBusMenu extends AbstractMachineMenu {
+public class ItemBusMenu extends AbstractMachineMenu implements PortMenu {
 
     public static final int BASE_IMAGE_HEIGHT = 166;
     public static final int SLOT_SIZE = 18;

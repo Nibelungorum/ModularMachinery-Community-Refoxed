@@ -21,7 +21,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ExtendedCombinedMenu extends AbstractMachineMenu {
+public final class ExtendedCombinedMenu extends AbstractMachineMenu implements PortMenu {
     private final ExtendedCombinedPortBlockEntity owner;
     private final BlockPos pos;
     private final String kind;

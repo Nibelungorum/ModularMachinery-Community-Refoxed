@@ -16,6 +16,7 @@ public final class TierAdapters {
     private TierAdapters() {}
     public static PortTierLimits wrap(PortTiers value) { return new TierView(Objects.requireNonNull(value)); }
     public static PortTiers unwrap(PortTierLimits value) { return ((TierView) value).value; }
+    public static PortTierLimits parse(String expression) { return wrap(PortTiers.parse(expression)); }
     public static PortTierLimits none() { return wrap(PortTiers.none()); }
     public static PortTierLimits.Builder builder() { return builder(PortTiers.builder()); }
     public static PortTierLimits.Builder builder(PortTiers.Builder value) { return new TierOptions(value); }
@@ -183,8 +184,10 @@ public final class TierAdapters {
                 case CHEMICAL -> PortTierLimits.PortCategory.CHEMICAL;
                 case RADIOACTIVE_CHEMICAL -> PortTierLimits.PortCategory.RADIOACTIVE_CHEMICAL;
                 case HEAT -> PortTierLimits.PortCategory.HEAT;
+                case CUSTOM -> PortTierLimits.PortCategory.CUSTOM;
             };
         }
+        public String familyId() { return value.familyId().toString(); }
         public IoDirection ioType() { return toPublic(value.ioType()); }
         public int minTier() { return value.minTier(); }
         public String minTierId() { return value.minTierId(); }

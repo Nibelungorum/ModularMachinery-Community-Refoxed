@@ -1,6 +1,11 @@
 package cn.howxu.mmcr.api.machine.definition;
 
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.registry.PortKinds;
+import net.minecraft.resources.Identifier;
+import java.util.Locale;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,12 +42,19 @@ public record PortTiers(List<Requirement> requirements) {
     }
 
     public enum PortCategory {
-        ITEM,
-        FLUID,
-        ENERGY,
-        CHEMICAL,
-        RADIOACTIVE_CHEMICAL,
-        HEAT
+        ITEM(PortFamilyIds.ITEM, "item_%s_bus"),
+        FLUID(PortFamilyIds.FLUID, "fluid_%s_hatch"),
+        ENERGY(PortFamilyIds.ENERGY, "energy_%s_hatch"),
+        CHEMICAL(MekanismPortFamilies.CHEMICAL, "chemical_%s_hatch"),
+        RADIOACTIVE_CHEMICAL(MekanismPortFamilies.RADIOACTIVE_CHEMICAL, "radioactive_chemical_%s_hatch"),
+        HEAT(MekanismPortFamilies.HEAT, "heat_%s_hatch"),
+        CUSTOM(null, null);
+
+        private final Identifier familyId;
+        private final String alias;
+        PortCategory(Identifier familyId, String alias) { this.familyId = familyId; this.alias = alias; }
+        public Identifier familyId() { return familyId; }
+        public String alias(IOType direction) { return alias.formatted(direction.name().toLowerCase(Locale.ROOT)); }
     }
 
     public enum ItemTier {
@@ -129,18 +141,76 @@ public record PortTiers(List<Requirement> requirements) {
         public int detectionTier() { return detectionTier; }
     }
 
-    public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
+    /** Legacy aliases retain named tiers. Extensions use alias>=N or namespace:family@input>=N. */
+    public static PortTiers parse(String expression) {
+        String[] parts = expression.split(">=", -1);
+        if (parts.length > 2) throw new IllegalArgumentException("Invalid port tier: " + expression);
+        String name = parts[0];
+        Identifier family = null;
+        IOType direction = null;
+        for (var category : PortCategory.values()) {
+            if (category == PortCategory.CUSTOM) continue;
+            for (var io : IOType.values()) {
+                if (category.alias(io).equals(name)) { family = category.familyId(); direction = io; }
+            }
+        }
+        for (var port : PortKinds.all()) {
+            for (var descriptor : port.families()) {
+                if (!descriptor.countAliases().contains(name) && !qualified(descriptor.familyId(), descriptor.ioType()).equals(name)) continue;
+                if (family != null && (!family.equals(descriptor.familyId()) || direction != descriptor.ioType())) {
+                    throw new IllegalArgumentException("Ambiguous port alias " + name + ": " + family + "/" + direction
+                            + " and " + descriptor.familyId() + "/" + descriptor.ioType());
+                }
+                family = descriptor.familyId();
+                direction = descriptor.ioType();
+            }
+        }
+        if (family == null) throw new IllegalArgumentException("Unknown port family: " + name);
+        for (var category : PortCategory.values()) {
+            if (!family.equals(category.familyId())) continue;
+            if (category == PortCategory.RADIOACTIVE_CHEMICAL || category == PortCategory.HEAT) {
+                if (parts.length != 1) throw new IllegalArgumentException("Single-tier port: " + name);
+                return new PortTiers(List.of(new Requirement(category, direction, 0, "any")));
+            }
+            if (parts.length != 2) throw new IllegalArgumentException("Missing minimum tier: " + name);
+            String tier = parts[1].toUpperCase(Locale.ROOT);
+            int minimum = switch (category) {
+                case ITEM -> ItemTier.valueOf(tier).ordinal();
+                case FLUID -> FluidTier.valueOf(tier).ordinal();
+                case ENERGY -> EnergyTier.valueOf(tier).ordinal();
+                case CHEMICAL -> ChemicalTier.valueOf(tier).detectionTier();
+                default -> throw new IllegalStateException("Not a tiered legacy family");
+            };
+            return new PortTiers(List.of(new Requirement(category, direction, minimum, parts[1].toLowerCase(Locale.ROOT))));
+        }
+        if (parts.length != 2) throw new IllegalArgumentException("Missing numeric minimum tier: " + name);
+        return new PortTiers(List.of(new Requirement(PortCategory.CUSTOM, direction, Integer.parseInt(parts[1]), parts[1], family)));
+    }
+
+    public static String qualified(Identifier family, IOType io) {
+        return family + "@" + io.name().toLowerCase(Locale.ROOT);
+    }
+
+    public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId, Identifier familyId) {
+        public Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
+            this(category, ioType, minTier, minTierId, category == null ? null : category.familyId());
+        }
+
         public Requirement {
             if (category == null) throw new IllegalArgumentException("category null");
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (minTier < 0) throw new IllegalArgumentException("minTier must be >= 0");
             if (minTierId == null || minTierId.isBlank()) throw new IllegalArgumentException("minTierId blank");
+            if (familyId == null || category != PortCategory.CUSTOM && !familyId.equals(category.familyId())) {
+                throw new IllegalArgumentException("familyId does not match category");
+            }
             String expectedTierId = switch (category) {
                 case ITEM -> minTier < ItemTier.values().length ? ItemTier.values()[minTier].id() : null;
                 case FLUID -> minTier < FluidTier.values().length ? FluidTier.values()[minTier].id() : null;
                 case ENERGY -> minTier < EnergyTier.values().length ? EnergyTier.values()[minTier].id() : null;
                 case CHEMICAL -> Arrays.stream(ChemicalTier.values())
                         .filter(tier -> tier.detectionTier() == minTier).map(ChemicalTier::id).findFirst().orElse(null);
+                case CUSTOM -> Integer.toString(minTier);
                 case RADIOACTIVE_CHEMICAL, HEAT -> minTier == 0 ? "any" : null;
             };
             if (!minTierId.equals(expectedTierId)) {
