@@ -4,6 +4,8 @@ import cn.howxu.mmcr.internal.api.facade.structure.StructureAdapters;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.internal.api.facade.recipe.ModifierAdapters;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
+import cn.howxu.mmcr.api.machine.MachineStructureFamily;
+import net.minecraft.core.BlockPos;
 import cn.howxu.mmcr.api.machine.definition.MachineStructureBuilder;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.definition.InterfaceTiers;
@@ -107,6 +109,17 @@ class PublicStructureFacadeTest {
         assertThatThrownBy(() -> pattern.predicates().clear()).isInstanceOf(UnsupportedOperationException.class);
         assertThat(pattern.predicates().get('B').blockSupplier().orElseThrow().get()).isEqualTo(Blocks.STONE);
         assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void extension_merges_at_the_same_automatically_bound_controller() {
+        var structure = Structures.structure().fullStructure(s -> s.pattern(p -> p.layer("BC")
+                        .where('B', BlockConditions.block(Blocks.STONE)).controller('C')))
+                .extension(s -> s.pattern(p -> p.layer("CE")
+                        .where('E', BlockConditions.block(Blocks.GOLD_BLOCK)).controller('C'))).build(MACHINE);
+        var family = MachineStructureFamily.of(MachineDefinitionConverter.toStructureDefinition(StructureAdapters.unwrap(structure)));
+        assertThat(family.stages().get(1).pattern().symbolsByPosition())
+                .containsEntry(BlockPos.ZERO, 'C').containsEntry(BlockPos.ZERO.west(), 'B').containsEntry(BlockPos.ZERO.east(), 'E');
     }
 
     @Test

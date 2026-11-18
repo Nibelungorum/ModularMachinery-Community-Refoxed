@@ -1,8 +1,6 @@
 package cn.howxu.mmcr.api.machine.definition;
 
-import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import java.util.LinkedHashMap;
-import net.minecraft.resources.Identifier;
 
 import java.util.List;
 import java.util.Map;
@@ -66,11 +64,10 @@ public record PatternDefinition(List<List<String>> layers, Map<Character, BlockP
         }
     }
 
-    PatternDefinition bindController(Identifier machineId) {
+    PatternDefinition bindController(BlockPredicate controller) {
         Map<Character, BlockPredicate> boundPredicates = new LinkedHashMap<>(predicates);
         if (predicates.get(controllerSymbol).isAutomaticController()) {
-            boundPredicates.put(controllerSymbol,
-                    BlockPredicate.deferredBlock(BuiltinRegistration.controller(machineId)));
+            boundPredicates.put(controllerSymbol, controller);
         }
         return new PatternDefinition(layers, boundPredicates, controllerSymbol, width, height, depth);
     }
