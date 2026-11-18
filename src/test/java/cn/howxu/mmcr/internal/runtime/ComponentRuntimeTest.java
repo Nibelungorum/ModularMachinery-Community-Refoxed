@@ -412,8 +412,13 @@ class ComponentRuntimeTest {
         assertThat(unrelated.amountReads).isZero();
         assertThat(runtime.capabilityPresentations()).isSameAs(after);
         assertThat(runtime.capabilityVersion()).isEqualTo(version);
+        try (Transaction transaction = Transaction.openRoot()) {
+            shared.insert(0, iron, 1L, transaction);
+            transaction.commit();
+        }
+        assertThat(runtime.capabilityPresentations().getFirst().amount()).isEqualTo(11L);
         runtime.markCapabilityPresentationChanged();
-        assertThat(runtime.capabilityContentRevision()).isEqualTo(revision + 2L);
+        assertThat(runtime.capabilityContentRevision()).isEqualTo(revision + 3L);
     }
 
     @Test

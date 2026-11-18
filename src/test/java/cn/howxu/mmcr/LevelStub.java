@@ -58,6 +58,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import java.util.stream.Collectors;
@@ -132,6 +133,10 @@ public final class LevelStub {
         ((TestLevel) level).gameTime = gameTime;
     }
 
+    public static void onOutputSignalUpdate(Level level, Consumer<BlockPos> listener) {
+        ((TestLevel) level).outputSignalListener = listener;
+    }
+
     public static int sentBlockUpdates(Level level) {
         return ((TestLevel) level).sentBlockUpdates;
     }
@@ -171,6 +176,7 @@ public final class LevelStub {
         private Set<Long> loadedChunks;
         private long gameTime;
         private int sentBlockUpdates;
+        private Consumer<BlockPos> outputSignalListener;
         private int capabilityLookups;
         private RandomSource random = RandomSource.create(0L);
 
@@ -198,6 +204,11 @@ public final class LevelStub {
         }
 
         @Override public void blockEntityChanged(BlockPos pos) {}
+
+        @Override public void updateNeighbourForOutputSignal(BlockPos pos, Block block) {
+            if (outputSignalListener != null) outputSignalListener.accept(pos);
+            super.updateNeighbourForOutputSignal(pos, block);
+        }
 
         @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) {
             blocks.put(pos, state);

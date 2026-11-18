@@ -189,6 +189,40 @@ class IOPortStorageSyncTest {
     }
 
     @Test
+    void repeated_commits_do_not_probe_the_dirty_set_again_until_detached() {
+        var controller = TestBootstrap.newController();
+        var port = new TrackingEnergyPort(POS, ModBlocks.BLOCKS.get(PortKinds.ENERGY_INPUT.id()).get().defaultBlockState());
+        RuntimeTestFixtures.formStructureWithComponents(controller, MachineRegistry.getMachine(MMCR.id("test_cube")), port);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        port.energyStorage().setAmount(1L);
+        int firstEnqueue = port.hashReads;
+        for (int i = 2; i <= 17; i++) port.energyStorage().setAmount(i);
+        assertThat(port.hashReads).isEqualTo(firstEnqueue);
+        IOPortBlockEntity.flushStorageChanges(level);
+        int detached = port.hashReads;
+        port.energyStorage().setAmount(18L);
+        assertThat(port.hashReads).isGreaterThan(detached);
+        IOPortBlockEntity.flushStorageChanges(level);
+        assertThat(port.snapshotNotifications).isEqualTo(2);
+    }
+
+    @Test
+    void moving_a_queued_port_does_not_lose_the_destination_flush() {
+        var first = TestBootstrap.newController();
+        var second = TestBootstrap.newController();
+        var port = new TrackingEnergyPort(POS, ModBlocks.BLOCKS.get(PortKinds.ENERGY_INPUT.id()).get().defaultBlockState());
+        var machine = MachineRegistry.getMachine(MMCR.id("test_cube"));
+        RuntimeTestFixtures.formStructureWithComponents(first, machine, port);
+        port.energyStorage().setAmount(10L);
+        RuntimeTestFixtures.formStructureWithComponents(second, machine, port);
+        port.energyStorage().setAmount(20L);
+        IOPortBlockEntity.flushStorageChanges((ServerLevel) first.getLevel());
+        assertThat(port.snapshotNotifications).isZero();
+        IOPortBlockEntity.flushStorageChanges((ServerLevel) second.getLevel());
+        assertThat(port.snapshotNotifications).isEqualTo(1);
+    }
+
+    @Test
     void a_replaced_port_is_not_published_by_the_level_dirty_set() {
         MachineControllerBlockEntity controller = TestBootstrap.newController();
         TrackingEnergyPort oldPort = new TrackingEnergyPort(POS,
@@ -563,6 +597,10 @@ class IOPortStorageSyncTest {
      * @author howxu <dev@howxu.cn>
      */
     private static final class TrackingEnergyPort extends EnergyInputHatchBlockEntity {
+        private int hashReads;
+
+        @Override public int hashCode() { hashReads++; return super.hashCode(); }
+
         private int snapshotNotifications;
         private Runnable onSnapshot;
 
