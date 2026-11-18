@@ -585,6 +585,10 @@ public class TerminalAssemblyGameTest {
         MultiblockAssemblyService.Result result = MultiblockAssemblyService.build(player, controller, false);
 
         helper.assertTrue(result.interactionResult() == InteractionResult.FAIL, "Build rejects partial materials");
+        helper.assertTrue(result.message().key().equals("message.mmcr.terminal.build.missing.detail")
+                        && List.of(result.message().args()).equals(List.of(ModBlocks.CASING.get().getName(), 1)),
+                "Chat reports the missing casing, not the total number of casings required");
+        helper.assertTrue(!controller.hasActiveBuildTask(), "Missing materials do not start a build task");
         helper.assertTrue(result.changedBlocks() == 0, "No structure blocks are placed");
         for (MultiblockAssemblyService.Placement placement : template) {
             helper.assertTrue(helper.getLevel().getBlockState(placement.pos()).isAir(),

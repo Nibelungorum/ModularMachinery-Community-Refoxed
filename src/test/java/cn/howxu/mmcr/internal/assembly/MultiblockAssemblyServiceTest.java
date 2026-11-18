@@ -119,6 +119,22 @@ class MultiblockAssemblyServiceTest {
     }
 
     @Test
+    void reportsOnlyTheFirstShortageAfterUsingAvailableAlternatives() {
+        var predicate = new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlock(Blocks.STONE),
+                new BlockPredicate.OfBlock(Blocks.DIRT)));
+        var stone = new MultiblockAssemblyService.Placement(BlockPos.ZERO, Blocks.STONE.defaultBlockState(),
+                new ItemStack(Items.STONE), predicate);
+        var glass = new MultiblockAssemblyService.Placement(BlockPos.ZERO.above(), Blocks.GLASS.defaultBlockState(),
+                new ItemStack(Items.GLASS));
+        var source = PlayerInventoryStructureItemSource.forStacks(List.of(new ItemStack(Items.DIRT)));
+
+        var check = MultiblockAssemblyService.checkMaterials(List.of(stone, stone, glass, stone), source);
+
+        assertTrue(check.placements().isEmpty());
+        assertEquals(List.of(Blocks.STONE.getName(), 2), List.of(check.missing().args()));
+    }
+
+    @Test
     void usesNonInterfaceMaterialsInLevelOrderBeforeFallingBackToAnInterface() {
         var coupler = ModBlocks.MODULE_BRIDGE.get();
         var type = new LevelType(MMCR.id("assembly_test"), Component.literal("Assembly test"));

@@ -66,7 +66,18 @@ public final class MultiblockAssemblyService {
 
     public record Result(InteractionResult interactionResult, int changedBlocks, ComponentKey message) {}
 
-    public record ComponentKey(String key, Object... args) {}
+    private static final String MISSING_BLOCKS = "message.mmcr.terminal.build.missing";
+    private static final String MISSING_DETAIL = MISSING_BLOCKS + ".detail";
+
+    public record ComponentKey(String key, Object... args) {
+        public String statusKey() {
+            return MISSING_DETAIL.equals(key) ? MISSING_BLOCKS : key;
+        }
+    }
+
+    /** Simulated placements, or the reason the whole build must be rejected.
+     * @author howxu <dev@howxu.cn> */
+    record MaterialCheck(List<Placement> placements, ComponentKey missing) {}
 
     public static final class BuildTask {
         private final BlockPos controllerKey;
@@ -261,13 +272,13 @@ public final class MultiblockAssemblyService {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }
         if (!freeBuild) {
-            placements = extractAvailablePlacements(placements, source);
-            if (placements.isEmpty()) {
-                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
+            MaterialCheck check = checkMaterials(placements, source);
+            if (check.missing() != null) return new Result(InteractionResult.FAIL, 0, check.missing());
+            if (!source.extractAll(aggregateRequirements(check.placements()))) {
+                ComponentKey missing = checkMaterials(placements, source).missing();
+                return new Result(InteractionResult.FAIL, 0, missing != null ? missing : new ComponentKey(MISSING_BLOCKS));
             }
-            if (!source.extractAll(aggregateRequirements(placements))) {
-                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
-            }
+            placements = check.placements();
         }
         BuildTask task = BuildTask.create(controller.getBlockPos(), stage, placements,
                 controller.buildBlocksPerTick(), !freeBuild, source);
@@ -426,22 +437,42 @@ public final class MultiblockAssemblyService {
     }
 
     public static List<Placement> extractAvailablePlacements(List<Placement> placements, StructureItemSource source) {
+        return checkMaterials(placements, source).placements();
+    }
+
+    static MaterialCheck checkMaterials(List<Placement> placements, StructureItemSource source) {
         List<ItemStack> available = source.copyStacks();
         Map<Fluid, Long> availableFluids = new HashMap<>(source.copyFluidSources());
         List<Placement> selected = new ArrayList<>();
-        for (Placement placement : placements) {
-            candidateStates(placement.predicate()).stream()
-                    .sorted(MATERIAL_PRIORITY)
-                    .filter(MultiblockAssemblyService::isBuildableState)
-                    .map(state -> new Placement(placement.pos(), state, isFluidSource(state) ? ItemStack.EMPTY
-                            : requirementFor(state).copyWithCount(Math.max(1, placement.requirement().getCount())), placement.predicate()))
-                    .filter(candidate -> isFluidSource(candidate.state())
-                            ? reserveFluidSource(availableFluids, candidate.state().getFluidState().getType())
-                            : reserve(available, candidate.requirement()))
-                    .findFirst()
-                    .ifPresent(selected::add);
+        BlockState firstMissing = null;
+        int missingCount = 0;
+        placementLoop: for (Placement placement : placements) {
+            List<BlockState> candidates = candidateStates(placement.predicate());
+            candidates.sort(MATERIAL_PRIORITY);
+            BlockState preferred = null;
+            int count = Math.max(1, placement.requirement().getCount());
+            for (BlockState state : candidates) {
+                if (!isBuildableState(state)) continue;
+                if (preferred == null) preferred = state;
+                boolean fluid = isFluidSource(state);
+                ItemStack requirement = fluid ? ItemStack.EMPTY : requirementFor(state).copyWithCount(count);
+                if (fluid ? reserveFluidSource(availableFluids, state.getFluidState().getType()) : reserve(available, requirement)) {
+                    selected.add(new Placement(placement.pos(), state, requirement, placement.predicate()));
+                    continue placementLoop;
+                }
+            }
+            if (preferred == null) return new MaterialCheck(List.of(), new ComponentKey(MISSING_BLOCKS));
+            if (firstMissing == null) firstMissing = preferred;
+            if (preferred.is(firstMissing.getBlock())) missingCount += isFluidSource(preferred) ? 1 : count;
         }
-        return selected.size() == placements.size() ? selected : List.of();
+        if (firstMissing == null) return new MaterialCheck(selected, null);
+        if (!isFluidSource(firstMissing)) {
+            ItemStack requirement = requirementFor(firstMissing);
+            for (ItemStack stack : available) {
+                if (ItemStack.isSameItemSameComponents(stack, requirement)) missingCount -= stack.getCount();
+            }
+        }
+        return new MaterialCheck(List.of(), new ComponentKey(MISSING_DETAIL, firstMissing.getBlock().getName(), missingCount));
     }
 
     public static boolean canReplace(BlockState state) {

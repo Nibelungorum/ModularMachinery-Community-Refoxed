@@ -193,7 +193,7 @@ public final class TerminalService {
                 }
                 player.sendSystemMessage(Component.translatable(result.message().key(), result.message().args()));
                 return result.interactionResult().consumesAction()
-                        ? accepted(player, stack, result.message().key()) : rejected(player, stack, result.message().key());
+                        ? accepted(player, stack, result.message().statusKey()) : rejected(player, stack, result.message().statusKey());
             }
         }
         return rejected(player, stack, "message.mmcr.terminal.invalid_action");

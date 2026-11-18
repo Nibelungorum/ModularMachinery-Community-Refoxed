@@ -650,6 +650,7 @@
   "message.mmcr.terminal.container_bound": "Container selected",
   "message.mmcr.terminal.cleared": "Terminal data cleared",
   "message.mmcr.terminal.build.missing": "Missing required structure blocks",
+  "message.mmcr.terminal.build.missing.detail": "Missing required structure blocks: %1$s x%2$s",
   "message.mmcr.terminal.build.none": "Structure already formed",
   "message.mmcr.terminal.build.none.staged": "Structure already formed: Stage %s",
   "message.mmcr.terminal.build.success": "Built %s blocks",

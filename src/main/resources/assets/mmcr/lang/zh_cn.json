@@ -651,6 +651,7 @@
   "message.mmcr.terminal.container_bound": "已选中容器",
   "message.mmcr.terminal.cleared": "已清空终端数据",
   "message.mmcr.terminal.build.missing": "缺少搭建所需方块",
+  "message.mmcr.terminal.build.missing.detail": "缺少搭建所需方块: %1$s x%2$s",
   "message.mmcr.terminal.build.none": "结构已成型",
   "message.mmcr.terminal.build.none.staged": "结构已成型: 层级 %s",
   "message.mmcr.terminal.build.success": "已搭建 %s 个方块",
