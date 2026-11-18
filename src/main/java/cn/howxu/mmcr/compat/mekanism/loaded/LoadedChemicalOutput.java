@@ -3,7 +3,7 @@ package cn.howxu.mmcr.compat.mekanism.loaded;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
-import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.compat.mekanism.MekanismModifiers;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -26,8 +26,8 @@ public record LoadedChemicalOutput(ResourceLocation id, long amount, float chanc
     public static final OutputType<LoadedChemicalOutput> TYPE = new OutputType.Definition<>(
             MekanismRecipeTypes.CHEMICAL, codec(), LoadedChemicalOutput::withChance,
             (output, modifiers) -> new LoadedChemicalOutput(output.id(),
-                    IntegrationTypeHelper.applyChemical(modifiers, output.amount(), RecipeModifier.IOType.OUTPUT),
-                    IntegrationTypeHelper.applyChemicalOutputChance(modifiers, output.chance())),
+                    MekanismModifiers.applyChemical(modifiers, output.amount(), RecipeModifier.IOType.OUTPUT),
+                    MekanismModifiers.applyChemicalOutputChance(modifiers, output.chance())),
             output -> output, OutputType.Presentation.defaults(MekanismRecipeTypes.CHEMICAL),
             MekanismRecipeTypes.CHEMICAL.toString(),
             (output, tags) -> LoadedChemicalRequirement.output(output.id(), output.amount(), output.chance()),

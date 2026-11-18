@@ -20,7 +20,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
-import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.compat.mekanism.MekanismModifiers;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -162,7 +162,7 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
 
     public static LoadedHeatRequirement applyModifiers(LoadedHeatRequirement requirement,
                                                         List<RecipeModifier> modifiers) {
-        double value = IntegrationTypeHelper.applyHeat(modifiers, requirement.heat().value(), requirement.io());
+        double value = MekanismModifiers.applyHeat(modifiers, requirement.heat().value(), requirement.io());
         HeatRequirement heat = requirement.heat().kind() == HeatRequirement.Kind.OUTPUT_HEAT
                 ? HeatRequirement.outputHeat(value) : HeatRequirement.minimumTemperature(value);
         return new LoadedHeatRequirement(requirement.io(), heat, requirement.tags());

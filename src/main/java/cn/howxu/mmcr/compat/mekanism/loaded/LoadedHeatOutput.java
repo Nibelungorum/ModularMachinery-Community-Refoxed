@@ -3,7 +3,7 @@ package cn.howxu.mmcr.compat.mekanism.loaded;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
-import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.compat.mekanism.MekanismModifiers;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -22,7 +22,7 @@ import java.util.List;
 public record LoadedHeatOutput(double heat) implements MachineOutput {
     public static final OutputType<LoadedHeatOutput> TYPE = new OutputType.Definition<>(
             MekanismRecipeTypes.HEAT, codec(), (output, ignored) -> output,
-            (output, modifiers) -> new LoadedHeatOutput(IntegrationTypeHelper.applyHeat(
+            (output, modifiers) -> new LoadedHeatOutput(MekanismModifiers.applyHeat(
                     modifiers, output.heat(), RecipeModifier.IOType.OUTPUT)), output -> output,
             OutputType.Presentation.defaults(MekanismRecipeTypes.HEAT), MekanismRecipeTypes.HEAT.toString(),
             (output, tags) -> LoadedHeatRequirement.outputHeat(output.heat()),

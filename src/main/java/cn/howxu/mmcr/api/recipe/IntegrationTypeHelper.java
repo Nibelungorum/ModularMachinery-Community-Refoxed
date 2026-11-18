@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.compat.mekanism.MekanismModifiers;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.world.item.ItemStack;
@@ -68,29 +68,19 @@ public final class IntegrationTypeHelper {
     }
 
     public static float applyChemicalInputChance(List<RecipeModifier> modifiers, float chance) {
-        if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
-        return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL, RecipeModifier.IOType.INPUT, chance, true));
+        return MekanismModifiers.applyChemicalInputChance(modifiers, chance);
     }
 
     public static float applyChemicalOutputChance(List<RecipeModifier> modifiers, float chance) {
-        if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
-        return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL,
-                RecipeModifier.IOType.OUTPUT, chance, true));
+        return MekanismModifiers.applyChemicalOutputChance(modifiers, chance);
     }
 
     public static long applyChemical(List<RecipeModifier> modifiers, long amount, RecipeModifier.IOType io) {
-        if (modifiers == null || modifiers.isEmpty()) return amount;
-        double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL, io, (double) amount, false);
-        if (Double.isNaN(adjusted) || adjusted <= 1D) return 1L;
-        if (adjusted >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
-        return Math.max(1L, (long) Math.floor(adjusted));
+        return MekanismModifiers.applyChemical(modifiers, amount, io);
     }
 
     public static double applyHeat(List<RecipeModifier> modifiers, double heat, RecipeModifier.IOType io) {
-        if (modifiers == null || modifiers.isEmpty()) return heat;
-        double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_HEAT, io, heat, false);
-        if (Double.isNaN(adjusted) || adjusted <= 0D) return 0D;
-        return Double.isInfinite(adjusted) ? Double.MAX_VALUE : adjusted;
+        return MekanismModifiers.applyHeat(modifiers, heat, io);
     }
 
     public static long applyEnergy(List<RecipeModifier> modifiers, long fePerTick) {

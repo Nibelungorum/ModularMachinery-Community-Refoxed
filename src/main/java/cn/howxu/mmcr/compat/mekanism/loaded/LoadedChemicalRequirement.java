@@ -14,7 +14,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
-import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.compat.mekanism.MekanismModifiers;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
@@ -184,14 +184,14 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
 
     public static LoadedChemicalRequirement applyModifiers(LoadedChemicalRequirement requirement,
                                                            List<RecipeModifier> modifiers) {
-        long amount = IntegrationTypeHelper.applyChemical(modifiers, requirement.ingredient().amount(), requirement.io());
+        long amount = MekanismModifiers.applyChemical(modifiers, requirement.ingredient().amount(), requirement.io());
         ChemicalIngredient ingredient = new ChemicalIngredient(requirement.ingredient().kind(),
                 requirement.ingredient().id(), amount);
         float consumeChance = requirement.io() == RecipeModifier.IOType.INPUT
-                ? IntegrationTypeHelper.applyChemicalInputChance(modifiers, requirement.consumeChance())
+                ? MekanismModifiers.applyChemicalInputChance(modifiers, requirement.consumeChance())
                 : requirement.consumeChance();
         float chance = requirement.io() == RecipeModifier.IOType.OUTPUT
-                ? IntegrationTypeHelper.applyChemicalOutputChance(modifiers, requirement.chance())
+                ? MekanismModifiers.applyChemicalOutputChance(modifiers, requirement.chance())
                 : requirement.chance();
         return new LoadedChemicalRequirement(requirement.io(), ingredient, chance, requirement.tags(), consumeChance);
     }
