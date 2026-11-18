@@ -12,6 +12,9 @@ import net.minecraft.resources.ResourceLocation;
  * @author howxu <dev@howxu.cn> */
 public interface OutputExtension<O> {
     ResourceLocation id(); default String serializedId() { return id().toString(); } MapCodec<O> codec();
+    /** Immutable identity within this type; null disables grouping. */
+    default ResourceLocation aggregationIdentity(O value) { return null; }
+    default boolean perTickOutput(O value) { return false; }
     O copy(O value); float chance(O value); default long amount(O value) { return 0; }
     O withChance(O value, float chance); O applyModifiers(O value, List<RecipeAdjustmentSpec> modifiers);
     RequirementSpec toRequirement(O value, List<String> tags); boolean matchesRequirement(RequirementSpec requirement);

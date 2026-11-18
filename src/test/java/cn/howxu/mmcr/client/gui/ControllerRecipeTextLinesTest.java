@@ -109,22 +109,22 @@ class ControllerRecipeTextLinesTest {
     }
 
     @Test
-    void manaOutputsAreHiddenWithoutAHeadingOrIconAndMixedItemOutputsRemainVisible() {
+    void manaOutputsHaveExactTextWithoutBorrowingAnItemIcon() {
         try (var outputScope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(ManaOutput.TYPE);
             var presentation = new ControllerRecipePresentation(List.of(
                     new MachineOutputAmount(new ManaOutput(10_000L), Long.MAX_VALUE)), 0L, 0L, 0D);
-            assertThat(ControllerRecipeTextLines.create(presentation)).isEmpty();
+            assertThat(ControllerRecipeTextLines.create(presentation).getLast().text().getString()).contains("9,223,372,036,854,775,807");
             assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation)).isEmpty();
             MachineRecipe recipe = new MachineRecipe(MMCR.id("mana_recipe_text"), MMCR.id("test_cube"), 20,
                     List.of(), List.of(new ManaOutput(3_000_000_001L)),
                     List.of(), 0, 1, false, false, false, Set.of());
-            assertThat(ControllerRecipeTextLines.forRecipe(recipe, 3L)).isEmpty();
+            assertThat(ControllerRecipeTextLines.forRecipe(recipe, 3L).getLast().text().getString()).contains("9,000,000,003");
             var mixed = new ControllerRecipePresentation(List.of(
                     presentation.outputs().getFirst(),
                     new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND), 1F), 7L)),
                     0L, 0L, 0D);
-            assertThat(ControllerRecipeTextLines.create(mixed)).hasSize(2);
+            assertThat(ControllerRecipeTextLines.create(mixed)).hasSize(3);
             assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(mixed).orElseThrow())
                     .isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class,
                             icon -> assertThat(icon.stack().is(Items.DIAMOND)).isTrue());

@@ -48,6 +48,12 @@ public record LoadedChemicalOutput(ResourceLocation id, long amount, float chanc
     }
 
     @Override
+    public Object aggregationIdentity() { return id; }
+
+    @Override
+    public Object conversionVersion() { return TYPE; }
+
+    @Override
     public OutputType<LoadedChemicalOutput> outputType() {
         return TYPE;
     }

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.extendedae.loaded.kind;
 
+import net.minecraft.resources.ResourceLocation;
+
 import appeng.api.networking.IManagedGridNode;
 import appeng.core.definitions.AEBlocks;
 import appeng.helpers.InterfaceLogic;
@@ -22,6 +24,8 @@ public final class ExtendedStockingInputInterfaceKind implements InterfaceLogicK
             AE2ResourceFamilies.itemBinding(CapabilityDirections.input(), host -> host.nativeItemHandler()),
             AE2ResourceFamilies.fluidBinding(CapabilityDirections.input(), host -> host.nativeFluidHandler())));
     private ExtendedStockingInputInterfaceKind() {}
+    @Override public List<ResourceLocation> overlayTextures() { return List.of(MMCR.id("block/extendedae/" + id())); }
+
     @Override public String id() { return "eae_me_extended_stocking_input_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }
     @Override public List<PortFamilyDescriptor> families() { return AE2ResourceFamilies.inputFamilies(); }

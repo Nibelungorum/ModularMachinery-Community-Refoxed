@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -57,6 +59,24 @@ public record EnergyRequirement(RecipeModifier.IOType io, long fePerTick, List<S
             throw new IllegalArgumentException("Invalid tag count: " + requirement.tags().size());
         }
     }
+
+    @Override
+    public RequirementExecutionPolicy execution() { return RequirementExecutionPolicy.TICK_IO; }
+
+    @Override
+    public long batchAmount(int duration) { return Math.multiplyExact(fePerTick, (long) duration); }
+
+    @Override
+    public float consumptionProbability() { return 1F; }
+
+    @Override
+    public ScalarRecipeRule scalarRule() {
+        return new ScalarRecipeRule(type().id(), fePerTick, 1F, 1F, true,
+                (io.isInput() ? BuiltinFailureReasons.MISSING_ENERGY : BuiltinFailureReasons.MISSING_OUTPUT).id(), true);
+    }
+
+    @Override
+    public Object derivationVersion() { return type().handler(); }
 
     @Override
     public RequirementType<EnergyRequirement> type() {

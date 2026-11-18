@@ -134,7 +134,7 @@ class RecipeOutputComponentProviderTest {
         int decodeCopies = CountingOutput.COPIES.get();
         CountingOutput.COPIES.set(0);
 
-        assertThat(collect(data)).isEmpty(); // Unsupported types still require only one owned classification copy.
+        assertThat(((Component) collect(data).getLast()).getString()).contains("5");
         assertThat(CountingOutput.COPIES).hasValue(decodeCopies + 1);
     }
 

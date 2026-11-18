@@ -9,7 +9,7 @@ import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.MEStorage;
 import appeng.util.ConfigInventory;
-import cn.howxu.mmcr.compat.appmek.AppMekBridge;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.InputInterfaceBlockEntity;
 import cn.howxu.mmcr.mixin.compat.appliedenergistics2.InterfaceLogicAccessor;
 import net.minecraft.network.chat.Component;
@@ -36,7 +36,7 @@ public final class ExternalInputInventory implements GenericInternalInventory, M
     }
 
     @Override public boolean isSupportedType(AEKeyType type) {
-        return type == AEKeyType.items() || type == AEKeyType.fluids() || AppMekBridge.get().isChemicalKeyType(type);
+        return AE2ResourceFamilies.exposesLocalSlots(type);
     }
     @Override public int size() { return storage.size(); }
     @Override public boolean canInsert() { return storage.canInsert(); }

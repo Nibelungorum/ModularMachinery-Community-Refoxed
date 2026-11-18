@@ -1,5 +1,10 @@
 package cn.howxu.mmcr.internal.menu;
 
+import net.minecraft.network.RegistryFriendlyByteBuf;
+
+import net.minecraft.server.level.ServerPlayer;
+import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
+
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.machine.definition.DisplayStack;
@@ -25,7 +30,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class CombinedPortMenu extends AbstractMachineMenu {
+public final class CombinedPortMenu extends AbstractMachineMenu implements PortMenuBinding {
     public static final int FIRST_TANK_X = 15;
     public static final int FIRST_TANK_Y = 10;
     public static final int SECOND_TANK_X = 42;
@@ -114,6 +119,13 @@ public final class CombinedPortMenu extends AbstractMachineMenu {
     }
 
     public CombinedPortBlockEntity owner() { return owner; }
+
+    public int transferContainer(ServerPlayer player, int tank, boolean extract) {
+        if (owner.kind().combinedPortSize().isEmpty() || tank >= fluidTankCount() || tank >= owner.fluidHandler(null).size()) return 0;
+        return PktPortContainerTransferPayload.transferFluid(player, this, owner, owner.fluidHandler(null), tank, extract);
+    }
+
+    @Override public void writeOpenData(RegistryFriendlyByteBuf buffer) { writeClientOpenData(buffer, owner()); }
 
     public BlockPos pos() { return pos; }
 

@@ -67,7 +67,7 @@ public final class LoadedAppMekBridge implements AppMekBridge {
                 families.add(new PortFamilyDescriptor(MekanismRecipeTypes.CHEMICAL, direction, tier,
                         List.of(direction == IOType.INPUT ? "chemical_input_hatch" : "chemical_output_hatch")));
                 families.add(new PortFamilyDescriptor(MekanismPortFamilies.RADIOACTIVE_CHEMICAL, direction, tier,
-                        List.of(direction == IOType.INPUT ? "radioactive_chemical_input_hatch" : "radioactive_chemical_output_hatch")));
+                        List.of(direction == IOType.INPUT ? "radioactive_chemical_input_hatch" : "radioactive_chemical_output_hatch"), MekanismPortFamilies.CHEMICAL));
             }
         }
         return List.copyOf(families);

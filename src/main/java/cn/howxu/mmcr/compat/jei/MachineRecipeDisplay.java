@@ -16,9 +16,6 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.compat.create.StressRequirement;
-import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
-import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
-import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -287,7 +284,7 @@ public record MachineRecipeDisplay(
         }
     }
 
-    static Component withChanceLabel(Component label, float chance, boolean input) {
+    public static Component withChanceLabel(Component label, float chance, boolean input) {
         return chance >= 1F ? label : Component.translatable("jei.mmcr.machine_recipe.chanced_resource",
                 label, chanceComponent(chance, input));
     }
@@ -318,54 +315,18 @@ public record MachineRecipeDisplay(
     public List<JeiDisplayEntry> entries() {
         return recipe.runtimeRequirements().stream()
                 .filter(requirement -> !(requirement instanceof EnergyRequirement)
-                        && !(requirement instanceof LoadedHeatRequirement)
                         && !(requirement instanceof SmartInterfaceRequirement)
                         && !(requirement instanceof LevelRequirement)
                         && !(requirement instanceof StageRequirement)
-                         && !(requirement instanceof StressRequirement)
-                         && !(requirement instanceof LightningRequirement)
-                        && !(requirement instanceof AirRequirement))
+                        && RecipeDetails.providers().stream().noneMatch(provider -> provider.handles(requirement)))
                 .map(requirement -> new RecipeIoEntry(
                         requirement.io() == RecipeModifier.IOType.INPUT
                                 ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,
-                        requirement.type().id(), requirement, requirementAmount(requirement), requirementChance(requirement)))
+                        requirement))
                 .flatMap(entry -> JeiIngredientAdapterRegistry.display(entry)
                         .map(Stream::of)
                         .orElseGet(() -> Stream.of(JeiIngredientAdapterRegistry.textEntry(entry))))
                 .toList();
-    }
-
-    private static long requirementAmount(MachineRequirement requirement) {
-        if (requirement instanceof ItemRequirement item) {
-            return item.io() == RecipeModifier.IOType.INPUT ? item.count() : item.stack().getCount();
-        }
-        if (requirement instanceof FluidRequirement fluid) {
-            return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
-        }
-        if (requirement instanceof EnergyRequirement energy) return energy.fePerTick();
-        if (requirement instanceof LoadedChemicalRequirement chemical) return chemical.ingredient().amount();
-        if (requirement instanceof SourceRequirement source) return source.amount();
-        if (requirement instanceof ManaRequirement mana) return mana.amount();
-        return 1L;
-    }
-
-    private static float requirementChance(MachineRequirement requirement) {
-        if (requirement instanceof ItemRequirement item) {
-            return item.io() == RecipeModifier.IOType.INPUT ? item.consumeChance() : item.chance();
-        }
-        if (requirement instanceof FluidRequirement fluid) {
-            return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.consumeChance() : fluid.chance();
-        }
-        if (requirement instanceof LoadedChemicalRequirement chemical) {
-            return chemical.io() == RecipeModifier.IOType.INPUT ? chemical.consumeChance() : chemical.chance();
-        }
-        if (requirement instanceof SourceRequirement source) {
-            return source.io() == IOType.INPUT ? source.consumeChance() : source.chance();
-        }
-        if (requirement instanceof ManaRequirement mana) {
-            return mana.io() == IOType.INPUT ? mana.consumeChance() : mana.chance();
-        }
-        return 1F;
     }
 
     private static Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceRequirement requirement) {

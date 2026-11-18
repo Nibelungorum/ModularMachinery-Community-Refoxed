@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import java.util.function.Consumer;
+
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
@@ -24,6 +26,9 @@ public interface RequirementType<R extends MachineRequirement> {
     default Set<ResourceLocation> capabilityIds() {
         return Set.of(id());
     }
+
+    /** Stable contribution shared by all types subject to the same whole-recipe constraint. */
+    default Consumer<List<MachineRequirement>> recipeValidator() { return null; }
 
     MapCodec<R> codec();
 
@@ -94,7 +99,7 @@ public interface RequirementType<R extends MachineRequirement> {
      * @param <R> the requirement type
      * @author howxu <dev@howxu.cn>
      */
-    final class Definition<R extends MachineRequirement> implements RequirementType<R> {
+    class Definition<R extends MachineRequirement> implements RequirementType<R> {
         private final ResourceLocation id;
         private final MapCodec<R> codec;
         private final RequirementHandler<R> handler;

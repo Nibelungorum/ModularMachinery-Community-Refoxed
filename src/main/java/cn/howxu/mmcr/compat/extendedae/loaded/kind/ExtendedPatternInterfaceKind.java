@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.extendedae.loaded.kind;
 
+import net.minecraft.resources.ResourceLocation;
+
 import appeng.api.networking.IManagedGridNode;
 import appeng.helpers.patternprovider.PatternProviderLogic;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
@@ -21,6 +23,8 @@ public final class ExtendedPatternInterfaceKind implements PatternLogicKind {
             AE2ResourceFamilies.itemBinding(CapabilityDirections.bidirectional(), host -> host.nativeItemHandler(), false),
             AE2ResourceFamilies.fluidBinding(CapabilityDirections.bidirectional(), host -> host.nativeFluidHandler(), false)));
     private ExtendedPatternInterfaceKind() {}
+    @Override public List<ResourceLocation> overlayTextures() { return List.of(MMCR.id("block/extendedae/" + id())); }
+
     @Override public String id() { return "eae_me_extended_pattern_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }
     @Override public List<PortFamilyDescriptor> families() { return AE2ResourceFamilies.patternFamilies(); }

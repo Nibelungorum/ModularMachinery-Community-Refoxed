@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.compat.ae2lt;
 
+import cn.howxu.mmcr.api.recipe.InputScopeFamilies;
+
+import java.util.function.Consumer;
+
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
@@ -24,9 +28,10 @@ import java.util.Set;
 public final class LightningRecipeTypes {
     public static final ResourceLocation HIGH_VOLTAGE = LightningTier.HIGH_VOLTAGE.requirementId();
     public static final ResourceLocation EXTREME_HIGH_VOLTAGE = LightningTier.EXTREME_HIGH_VOLTAGE.requirementId();
-    public static final ResourceLocation LIGHTNING = ResourceLocation.fromNamespaceAndPath("ae2lt", "lightning");
+    public static final ResourceLocation LIGHTNING = InputScopeFamilies.isolated(ResourceLocation.fromNamespaceAndPath("ae2lt", "lightning"));
     public static final long MAX_AMOUNT = Integer.MAX_VALUE;
 
+    private static final Consumer<List<MachineRequirement>> VALIDATOR = LightningRecipeTypes::validateRecipeAmounts;
     private static final Codec<Long> AMOUNT_CODEC = Codec.LONG.validate(amount -> amount > 0L
                     ? DataResult.success(amount) : DataResult.error(() -> "Lightning amount must be positive"))
             .xmap(LightningRecipeTypes::recipeAmount, amount -> amount);
@@ -96,6 +101,7 @@ public final class LightningRecipeTypes {
         return new RequirementType<>() {
             private final RequirementHandler<LightningRequirement> handler = new LightningRequirementHandler();
             @Override public ResourceLocation id() { return tier.requirementId(); }
+            @Override public Consumer<List<MachineRequirement>> recipeValidator() { return VALIDATOR; }
             @Override public Set<ResourceLocation> capabilityIds() { return Set.of(LIGHTNING); }
             @Override public MapCodec<LightningRequirement> codec() { return codec; }
             @Override public RequirementHandler<LightningRequirement> handler() { return handler; }

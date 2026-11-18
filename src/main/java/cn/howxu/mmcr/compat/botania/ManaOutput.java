@@ -44,6 +44,12 @@ public record ManaOutput(long amount, float chance) implements MachineOutput {
     }
 
     @Override
+    public Object aggregationIdentity() { return TYPE.id(); }
+
+    @Override
+    public Object conversionVersion() { return TYPE; }
+
+    @Override
     public OutputType<ManaOutput> outputType() { return TYPE; }
 
     @Override

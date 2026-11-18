@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.internal.port;
 
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
-import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 
@@ -18,9 +17,15 @@ public record PortFamilyDescriptor(
         ResourceLocation familyId,
         IOType ioType,
         int detectionTier,
-        List<String> countAliases) {
+        List<String> countAliases,
+        ResourceLocation bindingType) {
+
+    public PortFamilyDescriptor(ResourceLocation familyId, IOType ioType, int detectionTier, List<String> countAliases) {
+        this(familyId, ioType, detectionTier, countAliases, familyId);
+    }
 
     public PortFamilyDescriptor {
+        if (bindingType == null) throw new IllegalArgumentException("bindingType null");
         if (familyId == null) throw new IllegalArgumentException("familyId null");
         if (ioType == null) throw new IllegalArgumentException("ioType null");
         if (detectionTier < 0) throw new IllegalArgumentException("detectionTier must be >= 0");
@@ -38,8 +43,6 @@ public record PortFamilyDescriptor(
 
     public boolean matches(CapabilityBinding binding) {
         return binding != null && binding.directions().supports(ioType)
-                && (familyId.equals(binding.type().id())
-                || familyId.equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL)
-                && binding.type().id().equals(MekanismPortFamilies.CHEMICAL));
+                && bindingType.equals(binding.type().id());
     }
 }

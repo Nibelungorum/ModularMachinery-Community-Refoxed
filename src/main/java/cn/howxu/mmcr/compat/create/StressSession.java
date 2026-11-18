@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.create;
 
+import cn.howxu.mmcr.api.capability.plan.LaneReservations;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.compat.create.StressFacet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -13,7 +15,7 @@ import java.util.IdentityHashMap;
 /** Persistent main-thread owner of one crafting lane's transient Create contributions.
  * @author howxu <dev@howxu.cn>
  */
-public final class StressSession {
+public final class StressSession implements LaneReservations.Holding {
     private final List<Tracked> tracked = new ArrayList<>();
     private final Set<StressFacet> finishedOutputs = Collections.newSetFromMap(new IdentityHashMap<>());
     private Integer committingIndex;

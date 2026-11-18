@@ -42,6 +42,12 @@ public record SmartInterfaceRequirement(RecipeModifier.IOType io, String interfa
     }
 
     @Override
+    public long batchAmount(int duration) { return 0; }
+
+    @Override
+    public float consumptionProbability() { return 1F; }
+
+    @Override
     public RequirementType<SmartInterfaceRequirement> type() {
         return TYPE;
     }

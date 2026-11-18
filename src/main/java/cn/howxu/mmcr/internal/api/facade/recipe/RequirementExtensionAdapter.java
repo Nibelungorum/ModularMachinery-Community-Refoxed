@@ -1,5 +1,10 @@
 package cn.howxu.mmcr.internal.api.facade.recipe;
 
+import com.google.gson.JsonElement;
+import com.mojang.serialization.DynamicOps;
+
+import cn.howxu.mmcr.api.recipe.requirement.RequirementExecutionPolicy;
+
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -39,6 +44,7 @@ public final class RequirementExtensionAdapter {
     }
     private static final class Handle<R> implements RequirementKind<R> {
         private final RequirementExtension<R> extension;
+        private final RequirementExecution<R> execution;
         private final ResourceLocation id;
         private final TypePresentation presentation;
         private final RequirementType<Carrier<R>> type;
@@ -48,7 +54,7 @@ public final class RequirementExtensionAdapter {
             Set<ResourceLocation> capabilityIds = Set.copyOf(extension.capabilityIds());
             presentation = Objects.requireNonNull(extension.presentation(), "presentation");
             RequirementType.Presentation corePresentation = new RequirementType.Presentation(presentation.translationKey(), presentation.descriptionKey());
-            RequirementExecution<R> execution = Objects.requireNonNull(extension.execution(), "execution");
+            execution = Objects.requireNonNull(extension.execution(), "execution");
             Codec<String> discriminator = Codec.STRING.validate(value -> value.equals(id.toString())
                     ? DataResult.success(value) : DataResult.error(() -> "Wrong requirement type: " + value));
             MapCodec<Carrier<R>> codec = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -59,6 +65,16 @@ public final class RequirementExtensionAdapter {
                 public RequirementPlan plan(Carrier<R> value, List<MachineCapability> capabilities, PlanningContext context) {
                     owned(value);
                     return PlanningAdapters.unwrap(execution.plan(value.payload, PlanningAdapters.wrap(capabilities, context)));
+                }
+                public RequirementExecutionPolicy execution(Carrier<R> value) {
+                    owned(value);
+                    if (value.io().isInput()) return execution.paysAtStart(value.payload)
+                            ? RequirementExecutionPolicy.START_MATERIAL : RequirementExecutionPolicy.LEGACY;
+                    return execution.perTickOutput(value.payload) ? RequirementExecutionPolicy.TICK_IO : RequirementExecutionPolicy.LEGACY;
+                }
+                public Carrier<R> asRetainedInput(Carrier<R> value) {
+                    owned(value);
+                    return new Carrier<>(Handle.this, execution.asRetainedInput(value.payload));
                 }
                 public Carrier<R> applyModifiers(Carrier<R> value, List<RecipeModifier> modifiers) {
                     owned(value);
@@ -100,6 +116,20 @@ public final class RequirementExtensionAdapter {
         Carrier { Objects.requireNonNull(payload, "payload"); }
         public RequirementType<Carrier<R>> type() { return owner.type; }
         public RecipeModifier.IOType io() { return Objects.requireNonNull(ModifierAdapters.io(owner.extension.io(payload)), "io"); }
+        public MachineRequirement searchProjection() {
+            var projection = owner.execution.searchProjection(payload);
+            if (projection == null) return this;
+            var value = RequirementAdapters.unwrap(projection);
+            if (value.io() != io() || !value.tags().equals(tags()) || !type().capabilityIds().equals(value.type().capabilityIds()))
+                throw new IllegalArgumentException("Incompatible search projection for " + type().id());
+            return value;
+        }
+        public long batchAmount(int duration) { return owner.execution.batchAmount(payload, duration); }
+        public Object batchIdentity(DynamicOps<JsonElement> ops) {
+            var id = owner.execution.batchIdentity(payload);
+            return id == null ? owner.id : id;
+        }
+        public float consumptionProbability() { return owner.execution.consumptionProbability(payload); }
         public List<String> tags() { return List.copyOf(owner.extension.tags(payload)); }
     }
 }

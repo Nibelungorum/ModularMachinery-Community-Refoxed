@@ -691,6 +691,7 @@ public final class FactoryRuntime {
                 && current.stateVersion() == request.context().snapshot().stateVersion()
                 && current.upgradeContentRevision() == request.context().snapshot().upgradeContentRevision()
                 && current.maxParallelism() == request.context().snapshot().maxParallelism()
+                && request.workerRequest().request.snapshotValues().stamp().semanticsCurrent()
                 && (request.workerRequest().request.snapshotValues().stamp().routing() < 0L
                     || controller.componentRuntime().inputRoutingRevision()
                     == request.workerRequest().request.snapshotValues().stamp().routing());

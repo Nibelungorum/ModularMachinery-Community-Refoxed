@@ -6,7 +6,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.PresentationFacet;
-import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
+import cn.howxu.mmcr.api.capability.facet.PresentationFacet.SlotSummary;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -50,11 +50,10 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
                     .filter(capability -> capability.directions().supports(IOType.OUTPUT)
                             && !capability.directions().supports(IOType.INPUT))
                     .flatMap(InterfaceJadeDataProvider::outputDisplays)
-                    .filter(display -> isSupportedDisplay(display.label())
-                            && !display.value().equals("0"))
                     .forEach(display -> {
                         CompoundTag output = new CompoundTag();
-                        output.putString(LABEL, display.label());
+                        output.putString(LABEL, display.labelKey());
+                        output.putString("unitKey", display.unitKey());
                         output.putString(VALUE, display.value());
                         output.putString(UNIT, display.unit());
                         outputs.add(output);
@@ -63,31 +62,24 @@ public enum InterfaceJadeDataProvider implements IServerDataProvider<BlockAccess
         data.put(OUTPUTS, outputs);
     }
 
-    private static Stream<CapabilityDisplay> outputDisplays(MachineCapability capability) {
+    private static Stream<SlotSummary> outputDisplays(MachineCapability capability) {
         return capability.facet(PresentationFacet.class).stream()
-                .flatMap(facet -> facet.displays(capability.view()).stream());
+                .flatMap(facet -> facet.outputSlots(capability.view()).stream());
     }
 
-    static List<OutputPresentation> outputs(CompoundTag data) {
-        List<OutputPresentation> outputs = new ArrayList<>();
+    static List<SlotSummary> outputs(CompoundTag data) {
+        List<SlotSummary> outputs = new ArrayList<>();
         ListTag outputTags = data.getList(OUTPUTS, Tag.TAG_COMPOUND);
         for (int index = 0; index < outputTags.size(); index++) {
             CompoundTag output = outputTags.getCompound(index);
             String label = output.getString(LABEL);
             String value = output.getString(VALUE);
             String unit = output.getString(UNIT);
-            if (isSupportedDisplay(label) && !value.isEmpty()) {
-                outputs.add(new OutputPresentation(label, value, unit));
+            if (!label.isEmpty() && !value.isEmpty()) {
+                outputs.add(new SlotSummary(label, value, unit, output.getString("unitKey")));
             }
         }
         return List.copyOf(outputs);
-    }
-
-    record OutputPresentation(String label, String value, String unit) {
-    }
-
-    private static boolean isSupportedDisplay(String label) {
-        return label.equals("item") || label.equals("fluid") || label.equals("chemical");// || label.equals("energy");
     }
 
     private static int state(IGridNode node) {

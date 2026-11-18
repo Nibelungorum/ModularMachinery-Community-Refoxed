@@ -1,5 +1,12 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import com.google.gson.JsonElement;
+import com.mojang.serialization.DynamicOps;
+
+import cn.howxu.mmcr.api.recipe.RecipeSemantics;
+
+import cn.howxu.mmcr.api.recipe.requirement.RequirementExecutionPolicy;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -10,7 +17,10 @@ import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.internal.recipe.ResourceSearch;
+import java.util.Set;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler.ResourceWakeup;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
@@ -31,9 +41,36 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngredient ingredient,
-                                         float chance, List<String> tags, float consumeChance) implements MachineRequirement {
+                                         float chance, List<String> tags, float consumeChance) implements ResourceSearch {
+    @Override public boolean searchAvailable() { return supportsSearchSnapshot(); }
+    @Override public long amount() { return ingredient.amount(); }
+    @Override public Object predicateKey() { return List.of(ingredient.kind(), ingredient.id()); }
+    @Override public boolean validResource() { return LoadedMekanismBridge.validChemicalSearch(this); }
+    @Override public boolean matchesPort(MachineCapability port) { return LoadedMekanismBridge.acceptsChemicalSearchPort(this, port); }
+    @Override public Set<AsyncResourceValue> accepted(Set<AsyncResourceValue> universe) {
+        return LoadedMekanismBridge.matchingChemicalSearchResources(this, universe);
+    }
+    @Override public AsyncResourceValue outputValue() {
+        return LoadedMekanismBridge.chemicalSearchValue(LoadedMekanismBridge.chemicalSearchOutput(this));
+    }
+    @Override public ResourceLocation exactCommitInput() {
+        return ingredient.kind() == ChemicalIngredient.Kind.CHEMICAL ? ingredient.id() : null;
+    }
+    @Override public ResourceLocation failure(boolean valid, boolean missingPort) {
+        if (!valid) return MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH.id();
+        if (missingPort) return (io.isInput() ? BuiltinFailureReasons.MISSING_INPUT : BuiltinFailureReasons.MISSING_OUTPUT).id();
+        return (io.isInput() ? MekanismFailureReasons.CHEMICAL_INPUT_MISSING : MekanismFailureReasons.CHEMICAL_OUTPUT_BLOCKED).id();
+    }
+    @Override public ResourceLocation missingScopeReason() { return io.isInput() ? BuiltinFailureReasons.MISSING_INPUT.id() : null; }
+    @Override public Limits limits(MachineCapability port, int slot) {
+        var policy = LoadedMekanismBridge.chemicalSearchPolicy(this, port);
+        return new Limits(policy.inputLimit(), policy.outputCapacity(),
+                policy.radioactiveRejected() ? MekanismFailureReasons.CHEMICAL_RADIOACTIVITY_REJECTED.id() : null);
+    }
+
     private static final RequirementHandler<LoadedChemicalRequirement> UNAVAILABLE =
             (requirement, capabilities, context) -> unavailable(requirement, context);
+    private static volatile Object version = new Object();
     private static volatile RequirementHandler<LoadedChemicalRequirement> delegate = UNAVAILABLE;
     private static final RequirementHandler<LoadedChemicalRequirement> DELEGATING_HANDLER = new RequirementHandler<>() {
         @Override
@@ -97,12 +134,36 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
     }
 
     @Override
+    public RequirementExecutionPolicy execution() { return io.isInput() ? RequirementExecutionPolicy.START_MATERIAL : RequirementExecutionPolicy.LEGACY; }
+
+    @Override
+    public long batchAmount(int duration) { return ingredient.amount(); }
+
+    @Override
+    public Object batchIdentity(DynamicOps<JsonElement> ops) {
+        return List.of(ingredient.kind(), ingredient.id());
+    }
+
+    @Override
+    public float consumptionProbability() { return consumeChance; }
+
+    @Override
+    public LoadedChemicalRequirement asRetainedInput() {
+        return consumeChance == 0F ? this : new LoadedChemicalRequirement(io, ingredient, chance, tags, 0F);
+    }
+
+    @Override
+    public Object derivationVersion() { return supportsSearchSnapshot() ? version : null; }
+
+    @Override
     public RequirementType<LoadedChemicalRequirement> type() {
         return TYPE;
     }
 
     public static void installHandler(RequirementHandler<LoadedChemicalRequirement> handler) {
         delegate = Objects.requireNonNull(handler, "handler");
+        version = new Object();
+        RecipeSemantics.changed();
     }
 
     /** True only for the built-in handler whose resource rules can be captured by value. */
@@ -112,6 +173,8 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
 
     public static void installUnavailableHandler() {
         delegate = UNAVAILABLE;
+        version = new Object();
+        RecipeSemantics.changed();
     }
 
     private static LoadedChemicalRequirement copy(LoadedChemicalRequirement requirement) {

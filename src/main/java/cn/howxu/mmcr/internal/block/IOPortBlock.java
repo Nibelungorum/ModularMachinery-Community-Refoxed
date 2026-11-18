@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.block;
 
+import cn.howxu.mmcr.internal.menu.PortMenuBinding;
+
 import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
 import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
@@ -9,8 +11,6 @@ import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
-import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
-import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.MachinePort;
@@ -33,7 +33,6 @@ import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
@@ -105,19 +104,8 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
 
             @Override
             public void writeClientSideData(AbstractContainerMenu menu, RegistryFriendlyByteBuf buffer) {
-                switch (menu) {
-                    case ItemBusMenu bus -> ItemBusMenu.writeClientOpenData(buffer, pos, bus.owner());
-                    case ExtendedItemMenu bus -> ExtendedItemMenu.writeClientOpenData(buffer, bus.owner());
-                    case ExtendedFluidMenu hatch -> ExtendedFluidMenu.writeClientOpenData(buffer, hatch.owner());
-                    case CombinedPortMenu combined -> CombinedPortMenu.writeClientOpenData(buffer, combined.owner());
-                    case ExtendedCombinedMenu combined -> ExtendedCombinedMenu.writeClientOpenData(buffer, combined.owner());
-                    case FluidHatchMenu ignored -> buffer.writeBlockPos(pos);
-                    case EnergyHatchMenu ignored -> buffer.writeBlockPos(pos);
-                    default -> {
-                        if (ArsNouveauBridge.get().isSourcePort(kind.id())) buffer.writeBlockPos(pos);
-                        else MekanismBridge.get().writeClientOpenData(buffer, kind.id(), pos);
-                    }
-                }
+                if (menu instanceof PortMenuBinding binding) binding.writeOpenData(buffer);
+                else buffer.writeBlockPos(pos);
             }
         };
     }
@@ -125,7 +113,7 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
     @Override
     protected @NonNull ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level,
                                                        BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        if (ArsNouveauBridge.get().isSourcePort(kind.id()) && ArsNouveauBridge.get().isDominionWand(stack)) {
+        if (kind.bypassDefaultInteraction(stack)) {
             return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
         }
         if (AE2Bridge.get().useMemoryCard(stack, level, pos, player)) {
@@ -134,8 +122,10 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
         if (!ItemSpecialOperationUtil.isSpecialOperated(player)
                 && level.getBlockEntity(pos) instanceof IOPortBlockEntity port) {
             if (level.isClientSide()) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+            var interaction = port.kind().useContainer(player, hand, port);
+            if (interaction != null) return interaction;
             if (port.kind().fluidHatchSize().isPresent() && port.kind().extendedFluidHatchSize().isEmpty()
-                    || port.kind().combinedPortSize().isPresent() || MekanismBridge.get().isPort(port.kind().id())) {
+                    || port.kind().combinedPortSize().isPresent()) {
                 return interactWithContainer(player, hand, port)
                         ? ItemInteractionResult.SUCCESS : ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
             }
@@ -149,7 +139,7 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
     private static boolean interactWithContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
         IFluidHandler storage = port instanceof FluidHatchBlockEntity fluid ? fluid.fluidHandler(null)
                 : port instanceof CombinedPortBlockEntity combined ? combined.fluidHandler(null) : null;
-        if (storage == null) return MekanismBridge.get().interactWithChemicalContainer(player, hand, port) > 0;
+        if (storage == null) return false;
         ItemStack held = player.getItemInHand(hand);
         var container = MekanismBridge.get().manualFluidContainerHandler(
                 FluidUtil.getFluidHandler(held.copyWithCount(1)).orElse(null));
@@ -174,14 +164,8 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
     protected @NonNull InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                         Player player, BlockHitResult hit) {
         if (!level.isClientSide()) {
-            if (AE2Bridge.get().isPort(kind.id())) {
-                if (player instanceof ServerPlayer serverPlayer
-                        && AE2Bridge.get().openMenu(serverPlayer, level, pos)) {
-                    return InteractionResult.SUCCESS;
-                }
-                return InteractionResult.CONSUME;
-            }
-            if (AppliedFluxBridge.get().isPort(kind.id())) return InteractionResult.CONSUME;
+            var interaction = kind.openSpecialMenu(player, level, pos);
+            if (interaction != InteractionResult.PASS) return interaction;
             MenuProvider provider = state.getMenuProvider(level, pos);
             if (provider != null) player.openMenu(provider);
         }
@@ -273,10 +257,7 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
                     ? new CombinedPortMenu(containerId, playerInv, combined) : null;
             case EXTENDED_COMBINED -> port instanceof ExtendedCombinedPortBlockEntity combined
                     ? new ExtendedCombinedMenu(containerId, playerInv, combined) : null;
-            case NONE -> {
-                AbstractContainerMenu menu = ArsNouveauBridge.get().createMenu(kind, containerId, playerInv, level, pos);
-                yield menu != null ? menu : MekanismBridge.get().createMenu(kind, containerId, playerInv, level, pos);
-            }
+            case NONE -> port.kind().createPortMenu(containerId, playerInv, level, pos);
         };
     }
 

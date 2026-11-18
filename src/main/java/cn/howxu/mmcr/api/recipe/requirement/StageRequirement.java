@@ -44,6 +44,18 @@ public record StageRequirement(RecipeModifier.IOType io, int minStage) implement
     }
 
     @Override
+    public boolean countsForSpecificity() { return false; }
+
+    @Override
+    public long batchAmount(int duration) { return 0; }
+
+    @Override
+    public float consumptionProbability() { return 1F; }
+
+    @Override
+    public Object derivationVersion() { return type().handler(); }
+
+    @Override
     public RequirementType<StageRequirement> type() {
         return TYPE;
     }

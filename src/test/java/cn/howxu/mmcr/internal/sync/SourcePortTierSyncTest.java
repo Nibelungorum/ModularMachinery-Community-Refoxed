@@ -16,6 +16,8 @@ import cn.howxu.mmcr.publicapi.structure.PortTierLimits;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.registry.PortKinds;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -96,6 +98,26 @@ class SourcePortTierSyncTest {
         } finally {
             legacy.release();
         }
+    }
+
+    @Test
+    void namedFamilyConstraintKeepsItsBindingAndDirectionAfterStructureSync() {
+        var limits = PortTierLimits.family(PortFamilyIds.ITEM, IoDirection.INPUT, 2);
+        var tiers = PortTierRequirementSpec.from(TierAdapters.unwrap(limits));
+        var structure = new MachineStructureDefinition(ResourceLocation.parse("test:named_family"), new BlockArray(Map.of()),
+                PortRequirementSpec.none(), tiers, List.of(), MachineStructureRequirements.EMPTY);
+        var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        try {
+            MachineStructureSyncCodec.encode(buffer, structure);
+            var restored = MachineStructureSyncCodec.decode(buffer).portTierRequirements();
+            assertThat(restored.validate(List.of(PortKinds.ITEM_INPUT))).isEmpty();
+            assertThat(restored.validate(List.of(PortKinds.ITEM_OUTPUT, PortKinds.FLUID_INPUT))).isPresent();
+            assertThat(restored.requirements().getFirst().registeredFamily()).isEqualTo(PortFamilyIds.ITEM);
+        } finally {
+            buffer.release();
+        }
+        assertThatThrownBy(() -> PortTierLimits.family(ResourceLocation.parse("test:absent"), IoDirection.INPUT, 2))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

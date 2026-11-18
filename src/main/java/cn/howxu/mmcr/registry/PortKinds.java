@@ -1,5 +1,17 @@
 package cn.howxu.mmcr.registry;
 
+import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+
+import cn.howxu.mmcr.internal.item.InterfaceTooltips;
+import net.minecraft.network.chat.Component;
+
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.level.Level;
+import net.minecraft.core.BlockPos;
+
 import cn.howxu.mmcr.compat.create.CreateBridge;
 
 import cn.howxu.mmcr.MMCR;
@@ -264,6 +276,23 @@ public final class PortKinds {
 
     public record ChemicalKind(String id, IOType ioType, int tier, long capacity, boolean radioactive)
             implements IOPortKind {
+        @Override public ItemInteractionResult useContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
+            return MekanismBridge.get().interactWithChemicalContainer(player, hand, port) > 0
+                    ? ItemInteractionResult.SUCCESS : ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        }
+
+        @Override public List<Component> tooltipLines() { return InterfaceTooltips.chemicalTooltip(this); }
+
+        @Override public List<ResourceLocation> overlayTextures() {
+            return radioactive ? tieredOverlay("mekanism/raditional_chemical", "ludicrous")
+                    : tieredOverlay("mekanism/chemical", "extended/" + id.substring(id.lastIndexOf('_') + 1));
+        }
+
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return MekanismBridge.get().createMenu(id, containerId, player, level, pos);
+        }
+
         @Override
         public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
             return (pos, state) -> MekanismBridge.get().createChemicalPort(pos, state, this, capacity, radioactive);
@@ -276,7 +305,7 @@ public final class PortKinds {
                     ioType, tier,
                     List.of(ioType == IOType.INPUT
                             ? radioactive ? "radioactive_chemical_input_hatch" : "chemical_input_hatch"
-                            : radioactive ? "radioactive_chemical_output_hatch" : "chemical_output_hatch")));
+                            : radioactive ? "radioactive_chemical_output_hatch" : "chemical_output_hatch"), MekanismPortFamilies.CHEMICAL));
         }
 
         @Override
@@ -292,6 +321,21 @@ public final class PortKinds {
 
     public record HeatKind(String id, IOType ioType, int tier, double capacity)
             implements IOPortKind {
+        @Override public ItemInteractionResult useContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        }
+
+        @Override public List<Component> tooltipLines() { return InterfaceTooltips.heatTooltip(this); }
+
+        @Override public List<ResourceLocation> overlayTextures() {
+            return tieredOverlay("mekanism/heat", "huge");
+        }
+
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return MekanismBridge.get().createMenu(id, containerId, player, level, pos);
+        }
+
         @Override
         public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
             return (pos, state) -> MekanismBridge.get().createHeatPort(pos, state, this);
@@ -409,6 +453,27 @@ public final class PortKinds {
         REGISTRY.add(kind);
     }
 
+    /** Resolve a legacy count alias to a single directed family; different tiers may share the alias. */
+    public static PortFamilyDescriptor requireFamilyAlias(String alias) {
+        PortFamilyDescriptor found = null;
+        for (var kind : all()) for (var family : kind.families()) {
+            if (!family.countAliases().contains(alias) || kind.bindings().stream().noneMatch(family::matches)) continue;
+            if (found != null && (!found.familyId().equals(family.familyId()) || found.ioType() != family.ioType()))
+                throw new IllegalArgumentException("Ambiguous port family alias: " + alias);
+            if (found == null || found.detectionTier() > family.detectionTier()) found = family;
+        }
+        if (found == null) throw new IllegalArgumentException("Unknown port family alias: " + alias);
+        return found;
+    }
+
+    /** Reject script declarations with a typo instead of silently creating an impossible requirement. */
+    public static void requireFamilyTier(ResourceLocation id, IOType io, int tier) {
+        for (var kind : all()) for (var family : kind.families())
+            if (family.familyId().equals(id) && family.ioType() == io && family.detectionTier() == tier
+                    && kind.bindings().stream().anyMatch(family::matches)) return;
+        throw new IllegalArgumentException("Unknown port family tier: " + id + "/" + io + ">=" + tier);
+    }
+
     public static List<IOPortKind> all() { return Collections.unmodifiableList(REGISTRY); }
 
     /** Test-only helper. Never call from production code. */
@@ -486,15 +551,7 @@ public final class PortKinds {
         defaults.addAll(BotaniaBridge.get().portKinds());
         defaults.addAll(FluxNetworksBridge.get().portKinds());
         defaults.addAll(PneumaticCraftBridge.get().portKinds());
-        for (MekanismBridge.PortDeclaration declaration : MekanismBridge.get().portDeclarations()) {
-            if (declaration.type() == MekanismBridge.PortType.CHEMICAL) {
-                defaults.add(new ChemicalKind(declaration.id(), declaration.ioType(), declaration.tier(),
-                        declaration.capacity(), declaration.radioactive()));
-            } else if (declaration.type() == MekanismBridge.PortType.HEAT) {
-                defaults.add(new HeatKind(declaration.id(), declaration.ioType(), declaration.tier(),
-                        declaration.capacity()));
-            }
-        }
+        defaults.addAll(MekanismBridge.get().portKinds());
         return List.copyOf(defaults);
     }
 

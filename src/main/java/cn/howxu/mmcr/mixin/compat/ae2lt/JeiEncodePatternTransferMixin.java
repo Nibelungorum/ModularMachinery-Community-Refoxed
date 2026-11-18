@@ -2,8 +2,7 @@ package cn.howxu.mmcr.mixin.compat.ae2lt;
 
 import appeng.api.stacks.GenericStack;
 import appeng.menu.me.items.PatternEncodingTermMenu;
-import cn.howxu.mmcr.compat.ae2lt.client.LightningJeiDisplay;
-import cn.howxu.mmcr.compat.ae2lt.client.LightningPatternTransfer;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jei.PatternEncodingContribution;
 import cn.howxu.mmcr.compat.jei.MachineRecipeDisplay;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -23,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import tamaized.ae2jeiintegration.integration.modules.jei.GenericEntryStackHelper;
 import java.util.List;
 
-/** Keeps native terminal handling while supplying exact MMCR lightning amounts.
+/** Keeps native terminal handling while supplying exact contributed MMCR amounts.
  * @author howxu <dev@howxu.cn>
  */
 @Pseudo
@@ -33,10 +32,12 @@ public abstract class JeiEncodePatternTransferMixin {
 
     @Inject(method = "transferRecipe(Lappeng/menu/me/items/PatternEncodingTermMenu;Ljava/lang/Object;Lmezz/jei/api/gui/ingredient/IRecipeSlotsView;Lnet/minecraft/world/entity/player/Player;ZZ)Lmezz/jei/api/recipe/transfer/IRecipeTransferError;",
             at = @At("HEAD"), cancellable = true)
-    private void mmcr$checkLightningCapacity(PatternEncodingTermMenu menu, Object recipeBase, IRecipeSlotsView slots,
+    private void mmcr$checkPatternCapacity(PatternEncodingTermMenu menu, Object recipeBase, IRecipeSlotsView slots,
             Player player, boolean maxTransfer, boolean doTransfer, CallbackInfoReturnable<IRecipeTransferError> callback) {
-        if (!(recipeBase instanceof MachineRecipeDisplay display) || LightningJeiDisplay.requirements(display).isEmpty()) return;
-        var transfer = LightningPatternTransfer.prepare(display, GenericEntryStackHelper.ofInputs(slots), GenericEntryStackHelper.ofOutputs(slots));
+        if (!(recipeBase instanceof MachineRecipeDisplay display)) return;
+        var contributions = PatternEncodingContribution.collect(display);
+        if (contributions.isEmpty()) return;
+        var transfer = PatternEncodingContribution.prepare(contributions, GenericEntryStackHelper.ofInputs(slots), GenericEntryStackHelper.ofOutputs(slots));
         int inputSlots = menu.getProcessingInputSlots().length;
         int outputSlots = menu.getProcessingOutputSlots().length;
         if (!transfer.fits(inputSlots, outputSlots)) callback.setReturnValue(helper.createUserErrorWithTooltip(Component.translatable(
@@ -45,10 +46,10 @@ public abstract class JeiEncodePatternTransferMixin {
 
     @WrapOperation(method = "transferRecipe(Lappeng/menu/me/items/PatternEncodingTermMenu;Ljava/lang/Object;Lmezz/jei/api/gui/ingredient/IRecipeSlotsView;Lnet/minecraft/world/entity/player/Player;ZZ)Lmezz/jei/api/recipe/transfer/IRecipeTransferError;",
             at = @At(value = "INVOKE", target = "Lappeng/integration/modules/itemlists/EncodingHelper;encodeProcessingRecipe(Lappeng/menu/me/items/PatternEncodingTermMenu;Ljava/util/List;Ljava/util/List;)V"))
-    private void mmcr$encodeLightning(PatternEncodingTermMenu menu, List<List<GenericStack>> inputs, List<GenericStack> outputs,
+    private void mmcr$encodePattern(PatternEncodingTermMenu menu, List<List<GenericStack>> inputs, List<GenericStack> outputs,
                                      Operation<Void> original, @Local(argsOnly = true) Object recipeBase) {
-        if (recipeBase instanceof MachineRecipeDisplay display && !LightningJeiDisplay.requirements(display).isEmpty()) {
-            var transfer = LightningPatternTransfer.prepare(display, inputs, outputs);
+        if (recipeBase instanceof MachineRecipeDisplay display) {
+            var transfer = PatternEncodingContribution.prepare(PatternEncodingContribution.collect(display), inputs, outputs);
             original.call(menu, transfer.inputs(), transfer.outputs());
         } else original.call(menu, inputs, outputs);
     }

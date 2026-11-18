@@ -252,6 +252,7 @@ public abstract class RecipeThread {
                 && current.stateVersion() == captured.stateVersion()
                 && current.upgradeContentRevision() == captured.upgradeContentRevision()
                 && current.maxParallelism() == captured.maxParallelism()
+                && request.snapshotValues().stamp().semanticsCurrent()
                 && (request.snapshotValues().stamp().routing() < 0L || controller.componentRuntime().inputRoutingRevision()
                         == request.snapshotValues().stamp().routing())
                 && currentMachine != null && capturedMachine != null

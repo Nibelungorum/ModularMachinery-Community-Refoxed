@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
@@ -19,10 +20,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -288,12 +286,9 @@ public final class RecipeSearchTask {
             if (selectedScope.kind() != InputScope.Kind.LEGACY) {
                 List<MachineRequirement> retained = earlier.runtimeRequirements(modifiers)
                         .stream().filter(requirement -> requirement.io() == RecipeModifier.IOType.INPUT
-                                && (requirement instanceof ItemRequirement item
-                                && item.consumeChance() == 0F
-                                || requirement instanceof FluidRequirement fluid
-                                && fluid.consumeChance() == 0F
-                                || requirement instanceof LoadedChemicalRequirement chemical
-                                && chemical.consumeChance() == 0F)).toList();
+                                && requirement.execution().recordsStartPayment() && requirement.consumptionProbability() == 0F
+                                && requirement.type().capabilityIds().stream().anyMatch(id -> RequirementPlanner.isMaterialInput(
+                                cn.howxu.mmcr.util.IOType.INPUT, id))).toList();
                 if (!retained.isEmpty() && !context.planInputs(retained, 1L, Set.of(), Set.of()).successful()) continue;
             }
             PlanningResult inputs;

@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.compat.mekanism;
 
-import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
+import cn.howxu.mmcr.api.capability.facet.AvailabilityFacet;
+import java.util.Map;
+
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Optional;
@@ -12,7 +14,16 @@ import java.util.Objects;
  *
  * @author howxu <dev@howxu.cn>
  */
-public interface ChemicalViewFacet extends CapabilityFacet {
+public interface ChemicalViewFacet extends AvailabilityFacet {
+    @Override default Map<ResourceLocation, Fact> availability(ResourceLocation family) {
+        var result = new java.util.LinkedHashMap<ResourceLocation, Fact>();
+        for (var entry : contents()) {
+            long amount = cn.howxu.mmcr.util.SaturatingLong.add(result.getOrDefault(entry.id(), Fact.EMPTY).quantity(), entry.amount());
+            if (amount > 0L) result.put(entry.id(), new Fact(amount, 0D, -amount));
+        }
+        return Map.copyOf(result);
+    }
+
     Optional<ResourceLocation> chemicalId();
 
     long amount();

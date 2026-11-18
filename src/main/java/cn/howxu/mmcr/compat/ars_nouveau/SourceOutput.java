@@ -43,6 +43,12 @@ public record SourceOutput(long amount, float chance) implements MachineOutput {
     }
 
     @Override
+    public Object aggregationIdentity() { return TYPE.id(); }
+
+    @Override
+    public Object conversionVersion() { return TYPE; }
+
+    @Override
     public OutputType<SourceOutput> outputType() {
         return TYPE;
     }

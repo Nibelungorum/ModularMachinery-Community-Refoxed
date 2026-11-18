@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.api.recipe.RecipeSemantics;
+
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
 import cn.howxu.mmcr.api.recipe.InputScope;
@@ -22,7 +24,14 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
     }
 
     public record Stamp(long catalog, long structure, long capability, long modifier, long state,
-                        long upgrade, long routing, long maximumParallelism, int laneLimit) {}
+                        long upgrade, long routing, long maximumParallelism, int laneLimit, long semantics) {
+        public Stamp(long catalog, long structure, long capability, long modifier, long state,
+                     long upgrade, long routing, long maximumParallelism, int laneLimit) {
+            this(catalog, structure, capability, modifier, state, upgrade, routing, maximumParallelism, laneLimit,
+                    RecipeSemantics.revision());
+        }
+        public boolean semanticsCurrent() { return semantics == RecipeSemantics.revision(); }
+    }
 
     public record Candidate(ResourceLocation id, int priority, int inputCount, long maximumParallelism,
                             @Nullable ResourceLocation staticFailure, List<Rule> rules, List<Scope> scopes,
@@ -35,13 +44,26 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
         }
     }
 
-    public enum Kind { RESOURCE, SCALAR, AIR, STRESS, TEMPERATURE, HEAT, NOOP }
+    public enum Kind { RESOURCE, SCALAR, QUANTITY, CONDITION, NOOP }
 
     public record Rule(int index, ResourceLocation type, Kind kind, IOType direction, long amount,
                        double heat, float chance, float consumeChance, boolean partial, boolean valid,
                        Set<AsyncResourceValue> resources, @Nullable AsyncResourceValue output,
                        List<Port> ports, ResourceLocation failureReason,
-                       @Nullable CompatSearchValues.Condition condition) {
+                       @Nullable CompatSearchValues.Condition condition, boolean scopedInput, boolean retainedInput, @Nullable ResourceLocation missingScopeReason) {
+        public Rule(int index, ResourceLocation type, Kind kind, IOType direction, long amount, double heat,
+                    float chance, float consumeChance, boolean partial, boolean valid, Set<AsyncResourceValue> resources,
+                    @Nullable AsyncResourceValue output, List<Port> ports, ResourceLocation failureReason,
+                    @Nullable CompatSearchValues.Condition condition) {
+            this(index, type, kind, direction, amount, heat, chance, consumeChance, partial, valid, resources, output,
+                    ports, failureReason, condition, RequirementPlanner.isMaterialInput(direction, type),
+                    RequirementPlanner.isMaterialInput(direction, type) && consumeChance == 0F, null);
+        }
+
+        Rule forSource(ResourceLocation source, boolean scoped, boolean retained, ResourceLocation missingScope) {
+            return new Rule(index, source, kind, direction, amount, heat, chance, consumeChance, partial, valid, resources,
+                    output, ports, failureReason, condition, scoped, retained, missingScope);
+        }
         public Rule(int index, ResourceLocation type, Kind kind, IOType direction, long amount,
                     double heat, float chance, float consumeChance, boolean partial, boolean valid,
                     Set<AsyncResourceValue> resources, @Nullable AsyncResourceValue output,

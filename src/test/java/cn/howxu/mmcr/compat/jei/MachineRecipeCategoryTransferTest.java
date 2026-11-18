@@ -115,7 +115,7 @@ class MachineRecipeCategoryTransferTest {
     @Test
     void transferSlotsContainChemicalInputAndOutputWithRecipeAmounts() throws Exception {
         MachineRequirement chemicalInput = LoadedChemicalRequirement.input(
-                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 1_250L));
+                ChemicalIngredient.chemical(ResourceLocation.parse("mekanism:oxygen"), 2_147_483_648L));
         MachineRequirement chemicalOutput = LoadedChemicalRequirement.output(
                 ResourceLocation.parse("mekanism:hydrogen"), 750L, 1F);
         MachineRecipe recipe = MachineRecipe.fromCanonical(
@@ -137,7 +137,7 @@ class MachineRecipeCategoryTransferTest {
         assertThat(slots.get(0).chemicalAdds()).singleElement()
                 .satisfies(add -> {
                     assertThat(add.type()).isEqualTo(MekanismJEI.TYPE_CHEMICAL);
-                    assertThat(add.stack().getAmount()).isEqualTo(1_250);
+                    assertThat(add.stack().getAmount()).isEqualTo(2_147_483_648L);
                 });
         assertThat(slots.get(1).chemicalAdds()).singleElement()
                 .satisfies(add -> {

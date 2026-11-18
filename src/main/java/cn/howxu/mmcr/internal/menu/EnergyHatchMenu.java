@@ -15,7 +15,7 @@ import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import java.util.List;
 import java.util.Optional;
 
-public class EnergyHatchMenu extends AbstractMachineMenu {
+public class EnergyHatchMenu extends AbstractMachineMenu implements PortMenuBinding {
 
     private final EnergyHatchBlockEntity owner;
     private final Level level;

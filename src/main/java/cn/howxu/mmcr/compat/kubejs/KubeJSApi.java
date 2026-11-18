@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.registry.PortKinds;
+
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
@@ -990,6 +992,14 @@ public final class KubeJSApi {
         };
     }
 
+    private static PortTierRequirementSpec registeredTierAlias(String alias, String minimum) {
+        var family = PortKinds.requireFamilyAlias(alias);
+        int tier = minimum == null ? family.detectionTier() : Integer.parseInt(minimum);
+        PortKinds.requireFamilyTier(family.familyId(), family.ioType(), tier);
+        return new PortTierRequirementSpec(List.of(new PortTierRequirementSpec.Requirement(
+                PortTierRequirementSpec.PortCategory.REGISTERED, family.ioType(), tier, Integer.toString(tier), family.familyId())));
+    }
+
     private static PortTierRequirementSpec parseTierRequirement(String minimum) {
         String[] parts = minimum.split(">=", -1);
         if (parts.length == 1) {
@@ -1002,10 +1012,20 @@ public final class KubeJSApi {
                 case "create_stress_output_interface" -> KubeJSInterfaceHelpers.stressOutputTier();
                 case "pneumaticcraft_air_input_interface" -> KubeJSInterfaceHelpers.airInputTier();
                 case "pneumaticcraft_air_output_interface" -> KubeJSInterfaceHelpers.airOutputTier();
-                default -> throw new IllegalArgumentException("Invalid port tier requirement: " + minimum);
+                default -> registeredTierAlias(minimum, null);
             };
         }
         if (parts.length != 2) throw new IllegalArgumentException("Invalid port tier requirement: " + minimum);
+        if (parts[0].contains(":")) {
+            int split = parts[0].lastIndexOf('/');
+            if (split < 0) throw new IllegalArgumentException("Expected family/input or family/output: " + minimum);
+            var family = ResourceLocation.parse(parts[0].substring(0, split));
+            var io = cn.howxu.mmcr.util.IOType.valueOf(parts[0].substring(split + 1).toUpperCase(java.util.Locale.ROOT));
+            int tier = Integer.parseInt(parts[1]);
+            PortKinds.requireFamilyTier(family, io, tier);
+            return new PortTierRequirementSpec(List.of(new PortTierRequirementSpec.Requirement(
+                    PortTierRequirementSpec.PortCategory.REGISTERED, io, tier, Integer.toString(tier), family)));
+        }
         PortTierRequirementSpec spec = switch (parts[0]) {
             case "item_input_bus" -> KubeJSInterfaceHelpers.itemInputTier(parts[1]);
             case "item_output_bus" -> KubeJSInterfaceHelpers.itemOutputTier(parts[1]);
@@ -1019,7 +1039,7 @@ public final class KubeJSApi {
             case "mana_output_pool" -> KubeJSInterfaceHelpers.manaOutputTier(parts[1]);
             case "chemical_input_hatch" -> KubeJSInterfaceHelpers.chemicalInputTier(parts[1]);
             case "chemical_output_hatch" -> KubeJSInterfaceHelpers.chemicalOutputTier(parts[1]);
-            default -> throw new IllegalArgumentException("Invalid port family: " + parts[0]);
+            default -> registeredTierAlias(parts[0], parts[1]);
         };
         if (spec.requirements().stream().anyMatch(requirement -> !requirement.minTierId().equals(parts[1]))) {
             throw new IllegalArgumentException("Unknown port tier: " + parts[1]);

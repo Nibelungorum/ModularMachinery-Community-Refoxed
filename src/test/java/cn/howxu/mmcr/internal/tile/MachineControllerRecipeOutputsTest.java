@@ -20,6 +20,8 @@ import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
+import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
+import cn.howxu.mmcr.compat.botania.ManaOutput;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Codec;
@@ -65,6 +67,17 @@ class MachineControllerRecipeOutputsTest {
         assertThat(merged).hasSize(1);
         assertThat(merged.get(0).amount()).isEqualTo(10L);
         assertThat(((MachineOutput.ItemOutput) merged.get(0).output()).stack().getCount()).isEqualTo(4);
+    }
+
+    @Test
+    void factoryDoesNotCombineDifferentScalarResources() {
+        try (var scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(SourceOutput.TYPE);
+            OutputRegistry.register(ManaOutput.TYPE);
+            var controller = TestBootstrap.newController();
+            TestBootstrap.bindFactoryWithOutputs(controller, List.of(new SourceOutput(10, 1F), new ManaOutput(20, 1F)));
+            assertThat(controller.recipeOutputs()).extracting(MachineOutputAmount::amount).containsExactly(10L, 20L);
+        }
     }
 
     @Test
@@ -494,6 +507,9 @@ class MachineControllerRecipeOutputsTest {
                 }, OutputType.Presentation.defaults(ID), ID.toString(),
                 (output, tags) -> new EnergyRequirement(IOType.OUTPUT, output.amount(), tags),
                 requirement -> false);
+
+        @Override
+        public Object aggregationIdentity() { return ID; }
 
         @Override
         public OutputType<CountingOutput> outputType() {

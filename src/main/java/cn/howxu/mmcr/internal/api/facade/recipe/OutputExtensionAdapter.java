@@ -95,6 +95,8 @@ public final class OutputExtensionAdapter {
         Carrier { Objects.requireNonNull(payload, "payload"); }
         public OutputType<Carrier<O>> outputType() { return owner.type; }
         public float chance() { return owner.extension.chance(payload); }
+        public Object aggregationIdentity() { return owner.extension.aggregationIdentity(payload); }
+        public boolean perTickOutput() { return owner.extension.perTickOutput(payload); }
         public long amount() { return owner.extension.amount(payload); }
     }
 }

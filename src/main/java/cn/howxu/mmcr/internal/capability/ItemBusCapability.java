@@ -138,6 +138,11 @@ public final class ItemBusCapability implements MachineCapability, ItemHandlerFa
 
     @Override public CapabilityOperation prepare(CapabilityRequest request) { return CapabilityFactories.operation(this, request); }
 
+    @Override public List<SlotSummary> outputSlots(CapabilityView view) {
+        return IntStream.range(0, itemHandler.getSlots()).filter(slot -> !itemHandler.getStackInSlot(slot).isEmpty())
+                .mapToObj(slot -> new SlotSummary("gui.mmcr.port.items", Long.toString(itemAmount(slot)), "", "")).toList();
+    }
+
     @Override
     public List<CapabilityDisplay> displays(CapabilityView ignored) {
         return IntStream.range(0, itemHandler.getSlots()).mapToObj(slot -> new CapabilityDisplay("item",

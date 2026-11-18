@@ -1,5 +1,18 @@
 package cn.howxu.mmcr.compat.pneumaticcraft;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+
+import cn.howxu.mmcr.internal.recipe.ConditionCapture;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.compat.pneumaticcraft.loaded.AirPortCapability;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Rule;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Kind;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
+
+import cn.howxu.mmcr.api.recipe.requirement.RequirementExecutionPolicy;
+
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -15,7 +28,27 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public record AirRequirement(RecipeModifier.IOType io, long airPerTick, float minPressure,
-                              float chance, float consumeChance, List<String> tags) implements MachineRequirement {
+                              float chance, float consumeChance, List<String> tags) implements MachineRequirement, ConditionCapture {
+    @Override public boolean searchAvailable() { return PneumaticCraftBridge.get().available(); }
+    @Override public boolean supportsPort(MachineCapability port, AsyncCapabilitySnapshot value) { return port instanceof AirPortCapability; }
+
+    @Override public Rule captureRule(int index, boolean partial, List<Integer> matching, Ports captured) {
+        var direction = cn.howxu.mmcr.util.IOType.valueOf(io.name());
+        boolean output = !io.isInput();
+        List<AirSearchCondition.AirPort> ports = new ArrayList<>();
+        Set<Integer> seen = new HashSet<>();
+        for (int occurrence : matching) {
+            var capability = (AirPortCapability) captured.get(occurrence);
+            var port = captured.snapshot(AirSearchCondition.AirPort.class, occurrence, () ->
+                    AirSearchCondition.airPort(captured.identity(capability.queryIdentity()), occurrence, capability.state()));
+            if (seen.add(port.id())) ports.add(port);
+        }
+        return new Rule(index, type().id(), Kind.CONDITION, direction, this.airPerTick(), 0D,
+                this.chance(), this.consumeChance(), output && partial, true, Set.of(), null, List.of(),
+                (output ? AirFailureReasons.OUTPUT_BLOCKED : AirFailureReasons.INSUFFICIENT_AIR).id(),
+                new AirSearchCondition(this.minPressure(), ports));
+    }
+
     public static final MapCodec<AirRequirement> CODEC = RecordCodecBuilder.<Fields>mapCodec(instance -> instance.group(
             Codec.STRING.validate(value -> "pneumaticcraft:air".equals(value) ? DataResult.success(value)
                     : DataResult.error(() -> "Expected pneumaticcraft:air")).fieldOf("type").forGetter(Fields::type),
@@ -90,6 +123,18 @@ public record AirRequirement(RecipeModifier.IOType io, long airPerTick, float mi
     public static AirRequirement output(long airPerTick, float chance, List<String> tags) {
         return new AirRequirement(RecipeModifier.IOType.OUTPUT, airPerTick, 0F, chance, 1F, tags);
     }
+
+    @Override
+    public RequirementExecutionPolicy execution() { return io.isInput() ? RequirementExecutionPolicy.PREFLIGHT_INPUT : RequirementExecutionPolicy.TICK_IO; }
+
+    @Override
+    public long batchAmount(int duration) { return airPerTick; }
+
+    @Override
+    public float consumptionProbability() { return consumeChance; }
+
+    @Override
+    public Object derivationVersion() { return type().handler(); }
 
     @Override
     public RequirementType<AirRequirement> type() {

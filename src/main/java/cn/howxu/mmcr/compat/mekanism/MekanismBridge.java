@@ -3,6 +3,7 @@ package cn.howxu.mmcr.compat.mekanism;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.internal.port.IOPortKind;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
@@ -56,6 +57,13 @@ public interface MekanismBridge {
 
     default List<PortDeclaration> portDeclarations() {
         return List.of();
+    }
+
+    default List<IOPortKind> portKinds() {
+        return portDeclarations().stream().<IOPortKind>map(port -> switch (port.type()) {
+            case CHEMICAL -> new PortKinds.ChemicalKind(port.id(), port.ioType(), port.tier(), port.capacity(), port.radioactive());
+            case HEAT -> new PortKinds.HeatKind(port.id(), port.ioType(), port.tier(), port.capacity());
+        }).toList();
     }
 
     default MachineCapability createChemicalCapability(CapabilityCreationContext context) {

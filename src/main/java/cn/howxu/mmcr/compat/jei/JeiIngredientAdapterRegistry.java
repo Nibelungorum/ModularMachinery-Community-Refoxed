@@ -2,15 +2,8 @@ package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJeiAdapter;
 import cn.howxu.mmcr.compat.botania.client.ManaJeiAdapter;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
-import mekanism.api.MekanismAPI;
-import mekanism.api.chemical.Chemical;
-import mekanism.api.chemical.ChemicalStack;
-import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.ingredients.IIngredientType;
 import mezz.jei.api.neoforge.NeoForgeTypes;
@@ -18,13 +11,13 @@ import mezz.jei.api.recipe.RecipeIngredientRole;
 import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 
+import cn.howxu.mmcr.compat.mekanism.client.ChemicalJeiAdapter;
+import net.neoforged.fml.ModList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,27 +55,26 @@ public final class JeiIngredientAdapterRegistry {
         if (!ADAPTERS.isEmpty()) return;
         register(new ItemAdapter());
         register(new FluidAdapter());
-        register(new ChemicalAdapter());
+        var mods = ModList.get();
+        if (mods == null || mods.isLoaded("mekanism")) register(new ChemicalJeiAdapter());
         register(new SourceJeiAdapter());
         register(new ManaJeiAdapter());
     }
 
     static JeiDisplayEntry textEntry(RecipeIoEntry entry) {
         return new JeiDisplayEntry(entry.role(), entry.typeId(), null,
-                Component.literal(entry.typeId().toString()), boundedCount(entry.amount()), entry.chance(), null, false);
+                Component.literal(entry.typeId().toString()), boundedCount(entry.amount()), entry.chance(), null, false, entry.amount());
     }
 
     static Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
         return get(entry.typeId()).flatMap(adapter -> adapter.display(entry).map(display -> new JeiDisplayEntry(
                 display.role(), entry.typeId(), display.ingredientType(), display.ingredient(), display.count(),
-                entry.chance(), adapter.renderer(entry).orElse(null), display.transferable())));
+                display.chance(), adapter.renderer(entry).orElse(display.renderer()), display.transferable(), display.exactAmount())));
     }
 
     private static int boundedCount(long amount) {
         return (int) Math.min(Integer.MAX_VALUE, amount);
     }
-
-    private static final long CHEMICAL_RENDER_AMOUNT = 1000L;
 
     private static final class ItemAdapter implements JeiIngredientAdapter {
         @Override
@@ -106,11 +98,13 @@ public final class JeiIngredientAdapterRegistry {
                         .map(stack -> new ItemStack(stack.getItem()))
                         .toList();
                 return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
-                        stacks, boundedCount(entry.amount()), entry.chance(), null, true));
+                        stacks, entry.declaredValues() ? boundedCount(entry.amount()) : item.count(),
+                        entry.declaredValues() ? entry.chance() : item.consumeChance(), null, true));
             }
             ItemStack stack = item.resolvedStack();
             return stack.isEmpty() ? Optional.empty() : Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
-                    stack.copyWithCount(1), boundedCount(entry.amount()), entry.chance(), null, false));
+                    stack.copyWithCount(1), entry.declaredValues() ? boundedCount(entry.amount()) : stack.getCount(),
+                    entry.declaredValues() ? entry.chance() : item.chance(), null, false));
         }
 
         @Override
@@ -140,34 +134,8 @@ public final class JeiIngredientAdapterRegistry {
                     ? safeFluids(fluid.fluid()).findFirst().map(fluidStack -> new FluidStack(fluidStack.getFluid(), 1)).orElse(FluidStack.EMPTY)
                     : fluid.stack().copyWithAmount(1);
             return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
-                    stack, boundedCount(entry.amount()), entry.chance(), null, false));
-        }
-
-        @Override
-        public Optional<IRecipeTransferHandler<?, ?>> transferHandler() {
-            return Optional.empty();
-        }
-    }
-
-    private static final class ChemicalAdapter implements JeiIngredientAdapter {
-        @Override
-        public ResourceLocation typeId() {
-            return MekanismRecipeTypes.CHEMICAL;
-        }
-
-        @Override
-        public IIngredientType<?> ingredientType() {
-            return MekanismJEI.TYPE_CHEMICAL;
-        }
-
-        @Override
-        public Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
-            if (!(entry.value() instanceof LoadedChemicalRequirement chemical)) return Optional.empty();
-            List<ChemicalStack> stacks = chemicalStacks(chemical.ingredient());
-            Object ingredient = entry.role() == RecipeIngredientRole.INPUT ? stacks
-                    : stacks.isEmpty() ? ChemicalStack.EMPTY : stacks.getFirst();
-            return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(), ingredient,
-                    boundedCount(entry.amount()), entry.chance(), null, false));
+                    stack, entry.declaredValues() ? boundedCount(entry.amount()) : fluid.io().isInput() ? fluid.amount() : fluid.stack().getAmount(),
+                    entry.declaredValues() ? entry.chance() : fluid.io().isInput() ? fluid.consumeChance() : fluid.chance(), null, false));
         }
 
         @Override
@@ -192,17 +160,4 @@ public final class JeiIngredientAdapterRegistry {
         }
     }
 
-    private static List<ChemicalStack> chemicalStacks(ChemicalIngredient ingredient) {
-        if (ingredient.kind() == ChemicalIngredient.Kind.CHEMICAL) {
-            return MekanismAPI.CHEMICAL_REGISTRY.getHolder(
-                            ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id()))
-                    .map(holder -> List.of(new ChemicalStack(holder, CHEMICAL_RENDER_AMOUNT)))
-                    .orElseGet(List::of);
-        }
-        TagKey<Chemical> tag = TagKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, ingredient.id());
-        return MekanismAPI.CHEMICAL_REGISTRY.getTag(tag).stream()
-                .flatMap(holders -> holders.stream())
-                .map(holder -> new ChemicalStack(holder, CHEMICAL_RENDER_AMOUNT))
-                .toList();
-    }
 }

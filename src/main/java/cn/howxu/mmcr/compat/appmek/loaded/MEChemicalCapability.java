@@ -32,7 +32,7 @@ import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalHandlerPort;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalOutputAdmission;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalSearchValues;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.Action;
@@ -83,7 +83,7 @@ public final class MEChemicalCapability implements ChemicalHandlerPort, Chemical
                         for (int slot = 0; slot < handler.getChemicalTanks(); slot++) {
                             ChemicalStack stack = handler.getChemicalInTank(slot);
                             slots.add(new AsyncCapabilitySnapshot.ResourceSlot(stack.isEmpty() ? Optional.empty()
-                                    : Optional.of(NativeAsyncResourceValues.chemical(stack.copyWithAmount(1L))),
+                                    : Optional.of(ChemicalSearchValues.chemical(stack.copyWithAmount(1L))),
                                     stack.getAmount(), handler.getChemicalTankCapacity(slot)));
                         }
                         return new AsyncCapabilitySnapshot.Resource(TYPE.id(), slots);
@@ -147,6 +147,11 @@ public final class MEChemicalCapability implements ChemicalHandlerPort, Chemical
         return amount;
     }
 
+    @Override public List<SlotSummary> outputSlots(CapabilityView view) {
+        return contents().stream().filter(entry -> entry.amount() > 0)
+                .map(entry -> new SlotSummary("gui.mmcr.port.chemicals", Long.toString(entry.amount()), "", "mmcr.unit.chemical")).toList();
+    }
+
     @Override public List<CapabilityDisplay> displays(CapabilityView ignored) {
         return contents().stream().map(entry -> new CapabilityDisplay("chemical",
                 Long.toString(entry.amount()), "mB", Optional.empty())).toList();
@@ -203,7 +208,7 @@ public final class MEChemicalCapability implements ChemicalHandlerPort, Chemical
         }
         ChemicalStack stack;
         try {
-            stack = NativeAsyncResourceValues.chemical(resource.resource());
+            stack = ChemicalSearchValues.chemical(resource.resource());
         } catch (IllegalArgumentException exception) {
             return failure(MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH, resource.amount(), 0L);
         }

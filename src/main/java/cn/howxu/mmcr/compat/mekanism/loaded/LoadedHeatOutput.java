@@ -38,9 +38,15 @@ public record LoadedHeatOutput(double heat) implements MachineOutput {
     }
 
     @Override
+    public Object conversionVersion() { return TYPE; }
+
+    @Override
     public OutputType<LoadedHeatOutput> outputType() {
         return TYPE;
     }
+
+    @Override
+    public boolean perTickOutput() { return true; }
 
     @Override
     public float chance() {

@@ -38,6 +38,7 @@ public final class OutputRegistry {
             }
             TYPES.put(type.id(), type);
             SERIALIZED_TYPES.put(type.serializedId(), type);
+            RecipeSemantics.changed();
         }
     }
 
@@ -77,15 +78,25 @@ public final class OutputRegistry {
     public static MachineOutput fromRequirement(MachineRequirement requirement) {
         if (requirement == null) return null;
         registerBuiltIns();
+        MachineOutput found = null;
         for (OutputType<?> type : TYPES.values()) {
             MachineOutput output = type.fromRequirement(requirement);
             if (output == null) continue;
             if (output.outputType() != type) {
                 throw new IllegalArgumentException("Output factory returned a different type: " + type.id());
             }
-            return output;
+            if (found != null) throw new IllegalArgumentException("Ambiguous conversion of " + requirement.type().id()
+                    + " by " + found.outputType().id() + " and " + type.id());
+            found = output;
         }
-        return null;
+        return found;
+    }
+
+    public static boolean canRebuild(MachineOutput output) {
+        MachineRequirement requirement = tryToRequirement(output, List.of());
+        if (requirement == null) return false;
+        MachineOutput rebuilt = fromRequirement(requirement);
+        return rebuilt != null && rebuilt.outputType() == output.outputType() && sameOutput(output, rebuilt);
     }
 
     public static List<ItemStack> itemStacks(List<MachineOutput> outputs) {
@@ -205,7 +216,7 @@ public final class OutputRegistry {
     }
 
     private static void clearCustomTypes() {
-        TYPES.keySet().removeIf(id -> !isBuiltIn(id));
+        if (TYPES.keySet().removeIf(id -> !isBuiltIn(id))) RecipeSemantics.changed();
         SERIALIZED_TYPES.entrySet().removeIf(entry -> !isBuiltIn(entry.getValue().id()));
     }
 

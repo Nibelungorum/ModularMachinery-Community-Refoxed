@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.compat.jei;
 
 import mezz.jei.api.recipe.RecipeIngredientRole;
+import cn.howxu.mmcr.publicapi.recipe.requirement.RequirementSpec;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.internal.api.facade.recipe.RequirementAdapters;
+import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.Objects;
@@ -11,7 +15,19 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record RecipeIoEntry(RecipeIngredientRole role, ResourceLocation typeId,
-                            Object value, long amount, float chance) {
+                            Object value, long amount, float chance, boolean declaredValues) {
+    public RecipeIoEntry(RecipeIngredientRole role, ResourceLocation typeId, Object value, long amount, float chance) {
+        this(role, typeId, value, amount, chance, true);
+    }
+
+    public RecipeIoEntry(RecipeIngredientRole role, MachineRequirement value) {
+        this(role, value.type().id(), value, 0L, 1F, false);
+    }
+    /** Owner-checked payload access through the addon's public RequirementKind. */
+    public Optional<RequirementSpec> requirement() {
+        return value instanceof MachineRequirement declaration ? Optional.of(RequirementAdapters.wrap(declaration)) : Optional.empty();
+    }
+
     public RecipeIoEntry {
         Objects.requireNonNull(role, "role");
         Objects.requireNonNull(typeId, "typeId");

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.api.recipe.RecipeSemantics;
+
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipeResolver;
@@ -33,7 +35,10 @@ public record EffectiveRecipeSet(Key key, List<EffectiveRecipe> recipes) {
     }
 
     public record Key(long structureVersion, long capabilityVersion, long modifierVersion,
-                      long stateVersion, long catalogVersion) {
+                      long stateVersion, long catalogVersion, long semantics) {
+        public Key(long structureVersion, long capabilityVersion, long modifierVersion, long stateVersion, long catalogVersion) {
+            this(structureVersion, capabilityVersion, modifierVersion, stateVersion, catalogVersion, RecipeSemantics.revision());
+        }
     }
 
     /** Controller-local cache shared by async searches for the same immutable input versions. */

@@ -14,12 +14,17 @@ import java.util.Objects;
  */
 public record JeiDisplayEntry(RecipeIngredientRole role, ResourceLocation typeId, IIngredientType<?> ingredientType,
                               Object ingredient, int count, float chance, IIngredientRenderer<?> renderer,
-                              boolean transferable) {
+                              boolean transferable, long exactAmount) {
+    public JeiDisplayEntry(RecipeIngredientRole role, ResourceLocation typeId, IIngredientType<?> ingredientType,
+                           Object ingredient, int count, float chance, IIngredientRenderer<?> renderer, boolean transferable) {
+        this(role, typeId, ingredientType, ingredient, count, chance, renderer, transferable, count);
+    }
+
     public JeiDisplayEntry {
         Objects.requireNonNull(role, "role");
         Objects.requireNonNull(typeId, "typeId");
         Objects.requireNonNull(ingredient, "ingredient");
-        if (count < 0) throw new IllegalArgumentException("count must be non-negative");
+        if (count < 0 || exactAmount < 0) throw new IllegalArgumentException("count must be non-negative");
         if (!Float.isFinite(chance) || chance < 0F || chance > 1F) {
             throw new IllegalArgumentException("chance must be in [0, 1]");
         }

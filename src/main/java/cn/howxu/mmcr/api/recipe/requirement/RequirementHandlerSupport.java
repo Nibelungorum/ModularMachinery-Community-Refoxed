@@ -17,6 +17,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.DoubleSupplier;
 
 /**
  * Shared mechanics for the built-in requirement handlers.
@@ -141,13 +143,13 @@ public final class RequirementHandlerSupport {
     public static OutputExpectation outputExpectation(float chance, PlanningContext context) {
         return context.sampling() == null ? OutputExpectation.sample(chance, Math::random)
                 : context.sampling().outputs.computeIfAbsent(context.requirementIndex(),
-                        ignored -> OutputExpectation.sample(chance, Math::random));
+                        ignored -> OutputExpectation.sample(chance, context.sampling().random));
     }
 
     public static ConsumeProfile consumeProfile(float chance, long parallelism, PlanningContext context) {
         return context.sampling() == null ? consumeProfile(chance, parallelism)
                 : context.sampling().inputs.computeIfAbsent(context.requirementIndex(),
-                        ignored -> consumeProfile(chance, parallelism));
+                        ignored -> consumeProfile(chance, parallelism, context.sampling().random));
     }
 
     /**
@@ -155,15 +157,23 @@ public final class RequirementHandlerSupport {
      * @author howxu <dev@howxu.cn>
      */
     public static final class Sampling {
+        private final DoubleSupplier random;
+        public Sampling() { this(Math::random); }
+        public Sampling(DoubleSupplier random) { this.random = Objects.requireNonNull(random); }
+
         private final Map<Integer, ConsumeProfile> inputs = new LinkedHashMap<>();
         private final Map<Integer, OutputExpectation> outputs = new LinkedHashMap<>();
     }
 
     public static ConsumeProfile consumeProfile(float chance, long parallelism) {
+        return consumeProfile(chance, parallelism, Math::random);
+    }
+
+    private static ConsumeProfile consumeProfile(float chance, long parallelism, DoubleSupplier random) {
         if (parallelism <= 1_024L) {
             boolean[] decisions = new boolean[(int) parallelism];
             for (int index = 0; index < decisions.length; index++) {
-                decisions[index] = chance >= 1F || Math.random() < chance;
+                decisions[index] = chance >= 1F || random.getAsDouble() < chance;
             }
             return new ConsumeProfile(decisions, chance);
         }

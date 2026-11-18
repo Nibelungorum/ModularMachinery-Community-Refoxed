@@ -120,7 +120,7 @@ class AE2InterfaceJadeProviderTest {
                 new PresentedCapability("chemical", "200", "mB", IOType.INPUT))));
         InterfaceJadeDataProvider.INSTANCE.appendServerData(data, accessor(host, new CompoundTag()));
         assertThat(InterfaceJadeDataProvider.outputs(data)).containsExactly(
-                new InterfaceJadeDataProvider.OutputPresentation("chemical", amount, "mB"));
+                new PresentationFacet.SlotSummary("gui.mmcr.port.chemicals", amount, "", "mmcr.unit.chemical"));
         List<Component> added = new ArrayList<>();
         InterfaceJadeComponentProvider.INSTANCE.appendTooltip(tooltip(added), accessor(gridHost(), data), null);
         assertThat(added).contains(Component.translatable("gui.mmcr.port.chemicals")
@@ -366,6 +366,15 @@ class AE2InterfaceJadeProviderTest {
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
             throw new UnsupportedOperationException("Not used for Jade display tests");
+        }
+
+        @Override
+        public List<SlotSummary> outputSlots(CapabilityView ignored) {
+            var display = displays.getFirst();
+            if (display.value().equals("0") || display.label().equals("unknown")) return List.of();
+            return List.of(new SlotSummary("gui.mmcr.port." + display.label() + "s", display.value(),
+                    display.label().equals("fluid") ? display.unit() : "",
+                    display.label().equals("chemical") ? "mmcr.unit.chemical" : ""));
         }
 
         @Override

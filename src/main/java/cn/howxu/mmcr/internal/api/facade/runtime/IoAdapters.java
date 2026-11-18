@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.api.facade.runtime;
 
+import cn.howxu.mmcr.publicapi.recipe.IoDirection;
+
 import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.capability.plan.OutputPolicy;
@@ -50,6 +52,9 @@ public final class IoAdapters {
                 value.connected(), value.overstressed());
     }
     private record SnapshotAdapter(MachineIoView delegate) implements IoSnapshot {
+        public IoSnapshot forFamily(ResourceLocation id, IoDirection direction) {
+            return wrap(delegate.forFamily(id, cn.howxu.mmcr.util.IOType.valueOf(direction.name())));
+        }
         public IoSnapshot forTags(Set<String> tags) { return wrap(delegate.forTags(tags)); }
         public List<IoDisplay> displays() { return delegate.displays().stream().map(PresentationAdapters::wrap).toList(); }
         public List<ResourceAmount<ItemStack>> itemInputs() { return delegate.itemInputs().stream().map(v -> new ResourceAmount<>(v.resource().copy(), v.amount())).toList(); }

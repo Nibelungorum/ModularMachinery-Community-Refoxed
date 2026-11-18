@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.compat.pneumaticcraft.loaded;
 
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -29,6 +32,14 @@ public enum AirInterfaceKind implements IOPortKind {
     AirInterfaceKind(String id, IOType io) {
         this.id = id;
         this.io = io;
+    }
+
+    @Override public List<ResourceLocation> overlayTextures() { return tieredOverlay("pnc/air", "normal"); }
+
+    @Override public List<Component> tooltipLines() {
+        return List.of(Component.translatable("tooltip.mmcr.pneumaticcraft.volume", 10_000),
+                Component.translatable("tooltip.mmcr.pneumaticcraft.safe_pressure", 20),
+                Component.translatable("tooltip.mmcr.pneumaticcraft.equalization"));
     }
 
     @Override public String id() { return id; }

@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.compat.create.StressSearchCondition;
+import cn.howxu.mmcr.compat.pneumaticcraft.AirSearchCondition;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.create.loaded.StressPortCapability;
 import cn.howxu.mmcr.compat.create.loaded.StressInterfaceKind;
@@ -119,10 +122,10 @@ class CompatSearchValuesTest {
     void expectedAirOutputsShareSignedCapacityAndReuseSamplesOnWorkers() {
         for (int count : List.of(1, 2)) {
             List<Rule> rules = new ArrayList<>();
-            var condition = new CompatSearchValues.Air(0F,
-                    List.of(new CompatSearchValues.AirPort(0, 0, -100L, 100, 400L)));
+            var condition = new AirSearchCondition(0F,
+                    List.of(new AirSearchCondition.AirPort(0, 0, -100L, 100, 400L)));
             for (int index = 0; index < count; index++) {
-                rules.add(new Rule(index, PneumaticIds.AIR, Kind.AIR, IOType.OUTPUT, 20L, 0D, 0.7F, 1F,
+                rules.add(new Rule(index, PneumaticIds.AIR, Kind.CONDITION, IOType.OUTPUT, 20L, 0D, 0.7F, 1F,
                         false, true, Set.of(), null, List.of(), AirFailureReasons.OUTPUT_BLOCKED.id(), condition));
             }
             var candidate = new Candidate(MMCR.id("expected_air"), 0, 0, 100L, null, rules,
@@ -268,25 +271,25 @@ class CompatSearchValuesTest {
             IOType direction = output ? IOType.OUTPUT : IOType.INPUT;
             Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
             if (requirement instanceof AirRequirement air) {
-                List<CompatSearchValues.AirPort> ports = new ArrayList<>();
+                List<AirSearchCondition.AirPort> ports = new ArrayList<>();
                 for (Fixture fixture : fixtures) {
                     if (!(fixture instanceof AirPort port) || port.direction != direction || !seen.add(port)) continue;
-                    ports.add(CompatSearchValues.airPort(id(identities, port), 0, port.state()));
+                    ports.add(AirSearchCondition.airPort(id(identities, port), 0, port.state()));
                 }
-                rules.add(new Rule(index, PneumaticIds.AIR, Kind.AIR, direction, air.airPerTick(), 0D,
+                rules.add(new Rule(index, PneumaticIds.AIR, Kind.CONDITION, direction, air.airPerTick(), 0D,
                         air.chance(), air.consumeChance(), output && partial, true, Set.of(), null, List.of(),
                         (output ? AirFailureReasons.OUTPUT_BLOCKED : AirFailureReasons.INSUFFICIENT_AIR).id(),
-                        new CompatSearchValues.Air(air.minPressure(), ports)));
+                        new AirSearchCondition(air.minPressure(), ports)));
             } else if (requirement instanceof StressRequirement stress) {
-                List<CompatSearchValues.StressPort> ports = new ArrayList<>();
+                List<StressSearchCondition.StressPort> ports = new ArrayList<>();
                 for (Fixture fixture : fixtures) {
                     if (!(fixture instanceof StressPort port) || port.direction != direction || !seen.add(port)) continue;
-                    ports.add(CompatSearchValues.stressPort(id(identities, port), id(identities, port.network),
+                    ports.add(StressSearchCondition.stressPort(id(identities, port), id(identities, port.network),
                             port.state(), port.enabled, port.accepts));
                 }
-                rules.add(new Rule(index, CreateRecipeTypes.STRESS, Kind.STRESS, direction, 0L, 0D,
+                rules.add(new Rule(index, CreateRecipeTypes.STRESS, Kind.CONDITION, direction, 0L, 0D,
                         1F, 1F, false, true, Set.of(), null, List.of(), CreateFailureReasons.INSUFFICIENT_STRESS.id(),
-                        new CompatSearchValues.Stress(stress.stress(), stress.minRpm(), stress.rpm(), 256D, ports)));
+                        new StressSearchCondition(stress.stress(), stress.minRpm(), stress.rpm(), 256D, ports)));
             }
         }
         var candidate = new Candidate(recipe.id(), 0, recipe.inputRequirementCount(), 16L, null, rules,

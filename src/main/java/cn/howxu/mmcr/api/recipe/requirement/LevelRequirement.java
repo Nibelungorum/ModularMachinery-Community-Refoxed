@@ -50,6 +50,18 @@ public record LevelRequirement(RecipeModifier.IOType io, ResourceLocation typeId
     }
 
     @Override
+    public boolean countsForSpecificity() { return false; }
+
+    @Override
+    public long batchAmount(int duration) { return 0; }
+
+    @Override
+    public float consumptionProbability() { return 1F; }
+
+    @Override
+    public Object derivationVersion() { return type().handler(); }
+
+    @Override
     public RequirementType<LevelRequirement> type() {
         return TYPE;
     }

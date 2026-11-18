@@ -16,6 +16,7 @@ public interface LightningBridge {
     static LightningBridge get() { return LightningBridgeBootstrap.bridge(); }
     boolean available();
     default void registerCapabilityDefinitions() {}
+    default boolean ownsKeyType(Object type) { return false; }
     default List<CapabilityBinding> appendBindings(List<CapabilityBinding> base, CapabilityDirections directions) { return base; }
     default List<PortFamilyDescriptor> appendFamilies(List<PortFamilyDescriptor> base) { return base; }
     default boolean supportsPatternInput(Object key) { return false; }

@@ -17,26 +17,21 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
 import cn.howxu.mmcr.api.capability.plan.PlanningResult;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
-import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
-import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
+import cn.howxu.mmcr.internal.recipe.ResourceSearch;
+import cn.howxu.mmcr.internal.recipe.ConditionCapture;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
-import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
-import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
-import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
-import cn.howxu.mmcr.compat.botania.ManaRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import cn.howxu.mmcr.internal.runtime.EnergyPrefetchLedger;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.BlockPos;
@@ -45,7 +40,6 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -348,53 +342,8 @@ public final class CraftingContext {
         List<RecipeEnergyPrefetchFacet> facets = capabilities.stream()
                 .map(capability -> capability.facet(RecipeEnergyPrefetchFacet.class).orElse(null))
                 .filter(Objects::nonNull).toList();
-        if (facets.isEmpty()) return null;
-        int firstEnergyIndex = -1;
-        for (int index = 0; index < requirements.size(); index++) {
-            if (requirements.get(index) instanceof EnergyRequirement energy
-                    && energy.io() == RecipeModifier.IOType.INPUT) {
-                firstEnergyIndex = index;
-                break;
-            }
-        }
-        if (firstEnergyIndex < 0) return null;
-        int energyIndex = firstEnergyIndex;
-        List<Map.Entry<RecipeEnergyPrefetchFacet, RecipeEnergyPrefetchFacet.PrefetchPlan>> planned = new ArrayList<>();
-        long total = 0L;
-        try {
-            Set<String> reservationKeys = new HashSet<>();
-            if (facets.stream().anyMatch(facet -> facet.reservationKey() == null
-                    || facet.reservationKey().isBlank() || !reservationKeys.add(facet.reservationKey()))) {
-                return prefetchFailure(requirements, energyIndex);
-            }
-            for (int index = 0; index < requirements.size(); index++) {
-                MachineRequirement requirement = requirements.get(index);
-                if (!(requirement instanceof EnergyRequirement energy)
-                        || energy.io() != RecipeModifier.IOType.INPUT) continue;
-                long remaining = scaled(scaled(energy.fePerTick(), duration), parallelism);
-                try {
-                    total = Math.addExact(total, remaining);
-                } catch (ArithmeticException exception) {
-                    return prefetchFailure(requirements, index);
-                }
-                for (RecipeEnergyPrefetchFacet facet : facets) {
-                    if (remaining <= 0L) break;
-                    Optional<RecipeEnergyPrefetchFacet.PrefetchPlan> candidate = facet.planPrefetch(remaining);
-                    if (candidate.isEmpty()) continue;
-                    RecipeEnergyPrefetchFacet.PrefetchPlan plan = candidate.get();
-                    if (plan.amount() <= 0L || plan.amount() > remaining) return prefetchFailure(requirements, index);
-                    planned.add(Map.entry(facet, plan));
-                    remaining -= plan.amount();
-                }
-                if (remaining > 0L) return prefetchFailure(requirements, index);
-            }
-            return null;
-        } finally {
-            for (int index = planned.size() - 1; index >= 0; index--) {
-                var entry = planned.get(index);
-                entry.getKey().restoreReservation(entry.getValue().amount());
-            }
-        }
+        var allocation = EnergyPrefetchLedger.allocate(requirements, duration, parallelism, facets, true);
+        return allocation.failureIndex() < 0 ? null : prefetchFailure(requirements, allocation.failureIndex());
     }
 
     private static PlanningResult prefetchFailure(List<MachineRequirement> requirements, int requirementIndex) {
@@ -535,51 +484,27 @@ public final class CraftingContext {
             return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount,
                     IOType.valueOf(fluid.io().name()), requests);
         }
-        if (requirement instanceof LoadedChemicalRequirement chemical) {
-            if (chemical.io() != RecipeModifier.IOType.INPUT || chemical.consumeChance() < 1F
-                    || chemical.ingredient().kind() != ChemicalIngredient.Kind.CHEMICAL) return null;
-            long amount = scaled(chemical.ingredient().amount(), parallelism);
+        if (requirement instanceof ResourceSearch keyed) {
+            var id = keyed.exactCommitInput();
+            if (!requirement.io().isInput() || id == null || keyed.consumptionProbability() != 1F) return null;
+            long amount = scaled(keyed.amount(), parallelism);
             if (amount <= 0L) return null;
             List<AsyncCapabilityRequest> requests = new ArrayList<>();
-            for (AsyncResourceValue value : resources(capabilities, chemical.type().id(), IOType.INPUT)) {
-                if (chemical.ingredient().id().equals(value.resourceId())) {
-                    requests.add(resourceRequest(chemical.type().id(), parallelism, value, amount, false));
-                }
+            for (AsyncResourceValue value : resources(capabilities, requirement.type().id(), IOType.INPUT)) {
+                if (id.equals(value.resourceId())) requests.add(resourceRequest(requirement.type().id(), parallelism, value, amount, false));
             }
-            return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount, IOType.INPUT,
-                    requests);
+            return requests.isEmpty() ? null : new AsyncRequirementPlanner.Requirement(index, amount, IOType.INPUT, requests);
         }
-        if (requirement instanceof SourceRequirement source) {
-            if (source.io() == RecipeModifier.IOType.INPUT ? source.consumeChance() != 1F : source.chance() != 1F) return null;
-            long amount = scaled(source.amount(), parallelism);
-            return new AsyncRequirementPlanner.Requirement(index, amount,
-                    IOType.valueOf(source.io().name()), List.of(new AsyncCapabilityRequest.Scalar(
-                    ArsSourceIds.SOURCE, parallelism, amount, source.io() == RecipeModifier.IOType.OUTPUT)));
+        var scalar = requirement.scalarRule();
+        if (scalar != null) {
+            boolean input = requirement.io().isInput();
+            if (!scalar.supportsCommit() || scalar.amount() <= 0 || (input ? scalar.consumeChance() : scalar.outputChance()) != 1F)
+                return null;
+            long amount = scaled(scalar.amount(), parallelism);
+            return new AsyncRequirementPlanner.Requirement(index, amount, IOType.valueOf(requirement.io().name()),
+                    List.of(new AsyncCapabilityRequest.Scalar(scalar.capability(), parallelism, amount, !input)));
         }
-        if (requirement instanceof ManaRequirement mana) {
-            if (mana.io() == RecipeModifier.IOType.INPUT ? mana.consumeChance() != 1F : mana.chance() != 1F) return null;
-            if (!mana.tags().isEmpty()) return null;
-            long amount = scaled(mana.amount(), parallelism);
-            return new AsyncRequirementPlanner.Requirement(index, amount,
-                    IOType.valueOf(mana.io().name()), List.of(new AsyncCapabilityRequest.Scalar(
-                    BotaniaManaIds.MANA, parallelism, amount, mana.io() == RecipeModifier.IOType.OUTPUT)));
-        }
-        if (requirement instanceof EnergyRequirement energy && energy.fePerTick() > 0L) {
-            return new AsyncRequirementPlanner.Requirement(index, scaled(energy.fePerTick(), parallelism),
-                    IOType.valueOf(energy.io().name()), List.of(new AsyncCapabilityRequest.Scalar(energy.type().id(),
-                    parallelism, scaled(energy.fePerTick(), parallelism), energy.io() == RecipeModifier.IOType.OUTPUT)));
-        }
-        if (requirement instanceof LoadedHeatRequirement heat) {
-            boolean minimumTemperature = heat.heat().kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE;
-            double value = minimumTemperature ? heat.heat().value() : saturatingHeatMultiply(heat.heat().value(), parallelism);
-            if (value < 0D) return null;
-            long accountingAmount = Math.max(1L, value >= Long.MAX_VALUE ? Long.MAX_VALUE : (long) Math.ceil(value));
-            return new AsyncRequirementPlanner.Requirement(index, accountingAmount,
-                    minimumTemperature ? IOType.INPUT : IOType.OUTPUT,
-                    List.of(new AsyncCapabilityRequest.Heat(MekanismRecipeTypes.HEAT, parallelism, value,
-                            minimumTemperature, accountingAmount)));
-        }
-        return null;
+        return requirement instanceof ConditionCapture condition ? condition.commitRequest(index, parallelism) : null;
     }
 
     private static AsyncCapabilityRequest.Resource resourceRequest(ResourceLocation capabilityId,
@@ -610,11 +535,6 @@ public final class CraftingContext {
         return amount > Long.MAX_VALUE / parallelism ? Long.MAX_VALUE : amount * parallelism;
     }
 
-    private static double saturatingHeatMultiply(double amount, long multiplier) {
-        if (amount <= 0D || multiplier <= 0L) return 0D;
-        return amount >= Double.MAX_VALUE / multiplier ? Double.MAX_VALUE : amount * multiplier;
-    }
-
     private PlanningResult plan(List<MachineRequirement> source, long parallelism, RecipeModifier.IOType direction,
                                 Set<Integer> consumedAtStart, Set<Integer> retainedInputs,
                                 Map<Integer, OutputPolicy> outputPolicies) {
@@ -632,22 +552,8 @@ public final class CraftingContext {
             int originalIndex = sourceIndexes.get(index);
             if (direction != null && requirement.io() != direction) continue;
             if (consumedAtStart.contains(originalIndex)) continue;
-            if (retainedInputs.contains(originalIndex) && requirement instanceof SourceRequirement input
-                    && input.io() == RecipeModifier.IOType.INPUT && input.consumeChance() > 0F) {
-                requirement = new SourceRequirement(input.io(), input.amount(), input.chance(), 0F, input.tags());
-            } else if (retainedInputs.contains(originalIndex) && requirement instanceof ManaRequirement input
-                    && input.io() == RecipeModifier.IOType.INPUT && input.consumeChance() > 0F) {
-                requirement = new ManaRequirement(input.io(), input.amount(), input.chance(), 0F, input.tags());
-            }
-            if (retainedInputs.contains(originalIndex) && requirement instanceof ItemRequirement(
-                    RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
-                    net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,
-                    cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components, float consumeChance
-            )
-                    && io == RecipeModifier.IOType.INPUT && consumeChance > 0F) {
-                requirement = new ItemRequirement(io, item1, count,
-                        stack, chance, tags, components, 0F);
-            }
+            if (retainedInputs.contains(originalIndex) && requirement.execution().recordsStartPayment())
+                requirement = requirement.asRetainedInput();
             requirements.add(requirement);
             requirementIndexes.add(originalIndex);
         }

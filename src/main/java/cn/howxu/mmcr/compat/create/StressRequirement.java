@@ -1,5 +1,19 @@
 package cn.howxu.mmcr.compat.create;
 
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+
+import cn.howxu.mmcr.internal.recipe.ConditionCapture;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.compat.create.loaded.StressPortCapability;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Rule;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Kind;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
+import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
+
+import cn.howxu.mmcr.api.recipe.requirement.RequirementExecutionPolicy;
+
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -15,7 +29,34 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public record StressRequirement(RecipeModifier.IOType io, double stress, double minRpm, double rpm,
-                                List<String> tags) implements MachineRequirement {
+                                List<String> tags) implements MachineRequirement, ConditionCapture {
+    @Override public boolean searchAvailable() { return CreateBridge.get().available(); }
+    @Override public boolean supportsPort(MachineCapability port, AsyncCapabilitySnapshot value) { return port instanceof StressPortCapability; }
+
+    @Override public Rule captureRule(int index, boolean partial, List<Integer> matching, Ports captured) {
+        var direction = cn.howxu.mmcr.util.IOType.valueOf(io.name());
+        boolean output = !io.isInput();
+        List<StressSearchCondition.StressPort> ports = new ArrayList<>();
+        Set<Integer> seen = new HashSet<>();
+        for (int occurrence : matching) {
+            var capability = (StressPortCapability) captured.get(occurrence);
+            var port = captured.snapshot(StressSearchCondition.StressPort.class, occurrence, () -> {
+                var network = capability.networkIdentity();
+                return StressSearchCondition.stressPort(captured.identity(capability), network == null ? -1 : captured.identity(network),
+                        capability.state(), capability.stressEnabled(), true);
+            });
+            if (!seen.add(port.id())) continue;
+            boolean accepts = !output || capability
+                    .acceptsGeneratedRpm(null, index, this.rpm());
+            ports.add(new StressSearchCondition.StressPort(port.id(), port.network(), port.actualRpm(),
+                    port.theoreticalRpm(), port.baseContribution(), port.networkCapacity(), port.networkStress(),
+                    port.connected(), port.overstressed(), port.stressEnabled(), accepts));
+        }
+        return new Rule(index, type().id(), Kind.CONDITION, direction, 0L, 0D,
+                1F, 1F, false, true, Set.of(), null, List.of(), CreateFailureReasons.INSUFFICIENT_STRESS.id(),
+                new StressSearchCondition(this.stress(), this.minRpm(), this.rpm(), CreateBridge.get().maxRpm(), ports));
+    }
+
     public static final MapCodec<StressRequirement> CODEC = RecordCodecBuilder.<Fields>mapCodec(instance -> instance.group(
             Codec.STRING.validate(value -> "create:stress".equals(value) ? DataResult.success(value)
                     : DataResult.error(() -> "Expected create:stress")).fieldOf("type").forGetter(Fields::type),
@@ -65,6 +106,18 @@ public record StressRequirement(RecipeModifier.IOType io, double stress, double 
     public static StressRequirement output(double stress, double rpm) {
         return output(stress, rpm, List.of());
     }
+
+    @Override
+    public long batchAmount(int duration) { return 0; }
+
+    @Override
+    public float consumptionProbability() { return 1F; }
+
+    @Override
+    public RequirementExecutionPolicy execution() { return io.isInput() ? RequirementExecutionPolicy.LEGACY : RequirementExecutionPolicy.AFTER_PAYMENT_OUTPUT; }
+
+    @Override
+    public Object derivationVersion() { return type().handler(); }
 
     @Override
     public RequirementType<StressRequirement> type() {

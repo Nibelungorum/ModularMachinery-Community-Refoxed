@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.extendedae.loaded.kind;
 
+import net.minecraft.resources.ResourceLocation;
+
 import appeng.api.networking.IManagedGridNode;
 import appeng.core.definitions.AEBlocks;
 import appeng.helpers.InterfaceLogic;
@@ -22,6 +24,8 @@ public final class ExtendedOutputInterfaceKind implements InterfaceLogicKind {
             AE2ResourceFamilies.itemBinding(CapabilityDirections.output(), host -> host.nativeItemHandler()),
             AE2ResourceFamilies.fluidBinding(CapabilityDirections.output(), host -> host.nativeFluidHandler())));
     private ExtendedOutputInterfaceKind() {}
+    @Override public List<ResourceLocation> overlayTextures() { return List.of(MMCR.id("block/extendedae/" + id())); }
+
     @Override public String id() { return "eae_me_extended_output_interface"; }
     @Override public IOType ioType() { return IOType.OUTPUT; }
     @Override public List<PortFamilyDescriptor> families() { return AE2ResourceFamilies.outputFamilies(); }

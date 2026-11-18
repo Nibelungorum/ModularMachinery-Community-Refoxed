@@ -33,6 +33,8 @@ public enum StressInterfaceKind implements IOPortKind {
         this.factory = factory;
     }
 
+    @Override public List<ResourceLocation> overlayTextures() { return List.of(MMCR.id("block/create/" + ioType.getSerializedName())); }
+
     @Override public String id() { return id; }
     @Override public IOType ioType() { return ioType; }
     @Override public BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory() { return factory; }

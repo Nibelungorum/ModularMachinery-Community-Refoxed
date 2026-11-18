@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.api.capability.facet.AvailabilityFacet;
+
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
@@ -13,18 +15,9 @@ import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.capability.storage.LongValueStorage;
-import cn.howxu.mmcr.api.compat.ars_nouveau.SourceViewFacet;
-import cn.howxu.mmcr.api.compat.botania.ManaViewFacet;
-import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
-import cn.howxu.mmcr.api.compat.pneumaticcraft.AirState;
-import cn.howxu.mmcr.api.compat.pneumaticcraft.PneumaticAirFacet;
-import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.config.ServerConfig;
-import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
-import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
-import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
@@ -230,29 +223,28 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         for (MachineCapability capability : capabilitySnapshot().capabilities()) {
             LongValueStorage valueStorage = CapabilityFactories.valueStorage(capability, LongValueStorage.class);
             IEnergyStorage energyStorage = CapabilityFactories.energyStorage(capability);
-            ChemicalViewFacet chemical = capability.facet(ChemicalViewFacet.class).orElse(null);
-            SourceViewFacet source = capability.facet(SourceViewFacet.class).orElse(null);
-            PneumaticAirFacet air = capability.facet(PneumaticAirFacet.class).orElse(null);
-            if (air != null) {
-                AirState current = air.state();
-                AvailabilityState previous = nextStates.put(new AvailabilityKey(capability.type(), capability.directions()),
-                        new AvailabilityState(current.air(), List.of(PneumaticIds.AIR), List.of(), current));
-                if (previous == null) previous = availabilityStates.get(new AvailabilityKey(capability.type(), capability.directions()));
-                if (!notify || previous == null || previous.air() == null) continue;
-                AirState before = previous.air();
-                if (capability.directions().supports(IOType.INPUT)
-                        && (Math.max(0L, current.air()) > Math.max(0L, before.air()) || current.pressure() > before.pressure())) {
-                    failure = notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, PneumaticIds.AIR, failure);
+            var contributor = AvailabilityFacet.find(capability);
+            if (contributor != null) {
+                var key = new AvailabilityKey(capability.type(), capability.directions());
+                var current = Map.copyOf(contributor.availability(capability.type().id()));
+                var previous = nextStates.put(key, new AvailabilityState(0, List.of(), List.of(), current));
+                if (previous == null) previous = availabilityStates.get(key);
+                if (!notify || previous == null && !contributor.notifyInitialAvailability()) continue;
+                Map<ResourceLocation, AvailabilityFacet.Fact> before = previous == null || previous.facts() == null
+                        ? Map.of() : previous.facts();
+                for (var entry : current.entrySet()) {
+                    var old = before.getOrDefault(entry.getKey(), AvailabilityFacet.Fact.EMPTY);
+                    if (capability.directions().supports(IOType.INPUT) && (entry.getValue().quantity() > old.quantity()
+                            || entry.getValue().threshold() > old.threshold()))
+                        failure = notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, entry.getKey(), failure);
                 }
-                if (capability.directions().supports(IOType.OUTPUT) && current.outputCapacity() > before.outputCapacity()) {
-                    failure = notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, PneumaticIds.AIR, failure);
+                if (capability.directions().supports(IOType.OUTPUT)) for (var entry : before.entrySet()) {
+                    if (current.getOrDefault(entry.getKey(), AvailabilityFacet.Fact.EMPTY).outputPotential() > entry.getValue().outputPotential())
+                        failure = notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, entry.getKey(), failure);
                 }
                 continue;
             }
-            ManaViewFacet mana = capability.facet(ManaViewFacet.class).orElse(null);
-            Object resource = chemical == null
-                    ? valueStorage == null && energyStorage == null ? null : capability.type()
-                    : chemical.chemicalId().orElse(null);
+            Object resource = valueStorage == null && energyStorage == null ? null : capability.type();
             List<Object> resources = new ArrayList<>();
             List<SlotAvailability> slots = new ArrayList<>();
             if (resource != null) resources.add(resource);
@@ -263,26 +255,6 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             } else if (energyStorage != null) {
                 amount = energyStorage instanceof cn.howxu.mmcr.internal.storage.LongEnergyHandler storage
                         ? storage.getAmountAsLong() : energyStorage.getEnergyStored();
-                slots.add(new SlotAvailability(resource, amount));
-            } else if (chemical != null) {
-                resources.clear();
-                for (ChemicalViewFacet.ChemicalAmount entry : chemical.contents()) {
-                    if (entry.amount() <= 0L) continue;
-                    resources.add(entry.id());
-                    slots.add(new SlotAvailability(entry.id(), entry.amount()));
-                    amount = RequirementHandlerSupport.saturatingAdd(amount, entry.amount());
-                }
-            } else if (source != null) {
-                resource = ArsSourceIds.SOURCE;
-                resources.clear();
-                resources.add(resource);
-                amount = source.amount();
-                slots.add(new SlotAvailability(resource, amount));
-            } else if (mana != null) {
-                resource = BotaniaManaIds.MANA;
-                resources.clear();
-                resources.add(resource);
-                amount = mana.amount();
                 slots.add(new SlotAvailability(resource, amount));
             } else {
                 IItemHandler itemHandler = CapabilityFactories.itemHandler(capability);
@@ -311,28 +283,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
             if (!notify) continue;
             long previousAmount = previous == null ? 0L : previous.amount();
             List<Object> previousResources = previous == null ? List.of() : previous.resources();
-            if (chemical != null) {
-                List<SlotAvailability> previousSlots = previous == null ? List.of() : previous.slots();
-                if (capability.directions().supports(IOType.INPUT)) {
-                    for (SlotAvailability current : slots) {
-                        long before = previousSlots.stream().filter(slot -> slot.resource().equals(current.resource()))
-                                .mapToLong(SlotAvailability::amount).sum();
-                        if (current.amount() > before) {
-                            failure = notifyControllers(ResourceAvailabilityNotifier.Reason.INPUT_AVAILABLE, current.resource(), failure);
-                        }
-                    }
-                }
-                if (capability.directions().supports(IOType.OUTPUT)) {
-                    for (SlotAvailability before : previousSlots) {
-                        long current = slots.stream().filter(slot -> slot.resource().equals(before.resource()))
-                                .mapToLong(SlotAvailability::amount).sum();
-                        if (current < before.amount()) {
-                            failure = notifyControllers(ResourceAvailabilityNotifier.Reason.OUTPUT_CAPACITY, before.resource(), failure);
-                        }
-                    }
-                }
-                continue;
-            }
+
             boolean resourceChanged = previous != null && (resources.size() != previousResources.size()
                     || resources.stream().anyMatch(current -> !containsNativeResource(previousResources, current)));
             if (amount > previousAmount && capability.directions().supports(IOType.INPUT)) {
@@ -410,7 +361,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
     }
 
     private record AvailabilityState(long amount, List<Object> resources, List<SlotAvailability> slots,
-                                     @Nullable AirState air) { }
+                                     @Nullable Map<ResourceLocation, AvailabilityFacet.Fact> facts) { }
 
     private record AvailabilityKey(CapabilityType type, CapabilityDirections directions) { }
 

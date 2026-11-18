@@ -24,6 +24,9 @@ public interface OutputType<O extends MachineOutput> {
 
     MapCodec<O> codec();
 
+    /** Immutable identity within this output type, or null to keep each row separate. */
+    default Object aggregationIdentity(O output) { return null; }
+
     O withChance(O output, float chance);
 
     O applyModifiers(O output, List<RecipeModifier> modifiers);

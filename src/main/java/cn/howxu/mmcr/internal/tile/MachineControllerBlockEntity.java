@@ -1,9 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickResult;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -136,7 +134,6 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
@@ -1597,13 +1594,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private static List<MachineOutputAmount> aggregateFactoryLaneOutputs(FactoryRuntime factory) {
-        Map<MachineOutput.AggregationKey, Aggregate> aggregates = new LinkedHashMap<>();
+        record Group(Object type, Object identity) {}
+        Map<Object, Aggregate> aggregates = new LinkedHashMap<>();
         for (CraftingRuntime lane : factory.activeRuntimes()) {
             for (MachineOutputAmount output : scaleOutputs(lane.activeOutputs(), lane.parallelism())) {
                 MachineOutput owned = output.output();
-                MachineOutput.AggregationKey key = owned instanceof LightningOutput
-                        ? new MachineOutput.AggregationKey(owned.outputType(), null, null)
-                        : MachineOutput.aggregationKey(owned);
+                Object identity = owned.aggregationIdentity();
+                Object key = identity == null ? new Object() : new Group(owned.outputType(), identity);
                 aggregates.computeIfAbsent(key, k -> new Aggregate(owned))
                         .absorb(owned, output.amount());
             }
@@ -5119,30 +5116,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private static boolean samePatternOutput(MachineOutput expected, MachineOutput actual) {
-        if (expected instanceof LightningOutput expectedLightning && actual instanceof LightningOutput actualLightning) {
-            return expectedLightning.outputType() == actualLightning.outputType()
-                    && expectedLightning.tier() == actualLightning.tier()
-                    && expectedLightning.amount() == actualLightning.amount();
-        }
-        if (expected instanceof MachineOutput.ItemOutput expectedItem
-                && actual instanceof MachineOutput.ItemOutput actualItem) {
-            ItemStack expectedStack = expectedItem.resolvedStack();
-            ItemStack actualStack = actualItem.resolvedStack();
-            return expectedStack.getCount() == actualStack.getCount()
-                    && ItemStack.isSameItemSameComponents(expectedStack, actualStack);
-        }
-        if (expected instanceof MachineOutput.FluidOutput expectedFluid
-                && actual instanceof MachineOutput.FluidOutput actualFluid) {
-            return expectedFluid.stack().getAmount() == actualFluid.stack().getAmount()
-                    && expectedFluid.stack().getFluid() == actualFluid.stack().getFluid()
-                    && Objects.equals(expectedFluid.stack().getComponents(), actualFluid.stack().getComponents());
-        }
-        if (expected instanceof LoadedChemicalOutput expectedChemical
-                && actual instanceof LoadedChemicalOutput actualChemical) {
-            return expectedChemical.amount() == actualChemical.amount()
-                    && expectedChemical.id().equals(actualChemical.id());
-        }
-        return false;
+        if (expected.outputType() != actual.outputType() || MachineOutput.scaledAmount(expected) != MachineOutput.scaledAmount(actual)) return false;
+        Object identity = expected.aggregationIdentity();
+        return identity != null && identity.equals(actual.aggregationIdentity());
     }
 
     private void clearCandidateCache() {

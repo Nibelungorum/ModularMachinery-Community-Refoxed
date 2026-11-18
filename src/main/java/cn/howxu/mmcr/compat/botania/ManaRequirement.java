@@ -1,5 +1,11 @@
 package cn.howxu.mmcr.compat.botania;
 
+import cn.howxu.mmcr.api.recipe.RecipeSemantics;
+
+import cn.howxu.mmcr.api.recipe.requirement.ScalarRecipeRule;
+
+import cn.howxu.mmcr.api.recipe.requirement.RequirementExecutionPolicy;
+
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -37,6 +43,7 @@ public record ManaRequirement(RecipeModifier.IOType io, long amount, float chanc
 
     private static final RequirementHandler<ManaRequirement> UNAVAILABLE = (requirement, capabilities, context) ->
             RequirementHandlerSupport.blockedPlan(requirement, context, ManaFailureReasons.BOTANIA_UNAVAILABLE);
+    private static volatile Object version = new Object();
     private static volatile RequirementHandler<ManaRequirement> delegate = UNAVAILABLE;
     private static final RequirementHandler<ManaRequirement> HANDLER = new RequirementHandler<>() {
         @Override
@@ -111,12 +118,40 @@ public record ManaRequirement(RecipeModifier.IOType io, long amount, float chanc
     }
 
     @Override
+    public RequirementExecutionPolicy execution() { return io.isInput() ? RequirementExecutionPolicy.START_MATERIAL : RequirementExecutionPolicy.LEGACY; }
+
+    @Override
+    public long batchAmount(int duration) { return amount; }
+
+    @Override
+    public float consumptionProbability() { return consumeChance; }
+
+    @Override
+    public ManaRequirement asRetainedInput() {
+        return consumeChance == 0F ? this : new ManaRequirement(io, amount, chance, 0F, tags);
+    }
+
+    @Override
+    public ScalarRecipeRule scalarRule() {
+        return new ScalarRecipeRule(type().id(), amount, chance, consumeChance, false,
+                (io.isInput() ? ManaFailureReasons.INPUT_MISSING : ManaFailureReasons.OUTPUT_BLOCKED).id(), true);
+    }
+
+    @Override
+    public boolean acceptsScalarPort(MachineCapability port) { return port instanceof ManaPortCapability; }
+
+    @Override
+    public Object derivationVersion() { return supportsSearchSnapshot() ? version : null; }
+
+    @Override
     public RequirementType<ManaRequirement> type() {
         return TYPE;
     }
 
     public static void installHandler(RequirementHandler<ManaRequirement> handler) {
         delegate = Objects.requireNonNull(handler, "handler");
+        version = new Object();
+        RecipeSemantics.changed();
     }
 
     /** Whether the loaded delegate has the native, snapshot-safe planning semantics. */
@@ -126,5 +161,7 @@ public record ManaRequirement(RecipeModifier.IOType io, long amount, float chanc
 
     public static void installUnavailableHandler() {
         delegate = UNAVAILABLE;
+        version = new Object();
+        RecipeSemantics.changed();
     }
 }

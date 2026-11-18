@@ -314,7 +314,11 @@ public final class InterfacePredicates {
 
     public static BlockPredicate networkInterface(){return port("network_interface");}
 
-    private static BlockPredicate anyOfPorts(ResourceLocation familyId, IOType ioType) {
+    public static BlockPredicate anyOfPorts(String familyId, IOType ioType) {
+        return anyOfPorts(ResourceLocation.parse(familyId), ioType);
+    }
+
+    public static BlockPredicate anyOfPorts(ResourceLocation familyId, IOType ioType) {
         if (isUnavailableMekanismFamily(familyId)) return BlockPredicate.none();
         List<BlockPredicate> predicates = new ArrayList<>();
         for (IOPortKind kind : PortKinds.all()) {

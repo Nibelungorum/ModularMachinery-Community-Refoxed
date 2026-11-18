@@ -180,7 +180,7 @@ class CraftingRuntimeSourceConsumptionTest {
         assertThat(restored.active()).isTrue();
         assertThat(readField(restored, "consumedAtStart")).isEqualTo(Set.of(1));
         assertThat(readField(restored, "retainedInputs")).isEqualTo(Set.of(2));
-        assertThat(requirements(restored, "perTickRequirements")).containsExactly(requirements.get(2));
+        assertThat(requirements(restored, "perTickRequirements")).containsExactly(requirements.get(2).asRetainedInput());
         assertThat(active.inputConsumptionPlan().consumedInputBatches()).containsExactly(0, 1, 0);
     }
 

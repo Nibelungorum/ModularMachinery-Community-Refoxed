@@ -1,14 +1,11 @@
 package cn.howxu.mmcr.internal.network;
 
+import cn.howxu.mmcr.internal.menu.PortMenuBinding;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer.SelectedTank;
-import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
-import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
-import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.MenuSupport;
-import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
-import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.util.IOType;
@@ -51,24 +48,9 @@ public record PktPortContainerTransferPayload(int containerId, int tankIndex, bo
         AbstractContainerMenu menu = player.containerMenu;
         if (menu.containerId != payload.containerId || !menu.stillValid(player)
                 || menu.getCarried().isEmpty()) return 0;
-        int moved;
-            if (menu instanceof FluidHatchMenu fluid) {
-                FluidHatchBlockEntity port = fluid.owner();
-                if (!validTarget(player, menu, port) || payload.tankIndex != 0
-                        || port.kind().fluidHatchSize().isEmpty()
-                        || port.kind().extendedFluidHatchSize().isPresent()) return 0;
-                moved = transferFluid(player, menu, port, port.fluidHandler(null), payload.tankIndex, payload.extract);
-            } else if (menu instanceof CombinedPortMenu combined) {
-                CombinedPortBlockEntity port = combined.owner();
-                if (!validTarget(player, menu, port)
-                        || port.kind().combinedPortSize().isEmpty()
-                        || payload.tankIndex >= combined.fluidTankCount()
-                        || payload.tankIndex >= port.fluidHandler(null).size()) return 0;
-                moved = transferFluid(player, menu, port, port.fluidHandler(null), payload.tankIndex, payload.extract);
-            } else {
-                moved = MekanismBridge.get().transferChemicalContainer(player, menu,
-                        payload.tankIndex, payload.extract);
-            }
+        if (!(menu instanceof PortMenuBinding binding) || !validTarget(player, menu, binding.owner())
+                || !binding.pos().equals(binding.owner().getBlockPos())) return 0;
+        int moved = binding.transferContainer(player, payload.tankIndex, payload.extract);
         if (moved > 0) menu.broadcastChanges();
         return moved;
     }
@@ -81,7 +63,7 @@ public record PktPortContainerTransferPayload(int containerId, int tankIndex, bo
                 && MenuSupport.stillValidWithin(player, port.getBlockPos());
     }
 
-    private static int transferFluid(ServerPlayer player, AbstractContainerMenu menu,
+    public static int transferFluid(ServerPlayer player, AbstractContainerMenu menu,
                                      IOPortBlockEntity port, LongFluidStorage storage, int tankIndex, boolean extract) {
         var result = ContainerResourceTransfer.transferCarried(port.ioType() == IOType.OUTPUT || extract ? IOType.OUTPUT : IOType.INPUT, menu.getCarried(),
                 new SelectedTank(storage, tankIndex), false);

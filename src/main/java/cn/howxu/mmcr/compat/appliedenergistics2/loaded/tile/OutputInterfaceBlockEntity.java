@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile;
 
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.ticking.IGridTickable;
@@ -9,8 +11,6 @@ import appeng.api.networking.security.IActionSource;
 import appeng.api.storage.MEStorage;
 import appeng.core.settings.TickRates;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
-import cn.howxu.mmcr.compat.appmek.AppMekBridge;
-import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -111,8 +111,7 @@ public final class OutputInterfaceBlockEntity extends OutputInterfaceBaseBlockEn
                         IActionSource.ofMachine(OutputInterfaceBlockEntity.this), appeng.api.stacks.AEKeyType.fluids(),
                         256L - moved);
             }
-            if (moved < 256L) moved += AppMekBridge.get().flush(OutputInterfaceBlockEntity.this, 256L - moved);
-            if (moved < 256L) moved += LightningBridge.get().flush(OutputInterfaceBlockEntity.this, 256L - moved);
+            if (moved < 256L) moved += AE2ResourceFamilies.flush(OutputInterfaceBlockEntity.this, 256L - moved);
             if (getStorage().isEmpty()) return TickRateModulation.SLEEP;
             return moved > 0L ? TickRateModulation.FASTER : TickRateModulation.SLOWER;
         }

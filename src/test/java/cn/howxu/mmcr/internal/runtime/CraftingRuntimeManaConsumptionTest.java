@@ -26,6 +26,13 @@ import cn.howxu.mmcr.compat.botania.ManaPortCapability;
 import cn.howxu.mmcr.compat.botania.ManaRequirement;
 import cn.howxu.mmcr.compat.botania.ManaRequirementHandler;
 import cn.howxu.mmcr.compat.botania.ManaStorage;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
+import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
+import cn.howxu.mmcr.internal.storage.LongFluidStorage;
+import net.minecraft.world.level.material.Fluids;
+import net.neoforged.neoforge.fluids.FluidStack;
+import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -169,6 +176,35 @@ class CraftingRuntimeManaConsumptionTest {
     }
 
     @Test
+    void retainedFluidRemainsAPresenceCheckAfterRestore() throws Exception {
+        List<MachineRequirement> source = List.of(new FluidRequirement(RecipeModifier.IOType.INPUT,
+                FluidIngredient.of(Fluids.WATER), 250, FluidStack.EMPTY, 1F, List.of(), 0.5F));
+        var active = activeRecipe("retained_water", source);
+        var initial = runtime(active, source);
+        var water = new LongFluidStorage(1000, null);
+        water.setFluid(new FluidStack(Fluids.WATER, 500));
+        var capabilities = new CapabilitySnapshot(List.of(new FluidHatchCapability(water, IOType.INPUT)));
+        var admission = new CraftingContext(capabilities, List.of(), null, new Sampling(() -> 0.75D))
+                .planInputs(source, 1L, Set.of(), Set.of());
+        assertThat(admission.successful()).isTrue();
+        assertThat(admission.plan().commitInputs()).isTrue();
+        capture(initial, source, admission.plan());
+        active.setInputConsumptionPlan(ActiveMachineRecipe.InputConsumptionPlan.deserialize(active.inputConsumptionPlan().serialize()));
+        var restored = runtime(null, List.of());
+        restored.restore(active, null, 0L, 0L, 0L, 0L);
+        var checks = requirements(restored, "perTickRequirements");
+        assertThat(((FluidRequirement) checks.getFirst()).consumeChance()).isZero();
+        // A second fractional draw would extract water. The saved retained input must only check presence.
+        var context = new CraftingContext(capabilities, List.of(), null, new Sampling(() -> 0.1D));
+        var plan = context.planInputs(checks, 1, Set.of(), Set.of());
+        assertThat(plan.successful()).isTrue();
+        assertThat(plan.plan().commitInputs()).isTrue();
+        assertThat(water.getFluidInTank(0).getAmount()).isEqualTo(500);
+        water.setFluid(FluidStack.EMPTY);
+        assertThat(context.planInputs(checks, 1, Set.of(), Set.of()).successful()).isFalse();
+    }
+
+    @Test
     void craftingContextRetainedManaOnlyChecksTheInputWithoutReconsuming() {
         var storage = new ManaStorage(() -> {});
         storage.setAmount(600L);
@@ -199,7 +235,7 @@ class CraftingRuntimeManaConsumptionTest {
         assertThat(restored.active()).isTrue();
         assertThat(readField(restored, "consumedAtStart")).isEqualTo(Set.of(1, 3));
         assertThat(readField(restored, "retainedInputs")).isEqualTo(Set.of(4));
-        assertThat(requirements(restored, "perTickRequirements")).containsExactly(requirements.get(0), requirements.get(4));
+        assertThat(requirements(restored, "perTickRequirements")).containsExactly(requirements.get(0), requirements.get(4).asRetainedInput());
     }
 
     @Test

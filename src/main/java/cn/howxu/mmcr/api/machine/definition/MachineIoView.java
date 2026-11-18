@@ -85,6 +85,15 @@ public final class MachineIoView {
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
     }
 
+    public MachineIoView forFamily(String capabilityId, IOType direction) {
+        return forFamily(ResourceLocation.parse(capabilityId), direction);
+    }
+
+    public MachineIoView forFamily(ResourceLocation capabilityId, IOType direction) {
+        return new MachineIoView(new CapabilitySnapshot(capabilities(direction).stream()
+                .filter(capability -> capability.type().id().equals(capabilityId)).toList()));
+    }
+
     public MachineIoView forTags(Set<String> requiredTags) {
         Objects.requireNonNull(requiredTags, "requiredTags");
         Set<String> tags = Set.copyOf(requiredTags);

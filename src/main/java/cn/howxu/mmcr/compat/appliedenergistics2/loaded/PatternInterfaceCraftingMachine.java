@@ -1,11 +1,11 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.config.Actionable;
 import appeng.api.implementations.blockentities.ICraftingMachine;
 import appeng.api.implementations.blockentities.PatternContainerGroup;
-import appeng.api.stacks.AEFluidKey;
-import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
@@ -16,19 +16,13 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.compat.appmek.AppMekBridge;
-import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
-import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
-import cn.howxu.mmcr.internal.capability.FluidHatchCapability;
-import cn.howxu.mmcr.internal.capability.ItemBusCapability;
 import cn.howxu.mmcr.internal.runtime.PatternStartReservation;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -41,7 +35,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Virtual AE2 crafting machine that forwards processing patterns to linked MMCR controllers.
@@ -191,15 +184,7 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     }
 
     private static List<MachineCapability> requestCapabilities(GenericStackInv inventory, KeyCounter[] inputs) {
-        AppMekBridge bridge = AppMekBridge.get();
-        AppMekBridge.PatternRequest chemicals = bridge.available()
-                ? bridge.patternRequestFromInventory(inventory) : bridge.patternRequest(inputs);
-        List<MachineCapability> capabilities = new ArrayList<>(List.of(
-                new ItemBusCapability(AE2NativeAdapters.items(inventory), IOType.INPUT),
-                new FluidHatchCapability(AE2NativeAdapters.fluids(inventory), IOType.INPUT)));
-        capabilities.addAll(chemicals.capabilities());
-        capabilities.addAll(LightningBridge.get().patternInputs(inventory));
-        return List.copyOf(capabilities);
+        return AE2ResourceFamilies.requestCapabilities(inventory, inputs);
     }
 
     /** Settles only owned leftovers; never retries a recipe start or holds a live controller after admission. */
@@ -319,9 +304,8 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
     }
 
     private static boolean hasSupportedKey(AEKey key) {
-        return key instanceof AEItemKey || key instanceof AEFluidKey
-                || AppMekBridge.get().supportsPatternInput(key)
-                || LightningBridge.get().supportsPatternInput(key);
+        var family = AE2ResourceFamilies.forType(key.getType());
+        return family != null && family.acceptsPatternKey(key);
     }
 
     static boolean validInputs(IPatternDetails details, KeyCounter[] inputs, Level level) {
@@ -355,26 +339,17 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
     static List<MachineOutput> outputs(List<GenericStack> stacks) {
         List<MachineOutput> outputs = new ArrayList<>();
-        Map<AEKey, Long> lightningAmounts = new HashMap<>();
+        Map<AEKey, Long> totals = new HashMap<>();
         for (GenericStack stack : stacks) {
             if (stack == null || stack.amount() <= 0L) return null;
-            if (stack.what() instanceof AEItemKey item) {
-                if (stack.amount() > Integer.MAX_VALUE) return null;
-                outputs.add(new MachineOutput.ItemOutput(item.toStack((int) stack.amount()), 1F));
-            } else if (stack.what() instanceof AEFluidKey fluid) {
-                if (stack.amount() > Integer.MAX_VALUE) return null;
-                outputs.add(new MachineOutput.FluidOutput(fluid.toStack((int) stack.amount()), 1F));
-            } else {
-                Optional<MachineOutput> chemical = AppMekBridge.get().patternOutput(stack.what(), stack.amount());
-                if (chemical.isEmpty()) chemical = LightningBridge.get().patternOutput(stack.what(), stack.amount());
-                if (chemical.isEmpty()) return null;
-                if (chemical.get() instanceof LightningOutput) {
-                    long previous = lightningAmounts.getOrDefault(stack.what(), 0L);
-                    if (stack.amount() > Integer.MAX_VALUE - previous) return null;
-                    lightningAmounts.put(stack.what(), previous + stack.amount());
-                }
-                outputs.add(chemical.get());
-            }
+            var family = AE2ResourceFamilies.forType(stack.what().getType());
+            if (family == null) return null;
+            long previous = totals.getOrDefault(stack.what(), 0L);
+            if (stack.amount() > family.patternLimit() - previous) return null;
+            totals.put(stack.what(), previous + stack.amount());
+            var converted = family.patternOutput(stack.what(), stack.amount());
+            if (converted == null) return null;
+            outputs.add(converted);
         }
         return outputs.isEmpty() ? null : List.copyOf(outputs);
     }

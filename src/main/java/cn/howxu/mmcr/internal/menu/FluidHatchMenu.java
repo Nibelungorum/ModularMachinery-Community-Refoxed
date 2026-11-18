@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.internal.menu;
 
+import net.minecraft.server.level.ServerPlayer;
+import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
+
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
@@ -16,7 +19,7 @@ import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import java.util.List;
 import java.util.Optional;
 
-public class FluidHatchMenu extends AbstractMachineMenu {
+public class FluidHatchMenu extends AbstractMachineMenu implements PortMenuBinding {
 
     private final FluidHatchBlockEntity owner;
     private final Level level;
@@ -54,6 +57,11 @@ public class FluidHatchMenu extends AbstractMachineMenu {
 
     public FluidHatchBlockEntity owner() {
         return owner;
+    }
+
+    public int transferContainer(ServerPlayer player, int tank, boolean extract) {
+        if (tank != 0 || owner.kind().fluidHatchSize().isEmpty() || owner.kind().extendedFluidHatchSize().isPresent()) return 0;
+        return PktPortContainerTransferPayload.transferFluid(player, this, owner, owner.fluidHandler(null), tank, extract);
     }
 
     public BlockPos pos() { return pos; }

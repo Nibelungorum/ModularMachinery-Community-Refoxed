@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import com.google.gson.JsonElement;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
@@ -95,6 +97,29 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
     public ItemStack stack() {
         return stack.copy();
     }
+
+    @Override
+    public RequirementExecutionPolicy execution() { return io.isInput() ? RequirementExecutionPolicy.START_MATERIAL : RequirementExecutionPolicy.LEGACY; }
+
+    @Override
+    public long batchAmount(int duration) { return io.isInput() ? count : stack.getCount(); }
+
+    @Override
+    public Object batchIdentity(DynamicOps<JsonElement> ops) {
+        return io.isInput() ? List.of(Ingredient.CODEC.encodeStart(ops, item).getOrThrow(), components)
+                : MachineOutput.aggregationKey(new MachineOutput.ItemOutput(stack, 1F, components));
+    }
+
+    @Override
+    public float consumptionProbability() { return consumeChance; }
+
+    @Override
+    public ItemRequirement asRetainedInput() {
+        return consumeChance == 0F ? this : new ItemRequirement(io, item, count, stack, chance, tags, components, 0F);
+    }
+
+    @Override
+    public Object derivationVersion() { return type().handler(); }
 
     @Override
     public RequirementType<ItemRequirement> type() {

@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.compat.fluxnetworks.loaded;
 
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -33,6 +36,14 @@ public enum FluxNetworkInterfaceKind implements IOPortKind {
         this.id = id;
         this.io = io;
         this.factory = factory;
+    }
+
+    @Override public List<ResourceLocation> overlayTextures() { return List.of(ResourceLocation.fromNamespaceAndPath("fluxnetworks", io == IOType.INPUT ? "block/flux_point_on" : "block/flux_plug_on"),
+                ResourceLocation.fromNamespaceAndPath("fluxnetworks", io == IOType.INPUT ? "block/flux_point_colour" : "block/flux_plug_colour")); }
+
+    @Override public List<Component> tooltipLines() {
+        return List.of(Component.translatable(io == IOType.INPUT ? "tooltip.mmcr.fluxnetworks.input" : "tooltip.mmcr.fluxnetworks.output"),
+                Component.translatable("tooltip.mmcr.fluxnetworks.configure"));
     }
 
     @Override public String id() { return id; }

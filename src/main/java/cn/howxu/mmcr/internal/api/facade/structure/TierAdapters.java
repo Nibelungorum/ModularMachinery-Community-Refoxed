@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.internal.api.facade.structure;
 
+import net.minecraft.resources.ResourceLocation;
+import cn.howxu.mmcr.registry.PortKinds;
+
 import cn.howxu.mmcr.api.machine.definition.InterfaceTiers;
 import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.publicapi.recipe.IoDirection;
@@ -16,6 +19,13 @@ public final class TierAdapters {
     private TierAdapters() {}
     public static PortTierLimits wrap(PortTiers value) { return new TierView(Objects.requireNonNull(value)); }
     public static PortTiers unwrap(PortTierLimits value) { return ((TierView) value).value; }
+    public static PortTierLimits family(ResourceLocation id, IoDirection direction, int tier) {
+        var io = toCore(direction);
+        PortKinds.requireFamilyTier(id, io, tier);
+        return wrap(new PortTiers(List.of(new PortTiers.Requirement(PortTiers.PortCategory.REGISTERED,
+                io, tier, Integer.toString(tier), id))));
+    }
+
     public static PortTierLimits none() { return wrap(PortTiers.none()); }
     public static PortTierLimits.Builder builder() { return builder(PortTiers.builder()); }
     public static PortTierLimits.Builder builder(PortTiers.Builder value) { return new TierOptions(value); }
@@ -199,6 +209,7 @@ public final class TierAdapters {
     private static final class RequirementViewAdapter implements PortTierLimits.RequirementView {
         private final PortTiers.Requirement value;
         private RequirementViewAdapter(PortTiers.Requirement value) { this.value = value; }
+        public ResourceLocation registeredFamily() { return value.registeredFamily(); }
         public PortTierLimits.PortCategory category() {
             return switch (value.category()) {
                 case ITEM -> PortTierLimits.PortCategory.ITEM;
@@ -211,6 +222,7 @@ public final class TierAdapters {
                 case HEAT -> PortTierLimits.PortCategory.HEAT;
                 case STRESS -> PortTierLimits.PortCategory.STRESS;
                 case AIR -> PortTierLimits.PortCategory.AIR;
+                case REGISTERED -> PortTierLimits.PortCategory.REGISTERED;
             };
         }
         public IoDirection ioType() { return toPublic(value.ioType()); }

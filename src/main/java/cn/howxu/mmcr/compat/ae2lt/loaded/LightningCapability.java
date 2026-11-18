@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.internal.recipe.ResourceSearch;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityOperation;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilityPlanner;
 import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
@@ -41,7 +42,11 @@ import java.util.stream.IntStream;
 /** Internal ME-only operations; deliberately exposes no adjacent transfer facet.
  * @author howxu <dev@howxu.cn>
  */
-public final class LightningCapability implements MachineCapability, LightningViewFacet, OperationFacet, FixedExecutionFacets {
+public final class LightningCapability implements MachineCapability, LightningViewFacet, OperationFacet, FixedExecutionFacets, ResourceSearch.Access {
+    @Override public Object searchStorage() { return storage; }
+    @Override public Object searchIdentity() { return storage.identity(); }
+    @Override public Object searchSlot(int slot) { return storage.address(slot); }
+
     private final IOPortBlockEntity host;
     private final LightningStorage storage;
     private final IOType direction;

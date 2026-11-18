@@ -1,5 +1,12 @@
 package cn.howxu.mmcr.compat.appliedflux.loaded.kind;
 
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.core.BlockPos;
+
+import net.minecraft.resources.ResourceLocation;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -23,6 +30,8 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class FluxEnergyOutputKind implements IOPortKind {
+    @Override public InteractionResult openSpecialMenu(Player player, Level level, BlockPos pos) { return InteractionResult.CONSUME; }
+
     private static final String ID = "appflux_me_flux_output_interface";
     private static final int DETECTION_TIER = EnergyHatchSize.ULTIMATE.ordinal() + 1;
     private static final List<PortFamilyDescriptor> FAMILIES = List.of(
@@ -39,6 +48,8 @@ public final class FluxEnergyOutputKind implements IOPortKind {
 
     private FluxEnergyOutputKind() {
     }
+
+    @Override public List<ResourceLocation> overlayTextures() { return List.of(MMCR.id("block/appliedflux/appflux_output")); }
 
     @Override
     public String id() {

@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.internal.menu.PortMenuBinding;
+import net.minecraft.server.level.ServerPlayer;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
@@ -25,7 +29,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ChemicalPortMenu extends AbstractMachineMenu {
+public final class ChemicalPortMenu extends AbstractMachineMenu implements PortMenuBinding {
     private final ChemicalPortBlockEntity owner;
     private final Level level;
     private final BlockPos pos;
@@ -62,6 +66,10 @@ public final class ChemicalPortMenu extends AbstractMachineMenu {
 
     public ChemicalPortBlockEntity owner() {
         return owner;
+    }
+
+    public int transferContainer(ServerPlayer player, int tank, boolean extract) {
+        return MekanismBridge.get().transferChemicalContainer(player, this, tank, extract);
     }
 
     public BlockPos pos() {

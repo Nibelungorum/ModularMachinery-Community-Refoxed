@@ -271,6 +271,7 @@ public final class MachineRecipeThread extends RecipeThread {
                 && current.stateVersion() == captured.stateVersion()
                 && current.upgradeContentRevision() == captured.upgradeContentRevision()
                 && current.maxParallelism() == captured.maxParallelism()
+                && pending.request().snapshotValues().stamp().semanticsCurrent()
                 && (pending.request().snapshotValues().stamp().routing() < 0L
                     || controller.componentRuntime().inputRoutingRevision() == pending.request().snapshotValues().stamp().routing())
                 && currentMachine != null && capturedMachine != null

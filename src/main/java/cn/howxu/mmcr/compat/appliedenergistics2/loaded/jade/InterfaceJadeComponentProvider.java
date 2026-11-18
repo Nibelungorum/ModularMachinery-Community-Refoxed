@@ -46,13 +46,10 @@ public enum InterfaceJadeComponentProvider implements IComponentProvider<BlockAc
             default -> ChatFormatting.RED;
         };
         tooltip.add(Component.translatable(key)); // .withStyle(color)
-        InterfaceJadeDataProvider.outputs(accessor.getServerData()).forEach(display -> tooltip.add(
-                Component.translatable("gui.mmcr.port."
-                                + (display.label().equals("energy") ? "energy" : display.label() + "s"))
-                        .append(display.label().equals("chemical")
-                                ? Component.literal(" " + display.value()).append(Component.literal(" ")
-                                        .append(Component.translatable("mmcr.unit.chemical")))
-                                : Component.literal(" " + display.value()
-                                        + (display.unit().equals("item") ? "" : " " + display.unit())))));
+        InterfaceJadeDataProvider.outputs(accessor.getServerData()).forEach(display -> {
+            var amount = Component.literal(" " + display.value() + (display.unit().isEmpty() ? "" : " " + display.unit()));
+            if (!display.unitKey().isEmpty()) amount.append(Component.literal(" ").append(Component.translatable(display.unitKey())));
+            tooltip.add(Component.translatable(display.labelKey()).append(amount));
+        });
     }
 }

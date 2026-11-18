@@ -41,6 +41,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementExecutionPolicy;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
 import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
@@ -53,14 +54,8 @@ import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
-import cn.howxu.mmcr.compat.create.StressRequirement;
-import cn.howxu.mmcr.compat.create.StressRequirementHandler;
-import cn.howxu.mmcr.compat.create.StressSession;
+import cn.howxu.mmcr.api.capability.plan.LaneReservations;
 import cn.howxu.mmcr.api.compat.create.CreateFailureReasons;
-import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
-import cn.howxu.mmcr.compat.botania.ManaRequirement;
-import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
-import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
@@ -68,12 +63,7 @@ import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.VersionStamp;
 import cn.howxu.mmcr.internal.recipe.RecipeProgramCompiler;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
-import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
-import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
@@ -90,8 +80,6 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import com.mojang.serialization.JsonOps;
 import org.jetbrains.annotations.Nullable;
 
@@ -120,7 +108,7 @@ public final class CraftingRuntime {
     private static final Map<MachineControllerBlockEntity, Long> CONTROLLER_IDS = new WeakHashMap<>();
     private final MachineControllerBlockEntity controller;
     private final ComponentRuntime components;
-    private StressSession stressSession = new StressSession();
+    private LaneReservations laneReservations = new LaneReservations();
     private final long controllerIdentity;
     private String laneId = "base";
     private Runnable installedCompletion = () -> { };
@@ -517,7 +505,7 @@ public final class CraftingRuntime {
             waiting(rejected, isPowerWait(rejected));
             return false;
         }
-        if (!commitStressOutputs()) {
+        if (!commitAfterPaymentOutputs()) {
             if (payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
             return false;
         }
@@ -569,14 +557,14 @@ public final class CraftingRuntime {
     }
 
     List<MachineRequirement> installedTickRequirements() {
-        return perTickRequirements().stream().filter(requirement -> !isStressOutput(requirement)).toList();
+        return perTickRequirements().stream().filter(requirement -> !isAfterPaymentOutput(requirement)).toList();
     }
 
     List<Integer> installedTickIndexes() {
         List<MachineRequirement> requirements = perTickRequirements();
         List<Integer> indexes = new ArrayList<>();
         for (int index = 0; index < requirements.size(); index++) {
-            if (!isStressOutput(requirements.get(index))) indexes.add(cachedPerTickRequirementIndexes.get(index));
+            if (!isAfterPaymentOutput(requirements.get(index))) indexes.add(cachedPerTickRequirementIndexes.get(index));
         }
         return List.copyOf(indexes);
     }
@@ -593,12 +581,12 @@ public final class CraftingRuntime {
         TickAttempt attempt = tickAttempt;
         ActiveMachineRecipe recipe = activeRecipe;
         RecipeCommitLedger.State admission = payment.state();
-        StressSession owner = stressSession;
+        LaneReservations owner = laneReservations;
         List<MachineRequirement> originalRequirements = effectiveRequirements;
         try {
             if (result.plan().commitRuntime(payment::beginNativeExecution, () -> attempt == null
                     ? installedProgram != null && installedProgram.current() : attemptCurrent(attempt))) {
-                if (!hasOrdinaryNativeEffects(result.plan(), originalRequirements)) payment.completePrefetchDebit(admission);
+                if (!hasOrdinaryNativeEffects(result.plan(), owner)) payment.completePrefetchDebit(admission);
                 return null;
             }
         } catch (RuntimeException exception) {
@@ -647,7 +635,7 @@ public final class CraftingRuntime {
                 .filter(output -> output == null || output.outputType() == null || !isPerTickOutput(output)).toList();
         int outputIndex = 0;
         for (MachineRequirement requirement : effectiveRequirements()) {
-            if (requirement.io() != IOType.OUTPUT || requirement instanceof AirRequirement || isPerTickOutput(requirement)) continue;
+            if (requirement.io() != IOType.OUTPUT || isPerTickOutput(requirement)) continue;
             if (!OutputRegistry.matchesOutputRequirement(requirement)) requirements.add(requirement);
             else if (outputIndex < outputs.size()) {
                 requirements.add(finishRequirement(outputs.get(outputIndex++), requirement.tags()));
@@ -707,7 +695,7 @@ public final class CraftingRuntime {
     }
 
     private void settleGrant(ActiveMachineRecipe recipe, RecipeCommitLedger payment) {
-        if (recipe.isFinishPending()) stressSession.onRecipeFinished();
+        if (recipe.isFinishPending()) laneReservations.onRecipeFinished();
         payment.settleTick(recipe.getTick(), recipe.isFinishPending());
         if (asyncTickPreparation != null && asyncTickPreparation.recipe == recipe
                 && asyncTickPreparation.attempt.payment() == payment) asyncTickPreparation.paidTickSettled = true;
@@ -743,7 +731,7 @@ public final class CraftingRuntime {
         }
         if (preparation != null && !attemptCurrent(attempt)) return;
         if (finalTick) recipe.beginFinishCommit();
-        if (recipe.isFinishPending()) stressSession.onRecipeFinished();
+        if (recipe.isFinishPending()) laneReservations.onRecipeFinished();
         settleGrant(recipe, payment);
         failure = null;
         status = CraftingStatus.working();
@@ -788,7 +776,7 @@ public final class CraftingRuntime {
     private boolean exactPatternOutputsFit(PreparedStart prepared, long parallelism) {
         try {
             PlanningResult output = new CraftingContext(components.capabilitySnapshot(), contextModifiers(prepared.runtime()))
-                    .withReservationOwner(stressSession)
+                    .withReservationOwner(laneReservations)
                     .planOutputs(prepared.recipe().source(), prepared.effective().outputs().stream()
                             .map(value -> value.withChance(1F)).toList(), parallelism);
             return output.successful() && output.plan() != null && output.plan().parallelism() == parallelism
@@ -819,17 +807,9 @@ public final class CraftingRuntime {
             }
             long amount = MachineOutput.scaledAmount(output);
             if (amount <= 0L) throw new IllegalArgumentException("Invalid output amount");
-            Object key;
-            if (output instanceof LoadedChemicalOutput chemical) {
-                key = List.of(chemical.outputType().id(), chemical.id());
-            } else if (output instanceof LightningOutput lightning) {
-                key = List.of(lightning.outputType().id(), lightning.tier());
-            } else {
-                key = MachineOutput.aggregationKey(output);
-                if (key.equals(MachineOutput.AggregationKey.EMPTY)) {
-                    throw new IllegalArgumentException("Unknown output identity");
-                }
-            }
+            var identity = output.aggregationIdentity();
+            if (identity == null) throw new IllegalArgumentException("Unknown output identity");
+            Object key = List.of(output.outputType(), identity);
             // Two independent chance rolls are not interchangeable with one larger chance stack.
             if (output.chance() != 1F) key = List.of(key, amount);
             totals.merge(List.of(key, output.chance()), Math.multiplyExact(amount, parallelism), Math::addExact);
@@ -843,33 +823,10 @@ public final class CraftingRuntime {
             var registries = registryAccess();
             var ops = registries == null ? JsonOps.INSTANCE : registries.createSerializationContext(JsonOps.INSTANCE);
             for (MachineRequirement requirement : effective.requirements()) {
-                long amount;
-                Object key;
-                if (requirement instanceof ItemRequirement item) {
-                    amount = item.io() == IOType.INPUT ? item.count() : item.stack().getCount();
-                    if (item.io() == IOType.INPUT) {
-                        if (item.item() == null) return false;
-                        key = List.of(item.type().id(), item.io(), Ingredient.CODEC.encodeStart(ops, item.item()).getOrThrow(),
-                                item.components(), item.tags());
-                    } else key = MachineOutput.aggregationKey(new MachineOutput.ItemOutput(item.stack(), 1F, item.components()));
-                } else if (requirement instanceof FluidRequirement fluid) {
-                    amount = fluid.io() == IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
-                    if (fluid.io() == IOType.INPUT) {
-                        if (fluid.fluid() == null) return false;
-                        key = List.of(fluid.type().id(), fluid.io(), FluidIngredient.CODEC.encodeStart(ops, fluid.fluid()).getOrThrow(),
-                                fluid.tags());
-                    } else key = MachineOutput.aggregationKey(new MachineOutput.FluidOutput(fluid.stack(), 1F));
-                } else if (requirement instanceof EnergyRequirement energy) {
-                    amount = Math.multiplyExact(energy.fePerTick(), (long) effective.duration());
-                    key = List.of(energy.type().id(), energy.io());
-                } else if (requirement instanceof LightningRequirement lightning) {
-                    amount = lightning.amount();
-                    key = List.of(lightning.type().id(), lightning.io(), lightning.tier());
-                } else if (requirement instanceof LoadedChemicalRequirement chemical) {
-                    amount = chemical.ingredient().amount();
-                    key = List.of(chemical.type().id(), chemical.io(), chemical.ingredient().kind(), chemical.ingredient().id(), chemical.tags());
-                } else continue;
-                if (amount < 0L) return false;
+                long amount = requirement.batchAmount(effective.duration());
+                // Lack of a linear bound forbids compression, not a single native request.
+                if (amount <= 0L) continue;
+                var key = List.of(requirement.type().id(), requirement.io(), requirement.tags(), requirement.batchIdentity(ops));
                 totals.merge(key, Math.multiplyExact(amount, parallelism), Math::addExact);
             }
             return true;
@@ -967,7 +924,7 @@ public final class CraftingRuntime {
             }
             List<RecipeEnergyPrefetchFacet> facets = prefetchFacets(requestCapabilities);
             CraftingContext patternContext = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime))
-                    .withReservationOwner(stressSession);
+                    .withReservationOwner(laneReservations);
             if (requestSource == null) {
                 if (requestCapabilities != null && !requestCapabilities.isEmpty()) {
                     if (patternContext.inputRouting() != null) return null;
@@ -1048,9 +1005,9 @@ public final class CraftingRuntime {
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             if (requirement.io() != IOType.INPUT
-                     || !(requirement instanceof ItemRequirement item && item.consumeChance() == 0F
-                    || requirement instanceof FluidRequirement fluid && fluid.consumeChance() == 0F
-                    || requirement instanceof LoadedChemicalRequirement chemical && chemical.consumeChance() == 0F)) continue;
+                     || !(requirement.execution().recordsStartPayment() && requirement.consumptionProbability() == 0F
+                    && requirement.type().capabilityIds().stream().anyMatch(id -> RequirementPlanner.isMaterialInput(
+                    cn.howxu.mmcr.util.IOType.INPUT, id)))) continue;
             PlanningResult result = context.planInputs(List.of(requirement), parallelism, Set.of(), Set.of());
             if (result.successful() && result.plan() != null && result.plan().parallelism() == parallelism) validated.add(index);
         }
@@ -1711,7 +1668,7 @@ public final class CraftingRuntime {
 
     public void discardAsyncTickPreparation() {
         if (asyncTickPreparation != null && !asyncTickPreparation.paidTickSettled) {
-            if (asyncTickPowerWait) stressSession.releaseOutputs();
+            if (asyncTickPowerWait) laneReservations.releaseOutputs();
             else releaseStressContributions();
         }
         asyncTickPreparation = null;
@@ -1878,13 +1835,13 @@ public final class CraftingRuntime {
             }
             if (!preparationCurrent(preparation)) return status;
             activeRecipe.beginFinishCommit();
-            stressSession.onRecipeFinished();
+            laneReservations.onRecipeFinished();
             settleGrant(activeRecipe, ledger);
             status = CraftingStatus.working();
             return status;
         }
         activeRecipe.applyTickGrant(true, false, gameTime);
-        if (activeRecipe.isFinishPending()) stressSession.onRecipeFinished();
+        if (activeRecipe.isFinishPending()) laneReservations.onRecipeFinished();
         settleGrant(activeRecipe, ledger);
         if (!executeTickPhase(CapabilityTickPhase.AFTER_RECIPE, preparation)) return status;
         status = CraftingStatus.working();
@@ -1934,7 +1891,7 @@ public final class CraftingRuntime {
         if (errorPaused()) return status;
         if (!versionsCurrent()) return invalidate(BuiltinFailureReasons.VERSION_INVALIDATED, FailurePhase.RUNTIME);
         if (!activeRecipe.isFinishPending()) return status;
-        stressSession.onRecipeFinished();
+        laneReservations.onRecipeFinished();
         if (!activeRecipe.shouldRetryFinish(currentGameTime())) return status;
 
         RecipeFinishContext finishContext = preparedAsyncFinishContext;
@@ -2188,7 +2145,7 @@ public final class CraftingRuntime {
 
     /** Releases this lane's contributions, including facets no longer in the component snapshot. */
     public void releaseStressContributions() {
-        stressSession.releaseAll();
+        laneReservations.releaseAll();
     }
 
     public void resume() {
@@ -2427,7 +2384,7 @@ public final class CraftingRuntime {
     public void invalidate() {
         PreparedStart oldPaymentStart = pendingPaymentStart;
         PreparedStart oldPatternStart = pendingPatternStart;
-        StressSession oldStress = stressSession;
+        LaneReservations oldHoldings = laneReservations;
         // Detach the cancelled identity before any native release/owner callback can start its successor.
         pendingPaymentStart = null;
         pendingPatternStart = null;
@@ -2435,7 +2392,7 @@ public final class CraftingRuntime {
         pendingPatternSourceOwner = null;
         pendingPatternSource = null;
         pendingPatternDomain = null;
-        stressSession = new StressSession();
+        laneReservations = new LaneReservations();
         cancelInstalledProgram();
         ledger = new RecipeCommitLedger();
         restartRecipe = null;
@@ -2463,7 +2420,7 @@ public final class CraftingRuntime {
                     if (oldPatternStart != null) releasePreparedPrefetches(oldPatternStart);
                     if (oldPaymentStart != null && oldPaymentStart != oldPatternStart) releasePreparedPrefetches(oldPaymentStart);
                 } finally {
-                    oldStress.cancel();
+                    oldHoldings.cancel();
                 }
             }
         }
@@ -2550,11 +2507,7 @@ public final class CraftingRuntime {
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type())
-                    || LoadedChemicalRequirement.TYPE.equals(requirement.type())
-                    || SourceRequirement.TYPE.equals(requirement.type())
-                    || ManaRequirement.TYPE.equals(requirement.type()) || requirement instanceof LightningRequirement)
-                    || requirement.io() != RecipeModifier.IOType.INPUT) continue;
+            if (!requirement.io().isInput() || !requirement.execution().recordsStartPayment()) continue;
             if (restored.inputConsumptionPlan().consumedBatches(index) > 0) consumed.add(index);
             else retained.add(index);
         }
@@ -2767,7 +2720,7 @@ public final class CraftingRuntime {
     private CraftingStatus waiting(@Nullable ExecutionStatus nextFailure, boolean allowInputRetention) {
         ActiveMachineRecipe recipe = activeRecipe;
         RecipeCommitLedger payment = ledger;
-        StressSession owner = stressSession;
+        LaneReservations owner = laneReservations;
         failure = nextFailure == null
                 ? failure(BuiltinFailureReasons.PER_TICK, FailurePhase.PER_TICK, Map.of()) : nextFailure;
         status = CraftingStatus.failure(failureUnloc(failure));
@@ -2784,7 +2737,7 @@ public final class CraftingRuntime {
             finishPlan = null;
             clearEffectiveRecipe();
             resourceDomain = null;
-            stressSession = new StressSession();
+            laneReservations = new LaneReservations();
             try {
                 releaseActivePrefetches();
             } finally {
@@ -2855,14 +2808,14 @@ public final class CraftingRuntime {
 
     private CraftingContext context(ControllerRuntimeSnapshot runtime) {
         return new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime), activeInputScope)
-                .withReservationOwner(stressSession);
+                .withReservationOwner(laneReservations);
     }
 
     private CraftingContext legacyPatternContext(ControllerRuntimeSnapshot runtime, List<MachineCapability> requestCapabilities) {
         List<MachineCapability> capabilities = new ArrayList<>(components.capabilities());
         if (requestCapabilities != null) capabilities.addAll(requestCapabilities);
         return new CraftingContext(new CapabilitySnapshot(capabilities), contextModifiers(runtime))
-                .withReservationOwner(stressSession);
+                .withReservationOwner(laneReservations);
     }
 
     private List<RecipeEnergyPrefetchFacet> prefetchFacets(List<MachineCapability> requestCapabilities) {
@@ -2892,45 +2845,9 @@ public final class CraftingRuntime {
 
     private @Nullable List<PreparedPrefetch> planPrefetches(List<MachineRequirement> requirements, int duration,
                                                              long parallelism, List<RecipeEnergyPrefetchFacet> facets) {
-        if (facets.isEmpty()) return List.of();
-        boolean hasEnergyInput = requirements.stream().anyMatch(requirement -> requirement instanceof EnergyRequirement energy
-                && energy.io() == RecipeModifier.IOType.INPUT);
-        if (!hasEnergyInput) return List.of();
-        Set<String> reservationKeys = new HashSet<>();
-        for (RecipeEnergyPrefetchFacet facet : facets) {
-            String reservationKey = facet.reservationKey();
-            if (reservationKey == null || reservationKey.isBlank() || !reservationKeys.add(reservationKey)) return null;
-        }
-        List<PreparedPrefetch> prefetches = new ArrayList<>();
-        long total = 0L;
-        boolean complete = false;
-        try {
-            for (MachineRequirement requirement : requirements) {
-                if (!(requirement instanceof EnergyRequirement energy)
-                        || energy.io() != RecipeModifier.IOType.INPUT) continue;
-                long remaining = SaturatingLong.multiply(SaturatingLong.multiply(energy.fePerTick(), duration), parallelism);
-                try {
-                    total = Math.addExact(total, remaining);
-                } catch (ArithmeticException exception) {
-                    return null;
-                }
-                for (RecipeEnergyPrefetchFacet facet : facets) {
-                    if (remaining <= 0L) break;
-                    var planned = facet.planPrefetch(remaining);
-                    if (planned.isEmpty()) continue;
-                    RecipeEnergyPrefetchFacet.PrefetchPlan plan = planned.get();
-                    prefetches.add(new PreparedPrefetch(facet.reservationKey(), facet, plan));
-                    if (plan.amount() > remaining) return null;
-                    remaining -= plan.amount();
-                }
-                if (remaining > 0L) return null;
-            }
-            List<PreparedPrefetch> result = List.copyOf(prefetches);
-            complete = true;
-            return result;
-        } finally {
-            if (!complete) releaseUnpaidPrefetches(prefetches);
-        }
+        var allocation = EnergyPrefetchLedger.allocate(requirements, duration, parallelism, facets, false);
+        return allocation.failureIndex() >= 0 ? null : allocation.candidates().stream()
+                .map(candidate -> new PreparedPrefetch(candidate.key(), candidate.facet(), candidate.plan())).toList();
     }
 
     private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared) {
@@ -2939,7 +2856,7 @@ public final class CraftingRuntime {
         }
         RecipeCommitLedger payment = ledger;
         long lifecycle = controller.lifecycleEpoch();
-        StressSession startingStress = stressSession;
+        LaneReservations startingHoldings = laneReservations;
         ActiveMachineRecipe startingRecipe = new ActiveMachineRecipe(prepared.recipe().source(),
                 prepared.plan().parallelism(), prepared.effective());
         ExecutionIdentity identity = new ExecutionIdentity(controllerIdentity, lifecycle, laneId,
@@ -2950,17 +2867,18 @@ public final class CraftingRuntime {
         boolean complete = false;
         boolean prefetchException = false;
         pendingPrefetchStart = new PendingPrefetchStart(prepared, payment, lifecycle);
-        Set<Integer> airInputIndexes = new LinkedHashSet<>();
+        Set<Integer> preflightIndexes = new LinkedHashSet<>();
         List<MachineRequirement> requirements = prepared.effective().requirements();
         PlanningReservations reservations = new PlanningReservations();
-        Sampling airStartSampling = new Sampling();
+        Sampling startSampling = new Sampling();
         for (int index = 0; index < requirements.size(); index++) {
-            if (requirements.get(index) instanceof AirRequirement air && air.io() == RecipeModifier.IOType.INPUT) {
-                CapabilityResult result = AirRequirementHandler.preflightStart(air, components.capabilities(),
+            var requirement = requirements.get(index);
+            if (requirement.execution() == RequirementExecutionPolicy.PREFLIGHT_INPUT) {
+                CapabilityResult result = RequirementHandlerRegistry.checkStart(requirement, components.capabilities(),
                         new PlanningContext(prepared.plan().parallelism(), index, false, reservations, Map.of(),
-                                null, null, airStartSampling));
+                                null, null, startSampling));
                 if (!result.success()) return result.status();
-                airInputIndexes.add(index);
+                preflightIndexes.add(index);
             }
         }
         try {
@@ -2994,15 +2912,15 @@ public final class CraftingRuntime {
                 }
                 if (payment != ledger || lifecycle != controller.lifecycleEpoch()) return missingInputStatus();
             }
-            // Recheck live Air after prefetch callbacks, before any ordinary startup input.
+            // Recheck live conditions after prefetch callbacks, before any ordinary startup input.
             reservations = new PlanningReservations();
-            for (int index : airInputIndexes) {
-                CapabilityResult result = AirRequirementHandler.preflightStart((AirRequirement) requirements.get(index),
+            for (int index : preflightIndexes) {
+                CapabilityResult result = RequirementHandlerRegistry.checkStart(requirements.get(index),
                         components.capabilities(), new PlanningContext(prepared.plan().parallelism(), index, false,
-                                reservations, Map.of(), null, null, airStartSampling));
+                                reservations, Map.of(), null, null, startSampling));
                 if (!result.success()) return result.status();
             }
-            Set<Integer> unpaidInputs = new HashSet<>(airInputIndexes);
+            Set<Integer> unpaidInputs = new HashSet<>(preflightIndexes);
             List<Integer> energyIndexes = new ArrayList<>();
             for (int index = 0; index < requirements.size(); index++) {
                 if (requirements.get(index) instanceof EnergyRequirement energy && energy.io() == IOType.INPUT) {
@@ -3033,10 +2951,7 @@ public final class CraftingRuntime {
             List<Integer> consumed = new ArrayList<>();
             for (int index = 0; index < requirements.size(); index++) {
                 MachineRequirement requirement = requirements.get(index);
-                boolean input = requirement.io() == IOType.INPUT && (ItemRequirement.TYPE.equals(requirement.type())
-                        || FluidRequirement.TYPE.equals(requirement.type()) || LoadedChemicalRequirement.TYPE.equals(requirement.type())
-                        || SourceRequirement.TYPE.equals(requirement.type()) || ManaRequirement.TYPE.equals(requirement.type())
-                        || requirement instanceof LightningRequirement);
+                boolean input = requirement.io().isInput() && requirement.execution().recordsStartPayment();
                 consumed.add(input && (prepared.plan().hasOperations(index) || validatedInputs.contains(index)) ? 1 : 0);
             }
             startingRecipe.setInputConsumptionPlan(new ActiveMachineRecipe.InputConsumptionPlan(consumed));
@@ -3054,30 +2969,30 @@ public final class CraftingRuntime {
             try {
                 if (!complete && !prefetchException && payment.state().paidAttempts() == 0L
                         && payment == ledger && lifecycle == controller.lifecycleEpoch()
-                        && pendingPaymentStart == prepared && !hasOrdinaryNativeEffects(prepared.plan(), requirements)
+                        && pendingPaymentStart == prepared && !hasOrdinaryNativeEffects(prepared.plan(), startingHoldings)
                         && prepared.prefetches().stream().allMatch(prefetch -> !prefetch.inFlight
                                 && !prefetch.transferred && prefetch.confirmedAmount() >= 0L)) {
                     // These are known owner-scoped holds, not an irreversible ordinary resource prefix.
-                    startingStress.releaseAll();
+                    startingHoldings.releaseAll();
                     releasePreparedPrefetches(prepared);
                     if (prepared.prefetches().stream().noneMatch(prefetch -> prefetch.releaseFailed)) {
                         payment.settleReleasedStart();
                     }
                 } else if (payment == ledger && lifecycle == controller.lifecycleEpoch()
-                        && payment.state().phase() != RecipeCommitLedger.Phase.RESOURCE_PAID) startingStress.releaseAll();
+                        && payment.state().phase() != RecipeCommitLedger.Phase.RESOURCE_PAID) startingHoldings.releaseAll();
             } finally {
                 if (coordinator != null) coordinator.endExecutionAdmission(identity);
             }
         }
     }
 
-    private static boolean hasOrdinaryNativeEffects(CraftingPlan plan, List<MachineRequirement> requirements) {
+    private static boolean hasOrdinaryNativeEffects(CraftingPlan plan, LaneReservations owner) {
         for (var requirementPlan : plan.requirements()) {
             int index = requirementPlan.requirementIndex();
             if (!plan.wasNativeExecuted(index)) continue;
-            if (index < 0 || index >= requirements.size()
-                    || !(requirements.get(index) instanceof StressRequirement stress)
-                    || !(RequirementHandlerRegistry.handlerFor(stress.type()) instanceof StressRequirementHandler)) return true;
+            if (requirementPlan.operations().stream().anyMatch(operation -> !owner.owns(operation))) return true;
+
+
         }
         return false;
     }
@@ -3123,10 +3038,7 @@ public final class CraftingRuntime {
         List<Integer> consumed = new ArrayList<>();
         int planIndex = 0;
         for (MachineRequirement requirement : prepared.effective().requirements()) {
-            boolean input = requirement.io() == IOType.INPUT && (ItemRequirement.TYPE.equals(requirement.type())
-                    || FluidRequirement.TYPE.equals(requirement.type()) || LoadedChemicalRequirement.TYPE.equals(requirement.type())
-                    || SourceRequirement.TYPE.equals(requirement.type()) || ManaRequirement.TYPE.equals(requirement.type())
-                    || requirement instanceof LightningRequirement);
+            boolean input = requirement.io().isInput() && requirement.execution().recordsStartPayment();
             boolean executed = ledger.state().phase() == RecipeCommitLedger.Phase.RESOURCE_PAID
                     ? prepared.plan().hasOperations(planIndex) : prepared.plan().wasNativeExecuted(planIndex);
             consumed.add(input && executed ? 1 : 0);
@@ -3513,7 +3425,7 @@ public final class CraftingRuntime {
         Map<Integer, OutputPolicy> policies = new LinkedHashMap<>();
         for (int index = 0; index < source.size(); index++) {
             MachineRequirement requirement = source.get(index);
-            if (isStressOutput(requirement)) continue;
+            if (isAfterPaymentOutput(requirement)) continue;
             int original = cachedPerTickRequirementIndexes.get(index);
             requirements.add(requirement);
             indexes.add(original);
@@ -3530,7 +3442,7 @@ public final class CraftingRuntime {
         ActiveMachineRecipe recipe = activeRecipe;
         if (!consumePaidPrefetch(payment)) return false;
         RecipeCommitLedger.State admission = payment.state();
-        StressSession owner = stressSession;
+        LaneReservations owner = laneReservations;
         List<MachineRequirement> originalRequirements = effectiveRequirements;
         try {
             if (!plan.commitRuntime(payment::beginNativeExecution, () -> attemptCurrent(attempt))) {
@@ -3540,8 +3452,8 @@ public final class CraftingRuntime {
                 return false;
             }
             if (!attemptCurrent(attempt)) return false;
-            if (!hasOrdinaryNativeEffects(plan, originalRequirements)) payment.completePrefetchDebit(admission);
-            if (!commitStressOutputs(controller.executionRuntimeSnapshot())) {
+            if (!hasOrdinaryNativeEffects(plan, owner)) payment.completePrefetchDebit(admission);
+            if (!commitAfterPaymentOutputs(controller.executionRuntimeSnapshot())) {
                 if (!settleStressOnlyFailure(plan, originalRequirements, payment, admission, owner)) payment.pauseAfterCommitFailure();
                 return false;
             }
@@ -3557,26 +3469,26 @@ public final class CraftingRuntime {
     }
 
     private boolean settleStressOnlyFailure(CraftingPlan plan, List<MachineRequirement> requirements, RecipeCommitLedger payment,
-                                            RecipeCommitLedger.State admission, StressSession owner) {
-        if (hasOrdinaryNativeEffects(plan, requirements)) return false;
+                                            RecipeCommitLedger.State admission, LaneReservations owner) {
+        if (hasOrdinaryNativeEffects(plan, owner)) return false;
         owner.releaseAll();
         payment.completePrefetchDebit(admission);
         return payment.state().phase() == admission.phase();
     }
 
-    private boolean commitStressOutputs() {
+    private boolean commitAfterPaymentOutputs() {
         for (MachineRequirement requirement : perTickRequirements()) {
-            if (isStressOutput(requirement)) return commitStressOutputs(controller.executionRuntimeSnapshot());
+            if (isAfterPaymentOutput(requirement)) return commitAfterPaymentOutputs(controller.executionRuntimeSnapshot());
         }
         return true;
     }
 
-    private boolean commitStressOutputs(ControllerRuntimeSnapshot runtime) {
+    private boolean commitAfterPaymentOutputs(ControllerRuntimeSnapshot runtime) {
         TickAttempt attempt = tickAttempt;
         RecipeCommitLedger payment = ledger;
         ActiveMachineRecipe recipe = activeRecipe;
         if (!attemptCurrent(attempt)) return false;
-        StressSession owner = stressSession;
+        LaneReservations owner = laneReservations;
         RecipeCommitLedger.State admission = payment.state();
         List<MachineRequirement> originalRequirements = effectiveRequirements;
         CraftingPlan plan = null;
@@ -3584,7 +3496,7 @@ public final class CraftingRuntime {
         List<MachineRequirement> outputs = new ArrayList<>();
         List<Integer> indexes = new ArrayList<>();
         for (int index = 0; index < source.size(); index++) {
-            if (!isStressOutput(source.get(index))) continue;
+            if (!isAfterPaymentOutput(source.get(index))) continue;
             outputs.add(source.get(index));
             indexes.add(cachedPerTickRequirementIndexes.get(index));
         }
@@ -3618,8 +3530,8 @@ public final class CraftingRuntime {
         }
     }
 
-    private static boolean isStressOutput(MachineRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.OUTPUT && StressRequirement.TYPE.equals(requirement.type());
+    private static boolean isAfterPaymentOutput(MachineRequirement requirement) {
+        return requirement.io() == RecipeModifier.IOType.OUTPUT && requirement.execution() == RequirementExecutionPolicy.AFTER_PAYMENT_OUTPUT;
     }
 
     private boolean commitAsyncTickPlan(AsyncRequirementPlanner.PlanResult planned,
@@ -3662,7 +3574,7 @@ public final class CraftingRuntime {
                     return false;
                 }
             }
-            if (!commitStressOutputs(runtime)) {
+            if (!commitAfterPaymentOutputs(runtime)) {
                 if (payment.state().phase() == RecipeCommitLedger.Phase.UNCERTAIN) payment.pauseAfterCommitFailure();
                 return false;
             }
@@ -3716,28 +3628,7 @@ public final class CraftingRuntime {
                 if (hasPrefetches && requirement instanceof EnergyRequirement) continue;
                 if (consumedAtStart.contains(index)) continue;
                 // Startup probability is already decided; retained one-shot resources only remain conditions.
-                if (retainedInputs.contains(index) && requirement instanceof SourceRequirement sourceInput
-                        && sourceInput.consumeChance() > 0F && sourceInput.consumeChance() < 1F) {
-                    requirement = new SourceRequirement(sourceInput.io(), sourceInput.amount(), sourceInput.chance(),
-                            0F, sourceInput.tags());
-                } else if (retainedInputs.contains(index) && requirement instanceof ManaRequirement manaInput
-                        && manaInput.consumeChance() > 0F && manaInput.consumeChance() < 1F) {
-                    requirement = new ManaRequirement(manaInput.io(), manaInput.amount(), manaInput.chance(),
-                            0F, manaInput.tags());
-                } else if (retainedInputs.contains(index) && requirement instanceof LoadedChemicalRequirement chemicalInput
-                        && chemicalInput.consumeChance() > 0F && chemicalInput.consumeChance() < 1F) {
-                    requirement = new LoadedChemicalRequirement(chemicalInput.io(), chemicalInput.ingredient(),
-                            chemicalInput.chance(), chemicalInput.tags(), 0F);
-                }
-                if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
-                        RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
-                        net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,
-                        cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components1, float consumeChance
-                )
-                        && consumeChance > 0F) {
-                    requirement = new ItemRequirement(io, item1, count, stack,
-                            chance, tags, components1, 0F);
-                }
+                if (retainedInputs.contains(index)) requirement = requirement.asRetainedInput();
                 requirements.add(requirement);
                 indexes.add(index);
             } else if (isPerTickOutput(requirement)) {
@@ -3756,7 +3647,7 @@ public final class CraftingRuntime {
 
     private List<MachineRequirement> finishRequirements() {
         return effectiveRequirements().stream()
-                .filter(requirement -> !(requirement instanceof AirRequirement))
+                .filter(requirement -> requirement.execution() != RequirementExecutionPolicy.PREFLIGHT_INPUT)
                 .filter(requirement -> !isPerTickOutput(requirement))
                 .toList();
     }
@@ -3769,15 +3660,11 @@ public final class CraftingRuntime {
 
     private static boolean isPerTickOutput(MachineRequirement requirement) {
         return requirement.io() == RecipeModifier.IOType.OUTPUT
-                && (requirement instanceof EnergyRequirement
-                || StressRequirement.TYPE.equals(requirement.type())
-                || MekanismRecipeTypes.HEAT.equals(requirement.type().id())
-                || AirRequirement.TYPE.equals(requirement.type()));
+                && requirement.execution().tickOutput();
     }
 
     private static boolean isPerTickOutput(MachineOutput output) {
-        return MekanismRecipeTypes.HEAT.equals(output.outputType().id())
-                || StressRequirement.TYPE.id().equals(output.outputType().id());
+        return output.perTickOutput();
     }
 
     private RecipeBehavior recipeBehavior(ControllerRuntimeSnapshot runtime) {
@@ -3873,12 +3760,7 @@ public final class CraftingRuntime {
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            if (!(ItemRequirement.TYPE.equals(requirement.type())
-                    || FluidRequirement.TYPE.equals(requirement.type())
-                    || LoadedChemicalRequirement.TYPE.equals(requirement.type())
-                    || SourceRequirement.TYPE.equals(requirement.type())
-                    || ManaRequirement.TYPE.equals(requirement.type()) || requirement instanceof LightningRequirement)
-                    || requirement.io() != RecipeModifier.IOType.INPUT) {
+            if (!requirement.io().isInput() || !requirement.execution().recordsStartPayment()) {
                 continue;
             }
             boolean executed = ledger.state().phase() == RecipeCommitLedger.Phase.ERROR_PAUSED

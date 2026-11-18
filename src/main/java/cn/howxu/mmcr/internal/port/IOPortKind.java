@@ -1,5 +1,20 @@
 package cn.howxu.mmcr.internal.port;
 
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionHand;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
+import cn.howxu.mmcr.MMCR;
+
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.level.Level;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
+
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -40,6 +55,24 @@ public interface IOPortKind {
 
     /** Returns the immutable capability binding declaration for this port kind. */
     PortDefinition definition();
+
+    default AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) { return null; }
+
+    /** Empty contributions keep native port presentation. Texture identifiers are safe to load on a server. */
+    default List<ResourceLocation> overlayTextures() { return List.of(); }
+    default List<Component> tooltipLines() { return List.of(); }
+
+    default List<ResourceLocation> tieredOverlay(String base, String tier) {
+        return List.of(MMCR.id("block/overlay/base/" + base), MMCR.id("block/overlay/direction/" + ioType().getSerializedName()),
+                MMCR.id("block/overlay/tier/" + tier));
+    }
+
+    default InteractionResult openSpecialMenu(Player player, Level level, BlockPos pos) { return InteractionResult.PASS; }
+
+    /** Null leaves manual interaction to the native, sided fluid handler. */
+    default ItemInteractionResult useContainer(Player player, InteractionHand hand, IOPortBlockEntity port) { return null; }
+
+    default boolean bypassDefaultInteraction(ItemStack held) { return false; }
 
     default List<CapabilityBinding> bindings() {
         return definition().bindings();

@@ -1,10 +1,11 @@
 package cn.howxu.mmcr.internal.recipe;
 
+import cn.howxu.mmcr.api.recipe.InputScopeFamilies;
+
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.capability.plan.InputRoutingIndex;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
@@ -17,11 +18,8 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
-import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
-import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
@@ -88,7 +86,7 @@ public final class RequirementPlanner {
         boolean materialInputs = requirements.stream().anyMatch(requirement -> requirement.type().capabilityIds()
                 .stream().anyMatch(id -> isMaterialInput(IOType.valueOf(requirement.io().name()), id)));
         List<InputScope> scopes = context.inputRouting().scopes(materialInputs);
-        Sampling sampling = scopes.size() > 1 ? new Sampling() : null;
+        Sampling sampling = context.sampling() != null ? context.sampling() : scopes.size() > 1 ? new Sampling() : null;
         PlanningResult bestFailure = null;
         int completed = -1;
         for (InputScope scope : scopes) {
@@ -234,10 +232,9 @@ public final class RequirementPlanner {
             // Its factory may reserve again, or may only create operations; neither changes feasibility.
             materializationBases.add(feasibilityReservations.copy());
             RequirementPlan resolved;
-            RequirementHandler<?> registered = RequirementHandlerRegistry.handlerFor(requirement.type());
-            if (requirement instanceof EnergyRequirement energy
-                    && registered instanceof EnergyRequirementHandler energyHandler) {
-                RequirementPlan.OperationPlan operations = energyHandler.planFixed(energy, matching, requirementContext);
+            var registered = handler(requirement.type());
+            var operations = registered.planFixed(requirement, matching, requirementContext);
+            if (operations != null) {
                 resolved = RequirementPlan.withOutputSimulation(originalIndex, selected, operations.operations(),
                         operations.failure(), operations.outputSimulation());
             } else {
@@ -333,10 +330,7 @@ public final class RequirementPlanner {
     }
 
     public static boolean isMaterialInput(IOType direction, ResourceLocation capabilityId) {
-        return direction == IOType.INPUT && (BuiltinCapabilityDefinitions.ITEM_TYPE.id().equals(capabilityId)
-                || BuiltinCapabilityDefinitions.FLUID_TYPE.id().equals(capabilityId)
-                || MekanismPortFamilies.CHEMICAL.equals(capabilityId)
-                || LightningRecipeTypes.LIGHTNING.equals(capabilityId));
+        return direction == IOType.INPUT && InputScopeFamilies.isIsolated(capabilityId);
     }
 
     public static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,
@@ -353,9 +347,7 @@ public final class RequirementPlanner {
         return IntStream.range(0, capabilities.size())
                 .filter(index -> {
                     var view = capabilities.get(index).view();
-                    return (capabilityIds.contains(view.type().id())
-                            || MekanismPortFamilies.HEAT_TEMPERATURE.equals(requirement.type().id())
-                            && MekanismPortFamilies.HEAT.equals(view.type().id()))
+                    return capabilityIds.contains(view.type().id())
                             && view.directions().supports(direction)
                             && (!isMaterialInput(direction, view.type().id()) || allowed.test(index));
                 })

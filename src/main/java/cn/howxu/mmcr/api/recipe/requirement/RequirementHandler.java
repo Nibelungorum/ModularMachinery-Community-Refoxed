@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -23,6 +25,21 @@ import java.util.function.Predicate;
  */
 public interface RequirementHandler<R extends MachineRequirement> {
     RequirementPlan plan(R requirement, List<MachineCapability> capabilities, PlanningContext context);
+
+    default RequirementExecutionPolicy execution(R value) { return RequirementExecutionPolicy.LEGACY; }
+
+    default CapabilityResult checkStart(R value, List<MachineCapability> ports, PlanningContext context) {
+        return CapabilityResult.successful();
+    }
+
+    default R asRetainedInput(R value) {
+        throw new IllegalStateException("No read-only retained input for " + value.type().id());
+    }
+
+    /** Optional exact-parallelism plan. Null retains the ordinary reservation/materialization path. */
+    default RequirementPlan.OperationPlan planFixed(R value, List<MachineCapability> capabilities, PlanningContext context) {
+        return null;
+    }
 
     /** Applies recipe modifiers to the handler-owned requirement representation. */
     default R applyModifiers(R requirement, List<RecipeModifier> modifiers) {

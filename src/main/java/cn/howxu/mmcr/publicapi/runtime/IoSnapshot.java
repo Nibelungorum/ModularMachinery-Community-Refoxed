@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.publicapi.runtime;
 
+import cn.howxu.mmcr.publicapi.recipe.IoDirection;
+
 import cn.howxu.mmcr.publicapi.presentation.IoDisplay;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -17,6 +19,7 @@ import java.util.Set;
  */
 @ApiStatus.NonExtendable
 public interface IoSnapshot {
+    IoSnapshot forFamily(ResourceLocation capabilityId, IoDirection direction);
     IoSnapshot forTags(Set<String> requiredTags);
     List<IoDisplay> displays();
     List<ResourceAmount<ItemStack>> itemInputs();

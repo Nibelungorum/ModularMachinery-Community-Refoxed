@@ -42,18 +42,8 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         if (tiers.requirements().isEmpty()) return none();
         return new PortTierRequirementSpec(tiers.requirements().stream()
                 .map(requirement -> new Requirement(
-                        switch (requirement.category()) {
-                            case ITEM -> PortCategory.ITEM;
-                            case FLUID -> PortCategory.FLUID;
-                            case ENERGY -> PortCategory.ENERGY;
-                            case SOURCE -> PortCategory.SOURCE;
-                            case MANA -> PortCategory.MANA;
-                            case CHEMICAL -> PortCategory.CHEMICAL;
-                            case RADIOACTIVE_CHEMICAL -> PortCategory.RADIOACTIVE_CHEMICAL;
-                            case HEAT -> PortCategory.HEAT;
-                            case STRESS -> PortCategory.STRESS;
-                            case AIR -> PortCategory.AIR;
-                        }, requirement.ioType(), requirement.minTier(), requirement.minTierId()))
+                        PortCategory.valueOf(requirement.category().name()), requirement.ioType(), requirement.minTier(),
+                        requirement.minTierId(), requirement.registeredFamily()))
                 .toList());
     }
 
@@ -94,11 +84,17 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
         RADIOACTIVE_CHEMICAL,
         HEAT,
         STRESS,
-        AIR
+        AIR,
+        REGISTERED
     }
 
-    public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
+    public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId, ResourceLocation registeredFamily) {
+        public Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
+            this(category, ioType, minTier, minTierId, null);
+        }
         public Requirement {
+            if ((category == PortCategory.REGISTERED) != (registeredFamily != null))
+                throw new IllegalArgumentException("Expected registered family id for REGISTERED category");
             if (category == null) throw new IllegalArgumentException("category null");
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (minTier < 0) throw new IllegalArgumentException("minTier must be >= 0");
@@ -130,6 +126,7 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
 
         private String baseId() {
             return switch (category) {
+                case REGISTERED -> registeredFamily + "/" + ioType.name().toLowerCase(java.util.Locale.ROOT);
                 case ITEM -> ioType == IOType.INPUT ? "item_input_bus" : "item_output_bus";
                 case FLUID -> ioType == IOType.INPUT ? "fluid_input_hatch" : "fluid_output_hatch";
                 case ENERGY -> ioType == IOType.INPUT ? "energy_input_hatch" : "energy_output_hatch";
@@ -158,6 +155,7 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
 
         private Optional<PortFamilyDescriptor> family(IOPortKind port) {
             ResourceLocation familyId = switch (category) {
+                case REGISTERED -> registeredFamily;
                 case ITEM -> PortFamilyIds.ITEM;
                 case FLUID -> PortFamilyIds.FLUID;
                 case ENERGY -> PortFamilyIds.ENERGY;
@@ -170,7 +168,8 @@ public record PortTierRequirementSpec(List<Requirement> requirements) {
                 case AIR -> PneumaticIds.AIR;
             };
             return port.families().stream()
-                    .filter(family -> family.familyId().equals(familyId) && family.ioType() == ioType)
+                    .filter(family -> family.familyId().equals(familyId) && family.ioType() == ioType
+                            && port.bindings().stream().anyMatch(family::matches))
                     .findFirst();
         }
     }

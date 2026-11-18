@@ -1,5 +1,18 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.internal.recipe.ConditionCapture;
+import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilityRequest;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Rule;
+import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Kind;
+import cn.howxu.mmcr.api.capability.async.AsyncCapabilitySnapshot;
+
+import cn.howxu.mmcr.api.recipe.RecipeSemantics;
+
+import java.util.Set;
+
+import cn.howxu.mmcr.api.recipe.requirement.RequirementExecutionPolicy;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -30,9 +43,41 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement heat, List<String> tags)
-        implements MachineRequirement {
+        implements MachineRequirement, ConditionCapture {
+    @Override public AsyncRequirementPlanner.Requirement commitRequest(int index, long parallelism) {
+        boolean minimumTemperature = heat.kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE;
+        double value = minimumTemperature ? heat.value() : saturatingHeatMultiply(heat.value(), parallelism);
+        if (value < 0D) return null;
+        long accountingAmount = Math.max(1L, value >= Long.MAX_VALUE ? Long.MAX_VALUE : (long) Math.ceil(value));
+        return new AsyncRequirementPlanner.Requirement(index, accountingAmount,
+                minimumTemperature ? cn.howxu.mmcr.util.IOType.INPUT : cn.howxu.mmcr.util.IOType.OUTPUT,
+                List.of(new AsyncCapabilityRequest.Heat(MekanismRecipeTypes.HEAT, parallelism, value,
+                    minimumTemperature, accountingAmount)));
+    }
+
+    private static double saturatingHeatMultiply(double amount, long multiplier) {
+        if (amount <= 0D || multiplier <= 0L) return 0D;
+        return amount >= Double.MAX_VALUE / multiplier ? Double.MAX_VALUE : amount * multiplier;
+    }
+
+    @Override public boolean searchAvailable() { return supportsSearchSnapshot(); }
+    @Override public boolean matchesPort(MachineCapability port) { return LoadedMekanismBridge.acceptsHeatSearchPort(port); }
+    @Override public boolean supportsPort(MachineCapability port, AsyncCapabilitySnapshot value) {
+        return value instanceof AsyncCapabilitySnapshot.Heat;
+    }
+
+    @Override public Rule captureRule(int index, boolean partial, List<Integer> matching, Ports ports) {
+        boolean threshold = heat.kind() == HeatRequirement.Kind.MINIMUM_TEMPERATURE;
+        boolean satisfied = !matching.isEmpty() && (!threshold || matching.stream().anyMatch(i ->
+                ((AsyncCapabilitySnapshot.Heat) ports.value(i)).temperature() >= heat.value()));
+        var failure = threshold ? MekanismFailureReasons.HEAT_TEMPERATURE_INSUFFICIENT : MekanismFailureReasons.HEAT_OUTPUT_BLOCKED;
+        return new Rule(index, type().id(), Kind.NOOP, cn.howxu.mmcr.util.IOType.valueOf(io.name()),
+                0L, 0D, 1F, 1F, false, heat.value() >= 0D && satisfied, Set.of(), null, List.of(), failure.id());
+    }
+
     private static final RequirementHandler<LoadedHeatRequirement> UNAVAILABLE =
             (requirement, capabilities, context) -> unavailable(requirement, context);
+    private static volatile Object version = new Object();
     private static volatile RequirementHandler<LoadedHeatRequirement> delegate = UNAVAILABLE;
     private static final RequirementHandler<LoadedHeatRequirement> DELEGATING_HANDLER = new RequirementHandler<>() {
         @Override
@@ -82,12 +127,26 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
     }
 
     @Override
+    public long batchAmount(int duration) { return 0; }
+
+    @Override
+    public float consumptionProbability() { return 1F; }
+
+    @Override
+    public RequirementExecutionPolicy execution() { return io.isInput() ? RequirementExecutionPolicy.LEGACY : RequirementExecutionPolicy.TICK_IO; }
+
+    @Override
+    public Object derivationVersion() { return supportsSearchSnapshot() ? version : null; }
+
+    @Override
     public RequirementType<LoadedHeatRequirement> type() {
         return heat.kind() == HeatRequirement.Kind.OUTPUT_HEAT ? HEAT_TYPE : TEMPERATURE_TYPE;
     }
 
     public static void installHandler(RequirementHandler<LoadedHeatRequirement> handler) {
         delegate = Objects.requireNonNull(handler, "handler");
+        version = new Object();
+        RecipeSemantics.changed();
     }
 
     /** True only for the built-in handler whose heat rules can be captured by value. */
@@ -97,6 +156,8 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
 
     public static void installUnavailableHandler() {
         delegate = UNAVAILABLE;
+        version = new Object();
+        RecipeSemantics.changed();
     }
 
     public static LoadedHeatRequirement applyModifiers(LoadedHeatRequirement requirement,
@@ -119,7 +180,9 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
                 kind == HeatRequirement.Kind.OUTPUT_HEAT ? HeatRequirement.outputHeat(value)
                         : HeatRequirement.minimumTemperature(value), tags)));
         return new RequirementType.Definition<>(id, codec, DELEGATING_HANDLER,
-                LoadedHeatRequirement::copy, RecipeSyncCodec.json(codec.codec()));
+                LoadedHeatRequirement::copy, RecipeSyncCodec.json(codec.codec())) {
+            @Override public Set<ResourceLocation> capabilityIds() { return Set.of(MekanismRecipeTypes.HEAT); }
+        };
     }
 
     private static LoadedHeatRequirement copy(LoadedHeatRequirement requirement) {

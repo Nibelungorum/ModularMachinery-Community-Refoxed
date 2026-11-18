@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.internal.menu.PortMenuBinding;
+
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
@@ -20,7 +22,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class HeatPortMenu extends AbstractMachineMenu {
+public final class HeatPortMenu extends AbstractMachineMenu implements PortMenuBinding {
     private final HeatPortBlockEntity owner;
     private final Level level;
     private final BlockPos pos;

@@ -15,5 +15,8 @@ public record LightningOutput(LightningTier tier, long amount, float chance) imp
         chance = MachineOutput.clampChance(chance);
     }
 
+    @Override
+    public Object aggregationIdentity() { return tier; }
+
     @Override public OutputType<LightningOutput> outputType() { return LightningRecipeTypes.outputType(tier); }
 }

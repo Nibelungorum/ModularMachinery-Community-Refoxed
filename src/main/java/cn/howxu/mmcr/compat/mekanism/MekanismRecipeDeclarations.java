@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.mekanism;
 
+import java.util.Set;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
@@ -60,7 +62,9 @@ public final class MekanismRecipeDeclarations {
             MekanismRecipeTypes.HEAT, HeatRequirement.Kind.OUTPUT_HEAT);
     static final RequirementType<UnavailableHeatRequirement> TEMPERATURE_TYPE = new RequirementType.Definition<>(
             MekanismRecipeTypes.HEAT_TEMPERATURE, TEMPERATURE_CODEC, HEAT_UNAVAILABLE,
-            RecipeSyncCodec.json(TEMPERATURE_CODEC.codec()));
+            RecipeSyncCodec.json(TEMPERATURE_CODEC.codec())) {
+            @Override public Set<ResourceLocation> capabilityIds() { return Set.of(MekanismRecipeTypes.HEAT); }
+        };
     static final RequirementType<UnavailableHeatRequirement> HEAT_TYPE = new RequirementType.Definition<>(
             MekanismRecipeTypes.HEAT, HEAT_CODEC, HEAT_UNAVAILABLE,
             RecipeSyncCodec.json(HEAT_CODEC.codec()));

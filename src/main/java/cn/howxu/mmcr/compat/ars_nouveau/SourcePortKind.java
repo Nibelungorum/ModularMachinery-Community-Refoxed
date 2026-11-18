@@ -1,5 +1,13 @@
 package cn.howxu.mmcr.compat.ars_nouveau;
 
+import net.minecraft.resources.ResourceLocation;
+
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.level.Level;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.ItemStack;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
@@ -19,6 +27,13 @@ import java.util.List;
  */
 public record SourcePortKind(String id, IOType ioType) implements IOPortKind {
     @Override
+    public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+        return ArsNouveauBridge.get().createMenu(id, containerId, player, level, pos);
+    }
+
+    @Override public boolean bypassDefaultInteraction(ItemStack held) { return ArsNouveauBridge.get().isDominionWand(held); }
+
+    @Override
     public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
         return (pos, state) -> ArsNouveauBridge.get().createPort(pos, state, this);
     }
@@ -35,6 +50,8 @@ public record SourcePortKind(String id, IOType ioType) implements IOPortKind {
                 CapabilityDirections.of(ioType), context -> ArsNouveauBridge.get().createCapability(context),
                 (binding, tier) -> tier >= 0));
     }
+
+    @Override public List<ResourceLocation> overlayTextures() { return tieredOverlay("ars_nouveau/source", "big"); }
 
     @Override
     public List<String> modDependencies() {

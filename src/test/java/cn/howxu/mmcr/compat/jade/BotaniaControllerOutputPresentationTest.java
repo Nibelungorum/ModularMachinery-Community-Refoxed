@@ -32,7 +32,7 @@ class BotaniaControllerOutputPresentationTest {
     }
 
     @Test
-    void controllerJadeHidesManaWithoutAnEmptyHeadingAndKeepsMixedItemOutputs() {
+    void controllerJadeShowsExactManaWithoutReadingPoolInventory() {
         try (var scope = OutputRegistry.openTestScope()) {
             OutputRegistry.register(ManaOutput.TYPE);
             CompoundTag data = new CompoundTag();
@@ -54,13 +54,14 @@ class BotaniaControllerOutputPresentationTest {
                         return null;
                     });
             RecipeOutputComponentProvider.INSTANCE.appendTooltip(tooltip, accessor, null);
-            assertThat(text).isEmpty();
+            assertThat(text.getLast().getString()).contains("9,223,372,036,854,775,807");
             assertThat(elements).isEmpty();
+            text.clear();
             RecipeOutputCodec.write(data, List.of(
                     new MachineOutputAmount(new ManaOutput(10_000), Long.MAX_VALUE),
                     new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND), 1F), 7L)));
             RecipeOutputComponentProvider.INSTANCE.appendTooltip(tooltip, accessor, null);
-            assertThat(text).hasSize(2);
+            assertThat(text).hasSize(3);
             assertThat(text.getFirst()).isEqualTo(Component.translatable("jade.mmcr.machine_controller.recipe_output"));
             assertThat(elements.stream().filter(ItemStackElement.class::isInstance).map(ItemStackElement.class::cast).toList())
                     .singleElement().satisfies(icon -> assertThat(icon.getItem().getItem()).isEqualTo(Items.DIAMOND));

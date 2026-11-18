@@ -52,6 +52,16 @@ public interface MachineOutput {
 
     float chance();
 
+    /** Identity token for deterministic requirement conversion, null when unknown. */
+    default Object conversionVersion() { return null; }
+
+    default boolean perTickOutput() { return false; }
+
+    @SuppressWarnings("unchecked")
+    default Object aggregationIdentity() {
+        return ((OutputType<MachineOutput>) outputType()).aggregationIdentity(this);
+    }
+
     /**
      * Amount represented by this output for controller-side aggregation and presentation.
      */
@@ -145,6 +155,12 @@ public interface MachineOutput {
         }
 
         @Override
+        public Object aggregationIdentity() { return aggregationKey(this); }
+
+        @Override
+        public Object conversionVersion() { return TYPE; }
+
+        @Override
         public OutputType<ItemOutput> outputType() {
             return TYPE;
         }
@@ -195,6 +211,12 @@ public interface MachineOutput {
             stack = stack == null ? FluidStack.EMPTY : stack.copy();
             chance = clampChance(chance);
         }
+
+        @Override
+        public Object aggregationIdentity() { return aggregationKey(this); }
+
+        @Override
+        public Object conversionVersion() { return TYPE; }
 
         @Override
         public OutputType<FluidOutput> outputType() {

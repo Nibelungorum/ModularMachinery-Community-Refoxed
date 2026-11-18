@@ -1,5 +1,11 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import cn.howxu.mmcr.api.recipe.RecipeSemantics;
+
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
+import cn.howxu.mmcr.api.capability.plan.PlanningContext;
+
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.MMCR;
@@ -43,6 +49,7 @@ public final class RequirementHandlerRegistry {
             }
             CANONICAL_TYPES.put(type.id(), type);
             HANDLERS.put(type, handler);
+            RecipeSemantics.changed();
         }
     }
 
@@ -74,9 +81,27 @@ public final class RequirementHandlerRegistry {
 
     public static List<RequirementHandler.ResourceWakeup> resourceWakeupsFor(MachineRequirement requirement) {
         if (requirement == null) throw new IllegalArgumentException("requirement must not be null");
-        RequirementType<?> canonical = canonicalType(requirement.type());
-        if (canonical == null || canonical != requirement.type()) return List.of();
-        return resourceWakeups(canonical, requirement);
+        List<RequirementHandler.ResourceWakeup> result = dispatch(requirement, (handler, value) -> handler.resourceWakeups(value));
+        return result == null ? List.of() : result;
+    }
+
+    static RequirementExecutionPolicy executionOf(MachineRequirement requirement) {
+        var policy = dispatch(requirement, (handler, value) -> handler.execution(value));
+        return policy == null ? RequirementExecutionPolicy.LEGACY : policy;
+    }
+
+    public static CapabilityResult checkStart(MachineRequirement requirement, List<MachineCapability> ports, PlanningContext context) {
+        CapabilityResult result = dispatch(requirement, (handler, value) -> handler.checkStart(value, ports, context));
+        if (result == null) throw new IllegalStateException("Missing startup handler: " + requirement.type().id());
+        return result;
+    }
+
+    static MachineRequirement retainedInputOf(MachineRequirement requirement) {
+        MachineRequirement retained = dispatch(requirement, (handler, value) -> handler.asRetainedInput(value));
+        if (retained == null || retained.type() != requirement.type() || retained.io() != requirement.io()
+                || !retained.tags().equals(requirement.tags()))
+            throw new IllegalStateException("Invalid retained projection for " + requirement.type().id());
+        return retained;
     }
 
     public static MachineRequirement applyModifiers(MachineRequirement requirement,
@@ -145,7 +170,7 @@ public final class RequirementHandlerRegistry {
 
     private static void clearCustomTypes() {
         CANONICAL_TYPES.keySet().removeIf(id -> !isBuiltIn(id));
-        HANDLERS.keySet().removeIf(type -> !isBuiltIn(type.id()));
+        if (HANDLERS.keySet().removeIf(type -> !isBuiltIn(type.id()))) RecipeSemantics.changed();
     }
 
     private static boolean isBuiltIn(ResourceLocation id) {
@@ -170,9 +195,4 @@ public final class RequirementHandlerRegistry {
         T apply(RequirementHandler handler, MachineRequirement requirement);
     }
 
-    @SuppressWarnings("unchecked")
-    private static <R extends MachineRequirement> List<RequirementHandler.ResourceWakeup> resourceWakeups(
-            RequirementType<R> type, MachineRequirement requirement) {
-        return type.handler().resourceWakeups((R) requirement);
-    }
 }

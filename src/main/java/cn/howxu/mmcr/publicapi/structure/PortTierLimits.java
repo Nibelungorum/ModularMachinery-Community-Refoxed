@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.publicapi.structure;
 
+import net.minecraft.resources.ResourceLocation;
+
 import cn.howxu.mmcr.internal.api.facade.structure.TierAdapters;
 import cn.howxu.mmcr.publicapi.recipe.IoDirection;
 import java.util.List;
@@ -13,7 +15,7 @@ public interface PortTierLimits {
     /** Independently tiered port families.
      * @author howxu <dev@howxu.cn>
      */
-    enum PortCategory { ITEM, FLUID, ENERGY, SOURCE, MANA, CHEMICAL, RADIOACTIVE_CHEMICAL, HEAT, STRESS, AIR }
+    enum PortCategory { ITEM, FLUID, ENERGY, SOURCE, MANA, CHEMICAL, RADIOACTIVE_CHEMICAL, HEAT, STRESS, AIR, REGISTERED }
     /** Item bus tiers.
      * @author howxu <dev@howxu.cn>
      */
@@ -44,6 +46,9 @@ public interface PortTierLimits {
         public String id() { return TierAdapters.id(this); }
     }
 
+    static PortTierLimits family(ResourceLocation id, IoDirection direction, int tier) {
+        return TierAdapters.family(id, direction, tier);
+    }
     static PortTierLimits none() { return TierAdapters.none(); }
     static Builder builder() { return TierAdapters.builder(); }
     static PortTierLimits combine(PortTierLimits... declarations) { return TierAdapters.combine(declarations); }
@@ -107,6 +112,7 @@ public interface PortTierLimits {
     @ApiStatus.NonExtendable
     interface RequirementView {
         PortCategory category();
+        default ResourceLocation registeredFamily() { return null; }
         IoDirection ioType();
         int minTier();
         String minTierId();

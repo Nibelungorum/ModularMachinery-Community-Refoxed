@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.data.view.DataValue;
 import cn.howxu.mmcr.api.data.view.DataStorage;
@@ -125,6 +126,16 @@ class KubeJSApiTest {
                 "item_input_bus>=small", "item_output_bus>=big",
                 "fluid_input_hatch>=normal", "fluid_output_hatch>=big",
                 "energy_input_hatch>=small", "energy_output_hatch>=ultimate");
+    }
+
+    @Test
+    void namedFamilyAndUntieredAliasUseTheSameRegisteredInputPorts() {
+        var named = api.portTierRequirements(List.of("minecraft:item/input>=2"));
+        var alias = api.portTierRequirements(List.of("item_input_bus"));
+        assertThat(named.validate(List.of(PortKinds.ITEM_INPUT))).isEmpty();
+        assertThat(named.validate(List.of(PortKinds.ITEM_OUTPUT))).isPresent();
+        assertThat(alias.validate(List.of(PortKinds.ITEM_INPUT))).isEmpty();
+        assertThat(alias.validate(List.of(PortKinds.ITEM_OUTPUT))).isPresent();
     }
 
     @Test

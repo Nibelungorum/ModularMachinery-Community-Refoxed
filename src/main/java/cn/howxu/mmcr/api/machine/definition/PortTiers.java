@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.machine.definition;
 
+import net.minecraft.resources.ResourceLocation;
+
 import cn.howxu.mmcr.util.IOType;
 
 import java.util.ArrayList;
@@ -46,7 +48,8 @@ public record PortTiers(List<Requirement> requirements) {
         RADIOACTIVE_CHEMICAL,
         HEAT,
         STRESS,
-        AIR
+        AIR,
+        REGISTERED
     }
 
     public enum ItemTier {
@@ -133,13 +136,19 @@ public record PortTiers(List<Requirement> requirements) {
         public int detectionTier() { return detectionTier; }
     }
 
-    public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
+    public record Requirement(PortCategory category, IOType ioType, int minTier, String minTierId, ResourceLocation registeredFamily) {
+        public Requirement(PortCategory category, IOType ioType, int minTier, String minTierId) {
+            this(category, ioType, minTier, minTierId, null);
+        }
         public Requirement {
+            if ((category == PortCategory.REGISTERED) != (registeredFamily != null))
+                throw new IllegalArgumentException("Expected registered family id for REGISTERED category");
             if (category == null) throw new IllegalArgumentException("category null");
             if (ioType == null) throw new IllegalArgumentException("ioType null");
             if (minTier < 0) throw new IllegalArgumentException("minTier must be >= 0");
             if (minTierId == null || minTierId.isBlank()) throw new IllegalArgumentException("minTierId blank");
             String expectedTierId = switch (category) {
+                case REGISTERED -> Integer.toString(minTier);
                 case ITEM -> minTier < ItemTier.values().length ? ItemTier.values()[minTier].id() : null;
                 case FLUID -> minTier < FluidTier.values().length ? FluidTier.values()[minTier].id() : null;
                 case ENERGY -> minTier < EnergyTier.values().length ? EnergyTier.values()[minTier].id() : null;

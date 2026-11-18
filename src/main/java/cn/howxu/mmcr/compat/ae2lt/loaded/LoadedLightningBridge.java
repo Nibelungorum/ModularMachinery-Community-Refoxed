@@ -46,6 +46,7 @@ public final class LoadedLightningBridge implements LightningBridge {
     public static boolean isLightning(Object key) {
         return LightningKey.HIGH_VOLTAGE.equals(key) || LightningKey.EXTREME_HIGH_VOLTAGE.equals(key);
     }
+    @Override public boolean ownsKeyType(Object type) { return type == LightningKey.HIGH_VOLTAGE.getType(); }
     @Override public boolean available() { return true; }
     @Override public void registerCapabilityDefinitions() {
         CapabilityRegistry.register(new CapabilityDefinition(TYPE, Set.of(LightningViewFacet.class, OperationFacet.class), context -> {

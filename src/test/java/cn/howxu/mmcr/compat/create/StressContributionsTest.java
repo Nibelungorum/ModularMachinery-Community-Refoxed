@@ -46,7 +46,8 @@ class StressContributionsTest {
 
     @Test
     void reservations_use_identity_and_copies_isolate_stress_rpm_and_owner_credits() {
-        var reservations = new PlanningReservations();
+        var branch = new PlanningReservations();
+        var reservations = branch.state(StressBudget.KEY);
         Object first = new String("network");
         Object equalButDifferent = new String("network");
         var owner = new StressSession();
@@ -57,7 +58,7 @@ class StressContributionsTest {
         assertThat(reservations.reserveStress(first, 32, 64)).isFalse();
         assertThat(reservations.reservedStress(equalButDifferent)).isZero();
         assertThat(reservations.reserveGeneratedRpm(first, 64)).isTrue();
-        var copy = reservations.copy();
+        var copy = branch.copy().state(StressBudget.KEY);
         assertThat(copy.reserveStress(first, 16, 64)).isTrue();
         assertThat(copy.reserveGeneratedRpm(first, -64)).isFalse();
         assertThat(copy.creditStress(first, owner, 4, 32)).isTrue();

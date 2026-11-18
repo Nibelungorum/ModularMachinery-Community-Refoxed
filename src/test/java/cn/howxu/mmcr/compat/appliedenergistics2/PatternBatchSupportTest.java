@@ -213,14 +213,14 @@ class PatternBatchSupportTest {
     }
 
     @Test
-    void customRequirementIsValidatedByItsRuntimeHandlerRatherThanAProviderWhitelist() {
+    void opaqueConditionRetainsOrdinaryBindingWithoutProvingBatchSafety() {
         try (var ignored = RequirementHandlerRegistry.openTestScope()) {
             RequirementHandlerRegistry.register(ExternalCondition.TYPE);
             var recipe = recipe("custom_condition", List.of(input(), new ExternalCondition()), List.of(output(1)));
             var effective = effective(recipe, 4L);
             var profile = PatternBatchSupport.inspectRecipe(recipe, effective,
                     pattern(AEItemKey.of(Items.IRON_INGOT), 1, List.of(stack(Items.GOLD_INGOT, 1))));
-            assertThat(profile.safety()).isEqualTo(Safety.PROVEN_LINEAR);
+            assertThat(profile.safety()).isEqualTo(Safety.UNPROVEN);
             assertThat(profile.maxMultiplier()).isEqualTo(4L);
         }
     }

@@ -9,7 +9,7 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
+import java.util.function.Consumer;
 import cn.howxu.mmcr.registry.ModRecipeTypes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
@@ -127,7 +127,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         this.inputRequirementCount = countInputs(this.requirements);
         validateLevelRequirements(this.requirements);
         this.outputs = MachineOutput.copyList(outputs == null ? List.of() : outputs);
-        LightningRecipeTypes.validateRecipeAmounts(runtimeRequirementSource());
+        validateRecipe(runtimeRequirementSource());
         this.modifiers = modifiers == null ? Collections.emptyList() : List.copyOf(modifiers);
         this.priority = priority;
         this.maxThreads = maxThreads;
@@ -163,7 +163,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         }
         this.requirements = List.copyOf(newRequirements);
         this.inputRequirementCount = countInputs(this.requirements);
-        LightningRecipeTypes.validateRecipeAmounts(runtimeRequirementSource());
+        validateRecipe(runtimeRequirementSource());
     }
 
     private MachineRecipe(ResourceLocation id, MachineRecipe recipe) {
@@ -373,7 +373,7 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
                     RequirementHandlerRegistry.applyLevelModifiers(requirement, energyMultiplier, outputMultiplier),
                     effective));
         }
-        LightningRecipeTypes.validateRecipeAmounts(derived);
+        validateRecipe(derived);
         return List.copyOf(derived);
     }
 
@@ -446,12 +446,18 @@ public final class MachineRecipe implements Recipe<RecipeInput> {
         return inputRequirementCount;
     }
 
+    public static void validateRecipe(List<MachineRequirement> requirements) {
+        Set<Consumer<List<MachineRequirement>>> validators = new LinkedHashSet<>();
+        for (var requirement : requirements) {
+            var validator = requirement.type().recipeValidator();
+            if (validator != null && validators.add(validator)) validator.accept(requirements);
+        }
+    }
+
     private static int countInputs(List<MachineRequirement> requirements) {
         int count = 0;
         for (MachineRequirement requirement : requirements) {
-            if (requirement.io() == RecipeModifier.IOType.INPUT
-                    && !(requirement instanceof LevelRequirement)
-                    && !(requirement instanceof StageRequirement)) {
+            if (requirement.countsForSpecificity()) {
                 count++;
             }
         }

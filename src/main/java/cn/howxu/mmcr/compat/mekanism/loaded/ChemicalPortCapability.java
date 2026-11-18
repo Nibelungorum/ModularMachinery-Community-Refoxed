@@ -27,7 +27,7 @@ import cn.howxu.mmcr.api.compat.mekanism.ChemicalViewFacet;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
 import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalSearchValues;
 import cn.howxu.mmcr.util.IOType;
 import mekanism.api.Action;
 import mekanism.api.AutomationType;
@@ -90,7 +90,7 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
                 boolean empty = stack.isEmpty();
                 return new AsyncCapabilitySnapshot.Resource(type().id(), List.of(
                         new AsyncCapabilitySnapshot.ResourceSlot(empty ? Optional.empty()
-                                : Optional.of(NativeAsyncResourceValues.chemical(identity(stack))),
+                                : Optional.of(ChemicalSearchValues.chemical(identity(stack))),
                                 empty ? 0L : chemicalTank.getStored(), chemicalTank.getCapacity())));
             }
 
@@ -201,6 +201,11 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
         return (NativeCapabilityOperation) () -> commitActions(resourceRequest.actions());
     }
 
+    @Override public List<SlotSummary> outputSlots(CapabilityView view) {
+        return chemicalTank.isEmpty() ? List.of() : List.of(new SlotSummary("gui.mmcr.port.chemicals",
+                Long.toString(chemicalTank.getStored()), "", "mmcr.unit.chemical"));
+    }
+
     @Override
     public List<CapabilityDisplay> displays(CapabilityView ignored) {
         return List.of(new CapabilityDisplay("chemical", Long.toString(chemicalTank.getStored()),
@@ -262,7 +267,7 @@ public final class ChemicalPortCapability implements LoadedMekanismBridge.Chemic
         }
         ChemicalStack stack;
         try {
-            stack = NativeAsyncResourceValues.chemical(resource.resource());
+            stack = ChemicalSearchValues.chemical(resource.resource());
         } catch (IllegalArgumentException exception) {
             return failure(MekanismFailureReasons.CHEMICAL_TYPE_MISMATCH);
         }

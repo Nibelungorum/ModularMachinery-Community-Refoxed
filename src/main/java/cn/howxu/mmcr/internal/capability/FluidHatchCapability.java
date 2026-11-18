@@ -130,6 +130,11 @@ public final class FluidHatchCapability implements MachineCapability, FluidHandl
 
     @Override public CapabilityOperation prepare(CapabilityRequest request) { return CapabilityFactories.operation(this, request); }
 
+    @Override public List<SlotSummary> outputSlots(CapabilityView view) {
+        return IntStream.range(0, fluidHandler.getTanks()).filter(tank -> !fluidHandler.getFluidInTank(tank).isEmpty())
+                .mapToObj(tank -> new SlotSummary("gui.mmcr.port.fluids", Long.toString(fluidAmount(tank)), "mB", "")).toList();
+    }
+
     @Override
     public List<CapabilityDisplay> displays(CapabilityView ignored) {
         return IntStream.range(0, fluidHandler.getTanks()).mapToObj(tank -> new CapabilityDisplay("fluid",

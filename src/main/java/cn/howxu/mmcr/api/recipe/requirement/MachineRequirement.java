@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import com.google.gson.JsonElement;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.MMCR;
@@ -29,6 +31,36 @@ public interface MachineRequirement extends RecipeIoDeclaration {
     RequirementType<? extends MachineRequirement> type();
 
     RecipeModifier.IOType io();
+
+    default RequirementExecutionPolicy execution() {
+        return RequirementHandlerRegistry.executionOf(this);
+    }
+
+    default MachineRequirement asRetainedInput() {
+        return RequirementHandlerRegistry.retainedInputOf(this);
+    }
+
+    /** Equivalent search-only shape. The original handler still owns all native operations. */
+    default MachineRequirement searchProjection() { return this; }
+
+    /** Optional description for value-only search/async planning. Never passed to a worker as a live callback. */
+    default ScalarRecipeRule scalarRule() { return null; }
+
+    default boolean acceptsScalarPort(cn.howxu.mmcr.api.capability.MachineCapability port) { return true; }
+
+    /** Identity token for stable modifier semantics; null means always derive a fresh view. */
+    default Object derivationVersion() { return null; }
+
+    default boolean countsForSpecificity() { return io().isInput(); }
+
+    /** Per-craft bound; negative means batching is unproven and zero means a condition. */
+    default long batchAmount(int duration) { return -1L; }
+
+    /** Key within this requirement family for checked scaled-total arithmetic. */
+    default Object batchIdentity(DynamicOps<JsonElement> ops) { return type().id(); }
+
+    /** Exact input-consumption probability, or NaN for opaque input semantics. */
+    default float consumptionProbability() { return Float.NaN; }
 
     default List<String> tags() {
         return List.of();

@@ -2,8 +2,6 @@ package cn.howxu.mmcr.internal.item;
 
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
-import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
-import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -34,18 +32,8 @@ public final class InterfaceTooltips {
     public static List<Component> tooltipLines(Block block) {
         if (block instanceof IOPortBlock port) {
             var kind = port.kind();
-            if (FluxNetworksIds.INPUT.equals(kind.id()) || FluxNetworksIds.OUTPUT.equals(kind.id())) {
-                return List.of(Component.translatable(FluxNetworksIds.INPUT.equals(kind.id())
-                                ? "tooltip.mmcr.fluxnetworks.input" : "tooltip.mmcr.fluxnetworks.output"),
-                        Component.translatable("tooltip.mmcr.fluxnetworks.configure"));
-            }
-            if (PneumaticIds.INPUT.equals(kind.id()) || PneumaticIds.OUTPUT.equals(kind.id())) {
-                return List.of(Component.translatable("tooltip.mmcr.pneumaticcraft.volume", 10_000),
-                        Component.translatable("tooltip.mmcr.pneumaticcraft.safe_pressure", 20),
-                        Component.translatable("tooltip.mmcr.pneumaticcraft.equalization"));
-            }
-            if (kind instanceof PortKinds.ChemicalKind chemical) return chemicalTooltip(chemical);
-            if (kind instanceof PortKinds.HeatKind heat) return heatTooltip(heat);
+            var contributed = kind.tooltipLines();
+            if (!contributed.isEmpty()) return contributed;
             return kind.itemBusSize().map(InterfaceTooltips::itemTooltip)
                     .or(() -> kind.extendedItemBusSize().map(InterfaceTooltips::itemTooltip))
                     .or(() -> kind.fluidHatchSize().map(InterfaceTooltips::fluidTooltip))
@@ -115,11 +103,11 @@ public final class InterfaceTooltips {
         return lines;
     }
 
-    private static List<Component> chemicalTooltip(PortKinds.ChemicalKind kind) {
+    public static List<Component> chemicalTooltip(PortKinds.ChemicalKind kind) {
         return List.of(capacityLine(formatAmount(kind.capacity(), "mB")));
     }
 
-    private static List<Component> heatTooltip(PortKinds.HeatKind kind) {
+    public static List<Component> heatTooltip(PortKinds.HeatKind kind) {
         return List.of(capacityLine(formatAmount(kind.capacity(), "J/K")));
     }
 

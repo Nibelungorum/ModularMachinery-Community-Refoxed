@@ -1,5 +1,12 @@
 package cn.howxu.mmcr.compat.ars_nouveau;
 
+import cn.howxu.mmcr.api.recipe.RecipeSemantics;
+
+import cn.howxu.mmcr.api.recipe.requirement.ScalarRecipeRule;
+import cn.howxu.mmcr.compat.ars_nouveau.loaded.SourcePortCapability;
+
+import cn.howxu.mmcr.api.recipe.requirement.RequirementExecutionPolicy;
+
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
@@ -36,6 +43,7 @@ public record SourceRequirement(RecipeModifier.IOType io, long amount, float cha
 
     private static final RequirementHandler<SourceRequirement> UNAVAILABLE = (requirement, capabilities, context) ->
             RequirementHandlerSupport.blockedPlan(requirement, context, SourceFailureReasons.ARS_UNAVAILABLE);
+    private static volatile Object version = new Object();
     private static volatile RequirementHandler<SourceRequirement> delegate = UNAVAILABLE;
     private static final RequirementHandler<SourceRequirement> HANDLER = new RequirementHandler<>() {
         @Override
@@ -110,12 +118,40 @@ public record SourceRequirement(RecipeModifier.IOType io, long amount, float cha
     }
 
     @Override
+    public RequirementExecutionPolicy execution() { return io.isInput() ? RequirementExecutionPolicy.START_MATERIAL : RequirementExecutionPolicy.LEGACY; }
+
+    @Override
+    public long batchAmount(int duration) { return amount; }
+
+    @Override
+    public float consumptionProbability() { return consumeChance; }
+
+    @Override
+    public SourceRequirement asRetainedInput() {
+        return consumeChance == 0F ? this : new SourceRequirement(io, amount, chance, 0F, tags);
+    }
+
+    @Override
+    public ScalarRecipeRule scalarRule() {
+        return new ScalarRecipeRule(type().id(), amount, chance, consumeChance, false,
+                (io.isInput() ? SourceFailureReasons.INPUT_MISSING : SourceFailureReasons.OUTPUT_BLOCKED).id(), true);
+    }
+
+    @Override
+    public boolean acceptsScalarPort(MachineCapability port) { return port instanceof SourcePortCapability; }
+
+    @Override
+    public Object derivationVersion() { return supportsSearchSnapshot() ? version : null; }
+
+    @Override
     public RequirementType<SourceRequirement> type() {
         return TYPE;
     }
 
     public static void installHandler(RequirementHandler<SourceRequirement> handler) {
         delegate = Objects.requireNonNull(handler, "handler");
+        version = new Object();
+        RecipeSemantics.changed();
     }
 
     /** Whether the loaded delegate has the native, snapshot-safe planning semantics. */
@@ -125,5 +161,7 @@ public record SourceRequirement(RecipeModifier.IOType io, long amount, float cha
 
     public static void installUnavailableHandler() {
         delegate = UNAVAILABLE;
+        version = new Object();
+        RecipeSemantics.changed();
     }
 }

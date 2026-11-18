@@ -197,6 +197,8 @@ class FailureRequirementCacheTest {
             var first = cache.resolve(recipe);
             assertThat(cache.resolve(recipe)).isSameAs(first);
             assertThat(first).containsExactly(SourceRequirement.output(24L), ManaRequirement.output(24L));
+            SourceRequirement.installHandler(new SourceRequirementHandler());
+            assertThat(cache.resolve(recipe)).isNotSameAs(first);
             SourceRequirement.installHandler((value, capabilities, context) -> {
                 throw new AssertionError("planning must not be called by failure views");
             });

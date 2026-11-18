@@ -12,4 +12,10 @@ import java.util.List;
  */
 public interface PresentationFacet extends CapabilityFacet {
     List<CapabilityDisplay> displays(CapabilityView view);
+
+    /** Nonempty slots owned by this family and explicitly visible to output-inventory overlays. */
+    default List<SlotSummary> outputSlots(CapabilityView view) { return List.of(); }
+
+    record SlotSummary(String labelKey, String value, String unit, String unitKey) {}
+
 }

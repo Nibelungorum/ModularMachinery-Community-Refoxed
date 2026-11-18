@@ -33,11 +33,7 @@ public final class PatternBatchPlanning {
     }
 
     public static boolean isBatchHost(PatternProviderLogicHost host) {
-        if (!(host instanceof PatternInterfaceBlockEntity patternHost)) return false;
-        return switch (patternHost.kind().id()) {
-            case "ae2_me_pattern_interface", "eae_me_extended_pattern_interface", "eaep_me_mirror_pattern_interface" -> true;
-            default -> false;
-        };
+        return host instanceof PatternInterfaceBlockEntity;
     }
 
     /** Called before AE2 refreshes the provider index, never from a crafting calculator. */

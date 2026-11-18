@@ -276,6 +276,7 @@ public final class MachineStructureSyncCodec {
             buf.writeEnum(requirement.ioType());
             buf.writeVarInt(requirement.minTier());
             ByteBufCodecs.STRING_UTF8.encode(buf, requirement.minTierId());
+            if (requirement.registeredFamily() != null) buf.writeResourceLocation(requirement.registeredFamily());
         }
     }
 
@@ -284,8 +285,10 @@ public final class MachineStructureSyncCodec {
         checkSize(count, maxCollectionEntries(), "port tier requirement");
         List<PortTierRequirementSpec.Requirement> requirements = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            requirements.add(new PortTierRequirementSpec.Requirement(buf.readEnum(PortTierRequirementSpec.PortCategory.class),
-                    buf.readEnum(IOType.class), buf.readVarInt(), ByteBufCodecs.STRING_UTF8.decode(buf)));
+            var category = buf.readEnum(PortTierRequirementSpec.PortCategory.class);
+            requirements.add(new PortTierRequirementSpec.Requirement(category, buf.readEnum(IOType.class),
+                    buf.readVarInt(), ByteBufCodecs.STRING_UTF8.decode(buf),
+                    category == PortTierRequirementSpec.PortCategory.REGISTERED ? buf.readResourceLocation() : null));
         }
         return requirements.isEmpty() ? PortTierRequirementSpec.none() : new PortTierRequirementSpec(requirements);
     }

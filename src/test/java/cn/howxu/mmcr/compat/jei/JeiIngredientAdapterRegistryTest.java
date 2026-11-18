@@ -53,7 +53,7 @@ class JeiIngredientAdapterRegistryTest {
             @Override
             public Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
                 return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), ingredientType(),
-                        "custom-ingredient", Math.toIntExact(entry.amount()), entry.chance(), null,
+                        "custom-ingredient", Math.toIntExact(entry.amount()), entry.role() == RecipeIngredientRole.OUTPUT ? 0.25F : entry.chance(), null,
                         entry.role() == RecipeIngredientRole.INPUT));
             }
 
@@ -72,7 +72,7 @@ class JeiIngredientAdapterRegistryTest {
         JeiDisplayEntry input = JeiIngredientAdapterRegistry.display(
                 new RecipeIoEntry(RecipeIngredientRole.INPUT, typeId, "input", 8, 1F)).orElseThrow();
         JeiDisplayEntry output = JeiIngredientAdapterRegistry.display(
-                new RecipeIoEntry(RecipeIngredientRole.OUTPUT, typeId, "output", 3, 0.25F)).orElseThrow();
+                new RecipeIoEntry(RecipeIngredientRole.OUTPUT, typeId, "output", 3, 1F)).orElseThrow();
 
         assertThat(input.role()).isEqualTo(RecipeIngredientRole.INPUT);
         assertThat(input.count()).isEqualTo(8);
@@ -81,6 +81,7 @@ class JeiIngredientAdapterRegistryTest {
         assertThat(input.typeId()).isEqualTo(typeId);
         assertThat(output.role()).isEqualTo(RecipeIngredientRole.OUTPUT);
         assertThat(output.count()).isEqualTo(3);
+        assertThat(output.chance()).isEqualTo(0.25F);
         assertThat(output.transferable()).isFalse();
 
         MachineRecipeLayout.RegionPlan layout = MachineRecipeLayout.regionForEntries(List.of(input),

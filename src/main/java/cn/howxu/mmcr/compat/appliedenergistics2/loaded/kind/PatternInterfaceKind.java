@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind;
 
+import net.minecraft.resources.ResourceLocation;
+
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.port.PortDefinition;
@@ -28,6 +30,8 @@ public final class PatternInterfaceKind implements PatternLogicKind {
 
     private PatternInterfaceKind() {
     }
+
+    @Override public List<ResourceLocation> overlayTextures() { return List.of(MMCR.id("block/appliedenergistics2/ae2_pattern_interface")); }
 
     @Override
     public String id() {

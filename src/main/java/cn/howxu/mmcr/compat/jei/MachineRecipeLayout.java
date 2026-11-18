@@ -1,8 +1,6 @@
 package cn.howxu.mmcr.compat.jei;
 
 import net.minecraft.client.Minecraft;
-import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
-import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.ae2lt.client.LightningJeiDisplay;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
@@ -37,8 +35,29 @@ public record MachineRecipeLayout(
         int hostRequirementTextY,
         int durationTextY,
         int transferButtonX,
-        int transferButtonY
+        int transferButtonY,
+        List<RecipeDetails.Row> detailRows
 ) {
+    public MachineRecipeLayout(
+        int width,
+        int height,
+        RegionPlan inputs,
+        RegionPlan outputs,
+        @Nullable Arrow arrow,
+        List<TextPlan> sourceTextLines,
+        List<ManaRowPlan> manaRows,
+        List<MetadataPage> metadataPages,
+        int metadataViewportY,
+        int metadataViewportHeight,
+        int durationTextX,
+        int hostRequirementTextY,
+        int durationTextY,
+        int transferButtonX,
+        int transferButtonY
+    ) {
+        this(width, height, inputs, outputs, arrow, sourceTextLines, manaRows,
+                metadataPages, metadataViewportY, metadataViewportHeight, durationTextX, hostRequirementTextY, durationTextY, transferButtonX, transferButtonY, List.of());
+    }
 
     public static final int WIDTH = 150;
     public static final int HEIGHT = 150;
@@ -57,7 +76,9 @@ public record MachineRecipeLayout(
         List<EntryPlan> inputEntries = entries(entries, RecipeIngredientRole.INPUT);
         List<EntryPlan> outputEntries = entries(entries, RecipeIngredientRole.OUTPUT);
         RecipeSlotLayout slots = RecipeSlotLayout.forCounts(inputEntries.size(), outputEntries.size());
-        List<Integer> metadataRows = metadataRowHeights(display, entries);
+        var details = RecipeDetails.rows(display);
+        int detailCount = 1 + display.energyInputs().size() + display.energyOutputs().size() + details.size();
+        List<Integer> metadataRows = metadataRowHeights(display, entries, detailCount);
         int metadataHeight = metadataRows.stream().mapToInt(Integer::intValue).sum();
         int metadataY = slots.bottom() + 4;
         int height = categoryHeight(guiScale);
@@ -67,7 +88,7 @@ public record MachineRecipeLayout(
                 ? metadataPages(metadataRows, metadataY, viewportHeight - PAGE_FOOTER_HEIGHT - 2) : List.of();
         List<TextPlan> sourceLines = sourceTextLines(entries, metadataY);
         int durationY = metadataY + sourceLines.size() * TEXT_LINE_SPACING;
-        List<ManaRowPlan> manaRows = manaRows(entries, durationY + TEXT_LINE_SPACING * metadataLineCount(display));
+        List<ManaRowPlan> manaRows = manaRows(entries, durationY + TEXT_LINE_SPACING * detailCount);
         return new MachineRecipeLayout(
                 WIDTH,
                 height,
@@ -80,10 +101,10 @@ public record MachineRecipeLayout(
                 metadataY,
                 viewportHeight,
                 8,
-                durationY + TEXT_LINE_SPACING * (metadataLineCount(display) + manaRows.size()),
+                durationY + TEXT_LINE_SPACING * (detailCount + manaRows.size()),
                 durationY,
                 transferButtonXForGuiScale(guiScale),
-                transferButtonYForGuiScale(guiScale)
+                transferButtonYForGuiScale(guiScale), details
         );
     }
 
@@ -113,10 +134,10 @@ public record MachineRecipeLayout(
         };
     }
 
-    private static List<Integer> metadataRowHeights(MachineRecipeDisplay display, List<JeiDisplayEntry> entries) {
+    private static List<Integer> metadataRowHeights(MachineRecipeDisplay display, List<JeiDisplayEntry> entries, int detailCount) {
         List<Integer> heights = new ArrayList<>();
         entries.stream().filter(MachineRecipeLayout::isSourceText).forEach(entry -> heights.add(TEXT_LINE_SPACING));
-        for (int index = 0; index < metadataLineCount(display); index++) heights.add(TEXT_LINE_SPACING);
+        for (int index = 0; index < detailCount; index++) heights.add(TEXT_LINE_SPACING);
         entries.stream().filter(MachineRecipeLayout::isMana).forEach(entry -> heights.add(TEXT_LINE_SPACING));
         if (!display.requiredHostIds().isEmpty()) heights.add(TEXT_LINE_SPACING);
         int levels = display.recipe().levelRequirements().size();
@@ -156,7 +177,7 @@ public record MachineRecipeLayout(
     }
 
     private static boolean isMana(JeiDisplayEntry entry) {
-        return entry.typeId().equals(BotaniaManaIds.MANA);
+        return JeiIngredientAdapterRegistry.get(entry.typeId()).map(adapter -> adapter.detailRow(entry) != null).orElse(false);
     }
 
     private static List<TextPlan> sourceTextLines(List<JeiDisplayEntry> entries, int metadataY) {
@@ -173,7 +194,8 @@ public record MachineRecipeLayout(
     }
 
     private static boolean isSourceText(JeiDisplayEntry entry) {
-        return entry.isTextOnly() && entry.typeId().equals(ArsSourceIds.SOURCE);
+        return entry.isTextOnly() && JeiIngredientAdapterRegistry.get(entry.typeId()).map(JeiIngredientAdapter::slotStyle)
+                .map(JeiIngredientAdapter.SlotStyle::headerText).orElse(false);
     }
 
     private static List<EntryPlan> entries(List<JeiDisplayEntry> displayEntries, RecipeIngredientRole role) {
@@ -221,7 +243,8 @@ public record MachineRecipeLayout(
     }
 
     private static int kindOrder(JeiDisplayEntry entry) {
-        if (entry.typeId().equals(ArsSourceIds.SOURCE)) return -1;
+        var style = JeiIngredientAdapterRegistry.get(entry.typeId()).map(JeiIngredientAdapter::slotStyle).orElse(null);
+        if (style != null) return style.order();
         if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) return 0;
         if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) return 1;
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) return 2;
@@ -291,12 +314,7 @@ public record MachineRecipeLayout(
     }
 
     private static int metadataLineCount(MachineRecipeDisplay display) {
-        return 1 + display.energyInputs().size() + display.energyOutputs().size()
-                + display.stressInputs().size() + display.stressOutputs().size()
-                + display.airInputs().size() + display.airOutputs().size()
-                + (display.minimumTemperature().isPresent() ? 1 : 0)
-                + (display.outputHeat().isPresent() ? 1 : 0)
-                + LightningJeiDisplay.requirements(display).size();
+        return 1 + display.energyInputs().size() + display.energyOutputs().size() + RecipeDetails.rows(display).size();
     }
 
     public enum Kind { ITEM, FLUID, CHEMICAL, GENERIC, TEXT }

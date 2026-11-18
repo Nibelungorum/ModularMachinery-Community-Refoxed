@@ -1,22 +1,21 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.client.gui.ControllerRecipeTextLines;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJadeElement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.util.ReadableNumber;
-import mekanism.api.MekanismAPI;
-import mekanism.api.chemical.Chemical;
+import cn.howxu.mmcr.client.gui.OutputFormats;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec2;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -29,7 +28,6 @@ import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.api.ui.IElementHelper;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Renders the controller's current recipe outputs at the tail of the Jade tooltip.
@@ -63,10 +61,19 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
                 tooltip.add(Component.translatable("jade.mmcr.machine_controller.recipe_output"));
                 labelAdded = true;
             }
-            if (owned instanceof MachineOutput.ItemOutput item) renderItem(tooltip, item, amount);
+            var contributed = OutputFormats.line(owned, amount);
+            if (contributed != null) {
+                if (contributed.icon().isEmpty()) tooltip.add(contributed.text());
+                else {
+                    tooltip.add(IElementHelper.get().smallItem(contributed.icon()));
+                    tooltip.append(IElementHelper.get().spacer(2, 0));
+                    tooltip.append(contributed.text());
+                }
+            } else if (owned instanceof MachineOutput.ItemOutput item) renderItem(tooltip, item, amount);
             else if (owned instanceof MachineOutput.FluidOutput fluid) renderFluid(tooltip, fluid, amount);
             else if (owned instanceof LoadedChemicalOutput chemical) renderChemical(tooltip, chemical, amount);
             else if (owned instanceof SourceOutput) renderSource(tooltip, amount);
+            else tooltip.add(ControllerRecipeTextLines.genericOutputLabel(owned, amount));
         }
     }
 
@@ -80,11 +87,9 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
         }
         if (output instanceof LoadedChemicalOutput chemical) {
             if (amount <= 0L) return false;
-            Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
-                    ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemical.id()));
-            return holder != null && holder.isPresent();
+            return MekanismBridge.get().chemicalRenderData(chemical.id()) != null;
         }
-        return false;
+        return amount > 0L;
     }
 
     private static void renderItem(ITooltip tooltip, MachineOutput.ItemOutput item, long amount) {
@@ -135,17 +140,15 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
     // for mekanism
     private static void renderChemical(ITooltip tooltip, LoadedChemicalOutput chemical, long amount) {
         if (amount <= 0L) return;
-        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.getHolder(
-                ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemical.id()));
-        if (holder == null || holder.isEmpty()) return;
-        Chemical value = holder.get().value();
+        var value = MekanismBridge.get().chemicalRenderData(chemical.id());
+        if (value == null) return;
         String formattedAmount = amount <= 10L
                 ? ReadableNumber.formatForSlot(amount, 0, "mB")
                 : ReadableNumber.formatForSlot(amount, 3, "B");
-        Component name = ComponentUtils.wrapInSquareBrackets(value.getTextComponent())
+        Component name = ComponentUtils.wrapInSquareBrackets(value.displayName())
                 .withStyle(ChatFormatting.WHITE);
         // here get an icon
-        var icon = new JadeChemicalElement(value.getIcon(), value.getTint(), 10,8);
+        var icon = new JadeChemicalElement(value.spriteLocation(), value.tint(), 10,8);
         try {
             int lineHeight = Minecraft.getInstance().font.lineHeight;
             icon.size(new Vec2(lineHeight + 1, lineHeight - 1)).translate(new Vec2(0, -1));

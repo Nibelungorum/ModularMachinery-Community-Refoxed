@@ -27,7 +27,7 @@ import java.util.Optional;
  *
  * @author howxu <dev@howxu.cn>
  */
-final class ControllerRecipeTextLines {
+public final class ControllerRecipeTextLines {
     static final int MAX_OUTPUT_LINES = 64;
     private static final int OUTPUT_INDENT = 4;
 
@@ -101,7 +101,11 @@ final class ControllerRecipeTextLines {
         if (presentation == null) return Optional.empty();
         for (MachineOutputAmount output : presentation.outputs()) {
             MachineOutput ownedOutput = output.output();
-            if (isRenderable(ownedOutput, output.amount())) return Optional.of(icon(ownedOutput, output.amount()));
+            if (!isRenderable(ownedOutput, output.amount())) continue;
+            var contributed = OutputFormats.line(ownedOutput, output.amount());
+            var icon = contributed == null ? icon(ownedOutput, output.amount())
+                    : contributed.icon().isEmpty() ? null : new ControllerTextLine.ItemIcon(contributed.icon());
+            if (icon != null) return Optional.of(icon);
         }
         return Optional.empty();
     }
@@ -122,10 +126,13 @@ final class ControllerRecipeTextLines {
         if (output instanceof LoadedChemicalOutput chemical) {
             return MekanismBridge.get().chemicalRenderData(chemical.id()) != null;
         }
-        return false;
+        return true;
     }
 
     private static ControllerTextLine line(MachineOutput output, long amount) {
+        var contributed = OutputFormats.line(output, amount);
+        if (contributed != null) return new ControllerTextLine(contributed.text(), MachineControllerScreen.STATUS_LABEL_COLOR,
+                contributed.icon().isEmpty() ? null : new ControllerTextLine.ItemIcon(contributed.icon()), contributed.tooltip(), OUTPUT_INDENT);
         ControllerTextLine.Icon icon = icon(output, amount);
         if (output instanceof SourceOutput) {
             return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.source",
@@ -163,7 +170,14 @@ final class ControllerRecipeTextLines {
                     List.of(data.displayName(), exactFluidAmount(amount)),
                     OUTPUT_INDENT);
         }
-        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.outputType().id());
+        return new ControllerTextLine(genericOutputLabel(output, amount), MachineControllerScreen.STATUS_LABEL_COLOR,
+                null, List.of(), OUTPUT_INDENT);
+    }
+
+    public static Component genericOutputLabel(MachineOutput output, long amount) {
+        var type = output.outputType();
+        return Component.translatableWithFallback(type.presentation().translationKey(), type.id().toString())
+                .append(" × ").append(ReadableNumber.formatExact(amount));
     }
 
     private static ControllerTextLine.Icon icon(MachineOutput output, long amount) {
@@ -183,7 +197,7 @@ final class ControllerRecipeTextLines {
         if (output instanceof LoadedChemicalOutput chemical) {
             return new ControllerTextLine.ChemicalIcon(chemical.id(), amount);
         }
-        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.outputType().id());
+        return null;
     }
 
     private static ControllerTextLine summary(String textKey, String tooltipKey, String value, String exact) {

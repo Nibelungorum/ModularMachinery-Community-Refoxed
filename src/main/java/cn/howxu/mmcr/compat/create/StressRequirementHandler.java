@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.compat.create;
 
+import cn.howxu.mmcr.api.capability.plan.LaneReservations;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.plan.CapabilityResult;
@@ -59,7 +62,9 @@ public final class StressRequirementHandler implements RequirementHandler<Stress
                 if (facets.stream().noneMatch(existing -> existing == facet)) facets.add(facet);
             });
         }
-        StressSession session = context.reservationOwner() instanceof StressSession owner ? owner : null;
+        LaneReservations lane = context.reservationOwner() instanceof LaneReservations owner ? owner : null;
+        StressSession session = lane != null ? lane.holding(StressSession.class, StressSession::new)
+                : context.reservationOwner() instanceof StressSession owner ? owner : null;
         AllocationResult minimum = allocate(requirement, facets, context, session, 1L, context.reservations().copy());
         if (minimum.failure() != null) return RequirementHandlerSupport.blockedPlan(requirement, context, minimum.failure());
         long lower = 1L;
@@ -75,8 +80,8 @@ public final class StressRequirementHandler implements RequirementHandler<Stress
             AllocationResult allocation = allocate(requirement, facets, context, session, parallelism, reservations);
             if (allocation.failure() != null) return new RequirementPlan.OperationPlan(List.of(),
                     blocked(requirement, context, allocation.failure()));
-            return new RequirementPlan.OperationPlan(List.of(() -> commit(requirement, context, session,
-                    allocation.allocations())), null);
+            CapabilityOperation operation = () -> commit(requirement, context, session, allocation.allocations());
+            return new RequirementPlan.OperationPlan(List.of(lane == null ? operation : lane.owned(operation)), null);
         };
         return RequirementHandlerSupport.deferredPlan(context, lower, factory,
                 RequirementHandlerSupport.reservationFactory(factory));
@@ -84,7 +89,8 @@ public final class StressRequirementHandler implements RequirementHandler<Stress
 
     private static AllocationResult allocate(StressRequirement requirement, List<StressFacet> facets,
                                                PlanningContext context, StressSession session, long parallelism,
-                                               PlanningReservations reservations) {
+                                               PlanningReservations branch) {
+        StressBudget reservations = branch.state(StressBudget.KEY);
         boolean input = requirement.io() == RecipeModifier.IOType.INPUT;
         if (!input && !validOutputRpm(requirement.rpm())) return failed(CreateFailureReasons.INVALID_OUTPUT_RPM);
         if (facets.isEmpty()) return failed(input ? CreateFailureReasons.MISSING_ROTATION

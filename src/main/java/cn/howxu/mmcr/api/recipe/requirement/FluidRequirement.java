@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.api.recipe.requirement;
 
+import com.google.gson.JsonElement;
+import com.mojang.serialization.DynamicOps;
+
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -109,6 +112,29 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
             throw new IllegalArgumentException("Invalid tag count: " + requirement.tags().size());
         }
     }
+
+    @Override
+    public RequirementExecutionPolicy execution() { return io.isInput() ? RequirementExecutionPolicy.START_MATERIAL : RequirementExecutionPolicy.LEGACY; }
+
+    @Override
+    public long batchAmount(int duration) { return io.isInput() ? amount : stack.getAmount(); }
+
+    @Override
+    public Object batchIdentity(DynamicOps<JsonElement> ops) {
+        return io.isInput() ? FluidIngredient.CODEC.encodeStart(ops, fluid).getOrThrow()
+                : MachineOutput.aggregationKey(new MachineOutput.FluidOutput(stack, 1F));
+    }
+
+    @Override
+    public float consumptionProbability() { return consumeChance; }
+
+    @Override
+    public FluidRequirement asRetainedInput() {
+        return consumeChance == 0F ? this : new FluidRequirement(io, fluid, amount, stack, chance, tags, 0F);
+    }
+
+    @Override
+    public Object derivationVersion() { return type().handler(); }
 
     @Override
     public RequirementType<FluidRequirement> type() {

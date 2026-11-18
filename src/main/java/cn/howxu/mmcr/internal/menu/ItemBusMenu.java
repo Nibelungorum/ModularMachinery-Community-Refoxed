@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
+import net.minecraft.network.RegistryFriendlyByteBuf;
+
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.port.ItemBusSize;
@@ -12,7 +14,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
-public class ItemBusMenu extends AbstractMachineMenu {
+public class ItemBusMenu extends AbstractMachineMenu implements PortMenuBinding {
 
     public static final int BASE_IMAGE_HEIGHT = 166;
     public static final int SLOT_SIZE = 18;
@@ -88,6 +90,8 @@ public class ItemBusMenu extends AbstractMachineMenu {
     public ItemBusBlockEntity owner() {
         return owner;
     }
+
+    @Override public void writeOpenData(RegistryFriendlyByteBuf buffer) { writeClientOpenData(buffer, pos(), owner()); }
 
     public BlockPos pos() { return pos; }
 

@@ -168,6 +168,11 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
     }
 
     /** Reallocates a startup input at the chosen parallelism and validates its split without applying it. */
+    @Override
+    public CapabilityResult checkStart(AirRequirement requirement, List<MachineCapability> capabilities, PlanningContext context) {
+        return preflightStart(requirement, capabilities, context);
+    }
+
     public static CapabilityResult preflightStart(AirRequirement requirement, List<MachineCapability> capabilities,
                                                  PlanningContext context) {
         if (!PneumaticCraftBridge.get().available()) return commitFailure(context, AirFailureReasons.UNAVAILABLE);

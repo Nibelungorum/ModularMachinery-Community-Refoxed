@@ -7,8 +7,9 @@ import cn.howxu.mmcr.api.capability.CapabilityRequest;
 import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.internal.recipe.ResourceSearch;
 import cn.howxu.mmcr.api.capability.async.AsyncResourceValue;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalSearchValues;
 import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
@@ -106,7 +107,9 @@ import java.util.function.Predicate;
  */
 public final class LoadedMekanismBridge implements MekanismBridge {
     /** Machine capability seam supplied by a loaded Mekanism chemical port. */
-    public interface ChemicalPort extends ChemicalHandlerPort {
+    public interface ChemicalPort extends ChemicalHandlerPort, ResourceSearch.Access {
+        @Override default Object searchStorage() { return chemicalTank(); }
+
         IChemicalTank chemicalTank();
 
         @Override
@@ -637,7 +640,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
                                                  AsyncResourceValue value) {
         ChemicalMatcher matcher = ChemicalMatcher.resolve(requirement.ingredient());
         return matcher != null && matcher.matches(
-                NativeAsyncResourceValues.chemical(value).getChemicalHolder());
+                ChemicalSearchValues.chemical(value).getChemicalHolder());
     }
 
     public static Set<AsyncResourceValue> matchingChemicalSearchResources(LoadedChemicalRequirement requirement,
@@ -646,7 +649,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         if (matcher == null) return Set.of();
         Set<AsyncResourceValue> matching = new HashSet<>();
         for (AsyncResourceValue value : values) {
-            if (matcher.matches(NativeAsyncResourceValues.chemical(value).getChemicalHolder())) matching.add(value);
+            if (matcher.matches(ChemicalSearchValues.chemical(value).getChemicalHolder())) matching.add(value);
         }
         return Set.copyOf(matching);
     }
@@ -667,7 +670,7 @@ public final class LoadedMekanismBridge implements MekanismBridge {
 
     public static AsyncResourceValue chemicalSearchValue(Object resource) {
         return resource instanceof ChemicalStack chemical && !chemical.isEmpty()
-                ? NativeAsyncResourceValues.chemical(chemical) : null;
+                ? ChemicalSearchValues.chemical(chemical) : null;
     }
 
     /** Captured on the server thread; no tank, matcher or callback is retained in the search values.

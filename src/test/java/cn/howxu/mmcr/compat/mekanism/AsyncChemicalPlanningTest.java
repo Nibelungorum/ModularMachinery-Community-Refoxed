@@ -19,7 +19,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortCapability;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
-import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
+import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalSearchValues;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
@@ -89,7 +89,7 @@ class AsyncChemicalPlanningTest {
         AsyncCapabilityRequest.Resource request = (AsyncCapabilityRequest.Resource) requirement.requests().getFirst();
         assertThat(request.capabilityId()).isEqualTo(MekanismRecipeTypes.CHEMICAL);
         assertThat(request.parallelism()).isEqualTo(3L);
-        assertThat(request.actions()).containsExactly(new AsyncResourceAction(NativeAsyncResourceValues.chemical(oxygen),
+        assertThat(request.actions()).containsExactly(new AsyncResourceAction(ChemicalSearchValues.chemical(oxygen),
                 300L, false));
     }
 
@@ -209,7 +209,7 @@ class AsyncChemicalPlanningTest {
         AsyncRequirementPlanner.Capability capability = new AsyncRequirementPlanner.Capability(
                 new AsyncCapabilityPlanner.Resource(input.type().id()),
                 new AsyncCapabilitySnapshot.Resource(input.type().id(), List.of(
-                        new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(NativeAsyncResourceValues.chemical(chemical)),
+                        new AsyncCapabilitySnapshot.ResourceSlot(Optional.of(ChemicalSearchValues.chemical(chemical)),
                                 1_000L, 1_000L))), Set.of(IOType.INPUT));
         Method method = CraftingContext.class.getDeclaredMethod("prepareAsyncRequirement", int.class,
                 MachineRequirement.class, long.class, List.class);

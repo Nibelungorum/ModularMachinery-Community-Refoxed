@@ -1,33 +1,19 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+
 import appeng.api.crafting.IPatternDetails;
-import appeng.api.stacks.AEFluidKey;
-import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.crafting.pattern.AEProcessingPattern;
-import cn.howxu.mmcr.api.compat.mekanism.ChemicalIngredient;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
-import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
-import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
-import cn.howxu.mmcr.compat.appmek.AppMekBridge;
-import cn.howxu.mmcr.compat.ars_nouveau.SourceRequirement;
-import cn.howxu.mmcr.compat.botania.ManaRequirement;
-import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
-import net.minecraft.resources.ResourceLocation;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -109,21 +95,9 @@ public final class PatternBatchSupport {
             // Conditions, custom requirements and callbacks are checked by actual start planning.
             boolean linear = supportsBatchInputs(effective.requirements());
             for (MachineRequirement requirement : effective.requirements()) {
-                long amount;
-                if (requirement instanceof ItemRequirement item) {
-                    amount = item.io() == IOType.INPUT ? item.count() : item.stack().getCount();
-                } else if (requirement instanceof FluidRequirement fluid) {
-                    amount = fluid.io() == IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
-                } else if (requirement instanceof EnergyRequirement energy) {
-                    amount = Math.multiplyExact(energy.fePerTick(), (long) effective.duration());
-                } else if (requirement instanceof LightningRequirement lightning) {
-                    amount = lightning.amount();
-                } else if (requirement instanceof LoadedChemicalRequirement chemical) {
-                    amount = chemical.ingredient().amount();
-                } else {
-                    continue;
-                }
-                if (amount <= 0L) return null;
+                long amount = requirement.batchAmount(effective.duration());
+                if (amount < 0L) linear = false;
+                if (amount <= 0L) continue;
                 maximum = Math.min(maximum, Long.MAX_VALUE / Math.multiplyExact(amount, crafts));
             }
             if (maximum < 1L) return null;
@@ -145,17 +119,9 @@ public final class PatternBatchSupport {
     /** Applied both during publication and after beforeStart has supplied the actual requirements. */
     public static boolean supportsBatchInputs(List<MachineRequirement> requirements) {
         for (MachineRequirement requirement : requirements) {
+            if (requirement.batchAmount(1) < 0L) return false;
             if (requirement.io() != IOType.INPUT) continue;
-            float consumeChance = switch (requirement) {
-                case ItemRequirement item -> item.consumeChance();
-                case FluidRequirement fluid -> fluid.consumeChance();
-                case LoadedChemicalRequirement chemical -> chemical.consumeChance();
-                case LightningRequirement lightning -> lightning.chance(); // Lightning inputs currently require 1.
-                case SourceRequirement source -> source.consumeChance();
-                case ManaRequirement mana -> mana.consumeChance();
-                case AirRequirement air -> air.consumeChance();
-                default -> 1F;
-            };
+            float consumeChance = requirement.consumptionProbability();
             if (consumeChance != 0F && consumeChance != 1F) return false;
         }
         return true;
@@ -164,30 +130,11 @@ public final class PatternBatchSupport {
     private static boolean inputsMatch(List<MachineRequirement> requirements, IPatternDetails original) {
         for (MachineRequirement requirement : requirements) {
             if (requirement.io() != IOType.INPUT) continue;
-            if (!(requirement instanceof ItemRequirement) && !(requirement instanceof FluidRequirement)
-                    && !(requirement instanceof LightningRequirement)
-                    && !(requirement instanceof LoadedChemicalRequirement)) continue;
-            // Chemical tags are resolved by the actual start planner, not by this publication lookup.
-            if (requirement instanceof LoadedChemicalRequirement chemical
-                    && chemical.ingredient().kind() != ChemicalIngredient.Kind.CHEMICAL) continue;
+            var matcher = AE2ResourceFamilies.inputMatcher(requirement);
+            if (matcher == null) continue; // Runtime conditions and tag proof belong to the start planner.
             boolean matched = false;
-            for (var input : original.getInputs()) {
-                for (GenericStack candidate : input.getPossibleInputs()) {
-                    if (requirement instanceof ItemRequirement item && candidate.what() instanceof AEItemKey key
-                            && item.item() != null && item.item().test(key.toStack())
-                            && item.components().matches(key.toStack())) matched = true;
-                    if (requirement instanceof FluidRequirement fluid && candidate.what() instanceof AEFluidKey key
-                            && fluid.fluid() != null && fluid.fluid().test(key.toStack(1))) matched = true;
-                    if (requirement instanceof LightningRequirement lightning) {
-                        MachineOutput output = LightningBridge.get().patternOutput(candidate.what(), 1L).orElse(null);
-                        if (output instanceof LightningOutput value && value.tier().equals(lightning.tier())) matched = true;
-                    }
-                    if (requirement instanceof LoadedChemicalRequirement chemical) {
-                        MachineOutput output = AppMekBridge.get().patternOutput(candidate.what(), 1L).orElse(null);
-                        if (output instanceof LoadedChemicalOutput value && value.id().equals(chemical.ingredient().id())) matched = true;
-                    }
-                }
-            }
+            for (var input : original.getInputs()) for (var candidate : input.getPossibleInputs())
+                if (matcher.test(candidate.what())) matched = true;
             if (!matched) return false;
         }
         return true;
@@ -197,14 +144,10 @@ public final class PatternBatchSupport {
         Map<Object, Long> totals = new LinkedHashMap<>();
         for (GenericStack stack : stacks) {
             if (stack == null || stack.amount() < 1L) throw new IllegalArgumentException("Invalid pattern output");
-            Object identity;
-            if (stack.what() instanceof AEItemKey || stack.what() instanceof AEFluidKey) identity = stack.what();
-            else {
-                MachineOutput output = AppMekBridge.get().patternOutput(stack.what(), 1L).orElse(null);
-                if (output == null) output = LightningBridge.get().patternOutput(stack.what(), 1L).orElse(null);
-                if (output == null) throw new IllegalArgumentException("Unknown pattern output family");
-                identity = outputIdentity(output);
-            }
+            var family = AE2ResourceFamilies.forType(stack.what().getType());
+            MachineOutput output = family == null ? null : family.patternOutput(stack.what(), 1L);
+            if (output == null) throw new IllegalArgumentException("Unknown pattern output family");
+            Object identity = outputIdentity(output);
             totals.merge(identity, stack.amount(), Math::addExact);
         }
         return totals;
@@ -222,18 +165,10 @@ public final class PatternBatchSupport {
     }
 
     private static Object outputIdentity(MachineOutput output) {
-        if (output instanceof MachineOutput.ItemOutput item) {
-            if (item.components().hasNonExactValues()) throw new IllegalArgumentException("Non-exact output components");
-            return AEItemKey.of(item.resolvedStack());
-        }
-        if (output instanceof MachineOutput.FluidOutput fluid) return AEFluidKey.of(fluid.stack());
-        if (output instanceof LightningOutput lightning) return lightning.tier();
-        if (output instanceof LoadedChemicalOutput chemical) return new ChemicalIdentity(chemical.id());
-        throw new IllegalArgumentException("Unknown output family");
+        if (output instanceof MachineOutput.ItemOutput item && item.components().hasNonExactValues())
+            throw new IllegalArgumentException("Non-exact output components");
+        var key = output.aggregationIdentity();
+        if (key == null) throw new IllegalArgumentException("Unknown output family");
+        return List.of(output.outputType(), key);
     }
-
-    /** Chemical IDs must never share MachineOutput's generic empty aggregation key.
-     * @author howxu <dev@howxu.cn>
-     */
-    private record ChemicalIdentity(ResourceLocation id) { }
 }

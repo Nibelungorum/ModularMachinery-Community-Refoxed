@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.extendedae_plus.loaded;
 
+import net.minecraft.resources.ResourceLocation;
+
 import appeng.api.networking.IManagedGridNode;
 import appeng.helpers.patternprovider.PatternProviderLogic;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
@@ -28,6 +30,8 @@ public final class MirrorPatternInterfaceKind implements PatternLogicKind {
 
     private MirrorPatternInterfaceKind() {
     }
+
+    @Override public List<ResourceLocation> overlayTextures() { return List.of(MMCR.id("block/extendedae_plus/mirror_pattern_interface")); }
 
     @Override public String id() { return "eaep_me_mirror_pattern_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }

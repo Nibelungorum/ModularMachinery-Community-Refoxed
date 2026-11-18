@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.menu;
 
+import net.minecraft.network.RegistryFriendlyByteBuf;
+
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
@@ -21,7 +23,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ExtendedCombinedMenu extends AbstractMachineMenu {
+public final class ExtendedCombinedMenu extends AbstractMachineMenu implements PortMenuBinding {
     private final ExtendedCombinedPortBlockEntity owner;
     private final BlockPos pos;
     private final String kind;
@@ -93,6 +95,8 @@ public final class ExtendedCombinedMenu extends AbstractMachineMenu {
     }
 
     public ExtendedCombinedPortBlockEntity owner() { return owner; }
+
+    @Override public void writeOpenData(RegistryFriendlyByteBuf buffer) { writeClientOpenData(buffer, owner()); }
 
     public BlockPos pos() { return pos; }
 
