@@ -4,6 +4,9 @@ import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.jei.MachineRecipeDisplay;
+import cn.howxu.mmcr.compat.jei.JeiRecipeLine;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
+import java.util.Optional;
 import com.moakiee.ae2lt.integration.jei.LightningJeiIngredients;
 import com.moakiee.ae2lt.me.key.LightningKey;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -31,6 +34,26 @@ public final class LightningJeiDisplay {
                 .map(LightningRequirement.class::cast)
                 .sorted(Comparator.comparingInt(requirement -> requirement.io() == IOType.INPUT ? 0 : 1))
                 .toList();
+    }
+
+    private static boolean registered;
+    public static synchronized void register() {
+        if (registered) return;
+        for (var tier : LightningTier.values()) {
+            JeiRecipeLine.Registry.register(LightningRecipeTypes.requirementType(tier), LightningRequirement.class, requirement -> new JeiRecipeLine() {
+                @Override public void draw(GuiGraphicsExtractor graphics, int x, int y, int width) {
+                    drawLine(graphics, requirement, x, y, width);
+                }
+                @Override public Optional<Component> tooltip() {
+                    return requirement.io().isInput() ? Optional.empty() : Optional.of(Component.translatable(
+                            "jei.mmcr.machine_recipe.output_chance", Math.round(requirement.chance() * 100F) + "%"));
+                }
+                @Override public void index(IRecipeLayoutBuilder builder) {
+                    if (nativeAvailable()) NativeIngredients.add(builder, List.of(requirement));
+                }
+            });
+        }
+        registered = true;
     }
 
     public static Component label(LightningRequirement requirement) {

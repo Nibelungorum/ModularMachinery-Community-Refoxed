@@ -8,11 +8,6 @@ import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
-import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
-import cn.howxu.mmcr.compat.ae2lt.client.LightningJeiDisplay;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
-import mekanism.api.chemical.ChemicalStack;
-import mekanism.client.recipe_viewer.jei.MekanismJEI;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -153,7 +148,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         addRegion(builder, recipe, layout.outputs(), false);
         addLevelRequirementSlots(builder, layout, recipe, Minecraft.getInstance().font::width);
         addTransferSlots(builder, recipe);
-        LightningJeiDisplay.addInvisibleIngredients(builder, recipe);
+        JeiRecipeLine.Registry.lines(recipe).forEach(line -> line.index(builder));
         builder.moveRecipeTransferButton(layout.transferButtonX(), layout.transferButtonY() - 3);
     }
 
@@ -208,8 +203,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
         y = layout.lightningTextY(recipe);
         int lightningWidth = (int) ((getWidth() - layout.durationTextX() * 2) / TEXT_SCALE);
-        for (LightningRequirement lightning : LightningJeiDisplay.requirements(recipe)) {
-            LightningJeiDisplay.drawLine(guiGraphics, lightning, textX, (int) (y / TEXT_SCALE), lightningWidth);
+        for (var line : JeiRecipeLine.Registry.lines(recipe)) {
+            line.draw(guiGraphics, textX, (int) (y / TEXT_SCALE), lightningWidth);
             y += TEXT_LINE_SPACING;
         }
         Component hostRequirement = hostRequirementComponent(recipe, gameTime);
@@ -484,13 +479,11 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         var type = switch (plan.kind()) {
             case ITEM -> VanillaTypes.ITEM_STACK;
             case FLUID -> NeoForgeTypes.FLUID_STACK;
-            case CHEMICAL -> null;
             case GENERIC, TEXT -> null;
         };
         return recipe.entries().stream()
                 .filter(entry -> entry.role() == (input ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT))
-                .filter(entry -> plan.kind() == MachineRecipeLayout.Kind.CHEMICAL
-                        ? entry.typeId().equals(MekanismRecipeTypes.CHEMICAL) : entry.ingredientType() == type)
+                .filter(entry -> entry.ingredientType() == type)
                 .skip(plan.index())
                 .findFirst();
     }
@@ -501,32 +494,18 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             slot.addRichTooltipCallback((view, tooltip) -> tooltip.add((Component) entry.ingredient()));
             return;
         }
-        boolean chemical = entry.typeId().equals(MekanismRecipeTypes.CHEMICAL);
-        String quantity = entry.ingredientType() == VanillaTypes.ITEM_STACK
-                ? itemQuantityText(entry.count())
-                : chemical ? chemicalQuantityText(entry.count()) : fluidQuantityText(entry.count());
-        if (entry.ingredientType() == VanillaTypes.ITEM_STACK) {
-            String chance = entry.role() == RecipeIngredientRole.INPUT
-                    ? inputOverlayText(entry.chance(), selectedLanguage())
-                    : outputOverlayText(entry.chance());
-            setItemOverlay(slot, chance, quantity);
-        } else if (chemical) {
-            if (entry.role() == RecipeIngredientRole.INPUT) {
-                setItemOverlay(slot, inputOverlayText(entry.chance(), selectedLanguage()), quantity);
-            } else {
-                setItemOverlay(slot, outputOverlayText(entry.chance()), quantity);
-            }
-            slot.addRichTooltipCallback((view, tooltip) -> {
-                appendChemicalQuantityTooltip(tooltip, entry.count());
-                if (entry.role() == RecipeIngredientRole.INPUT) {
-                    appendConsumeChanceTooltip(tooltip, entry.chance(), true);
-                } else {
-                    appendOutputChanceTooltip(tooltip, entry.chance());
-                }
-            });
-        } else {
-            setQuantityOverlay(slot, quantity);
-        }
+        var adapter = JeiIngredientAdapterRegistry.get(entry.typeId());
+        String quantity = entry.count() < 0L ? "" : adapter.map(value -> value.quantityText(entry.count()))
+                .orElseGet(() -> itemQuantityText(entry.count()));
+        String chance = !Float.isFinite(entry.chance()) || entry.chance() >= 1F ? ""
+                : entry.role() == RecipeIngredientRole.INPUT ? inputOverlayText(entry.chance(), selectedLanguage())
+                : outputOverlayText(entry.chance());
+        setItemOverlay(slot, chance, quantity);
+        slot.addRichTooltipCallback((view, tooltip) -> {
+            if (entry.count() >= 0L) adapter.flatMap(value -> value.quantityTooltip(entry.count())).ifPresent(tooltip::add);
+            if (entry.role() == RecipeIngredientRole.INPUT) appendConsumeChanceTooltip(tooltip, entry.chance(), true);
+            else appendOutputChanceTooltip(tooltip, entry.chance());
+        });
         if (entry.renderer() != null) {
             slot.setCustomRenderer((IIngredientType) entry.ingredientType(), entry.renderer());
         }
@@ -572,36 +551,18 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         for (JeiDisplayEntry entry : recipe.entries()) {
             if (entry.typeId().equals(ItemRequirement.TYPE.id())
                     || entry.typeId().equals(FluidRequirement.TYPE.id())) continue;
-            if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) {
-                addChemicalTransferSlot(builder, entry);
-                continue;
-            }
-            if (entry.role() != RecipeIngredientRole.INPUT || !entry.transferable()) continue;
-            IRecipeSlotBuilder slot = builder.addInputSlot(-1000, -1000);
-            addGeneric(slot, entry);
+            var actual = JeiIngredientAdapterRegistry.get(entry.typeId())
+                    .map(adapter -> adapter.actualIngredients(entry)).orElse(List.of());
+            if (actual.isEmpty()) continue;
+            addActualIngredients(builder, entry, actual);
         }
     }
 
-    private static void addChemicalTransferSlot(IRecipeLayoutBuilder builder, JeiDisplayEntry entry) {
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void addActualIngredients(IRecipeLayoutBuilder builder, JeiDisplayEntry entry, List<?> actual) {
         IRecipeSlotBuilder slot = entry.role() == RecipeIngredientRole.INPUT
-                ? builder.addInputSlot(-1000, -1000)
-                : builder.addOutputSlot(-1000, -1000);
-        for (ChemicalStack chemical : actualChemicalStacks(entry.ingredient())) {
-            slot.add(MekanismJEI.TYPE_CHEMICAL, chemical.copyWithAmount(entry.count()));
-        }
-    }
-
-    private static List<ChemicalStack> actualChemicalStacks(Object ingredient) {
-        if (ingredient instanceof List<?> ingredients) {
-            return ingredients.stream()
-                    .filter(ChemicalStack.class::isInstance)
-                    .map(ChemicalStack.class::cast)
-                    .filter(stack -> !stack.isEmpty())
-                    .toList();
-        }
-        return ingredient instanceof ChemicalStack chemical && !chemical.isEmpty()
-                ? List.of(chemical)
-                : List.of();
+                ? builder.addInputSlot(-1000, -1000) : builder.addOutputSlot(-1000, -1000);
+        for (Object value : actual) slot.add((IIngredientType) entry.ingredientType(), value);
     }
 
     private static void addActualItem(IRecipeSlotBuilder slot, MachineRecipeDisplay.ItemInputDisplay item) {
@@ -692,11 +653,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
-    private static void setQuantityOverlay(IRecipeSlotBuilder jeiSlot, String quantityText) {
-        if (!quantityText.isEmpty()) {
-            jeiSlot.setOverlay(new JeiSlotOverlayDrawable("", quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
-        }
-    }
 
     static String itemQuantityText(long count) {
         return count > 1 ? ReadableNumber.formatForSlot(count, 0, "") : "";
@@ -731,7 +687,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 : fluidBucketText(amount, 3);
     }
 
-    static String chemicalTooltipQuantity(long amount) {
+    public static String chemicalTooltipQuantity(long amount) {
         return BigDecimal.valueOf(amount, 3)
                 .setScale(3, RoundingMode.DOWN)
                 .stripTrailingZeros()
@@ -783,10 +739,6 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         }
     }
 
-    private static void appendChemicalQuantityTooltip(ITooltipBuilder tooltip, long amount) {
-        tooltip.add(Component.translatable("jei.mmcr.machine_recipe.chemical_amount",
-                chemicalTooltipQuantity(amount)));
-    }
 
     static void appendConsumeChanceTooltip(ITooltipBuilder tooltip, float consumeChance, boolean input) {
         if (!input) return;
@@ -804,11 +756,8 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
             return Optional.empty();
         }
         int y = layout.lightningTextY(recipe);
-        for (LightningRequirement lightning : LightningJeiDisplay.requirements(recipe)) {
-            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING && !lightning.io().isInput()) {
-                return Optional.of(Component.translatable("jei.mmcr.machine_recipe.output_chance",
-                        Math.round(lightning.chance() * 100F) + "%"));
-            }
+        for (var line : JeiRecipeLine.Registry.lines(recipe)) {
+            if (mouseY >= y && mouseY < y + TEXT_LINE_SPACING) return line.tooltip();
             y += TEXT_LINE_SPACING;
         }
         return Optional.empty();

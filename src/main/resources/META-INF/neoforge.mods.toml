@@ -43,8 +43,8 @@ config="mixins/extras/mmcr.extendedae_plus.mixins.json"
 requiredMods=["ae2", "extendedae", "extendedae_plus"]
 
 [[mixins]]
-config="mixins/extras/mmcr.ae2lt.jei.mixins.json"
-requiredMods=["ae2", "ae2lt", "jei"]
+config="mixins/extras/mmcr.ae2.jei.mixins.json"
+requiredMods=["ae2", "jei"]
 
 [[dependencies.${mod_id}]]
 modId="neoforge"

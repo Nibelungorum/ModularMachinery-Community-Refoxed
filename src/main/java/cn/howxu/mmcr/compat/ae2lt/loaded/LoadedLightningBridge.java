@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.ae2lt.loaded;
 
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.AEKeyType;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.facet.OperationFacet;
@@ -50,6 +51,9 @@ public final class LoadedLightningBridge implements LightningBridge {
                 @Override public Predicate<LightningTier> patternInput(MachineRequirement requirement) {
                     return requirement instanceof LightningRequirement r && r.io().isInput()
                             ? tier -> r.tier() == tier : null;
+                }
+                @Override public GenericStack exactJeiStack(MachineRequirement requirement) {
+                    return requirement instanceof LightningRequirement r ? new GenericStack(toKey(r.tier()), r.amount()) : null;
                 }
                 @Override public long maxPatternTotal() { return Integer.MAX_VALUE; }
                 @Override

@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.compat.ae2lt.client.LightningJeiDisplay;
+import cn.howxu.mmcr.compat.mekanism.loaded.jei.ChemicalJeiAdapter;
+import net.neoforged.fml.ModList;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.publicapi.event.RegisterJeiRecipeInformationEvent;
@@ -52,6 +55,10 @@ public final class JeiPlugin implements IModPlugin {
         ClientRegistrationAdapters.freeze(event);
         RecipeInformationRegistry.replacePublic(ClientRegistrationAdapters.coreEntries(event));
         JeiIngredientAdapterRegistry.registerBuiltIns();
+        if (ModList.get().isLoaded("ae2lt")) LightningJeiDisplay.register();
+        if (ModList.get().isLoaded("mekanism")) {
+            JeiIngredientAdapterRegistry.register(ChemicalJeiAdapter.INSTANCE);
+        }
         var guiHelper = registration.getJeiHelpers().getGuiHelper();
         registration.addRecipeCategories(new MachineStructureCategory(guiHelper,
                 registration.getJeiHelpers().getIngredientManager()));

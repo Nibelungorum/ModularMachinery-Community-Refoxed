@@ -116,8 +116,9 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
         }
     }
 
-    @Override
-    public OptionalLong ioAmount() {
+    @Override public float ioChance() { return io.isInput() ? consumeChance() : chance; }
+
+    @Override public OptionalLong ioAmount() {
         return OptionalLong.of(io.isInput() ? amount : stack.getAmount());
     }
 

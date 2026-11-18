@@ -106,12 +106,12 @@ class JeiIngredientAdapterRegistryTest {
     }
 
     @Test
-    void unknownTypeUsesBoundedTextEntry() {
+    void unknownTypeRetainsExactLongQuantityInTextEntry() {
         JeiDisplayEntry entry = JeiIngredientAdapterRegistry.textEntry(new RecipeIoEntry(
                 RecipeIngredientRole.INPUT, MMCR.id("unknown_jei_type"), "unknown", Long.MAX_VALUE, 1F));
 
         assertThat(entry.isTextOnly()).isTrue();
-        assertThat(entry.count()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(entry.count()).isEqualTo(Long.MAX_VALUE);
         assertThat(entry.transferable()).isFalse();
         assertThat(MachineRecipeLayout.regionForEntries(List.of(entry), RecipeIngredientRole.INPUT, 4).slots())
                 .singleElement().extracting(slot -> slot.entry().kind()).isEqualTo(MachineRecipeLayout.Kind.TEXT);

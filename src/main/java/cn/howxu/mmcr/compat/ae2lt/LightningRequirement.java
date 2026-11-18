@@ -34,6 +34,8 @@ public record LightningRequirement(LightningTier tier, RecipeModifier.IOType io,
         return new LightningRequirement(tier, RecipeModifier.IOType.OUTPUT, amount, chance, List.of());
     }
 
+    @Override public float ioChance() { return io.isInput() ? consumeChance() : chance; }
+
     @Override public OptionalLong ioAmount() { return OptionalLong.of(amount); }
 
     @Override

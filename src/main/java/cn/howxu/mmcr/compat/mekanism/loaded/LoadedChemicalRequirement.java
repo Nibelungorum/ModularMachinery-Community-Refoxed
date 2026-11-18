@@ -123,6 +123,8 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
                 ChemicalIngredient.chemical(id, amount), chance, List.of(), 1F);
     }
 
+    @Override public float ioChance() { return io.isInput() ? consumeChance() : chance; }
+
     @Override public OptionalLong ioAmount() { return OptionalLong.of(ingredient.amount()); }
 
     @Override

@@ -1,7 +1,7 @@
 {
   "required": false,
   "minVersion": "0.8",
-  "package": "cn.howxu.mmcr.mixin.compat.ae2lt",
+  "package": "cn.howxu.mmcr.mixin.compat.appliedenergistics2",
   "compatibilityLevel": "JAVA_21",
   "client": [
     "JeiEncodePatternTransferMixin"

@@ -386,6 +386,7 @@ class MachineRecipeDisplayTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        JeiIngredientAdapterRegistry.register(cn.howxu.mmcr.compat.mekanism.loaded.jei.ChemicalJeiAdapter.INSTANCE);
         bindItemComponents(
                 Items.COAL, Items.IRON_INGOT, Items.GOLD_INGOT, Items.IRON_NUGGET, Items.GOLD_NUGGET,
                 Items.DIAMOND_SWORD
@@ -1113,7 +1114,7 @@ class MachineRecipeDisplayTest {
                 .hasValueSatisfying(adapter -> assertThat(adapter.ingredientType()).isSameAs(MekanismJEI.TYPE_CHEMICAL));
         assertThat(MachineRecipeLayout.regionForEntries(List.of(item, chemical, fluid), RecipeIngredientRole.INPUT, 4).slots())
                 .extracting(slot -> slot.entry().kind().name())
-                .containsExactly("FLUID", "CHEMICAL", "ITEM");
+                .containsExactly("FLUID", "GENERIC", "ITEM");
     }
 
     @Test

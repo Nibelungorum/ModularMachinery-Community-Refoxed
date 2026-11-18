@@ -3,9 +3,7 @@ package cn.howxu.mmcr.compat.jei;
 import net.minecraft.client.Minecraft;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.compat.ae2lt.client.LightningJeiDisplay;
 import cn.howxu.mmcr.compat.jei.RecipeSlotLayout.Arrow;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import mezz.jei.api.constants.VanillaTypes;
 import mezz.jei.api.neoforge.NeoForgeTypes;
 import mezz.jei.api.recipe.RecipeIngredientRole;
@@ -78,7 +76,6 @@ public record MachineRecipeLayout(
         int fluidIndex = 0;
         int customItemIndex = 0;
         int customFluidIndex = 0;
-        int chemicalIndex = 0;
         int textIndex = 0;
         for (JeiDisplayEntry entry : displayEntries.stream()
                 .filter(candidate -> candidate.role() == role)
@@ -90,8 +87,7 @@ public record MachineRecipeLayout(
             } else if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
                 entries.add(new EntryPlan(Kind.FLUID,
                         entry.typeId().equals(FluidRequirement.TYPE.id()) ? fluidIndex++ : customFluidIndex++, entry));
-            } else if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) {
-                entries.add(new EntryPlan(Kind.CHEMICAL, chemicalIndex++, entry));
+
             } else if (!entry.isTextOnly()) {
                 entries.add(new EntryPlan(Kind.GENERIC, textIndex++, entry));
             } else {
@@ -118,7 +114,8 @@ public record MachineRecipeLayout(
 
     private static int kindOrder(JeiDisplayEntry entry) {
         if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) return 0;
-        if (entry.typeId().equals(MekanismRecipeTypes.CHEMICAL)) return 1;
+        var adapter = JeiIngredientAdapterRegistry.get(entry.typeId());
+        if (adapter.isPresent()) return adapter.get().displayOrder();
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) return 2;
         return 3;
     }
@@ -129,7 +126,7 @@ public record MachineRecipeLayout(
 
     public int lightningTextY(MachineRecipeDisplay display) {
         return durationTextY + TEXT_LINE_SPACING * (metadataLineCount(display)
-                - LightningJeiDisplay.requirements(display).size());
+                - JeiRecipeLine.Registry.lines(display).size());
     }
 
     public int levelRequirementSlotY(MachineRecipeDisplay display, int index) {
@@ -183,10 +180,10 @@ public record MachineRecipeLayout(
         return 1 + display.energyInputs().size() + display.energyOutputs().size()
                 + (display.minimumTemperature().isPresent() ? 1 : 0)
                 + (display.outputHeat().isPresent() ? 1 : 0)
-                + LightningJeiDisplay.requirements(display).size();
+                + JeiRecipeLine.Registry.lines(display).size();
     }
 
-    public enum Kind { ITEM, FLUID, CHEMICAL, GENERIC, TEXT }
+    public enum Kind { ITEM, FLUID, GENERIC, TEXT }
 
     public record EntryPlan(Kind kind, int index, @Nullable JeiDisplayEntry displayEntry) {
         public EntryPlan(Kind kind, int index) {

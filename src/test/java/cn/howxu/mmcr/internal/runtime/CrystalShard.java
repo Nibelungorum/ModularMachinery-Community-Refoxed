@@ -82,6 +82,7 @@ public record CrystalShard(RecipeModifier.IOType io, String color, int amount, f
 
     @Override public RequirementType<CrystalShard> type() { return TYPE; }
     @Override public java.util.OptionalLong ioAmount() { return java.util.OptionalLong.of(amount); }
+    @Override public float ioChance() { return chance; }
     @Override public float consumeChance() { return io.isInput() ? chance : 1F; }
     @Override public CrystalShard retainedInput() { return new CrystalShard(io, color, amount, 0F); }
 

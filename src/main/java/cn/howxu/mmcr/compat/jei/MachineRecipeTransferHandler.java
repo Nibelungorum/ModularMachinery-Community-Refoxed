@@ -98,7 +98,8 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
             }
         }
         Optional<JeiDisplayEntry> unsupported = inputs.stream()
-                .filter(entry -> entry.ingredientType() != VanillaTypes.ITEM_STACK || !entry.transferable())
+                .filter(entry -> entry.ingredientType() != VanillaTypes.ITEM_STACK || !entry.transferable()
+                        || entry.count() < 1L || entry.count() > Integer.MAX_VALUE)
                 .findFirst();
         if (unsupported.isPresent()) {
             JeiDisplayEntry entry = unsupported.get();
@@ -146,7 +147,7 @@ public final class MachineRecipeTransferHandler implements IRecipeTransferHandle
                             || itemInputIndex[0] >= itemEntries.size()) {
                         return slot;
                     }
-                    int count = itemEntries.get(itemInputIndex[0]++).count();
+                    int count = Math.toIntExact(itemEntries.get(itemInputIndex[0]++).count());
                     return new ActualCountSlotView(slot, count, ingredientManager);
                 })
                 .toList();

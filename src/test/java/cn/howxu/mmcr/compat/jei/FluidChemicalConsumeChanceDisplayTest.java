@@ -42,6 +42,7 @@ class FluidChemicalConsumeChanceDisplayTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        JeiIngredientAdapterRegistry.register(cn.howxu.mmcr.compat.mekanism.loaded.jei.ChemicalJeiAdapter.INSTANCE);
         RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
         LoadedChemicalRequirement.installUnavailableHandler();
         registerOxygen();

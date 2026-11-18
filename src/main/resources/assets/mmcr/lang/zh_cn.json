@@ -601,6 +601,7 @@
   "jei.mmcr.transfer.fluid_energy_not_supported": "仅支持转移物品输入；流体和能量需要通过对应端口供应。",
   "jei.mmcr.transfer.no_item_inputs": "该配方没有可转移的物品输入。",
   "jei.mmcr.transfer.not_enough_slots": "该配方的物品总线槽位不足",
+  "jei.mmcr.transfer.pattern_unsupported": "处理样板无法准确表示配方材料：%s",
   "jei.mmcr.transfer.pattern_not_enough_slots": "样板槽位不足：配方需要 %s 个输入槽、%s 个输出槽，终端提供 %s/%s",
   "jei.mmcr.transfer.unsupported": "该配方输入无法由物品总线转移：%s",
   "message.mmcr.multiblock_detector.cleared": "§4[DEBUG]§r 已清除",

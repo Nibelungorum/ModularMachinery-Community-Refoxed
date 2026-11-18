@@ -599,6 +599,7 @@
   "jei.mmcr.transfer.fluid_energy_not_supported": "Only item inputs can be transferred; fluids and energy must be supplied by their ports.",
   "jei.mmcr.transfer.no_item_inputs": "This recipe has no item inputs to transfer.",
   "jei.mmcr.transfer.not_enough_slots": "Not enough item bus slots for this recipe",
+  "jei.mmcr.transfer.pattern_unsupported": "This processing pattern cannot represent the exact ingredient: %s",
   "jei.mmcr.transfer.pattern_not_enough_slots": "Not enough pattern slots: recipe needs %s inputs and %s outputs, terminal provides %s/%s",
   "jei.mmcr.transfer.unsupported": "This recipe input cannot be transferred by the item bus: %s",
 

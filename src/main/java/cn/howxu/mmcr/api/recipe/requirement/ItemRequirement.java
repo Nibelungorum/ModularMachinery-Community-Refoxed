@@ -102,8 +102,9 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
         return stack.copy();
     }
 
-    @Override
-    public OptionalLong ioAmount() {
+    @Override public float ioChance() { return io.isInput() ? consumeChance() : chance; }
+
+    @Override public OptionalLong ioAmount() {
         return OptionalLong.of(io.isInput() ? count : stack.getCount());
     }
 

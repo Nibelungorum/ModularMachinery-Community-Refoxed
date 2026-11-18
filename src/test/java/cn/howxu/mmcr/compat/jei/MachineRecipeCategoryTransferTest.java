@@ -58,6 +58,7 @@ class MachineRecipeCategoryTransferTest {
     @BeforeAll
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
+        JeiIngredientAdapterRegistry.register(cn.howxu.mmcr.compat.mekanism.loaded.jei.ChemicalJeiAdapter.INSTANCE);
         if (RequirementHandlerRegistry.canonicalType(LoadedChemicalRequirement.TYPE) == null) {
             RequirementHandlerRegistry.register(LoadedChemicalRequirement.TYPE);
         }

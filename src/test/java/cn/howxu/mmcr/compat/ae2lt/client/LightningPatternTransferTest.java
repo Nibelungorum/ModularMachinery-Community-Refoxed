@@ -18,6 +18,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jei.PatternTransfer;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
+import cn.howxu.mmcr.compat.ae2lt.loaded.LoadedLightningBridge;
+import org.junit.jupiter.api.AfterAll;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,7 +32,11 @@ class LightningPatternTransferTest {
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
         LightningRecipeTypes.register();
+        LightningBridgeBootstrap.installForTesting(new LoadedLightningBridge());
     }
+
+    @AfterAll
+    static void restoreBridge() { LightningBridgeBootstrap.resetForTesting(); }
 
     @Test
     void encodesBothTiersAndDirectionsWithoutLosingNativeIngredients() {
@@ -42,7 +50,7 @@ class LightningPatternTransferTest {
                 LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 200L, 1F),
                 LightningRequirement.output(LightningTier.EXTREME_HIGH_VOLTAGE, 20L, 0.5F)));
 
-        var transfer = LightningPatternTransfer.prepare(display, List.of(List.of(iron, copper), List.of(water)),
+        var transfer = PatternTransfer.prepare(display, List.of(List.of(iron, copper), List.of(water)),
                 List.of(gold));
 
         assertThat(transfer.inputs()).containsExactly(List.of(iron, copper), List.of(water),
@@ -59,7 +67,7 @@ class LightningPatternTransferTest {
         var display = display(List.of(LightningRequirement.input(LightningTier.HIGH_VOLTAGE, 1000L),
                 LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 200L, 1F)));
 
-        var transfer = LightningPatternTransfer.prepare(display, List.of(List.of(unit)), List.of(unit));
+        var transfer = PatternTransfer.prepare(display, List.of(List.of(unit)), List.of(unit));
 
         assertThat(transfer.inputs()).containsExactly(List.of(new GenericStack(LightningKey.HIGH_VOLTAGE, 1000L)));
         assertThat(transfer.outputs()).containsExactly(new GenericStack(LightningKey.HIGH_VOLTAGE, 200L));
@@ -72,7 +80,7 @@ class LightningPatternTransferTest {
                 LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 4L, 1F),
                 LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 6L, 1F)));
 
-        var transfer = LightningPatternTransfer.prepare(display, List.of(), List.of());
+        var transfer = PatternTransfer.prepare(display, List.of(), List.of());
 
         assertThat(transfer.inputs()).containsExactly(List.of(new GenericStack(LightningKey.HIGH_VOLTAGE, 100L)));
         assertThat(transfer.outputs()).containsExactly(new GenericStack(LightningKey.HIGH_VOLTAGE, 10L));
@@ -83,7 +91,7 @@ class LightningPatternTransferTest {
         var display = display(List.of(LightningRequirement.input(LightningTier.HIGH_VOLTAGE, 2_147_483_647L),
                 LightningRequirement.output(LightningTier.EXTREME_HIGH_VOLTAGE, 2_147_483_647L, 1F)));
 
-        var transfer = LightningPatternTransfer.prepare(display, List.of(), List.of());
+        var transfer = PatternTransfer.prepare(display, List.of(), List.of());
 
         assertThat(transfer.inputs()).containsExactly(
                 List.of(new GenericStack(LightningKey.HIGH_VOLTAGE, 2_147_483_647L)));
@@ -95,7 +103,7 @@ class LightningPatternTransferTest {
     void outputOnlyLightningDoesNotBecomeAnInput() {
         var display = display(List.of(LightningRequirement.output(LightningTier.HIGH_VOLTAGE, 15L, 1F)));
 
-        var transfer = LightningPatternTransfer.prepare(display, List.of(), List.of());
+        var transfer = PatternTransfer.prepare(display, List.of(), List.of());
 
         assertThat(transfer.inputs()).isEmpty();
         assertThat(transfer.outputs()).containsExactly(new GenericStack(LightningKey.HIGH_VOLTAGE, 15L));
@@ -106,7 +114,7 @@ class LightningPatternTransferTest {
         List<List<GenericStack>> inputs = List.of(List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 4L)));
         List<GenericStack> outputs = List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 2L));
 
-        var transfer = LightningPatternTransfer.prepare(display(List.of()), inputs, outputs);
+        var transfer = PatternTransfer.prepare(display(List.of()), inputs, outputs);
 
         assertThat(transfer.inputs()).isSameAs(inputs);
         assertThat(transfer.outputs()).isSameAs(outputs);
@@ -115,7 +123,7 @@ class LightningPatternTransferTest {
     @Test
     void refusesInputOverflowInsteadOfDroppingAppendedLightning() {
         var inputs = List.of(List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)));
-        var transfer = LightningPatternTransfer.prepare(display(List.of(
+        var transfer = PatternTransfer.prepare(display(List.of(
                 LightningRequirement.input(LightningTier.HIGH_VOLTAGE, 1000L))), inputs, List.of());
 
         assertThat(transfer.fits(1, 1)).isFalse();
@@ -125,7 +133,7 @@ class LightningPatternTransferTest {
     @Test
     void refusesOutputOverflowInsteadOfDroppingAppendedLightning() {
         var outputs = List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L));
-        var transfer = LightningPatternTransfer.prepare(display(List.of(
+        var transfer = PatternTransfer.prepare(display(List.of(
                 LightningRequirement.output(LightningTier.EXTREME_HIGH_VOLTAGE, 20L, 1F))), List.of(), outputs);
 
         assertThat(transfer.fits(1, 1)).isFalse();

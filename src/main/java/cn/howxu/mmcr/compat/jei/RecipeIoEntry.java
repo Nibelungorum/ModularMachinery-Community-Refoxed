@@ -16,8 +16,8 @@ public record RecipeIoEntry(RecipeIngredientRole role, Identifier typeId,
         Objects.requireNonNull(role, "role");
         Objects.requireNonNull(typeId, "typeId");
         Objects.requireNonNull(value, "value");
-        if (amount < 0L) throw new IllegalArgumentException("amount must be non-negative");
-        if (!Float.isFinite(chance) || chance < 0F || chance > 1F) {
+        if (amount < -1L) throw new IllegalArgumentException("amount must be non-negative");
+        if (!Float.isNaN(chance) && (!Float.isFinite(chance) || chance < 0F || chance > 1F)) {
             throw new IllegalArgumentException("chance must be in [0, 1]");
         }
     }

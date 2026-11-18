@@ -55,6 +55,7 @@ class LightningRecipeDisplayTest {
     static void bootstrap() throws Exception {
         TestBootstrap.bootstrap();
         LightningRecipeTypes.register();
+        LightningJeiDisplay.register();
         if (RequirementHandlerRegistry.canonicalType(LoadedHeatRequirement.TEMPERATURE_TYPE) == null) {
             RequirementHandlerRegistry.register(LoadedHeatRequirement.TEMPERATURE_TYPE);
         }

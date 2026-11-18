@@ -67,6 +67,11 @@ import java.util.Optional;
 import java.util.function.Predicate;
 import appeng.api.stacks.AEKeyType;
 import cn.howxu.mmcr.internal.runtime.CrystalShard;
+import cn.howxu.mmcr.compat.jei.*;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.jei.PatternTransfer;
+import mezz.jei.api.ingredients.IIngredientType;
+import mezz.jei.api.recipe.RecipeIngredientRole;
+import mezz.jei.api.recipe.transfer.IRecipeTransferHandler;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
@@ -236,6 +241,24 @@ class PatternBatchSupportTest {
             var blueKey = nativeKeys.toKey(LightningTier.HIGH_VOLTAGE);
             var amberKey = nativeKeys.toKey(LightningTier.EXTREME_HIGH_VOLTAGE);
             var promised = List.of(new GenericStack(amberKey, 6L));
+            JeiIngredientAdapterRegistry.register(new JeiIngredientAdapter() {
+                private final IIngredientType<String> type = () -> String.class;
+                @Override public net.minecraft.resources.Identifier typeId() { return shard.type().id(); }
+                @Override public IIngredientType<?> ingredientType() { return type; }
+                @Override public String quantityText(long count) { return count + " shards"; }
+                @Override public Optional<JeiDisplayEntry> display(RecipeIoEntry entry) {
+                    return Optional.of(new JeiDisplayEntry(entry.role(), typeId(), type, ((CrystalShard) entry.value()).color(),
+                            entry.amount(), entry.chance(), null, false));
+                }
+                @Override public Optional<IRecipeTransferHandler<?, ?>> transferHandler() { return Optional.empty(); }
+            });
+            var display = MachineRecipeDisplay.from(recipe);
+            var entry = MachineRecipeLayout.forDisplay(display, 4).outputs().slots().getFirst().entry().displayEntry();
+            assertThat(entry.role()).isEqualTo(RecipeIngredientRole.OUTPUT);
+            assertThat(entry.chance()).isEqualTo(0.25F);
+            assertThat(entry.count()).isEqualTo(3L);
+            assertThat(JeiIngredientAdapterRegistry.get(entry.typeId()).orElseThrow().quantityText(entry.count())).isEqualTo("3 shards");
+            assertThat(PatternTransfer.prepare(display, List.of(), List.of()).unsupported()).isEqualTo(shard.type().id());
             assertThat(PatternBatchSupport.inspectRecipe(recipe, effective, patternFor(blueKey, 2, promised))).isNull();
             AE2ResourceFamilies.resetForTesting();
             var adapter = new AE2KeyAdapter<String>() {
@@ -251,6 +274,9 @@ class PatternBatchSupportTest {
                 @Override public String patternResource(MachineOutput value) {
                     return value instanceof CrystalShard.Output out ? out.color() : null;
                 }
+                @Override public GenericStack exactJeiStack(MachineRequirement value) {
+                    return value instanceof CrystalShard r ? new GenericStack(toKey(r.color()), r.amount()) : null;
+                }
                 @Override public Predicate<String> patternInput(MachineRequirement value) {
                     return value instanceof CrystalShard r && r.io().isInput() ? r.color()::equals : null;
                 }
@@ -261,6 +287,10 @@ class PatternBatchSupportTest {
                     new PortFamilyDescriptor(family, cn.howxu.mmcr.util.IOType.OUTPUT, 0, List.of()),
                     inv -> { throw new AssertionError(); }, (net, keys) -> { throw new AssertionError(); },
                     (host, storage, io, expose) -> { throw new AssertionError(); }));
+            var transfer = PatternTransfer.prepare(display, List.of(), List.of());
+            assertThat(transfer.fits(1, 1)).isTrue();
+            assertThat(transfer.fits(1, 0)).isFalse();
+            assertThat(transfer.outputs()).containsExactly(new GenericStack(amberKey, 3L));
             var profile = PatternBatchSupport.inspectRecipe(recipe, effective, patternFor(blueKey, 2, promised));
             assertThat(profile.binding().recipeCraftsPerPattern()).isEqualTo(2);
             assertThat(PatternBatchSupport.inspectRecipe(recipe, effective, patternFor(amberKey, 2, promised))).isNull();

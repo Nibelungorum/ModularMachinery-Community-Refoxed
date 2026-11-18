@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter;
 
 import appeng.api.stacks.AEKey;
+import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.AEKeyType;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -30,6 +31,9 @@ public interface AE2KeyAdapter<R> {
     default @Nullable R patternResource(MachineOutput output) { return null; }
     default @Nullable Predicate<R> patternInput(MachineRequirement requirement) { return null; }
 
+
+    /** Exact pattern contribution for a JEI ingredient that cannot itself carry this count. */
+    default @Nullable GenericStack exactJeiStack(MachineRequirement requirement) { return null; }
 
     default long maxPatternTotal() { return Long.MAX_VALUE; }
     default long stockingAmount() { return 1L; }

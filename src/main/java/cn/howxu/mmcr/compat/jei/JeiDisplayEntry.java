@@ -13,16 +13,20 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record JeiDisplayEntry(RecipeIngredientRole role, Identifier typeId, IIngredientType<?> ingredientType,
-                              Object ingredient, int count, float chance, IIngredientRenderer<?> renderer,
+                              Object ingredient, long count, float chance, IIngredientRenderer<?> renderer,
                               boolean transferable) {
     public JeiDisplayEntry {
         Objects.requireNonNull(role, "role");
         Objects.requireNonNull(typeId, "typeId");
         Objects.requireNonNull(ingredient, "ingredient");
-        if (count < 0) throw new IllegalArgumentException("count must be non-negative");
-        if (!Float.isFinite(chance) || chance < 0F || chance > 1F) {
+        if (count < -1L) throw new IllegalArgumentException("count must be non-negative");
+        if (!Float.isNaN(chance) && (!Float.isFinite(chance) || chance < 0F || chance > 1F)) {
             throw new IllegalArgumentException("chance must be in [0, 1]");
         }
+    }
+
+    public boolean hasNativePatternSlot() {
+        return JeiIngredientAdapterRegistry.get(typeId).map(adapter -> adapter.nativePatternSlot(this)).orElse(false);
     }
 
     public boolean isTextOnly() {

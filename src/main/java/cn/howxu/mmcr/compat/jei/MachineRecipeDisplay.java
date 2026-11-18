@@ -15,7 +15,6 @@ import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
-import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
@@ -212,47 +211,20 @@ public record MachineRecipeDisplay(
      * cannot prevent its machine category from loading.
      */
     public List<JeiDisplayEntry> entries() {
-        return recipe.runtimeRequirements().stream()
-                .filter(requirement -> !(requirement instanceof EnergyRequirement)
-                        && !(requirement instanceof LoadedHeatRequirement)
-                        && !(requirement instanceof SmartInterfaceRequirement)
-                        && !(requirement instanceof LevelRequirement)
-                        && !(requirement instanceof LightningRequirement)
-                        && !(requirement instanceof StageRequirement))
-                .map(requirement -> new RecipeIoEntry(
-                        requirement.io() == RecipeModifier.IOType.INPUT
-                                ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,
-                        requirement.type().id(), requirement, requirementAmount(requirement), requirementChance(requirement)))
-                .flatMap(entry -> JeiIngredientAdapterRegistry.display(entry)
-                        .map(Stream::of)
-                        .orElseGet(() -> Stream.of(JeiIngredientAdapterRegistry.textEntry(entry))))
-                .toList();
+        return recipe.runtimeRequirements().stream().map(MachineRecipeDisplay::entry)
+                .flatMap(Optional::stream).toList();
     }
 
-    private static long requirementAmount(MachineRequirement requirement) {
-        if (requirement instanceof ItemRequirement item) {
-            return item.io() == RecipeModifier.IOType.INPUT ? item.count() : item.stack().getCount();
-        }
-        if (requirement instanceof FluidRequirement fluid) {
-            return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
-        }
-        if (requirement instanceof EnergyRequirement energy) return energy.fePerTick();
-        if (requirement instanceof LoadedChemicalRequirement chemical) return chemical.ingredient().amount();
-        return 1L;
+    public static Optional<JeiDisplayEntry> entry(MachineRequirement requirement) {
+        if (requirement instanceof EnergyRequirement
+                || requirement instanceof LoadedHeatRequirement || requirement instanceof SmartInterfaceRequirement
+                || requirement instanceof LevelRequirement || JeiRecipeLine.Registry.contains(requirement)
+                || requirement instanceof StageRequirement) return Optional.empty();
+        var io = new RecipeIoEntry(requirement.io().isInput() ? RecipeIngredientRole.INPUT : RecipeIngredientRole.OUTPUT,
+                requirement.type().id(), requirement, requirement.ioAmount().orElse(-1L), requirement.ioChance());
+        return Optional.of(JeiIngredientAdapterRegistry.display(io).orElseGet(() -> JeiIngredientAdapterRegistry.textEntry(io)));
     }
 
-    private static float requirementChance(MachineRequirement requirement) {
-        if (requirement instanceof ItemRequirement item) {
-            return item.io() == RecipeModifier.IOType.INPUT ? item.consumeChance() : item.chance();
-        }
-        if (requirement instanceof FluidRequirement fluid) {
-            return fluid.io() == RecipeModifier.IOType.INPUT ? fluid.consumeChance() : fluid.chance();
-        }
-        if (requirement instanceof LoadedChemicalRequirement chemical) {
-            return chemical.io() == RecipeModifier.IOType.INPUT ? chemical.consumeChance() : chemical.chance();
-        }
-        return 1F;
-    }
 
     private static Optional<SmartInterfaceDisplay> smartInterfaceDisplay(SmartInterfaceRequirement requirement) {
         Component displayType = Component.translatable("mmcr.smart_interface.type." + requirement.interfaceType());

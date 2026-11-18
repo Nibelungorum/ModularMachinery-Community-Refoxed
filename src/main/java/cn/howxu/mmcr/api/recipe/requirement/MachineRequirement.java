@@ -49,6 +49,9 @@ public interface MachineRequirement extends RecipeIoDeclaration {
     /** Nominal, unscaled integral units, if this declaration is quantified in integral units. */
     default OptionalLong ioAmount() { return OptionalLong.empty(); }
 
+    /** NaN means no probability was declared; display consumers must not infer certainty. */
+    default float ioChance() { return paysAtStart() ? consumeChance() : Float.NaN; }
+
     default OptionalLong batchAmount(int duration) { return ioAmount(); }
 
     /** For paid inputs, 0 retains the input and 1 consumes every admitted batch. */
