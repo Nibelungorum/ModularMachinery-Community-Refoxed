@@ -67,6 +67,7 @@ import java.util.Comparator;
 import java.util.ArrayDeque;
 import java.util.AbstractSet;
 import java.util.AbstractCollection;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.IdentityHashMap;
 import java.util.HashMap;
@@ -789,6 +790,24 @@ class SharedIoCoordinatorTest {
             assertThat(invokeScheduling(controller, "after", new Class<?>[]{String.class}, cursor))
                     .as("upper bound after membership/cursor change %s", step).isEqualTo(expected);
         }
+    }
+
+    @Test
+    void removal_before_the_new_lane_has_an_ordinal_does_not_clear_another_lane() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 100, 0L);
+        Object bucket = schedulingBucket(fixture.shared());
+        prepareSchedulingBucket(bucket, 1L);
+        Object base = ((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(fixture.runtime());
+        Object controller = schedulingField(base, "pendingController");
+        var pending = (BitSet) schedulingField(controller, "pending");
+        int baseIndex = (int) schedulingField(base, "pendingIndex");
+        assertThat(pending.get(baseIndex)).isTrue();
+        CraftingRuntime added = installSchedulingLane(fixture, "new-lane");
+        Object slot = ((Map<?, ?>) schedulingField(fixture.shared(), "activeExecutions")).get(added);
+        invokeScheduling(bucket, "removePending", new Class<?>[]{slot.getClass()}, slot);
+        assertThat(pending.get(baseIndex)).isTrue();
+        invokeScheduling(bucket, "removePending", new Class<?>[]{base.getClass()}, base);
+        assertThat(pending.get(baseIndex)).isFalse();
     }
 
     @Test

@@ -1467,13 +1467,8 @@ public final class SharedIoCoordinator {
         private void markInstalledAttempt(ExecutionSlot slot) {
             LaneKey key = slot.lane.key;
             markAttempted(RequestType.TICK, key);
-            ControllerCandidates controller = slot.pendingController;
-            // World queries during admission may have changed or rebuilt either selection buffer.
-            // Warm only from a still-current position; key cursors remain authoritative on fallback.
-            if (controller == null || controllersChanged || controller.changed
-                    || controller.index >= pendingInstalled.size() || pendingInstalled.get(controller.index) != controller
-                    || slot.pendingIndex >= controller.ordered.size() || controller.ordered.get(slot.pendingIndex) != slot
-                    || controller.orderedLaneIds.get(slot.pendingIndex) != key.laneId()) return;
+            ControllerCandidates controller = currentPendingController(slot);
+            if (controller == null) return;
             tickCursor = key;
             cursorControllerLayoutVersion = controllerLayoutVersion;
             tickControllerStart = controller.index + 1;
@@ -1532,11 +1527,26 @@ public final class SharedIoCoordinator {
             }
         }
 
+        /** World callbacks may replace a controller or reuse a lane before its old receipt is retired. */
+        private ControllerCandidates currentPendingController(ExecutionSlot slot) {
+            ControllerCandidates controller = slot.pendingController;
+            if (controller == null || controllersChanged || controller.changed
+                    || controller.index >= pendingInstalled.size() || pendingInstalled.get(controller.index) != controller
+                    || slot.pendingIndex >= controller.ordered.size() || controller.ordered.get(slot.pendingIndex) != slot
+                    || controller.orderedLaneIds.get(slot.pendingIndex) != slot.lane.key.laneId()) return null;
+            return controller;
+        }
+
         private void removePending(ExecutionSlot slot) {
             slot.consumedRound = pendingRound;
             slot.consumedTime = pendingTime;
-            ControllerCandidates controller = installedByController.get(slot.lane.key.controllerPos());
-            if (controller == null || controller.lanes.get(slot.lane.key.laneId()) != slot) return;
+            ControllerCandidates controller = currentPendingController(slot);
+            if (controller == null) {
+                controller = installedByController.get(slot.lane.key.controllerPos());
+                if (controller == null || controller.lanes.get(slot.lane.key.laneId()) != slot
+                        || controller.index >= pendingInstalled.size() || pendingInstalled.get(controller.index) != controller
+                        || slot.pendingIndex >= controller.ordered.size() || controller.ordered.get(slot.pendingIndex) != slot) return;
+            }
             controller.pending.clear(slot.pendingIndex);
             if (controller.pending.isEmpty()) pendingControllers.clear(controller.index);
         }
