@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.util.List;
+import java.util.Optional;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,9 +29,10 @@ class PktTerminalStatePayloadTest {
 
     @Test
     void round_trip_preserves_canonical_data_and_availability() {
-        PktTerminalStatePayload payload = new PktTerminalStatePayload(TerminalData.DEFAULT.withHighlight(true), true, false, true,
+        PktTerminalStatePayload payload = new PktTerminalStatePayload(TerminalData.DEFAULT.withHighlight(true).withBounds(true), true, false, true,
                 List.of(1, 2), Component.literal("Test Machine"), List.of(-2, 0, 4),
-                "message.mmcr.terminal.storage_unavailable", ResourceLocation.parse("test:highlight"), Direction.WEST);
+                "message.mmcr.terminal.storage_unavailable", ResourceLocation.parse("test:highlight"), Direction.WEST,
+                Optional.of(new BoundingBox(-3, 0, 2, 1, 4, 5)));
         var buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY, ConnectionType.NEOFORGE);
 
         PktTerminalStatePayload.STREAM_CODEC.encode(buffer, payload);

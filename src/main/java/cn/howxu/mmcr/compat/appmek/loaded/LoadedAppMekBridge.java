@@ -1,12 +1,9 @@
 package cn.howxu.mmcr.compat.appmek.loaded;
 
 import appeng.api.behaviors.GenericInternalInventory;
-import appeng.api.config.Actionable;
 import appeng.api.networking.security.IActionSource;
-import appeng.api.stacks.AEKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.api.storage.AEKeySlotFilter;
-import appeng.api.storage.MEStorage;
 import appeng.helpers.externalstorage.GenericStackInv;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
@@ -35,7 +32,6 @@ import mekanism.api.Action;
 import mekanism.api.chemical.ChemicalStack;
 import mekanism.api.chemical.IChemicalHandler;
 import mekanism.common.capabilities.Capabilities;
-import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 
 import java.util.ArrayList;
@@ -51,6 +47,7 @@ public final class LoadedAppMekBridge implements AppMekBridge {
     private static final CapabilityType TYPE = new CapabilityType(MekanismRecipeTypes.CHEMICAL);
 
     @Override public boolean available() { return true; }
+    @Override public boolean isChemicalKeyType(Object type) { return type == MekanismKeyType.TYPE; }
 
     @Override public List<CapabilityBinding> appendBindings(List<CapabilityBinding> base, CapabilityDirections directions, boolean transfer) {
         List<CapabilityBinding> bindings = new ArrayList<>(base);
@@ -84,20 +81,6 @@ public final class LoadedAppMekBridge implements AppMekBridge {
     }
 
     @Override public Object inventoryView(Object inventory) { return new ValidatedGenericInventory((GenericInternalInventory) inventory); }
-
-    @Override public Object storageView(Object storage) {
-        if (storage == null) return null;
-        MEStorage delegate = (MEStorage) storage;
-        return new MEStorage() {
-            @Override public boolean isPreferredStorageFor(AEKey key, IActionSource source) { return delegate.isPreferredStorageFor(key, source); }
-            @Override public long insert(AEKey key, long amount, Actionable mode, IActionSource source) {
-                return ValidatedGenericInventory.accepted(key) ? delegate.insert(key, amount, mode, source) : 0L;
-            }
-            @Override public long extract(AEKey key, long amount, Actionable mode, IActionSource source) { return delegate.extract(key, amount, mode, source); }
-            @Override public void getAvailableStacks(KeyCounter out) { delegate.getAvailableStacks(out); }
-            @Override public Component getDescription() { return delegate.getDescription(); }
-        };
-    }
 
     @Override public boolean supportsPatternInput(Object key) { return key instanceof MekanismKey chemical && ValidatedGenericInventory.accepted(chemical); }
     @Override public Optional<MachineOutput> patternOutput(Object key, long amount) {

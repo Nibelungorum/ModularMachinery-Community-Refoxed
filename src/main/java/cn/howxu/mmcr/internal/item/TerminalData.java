@@ -33,7 +33,8 @@ public record TerminalData(
         int stage,
         boolean previewEnabled,
         int previewLayer,
-        boolean highlightEnabled) {
+        boolean highlightEnabled,
+        boolean boundsEnabled) {
 
     private static final int MIN_SIGNED_Y = -(1 << (BlockPos.PACKED_Y_LENGTH - 1));
     private static final int MAX_SIGNED_Y = (1 << (BlockPos.PACKED_Y_LENGTH - 1)) - 1;
@@ -54,11 +55,12 @@ public record TerminalData(
             Codec.INT.fieldOf("stage").forGetter(TerminalData::stage),
             Codec.BOOL.fieldOf("preview_enabled").forGetter(TerminalData::previewEnabled),
             Codec.INT.fieldOf("preview_layer").forGetter(TerminalData::previewLayer),
-            Codec.BOOL.optionalFieldOf("highlight_enabled", false).forGetter(TerminalData::highlightEnabled)
+            Codec.BOOL.optionalFieldOf("highlight_enabled", false).forGetter(TerminalData::highlightEnabled),
+            Codec.BOOL.optionalFieldOf("bounds_enabled", false).forGetter(TerminalData::boundsEnabled)
     ).apply(instance, (controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
-                       previewEnabled, previewLayer, highlightEnabled) -> new TerminalData(controller.orElse(null), container.orElse(null),
+                       previewEnabled, previewLayer, highlightEnabled, boundsEnabled) -> new TerminalData(controller.orElse(null), container.orElse(null),
             ae2AccessPoint.orElse(null), inventoryMode, selectedLevelType.orElse(null), selectedLevels, stage,
-            previewEnabled, previewLayer, highlightEnabled)));
+            previewEnabled, previewLayer, highlightEnabled, boundsEnabled)));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TerminalData> STREAM_CODEC = StreamCodec.of(
             TerminalData::write, TerminalData::read);
@@ -74,6 +76,7 @@ public record TerminalData(
         ByteBufCodecs.BOOL.encode(buffer, data.previewEnabled);
         ByteBufCodecs.VAR_INT.encode(buffer, data.previewLayer);
         ByteBufCodecs.BOOL.encode(buffer, data.highlightEnabled);
+        ByteBufCodecs.BOOL.encode(buffer, data.boundsEnabled);
     }
 
     private static TerminalData read(RegistryFriendlyByteBuf buffer) {
@@ -88,7 +91,7 @@ public record TerminalData(
         int previewLayer = ByteBufCodecs.VAR_INT.decode(buffer);
         boolean highlightEnabled = ByteBufCodecs.BOOL.decode(buffer);
         return new TerminalData(controller.orElse(null), container.orElse(null), ae2AccessPoint.orElse(null), inventoryMode,
-                selectedLevelType.orElse(null), selectedLevels, stage, previewEnabled, previewLayer, highlightEnabled);
+                selectedLevelType.orElse(null), selectedLevels, stage, previewEnabled, previewLayer, highlightEnabled, ByteBufCodecs.BOOL.decode(buffer));
     }
 
     public TerminalData {
@@ -104,7 +107,7 @@ public record TerminalData(
             TerminalInventoryMode inventoryMode, @Nullable ResourceLocation selectedLevelType,
             Map<ResourceLocation, ResourceLocation> selectedLevels, int stage, boolean previewEnabled, int previewLayer) {
         this(controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
-                previewEnabled, previewLayer, false);
+                previewEnabled, previewLayer, false, false);
     }
 
     public static TerminalData from(ItemStack stack) {
@@ -113,44 +116,49 @@ public record TerminalData(
 
     public TerminalData withController(GlobalPos controller) {
         return new TerminalData(Objects.requireNonNull(controller, "controller"), container, ae2AccessPoint, inventoryMode,
-                selectedLevelType, selectedLevels, stage, previewEnabled, previewLayer, highlightEnabled);
+                selectedLevelType, selectedLevels, stage, previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
     }
 
     public TerminalData withContainer(GlobalPos container) {
         return new TerminalData(controller, Objects.requireNonNull(container, "container"), ae2AccessPoint, inventoryMode,
-                selectedLevelType, selectedLevels, stage, previewEnabled, previewLayer, highlightEnabled);
+                selectedLevelType, selectedLevels, stage, previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
     }
 
     public TerminalData withAe2AccessPoint(@Nullable GlobalPos ae2AccessPoint) {
         return new TerminalData(controller, container, ae2AccessPoint, inventoryMode,
-                selectedLevelType, selectedLevels, stage, previewEnabled, previewLayer, highlightEnabled);
+                selectedLevelType, selectedLevels, stage, previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
     }
 
     public TerminalData withInventoryMode(TerminalInventoryMode inventoryMode) {
         return new TerminalData(controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
-                previewEnabled, previewLayer, highlightEnabled);
+                previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
     }
 
     public TerminalData withSelectedLevel(ResourceLocation type, ResourceLocation level) {
         LinkedHashMap<ResourceLocation, ResourceLocation> selectedLevels = new LinkedHashMap<>(this.selectedLevels);
         selectedLevels.put(Objects.requireNonNull(type, "type"), Objects.requireNonNull(level, "level"));
         return new TerminalData(controller, container, ae2AccessPoint, inventoryMode, type, selectedLevels, stage,
-                previewEnabled, previewLayer, highlightEnabled);
+                previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
     }
 
     public TerminalData withStage(int stage) {
         return new TerminalData(controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
-                previewEnabled, previewLayer, highlightEnabled);
+                previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
     }
 
     public TerminalData withPreview(boolean previewEnabled, int previewLayer) {
         return new TerminalData(controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
-                previewEnabled, previewLayer, highlightEnabled);
+                previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
     }
 
     public TerminalData withHighlight(boolean highlightEnabled) {
         return new TerminalData(controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
-                previewEnabled, previewLayer, highlightEnabled);
+                previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
+    }
+
+    public TerminalData withBounds(boolean boundsEnabled) {
+        return new TerminalData(controller, container, ae2AccessPoint, inventoryMode, selectedLevelType, selectedLevels, stage,
+                previewEnabled, previewLayer, highlightEnabled, boundsEnabled);
     }
 
     public TerminalData clear() {

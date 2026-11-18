@@ -387,6 +387,10 @@ public final class GameTestRegistry {
                 helper -> new TerminalAssemblyGameTest().terminalServiceRejectsActionsWithoutHeldTerminal(helper));
         register(event, "terminal_service_rejects_level_without_controller", 100,
                 helper -> new TerminalAssemblyGameTest().terminalServiceRejectsLevelSelectionWithoutController(helper));
+        register(event, "terminal_replace_level_reserves_whole_order", 100,
+                helper -> new TerminalAssemblyGameTest().replaceLevelReservesWholeOrder(helper));
+        register(event, "ae2_terminal_short_item_extraction", 100,
+                helper -> new StructureFluidGameTest().shortItemExtractionReturnsEntireOrder(helper));
         register(event, "terminal_highlight_independent_and_binding_reset", 100,
                 helper -> new TerminalAssemblyGameTest().terminalHighlightIsIndependentAndBindingChangesClearIt(helper));
         register(event, "terminal_service_normalizes_stale_stage", 100,
@@ -627,8 +631,10 @@ public final class GameTestRegistry {
                 helper -> new AppMekPatternGameTest().chemicalPatternOutputMatchingPreservesLongAmounts(helper));
         register(event, "appmek_all_me_kinds", 100,
                 helper -> new AppMekInterfaceGameTest().allMeKindsExposeChemicalCapabilities(helper));
-        register(event, "appmek_generic_radioactivity_validation", 100,
-                helper -> new AppMekInterfaceGameTest().genericCapabilitiesAcceptRadioactiveChemicals(helper));
+        for (String kind : List.of("ae2_me_input_interface", "eae_me_extended_input_interface", "eae_me_oversize_input_interface")) {
+            register(event, "appmek_external_chemicals_" + kind, 100,
+                    helper -> new AppMekInterfaceGameTest().externalChemicalSlots(helper, kind));
+        }
         register(event, "appmek_partial_network_output", 100,
                 helper -> new AppMekAdapterGameTest().partialNetworkOutputConservesRemainder(helper));
         register(event, "appmek_disconnected_output", 100,
@@ -736,6 +742,10 @@ public final class GameTestRegistry {
                         helper -> new AE2InterfaceGameTest().inputUpgradeToolboxAndOversizeAmount(helper));
                 register(event, "eae_pattern_menu_terminal", 100,
                         helper -> new AE2PatternInterfaceGameTest().extendedPatternMenuStateAndTerminalVisibility(helper));
+                register(event, "eae_extended_external_input", 40,
+                        helper -> AE2InterfaceGameTest.externalInput(helper, "eae_me_extended_input_interface"));
+                register(event, "eae_oversize_external_input", 40,
+                        helper -> AE2InterfaceGameTest.externalInput(helper, "eae_me_oversize_input_interface"));
                 register(event, "eae_me_extended_input_provenance", 100,
                         helper -> new AE2InterfaceGameTest().extendedInputReturnsOnlyAeOwnedResourcesAfterCommittedExtraction(helper));
                 register(event, "eae_me_extended_output_menu", 100,
@@ -745,6 +755,8 @@ public final class GameTestRegistry {
             }
             register(event, "ae2_me_input_interface", 200,
                     helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
+            register(event, "ae2_external_input", 40,
+                    helper -> AE2InterfaceGameTest.externalInput(helper, "ae2_me_input_interface"));
             register(event, "ae2_me_input_manual_cache", 100,
                     helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
             register(event, "ae2_me_input_memory_card", 100,
@@ -930,6 +942,16 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:ae2_legacy_queue_")
                     || name.startsWith("mmcr:ae2_pattern_return_")
                     || name.startsWith("mmcr:ae2_standard_cpu_pattern_")
+                    || name.endsWith("_external_input")
+                    || name.startsWith("mmcr:appmek_external_chemicals_")
+                    || name.equals("mmcr:appmek_stocking_hydrogen_radioactive_recipe")
+                    || name.equals("mmcr:appmek_stocking_radioactive_storage_bus")
+                    || name.equals("mmcr:lightning_local_persistence_and_batch_slots")
+                    || name.equals("mmcr:ae2_me_input_interface")
+                    || name.equals("mmcr:ae2_me_input_manual_cache")
+                    || name.equals("mmcr:eae_me_extended_input_provenance")
+                    || name.equals("mmcr:ae2_menu_crafting_restock_cancel")
+                    || name.equals("mmcr:eae_menu_crafting_restock_cancel")
                     || name.equals("mmcr:ae2_stocking_configuration_views")
                     || name.equals("mmcr:ae2_me_stocking_input_interface")
                     || name.equals("mmcr:ae2_me_pattern_native_return_notification")
@@ -975,7 +997,7 @@ public final class GameTestRegistry {
                 .allowMultithreading()
                 .factory(factory -> factory.hasFactory(true).threadLimit(4)).build());
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "smart_interface_test", "iron_compressor",
-                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure", "fluid_assembly")) {
+                "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure", "fluid_assembly", "terminal_level_exchange")) {
             ResourceLocation id = MMCR.id(name);
             MachineBuilder builder = MachineBuilder.machine(id);
             builder.displayNameKey("machine.mmcr_test." + name);
@@ -993,7 +1015,7 @@ public final class GameTestRegistry {
                             MMCR.id("data_storage_tick_status"), Component.literal("ticks=" + (ticks + 1L)));
                 }));
             }
-            if (name.equals("expandable_structure_vertical_roll")) {
+            if (name.equals("expandable_structure_vertical_roll") || name.equals("terminal_level_exchange")) {
                 builder.controller(controller -> controller.allowVerticalFacing());
             }
             if (name.equals("upgrade_bus_test")) {
@@ -1004,7 +1026,7 @@ public final class GameTestRegistry {
             }
             MachineDefinition definition = builder.build();
             if (name.equals("distillation_tower_test") || name.equals("expandable_structure_stages")
-                    || name.equals("expandable_structure_vertical_roll")) {
+                    || name.equals("expandable_structure_vertical_roll") || name.equals("terminal_level_exchange")) {
                 definition = new MachineDefinition(definition.id(), definition.recipePoolId(), definition.displayNameKey(), definition.controller(),
                         definition.appearance(), definition.factory(), definition.role(), definition.acceptedModuleIds(),
                         definition.maxParallelism(), definition.parallelizable(), definition.failureAction(),
@@ -1072,6 +1094,7 @@ public final class GameTestRegistry {
                         .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(ControllerUiGameTest.MACHINE_ID).get()))
                         .where('F', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("factory_controller").get()))
                         .controller('C'))));
+        TerminalAssemblyGameTest.registerLevelExchange(event);
         event.registerStructure(MMCR.id("fluid_assembly"), structure -> structure.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("W W", " C ", " F ")
                         .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(MMCR.id("fluid_assembly")).get()))

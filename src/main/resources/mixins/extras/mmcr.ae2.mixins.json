@@ -10,6 +10,7 @@
     "CraftingSimulationStateMixin",
     "ConfigInventoryAccessor",
     "GenericStackInvAccessor",
+    "InterfaceLogicAccessor",
     "InterfaceLogicMixin",
     "PatternProviderLogicMixin"
   ],

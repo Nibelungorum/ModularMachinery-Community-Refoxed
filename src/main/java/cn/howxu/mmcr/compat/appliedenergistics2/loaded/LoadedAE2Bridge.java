@@ -3,7 +3,6 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 import appeng.api.AECapabilities;
 import appeng.api.features.GridLinkables;
 import appeng.api.behaviors.GenericInternalInventory;
-import appeng.api.storage.MEStorage;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import appeng.api.ids.AEComponents;
 import appeng.api.implementations.items.IMemoryCard;
@@ -187,17 +186,19 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (port instanceof PatternInterfaceBlockEntity host) host.getLogic().updateRedstoneState();
     }
 
+    public static void registerInputStorage(RegisterCapabilitiesEvent event, BlockEntityType<?> type) {
+        event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
+                (be, side) -> be instanceof InputInterfaceBlockEntity host ? host.externalInventory() : null);
+        event.registerBlockEntity(AECapabilities.ME_STORAGE, type,
+                (be, side) -> be instanceof InputInterfaceBlockEntity host ? host.externalInventory() : null);
+    }
+
     @Override
     public void registerCapabilities(RegisterCapabilitiesEvent event) {
         BlockEntityType<?> inputInterfaceType = ModBlockEntities.BES.get(INPUT_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, inputInterfaceType,
                 (be, ignored) -> be instanceof InputInterfaceBlockEntity host ? host : null);
-        event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, inputInterfaceType,
-                (be, direction) -> be instanceof InputInterfaceBlockEntity host
-                        ? (GenericInternalInventory) AppMekBridge.get().inventoryView(host.getInterfaceLogic().getStorage()) : null);
-        event.registerBlockEntity(AECapabilities.ME_STORAGE, inputInterfaceType,
-                (be, direction) -> be instanceof InputInterfaceBlockEntity host
-                        ? (MEStorage) AppMekBridge.get().storageView(host.getInterfaceLogic().getInventory()) : null);
+        registerInputStorage(event, inputInterfaceType);
         BlockEntityType<?> stockingInterfaceType = ModBlockEntities.BES.get(STOCKING_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, stockingInterfaceType,
                 (be, ignored) -> be instanceof StockingInterfaceBlockEntity host ? host : null);

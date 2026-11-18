@@ -20,6 +20,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ExternalInputInventory;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -68,6 +69,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
             .setInWorldNode(true);
     private final InterfaceLogic logic;
     private final GenericStack[] networkOwned;
+    private final ExternalInputInventory externalInventory;
     private final IItemHandler itemHandler;
     private final IFluidHandler fluidHandler;
     private CapabilitySnapshot capabilitySnapshot;
@@ -81,6 +83,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         logic = logicKind.createInterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
         AppMekBridge.get().configureInventory(logic.getStorage());
         networkOwned = new GenericStack[logic.getStorage().size()];
+        externalInventory = new ExternalInputInventory(this);
         itemHandler = AE2NativeAdapters.items(logic.getStorage());
         fluidHandler = AE2NativeAdapters.fluids(logic.getStorage());
     }
@@ -103,6 +106,15 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public InterfaceLogic getInterfaceLogic() {
         return logic;
+    }
+
+    /** Keep a network slot reserved even if an uncommitted machine extraction temporarily empties it. */
+    public boolean isExternalInputSlot(int slot) {
+        return logic.getConfig().getKey(slot) == null && networkOwned[slot] == null;
+    }
+
+    public ExternalInputInventory externalInventory() {
+        return externalInventory;
     }
 
     @Override

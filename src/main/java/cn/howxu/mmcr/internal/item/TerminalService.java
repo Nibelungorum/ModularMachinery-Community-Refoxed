@@ -21,6 +21,7 @@ import java.util.Comparator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -49,7 +50,8 @@ public final class TerminalService {
         if (controller == null) return rejected(player, stack, "message.mmcr.terminal.invalid_controller");
         TerminalData data = TerminalData.from(stack);
         controllerAt(player, data.controller()).ifPresent(previous -> previous.clearStructurePreview(player));
-        setData(stack, normalize(controller, data.withController(target).withPreview(false, Integer.MAX_VALUE).withHighlight(false)));
+        setData(stack, normalize(controller, data.withController(target).withPreview(false, Integer.MAX_VALUE)
+                .withHighlight(false).withBounds(false)));
         return accepted(player, stack, "message.mmcr.terminal.controller_bound");
     }
 
@@ -138,6 +140,11 @@ public final class TerminalService {
                 setData(stack, normalize(controller, data).withHighlight(value != 0));
                 return accepted(player, stack, "message.mmcr.terminal.updated");
             }
+            case SET_BOUNDS_ENABLED -> {
+                if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
+                setData(stack, normalize(controller, data).withBounds(value != 0));
+                return accepted(player, stack, "message.mmcr.terminal.updated");
+            }
             case SET_PREVIEW_LAYER -> {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
                 if (!previewLayerAllowed(value, currentPreviewLayers(controller, data))) {
@@ -153,10 +160,16 @@ public final class TerminalService {
                 controller.verifyStage(player, data.stage());
                 return accepted(player, stack, "message.mmcr.terminal.check_requested");
             }
-            case BUILD, DEMOLISH -> {
+            case BUILD, DEMOLISH, REPLACE_LEVEL -> {
                 if (controller == null) return rejected(player, stack, "message.mmcr.terminal.no_controller");
                 TerminalData normalized = normalize(controller, data);
                 if (!normalized.equals(data)) setData(stack, normalized);
+                ResourceLocation type = normalized.selectedLevelType();
+                if (action == TerminalAction.REPLACE_LEVEL && (type == null || normalized.stage() != data.stage()
+                        || !type.equals(data.selectedLevelType()) || !normalized.selectedLevels().get(type).equals(data.selectedLevels().get(type)))) {
+                    player.sendSystemMessage(Component.translatable("message.mmcr.terminal.invalid_level"));
+                    return rejected(player, stack, "message.mmcr.terminal.invalid_level");
+                }
                 data = normalized;
                 StructureItemStorage storage = StructureItemStorageResolver.resolve(player, data).orElse(null);
                 if (storage == null) return rejected(player, stack, "message.mmcr.terminal.storage_unavailable");
@@ -167,14 +180,20 @@ public final class TerminalService {
                     data = data.withPreview(false, data.previewLayer());
                     setData(stack, data);
                 }
-                MultiblockAssemblyService.Result result = action == TerminalAction.BUILD
-                        ? MultiblockAssemblyService.build(player, controller, data.stage(), storage.source(), freeInventoryBuild,
-                                data.selectedLevels())
-                        : MultiblockAssemblyService.demolish(player, controller, data.stage(),
-                                ServerConfig.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink, freeInventoryBuild);
+                MultiblockAssemblyService.Result result;
+                if (action == TerminalAction.REPLACE_LEVEL) {
+                    result = MultiblockAssemblyService.replaceLevel(player, controller, data.stage(), type,
+                            data.selectedLevels().get(type), storage, freeInventoryBuild);
+                } else if (action == TerminalAction.BUILD) {
+                    result = MultiblockAssemblyService.build(player, controller, data.stage(), storage.source(),
+                            freeInventoryBuild, data.selectedLevels());
+                } else {
+                    result = MultiblockAssemblyService.demolish(player, controller, data.stage(),
+                            ServerConfig.TERMINAL_MAX_DEMOLISH_BLOCKS.get(), demolitionSink, freeInventoryBuild);
+                }
                 player.sendSystemMessage(Component.translatable(result.message().key(), result.message().args()));
                 return result.interactionResult().consumesAction()
-                        ? accepted(player, stack, result.message().key()) : rejected(player, stack, result.message().key());
+                        ? accepted(player, stack, result.message().statusKey()) : rejected(player, stack, result.message().statusKey());
             }
         }
         return rejected(player, stack, "message.mmcr.terminal.invalid_action");
@@ -216,7 +235,7 @@ public final class TerminalService {
         ResourceLocation selectedType = data.selectedLevelType();
         if (selectedType == null || !levels.containsKey(selectedType)) selectedType = levels.isEmpty() ? null : levels.keySet().iterator().next();
         return new TerminalData(data.controller(), data.container(), data.ae2AccessPoint(), data.inventoryMode(), selectedType,
-                levels, stage, data.previewEnabled(), data.previewLayer(), data.highlightEnabled());
+                levels, stage, data.previewEnabled(), data.previewLayer(), data.highlightEnabled(), data.boundsEnabled());
     }
 
     private static Optional<MachineControllerBlockEntity> controllerAt(ServerPlayer player, GlobalPos target) {
@@ -273,7 +292,8 @@ public final class TerminalService {
                         : machine.displayName(),
                 previewLayers(pattern, PktTerminalStatePayload.maxPreviewLayers()), statusKey,
                 machine == null ? null : machine.registryName(),
-                controller == null ? Direction.SOUTH : controller.getBlockState().getValue(MachineControllerBlock.FACING)));
+                controller == null ? Direction.SOUTH : controller.getBlockState().getValue(MachineControllerBlock.FACING),
+                stateData.boundsEnabled() && pattern != null ? BoundingBox.encapsulatingPositions(pattern.pattern().keySet()) : Optional.empty()));
     }
 
     private static List<Integer> currentPreviewLayers(MachineControllerBlockEntity controller, TerminalData data) {

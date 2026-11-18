@@ -25,7 +25,6 @@ enum UnavailableAppMekBridge implements AppMekBridge {
     @Override public List<PortFamilyDescriptor> appendFamilies(List<PortFamilyDescriptor> base) { return base; }
     @Override public void configureInventory(Object inventory) {}
     @Override public Object inventoryView(Object inventory) { return inventory; }
-    @Override public Object storageView(Object storage) { return storage; }
     @Override public boolean supportsPatternInput(Object key) { return false; }
     @Override public Optional<MachineOutput> patternOutput(Object key, long amount) { return Optional.empty(); }
     @Override public PatternRequest patternRequest(Object holders) { return EMPTY_REQUEST; }

@@ -3,9 +3,11 @@ package cn.howxu.mmcr.internal.assembly;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.config.ServerConfig;
+import cn.howxu.mmcr.internal.block.StructureInterfaceBlocks;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -40,6 +42,10 @@ public final class MultiblockAssemblyService {
 
     public static final int MAX_BLOCKS_PER_OPERATION = 163_840;
 
+    private static final Comparator<BlockState> MATERIAL_PRIORITY = Comparator
+            .comparing((BlockState state) -> StructureInterfaceBlocks.isInterfaceBlock(state.getBlock()))
+            .thenComparing(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed());
+
     private MultiblockAssemblyService() {}
 
     public record Placement(BlockPos pos, BlockState state, ItemStack requirement, BlockPredicate predicate) {
@@ -60,7 +66,18 @@ public final class MultiblockAssemblyService {
 
     public record Result(InteractionResult interactionResult, int changedBlocks, ComponentKey message) {}
 
-    public record ComponentKey(String key, Object... args) {}
+    private static final String MISSING_BLOCKS = "message.mmcr.terminal.build.missing";
+    private static final String MISSING_DETAIL = MISSING_BLOCKS + ".detail";
+
+    public record ComponentKey(String key, Object... args) {
+        public String statusKey() {
+            return MISSING_DETAIL.equals(key) ? MISSING_BLOCKS : key;
+        }
+    }
+
+    /** Simulated placements, or the reason the whole build must be rejected.
+     * @author howxu <dev@howxu.cn> */
+    record MaterialCheck(List<Placement> placements, ComponentKey missing) {}
 
     public static final class BuildTask {
         private final BlockPos controllerKey;
@@ -255,13 +272,13 @@ public final class MultiblockAssemblyService {
             return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
         }
         if (!freeBuild) {
-            placements = extractAvailablePlacements(placements, source);
-            if (placements.isEmpty()) {
-                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
+            MaterialCheck check = checkMaterials(placements, source);
+            if (check.missing() != null) return new Result(InteractionResult.FAIL, 0, check.missing());
+            if (!source.extractAll(aggregateRequirements(check.placements()))) {
+                ComponentKey missing = checkMaterials(placements, source).missing();
+                return new Result(InteractionResult.FAIL, 0, missing != null ? missing : new ComponentKey(MISSING_BLOCKS));
             }
-            if (!source.extractAll(aggregateRequirements(placements))) {
-                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.missing"));
-            }
+            placements = check.placements();
         }
         BuildTask task = BuildTask.create(controller.getBlockPos(), stage, placements,
                 controller.buildBlocksPerTick(), !freeBuild, source);
@@ -270,6 +287,70 @@ public final class MultiblockAssemblyService {
         }
         return new Result(InteractionResult.SUCCESS, placements.size(),
                 new ComponentKey("message.mmcr.terminal.build.accepted", placements.size()));
+    }
+
+    public static Result replaceLevel(ServerPlayer player, MachineControllerBlockEntity controller, int stage,
+            ResourceLocation typeId, ResourceLocation levelId, StructureItemStorage storage, boolean freeInventoryBuild) {
+        Machine machine = controller.boundMachine().orElse(null);
+        if (machine == null) return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.no_machine"));
+        if (controller.hasActiveBuildTask()) {
+            return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.build.busy"));
+        }
+        MachineStructureStage selected = machine.structureStages().stream().filter(s -> s.number() == stage)
+                .findFirst().orElse(null);
+        MachineLevel target = MachineLevelRegistry.getLevel(levelId);
+        if (selected == null || target == null || !target.typeId().equals(typeId) || !selected.levelSlots().containsValue(typeId)) {
+            return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.invalid_level"));
+        }
+        BlockState replacement = target.statePredicate().preferredState().orElseThrow();
+        ItemStack material = requirementFor(replacement);
+        if (material.isEmpty() || StructureInterfaceBlocks.isInterfaceBlock(replacement.getBlock())) {
+            return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.unsafe"));
+        }
+        var world = player.level();
+        List<Removal> changes = new ArrayList<>();
+        int limit = Math.min(ServerConfig.assemblyMaxBlocksPerOperation(), ServerConfig.TERMINAL_MAX_DEMOLISH_BLOCKS.get());
+        for (BlockPos pos : controller.assemblyLevelSlots(machine, selected, typeId)) {
+            if (!world.hasChunkAt(pos)) {
+                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.unsafe"));
+            }
+            BlockState current = world.getBlockState(pos);
+            if (current.isAir() || current == replacement || StructureInterfaceBlocks.isInterfaceBlock(current.getBlock())
+                    || MachineLevelRegistry.findLevel(typeId, current).isEmpty()) continue;
+            ItemStack oldItem = requirementFor(current);
+            if (oldItem.isEmpty() || current.hasBlockEntity()) {
+                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.unsafe"));
+            }
+            if (changes.size() == limit) {
+                return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.limit"));
+            }
+            changes.add(new Removal(pos, current, oldItem));
+        }
+        if (changes.isEmpty()) return new Result(InteractionResult.SUCCESS, 0, new ComponentKey("message.mmcr.terminal.replace.none"));
+        if (!freeInventoryBuild && !storage.source().extractAll(List.of(material.copyWithCount(changes.size())))) {
+            return new Result(InteractionResult.FAIL, 0, new ComponentKey("message.mmcr.terminal.replace.missing"));
+        }
+
+        List<ItemStack> returns = new ArrayList<>();
+        int changed = 0;
+        for (Removal change : changes) {
+            if (world.getBlockState(change.pos()) != change.state() || !world.setBlock(change.pos(), replacement, 3)) break;
+            changed++;
+            if (!freeInventoryBuild) merge(returns, change.drop());
+        }
+        if (!freeInventoryBuild) {
+            if (changed < changes.size()) merge(returns, material.copyWithCount(changes.size() - changed));
+            for (ItemStack batch : returns) {
+                while (!batch.isEmpty()) {
+                    ItemStack stack = batch.split(batch.getMaxStackSize());
+                    if (!storage.sink().accept(stack)) player.getInventory().placeItemBackInInventory(stack);
+                }
+            }
+        }
+        if (changed != changes.size()) {
+            return new Result(InteractionResult.FAIL, changed, new ComponentKey("message.mmcr.terminal.replace.stopped", changed));
+        }
+        return new Result(InteractionResult.SUCCESS, changed, new ComponentKey("message.mmcr.terminal.replace.success", changed));
     }
 
     private static List<Placement> applySelectedLevels(Machine machine, int stage, BlockArray pattern,
@@ -356,22 +437,42 @@ public final class MultiblockAssemblyService {
     }
 
     public static List<Placement> extractAvailablePlacements(List<Placement> placements, StructureItemSource source) {
+        return checkMaterials(placements, source).placements();
+    }
+
+    static MaterialCheck checkMaterials(List<Placement> placements, StructureItemSource source) {
         List<ItemStack> available = source.copyStacks();
         Map<Fluid, Long> availableFluids = new HashMap<>(source.copyFluidSources());
         List<Placement> selected = new ArrayList<>();
-        for (Placement placement : placements) {
-            candidateStates(placement.predicate()).stream()
-                    .sorted(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed())
-                    .filter(MultiblockAssemblyService::isBuildableState)
-                    .map(state -> new Placement(placement.pos(), state, isFluidSource(state) ? ItemStack.EMPTY
-                            : requirementFor(state).copyWithCount(Math.max(1, placement.requirement().getCount())), placement.predicate()))
-                    .filter(candidate -> isFluidSource(candidate.state())
-                            ? reserveFluidSource(availableFluids, candidate.state().getFluidState().getType())
-                            : reserve(available, candidate.requirement()))
-                    .findFirst()
-                    .ifPresent(selected::add);
+        BlockState firstMissing = null;
+        int missingCount = 0;
+        placementLoop: for (Placement placement : placements) {
+            List<BlockState> candidates = candidateStates(placement.predicate());
+            candidates.sort(MATERIAL_PRIORITY);
+            BlockState preferred = null;
+            int count = Math.max(1, placement.requirement().getCount());
+            for (BlockState state : candidates) {
+                if (!isBuildableState(state)) continue;
+                if (preferred == null) preferred = state;
+                boolean fluid = isFluidSource(state);
+                ItemStack requirement = fluid ? ItemStack.EMPTY : requirementFor(state).copyWithCount(count);
+                if (fluid ? reserveFluidSource(availableFluids, state.getFluidState().getType()) : reserve(available, requirement)) {
+                    selected.add(new Placement(placement.pos(), state, requirement, placement.predicate()));
+                    continue placementLoop;
+                }
+            }
+            if (preferred == null) return new MaterialCheck(List.of(), new ComponentKey(MISSING_BLOCKS));
+            if (firstMissing == null) firstMissing = preferred;
+            if (preferred.is(firstMissing.getBlock())) missingCount += isFluidSource(preferred) ? 1 : count;
         }
-        return selected.size() == placements.size() ? selected : List.of();
+        if (firstMissing == null) return new MaterialCheck(selected, null);
+        if (!isFluidSource(firstMissing)) {
+            ItemStack requirement = requirementFor(firstMissing);
+            for (ItemStack stack : available) {
+                if (ItemStack.isSameItemSameComponents(stack, requirement)) missingCount -= stack.getCount();
+            }
+        }
+        return new MaterialCheck(List.of(), new ComponentKey(MISSING_DETAIL, firstMissing.getBlock().getName(), missingCount));
     }
 
     public static boolean canReplace(BlockState state) {

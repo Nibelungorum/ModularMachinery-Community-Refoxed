@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.api.machine.definition;
 
+import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -49,8 +50,9 @@ public final class MachineStructureBuilder {
     }
 
     public MachineStructureDefinition build(ResourceLocation machineId) {
+        BlockPredicate controller = BlockPredicate.deferredBlock(BuiltinRegistration.controller(machineId));
         List<StructureStage> boundStages = stages.stream()
-                .map(stage -> new StructureStage(stage.kind(), stage.pattern().bindController(machineId),
+                .map(stage -> new StructureStage(stage.kind(), stage.pattern().bindController(controller),
                         stage.portRequirements(), stage.portTiers(), stage.requirements()))
                 .toList();
         return new MachineStructureDefinition(machineId, boundStages, stateSensitive);

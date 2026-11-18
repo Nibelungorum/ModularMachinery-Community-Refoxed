@@ -69,7 +69,7 @@ public final class MultiblockDetectorSelectionRenderer {
                 minX, minY, minZ, maxX, maxY, maxZ);
         buffer.endBatch(RenderType.lines());
         if (shouldRenderMask(detector, selection)) {
-            renderBoxFaces(poseStack, buffer.getBuffer(RenderType.debugFilledBox()), camera,
+            renderRegionMask(poseStack, buffer.getBuffer(RenderType.debugFilledBox()), camera,
                     minX, minY, minZ, maxX, maxY, maxZ);
             buffer.endBatch(RenderType.debugFilledBox());
         }
@@ -139,7 +139,7 @@ public final class MultiblockDetectorSelectionRenderer {
         buffer.addVertex(pose, x4, y4, z4).setColor(color);
     }
 
-    private static void renderBoxFaces(PoseStack poseStack, VertexConsumer buffer, Vec3 camera,
+    static void renderRegionMask(PoseStack poseStack, VertexConsumer buffer, Vec3 camera,
             double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
         LevelRenderer.addChainedFilledBoxVertices(poseStack, buffer,
                 minX - camera.x(), minY - camera.y(), minZ - camera.z(),

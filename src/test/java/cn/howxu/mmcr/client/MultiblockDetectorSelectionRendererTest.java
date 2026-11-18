@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import java.util.function.BiConsumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.FastColor;
@@ -56,6 +57,15 @@ class MultiblockDetectorSelectionRendererTest {
     }
 
     @Test
+    void region_overlay_emits_a_translucent_green_surface_at_camera_relative_coordinates() {
+        Vec3 camera = new Vec3(10, 20, 30);
+        List<Vertex> vertices = render((pose, buffer) -> MultiblockDetectorSelectionRenderer.renderRegionMask(
+                pose, buffer, camera, 11, 22, 33, 15, 27, 39));
+        assertThat(vertices).isNotEmpty().extracting(Vertex::color).containsOnly(0x6600FF00);
+        assertThat(vertices).extracting(Vertex::position).contains(new Vec3(1, 2, 3), new Vec3(5, 7, 9));
+    }
+
+    @Test
     void no_controller_overlay_is_emitted_without_a_position_and_selected_face() {
         assertThat(render(MultiblockDetectorSelection.EMPTY, Vec3.ZERO)).isEmpty();
         assertThat(render(new MultiblockDetectorSelection(BlockPos.ZERO, null, null, null), Vec3.ZERO)).isEmpty();
@@ -63,6 +73,10 @@ class MultiblockDetectorSelectionRendererTest {
     }
 
     private static List<Vertex> render(MultiblockDetectorSelection selection, Vec3 camera) {
+        return render((pose, buffer) -> MultiblockDetectorSelectionRenderer.renderControllerFaces(pose.last(), buffer, camera, selection));
+    }
+
+    private static List<Vertex> render(BiConsumer<PoseStack, VertexConsumer> geometry) {
         List<Vertex> vertices = new ArrayList<>();
         Vec3[] pendingPosition = new Vec3[1];
         VertexConsumer buffer = (VertexConsumer) Proxy.newProxyInstance(VertexConsumer.class.getClassLoader(),
@@ -78,7 +92,7 @@ class MultiblockDetectorSelectionRendererTest {
                     }
                     return proxy;
                 });
-        MultiblockDetectorSelectionRenderer.renderControllerFaces(new PoseStack().last(), buffer, camera, selection);
+        geometry.accept(new PoseStack(), buffer);
         return vertices;
     }
 

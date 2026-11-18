@@ -10,15 +10,7 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
-import cn.howxu.mmcr.internal.block.DataStorageBlock;
-import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
-import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
-import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
-import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
-import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
-import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewPredicates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -38,6 +30,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import static cn.howxu.mmcr.internal.block.StructureInterfaceBlocks.isInterfaceBlock;
 
 /**
  * Builds immutable client preview schemas from machine structure stages.
@@ -151,13 +145,6 @@ public final class StructurePreviewSchemaFactory implements StructurePreviewVari
         };
         cache.put(predicate, accepted);
         return accepted;
-    }
-
-    private static boolean isInterfaceBlock(Block block) {
-        return block instanceof IOPortBlock || block instanceof ParallelControllerBlock
-                || block instanceof FactorySchedulerBlock || block instanceof SmartInterfaceBlock
-                || block instanceof DataStorageBlock || block instanceof NetworkInterfaceBlock
-                || block instanceof UpgradeBusBlock || block instanceof ModuleCouplerBlock;
     }
 
     private static List<StructurePreviewSchema.Candidate> candidates(BlockPredicate predicate, List<SingleBlockModifierReplacement> replacements) {

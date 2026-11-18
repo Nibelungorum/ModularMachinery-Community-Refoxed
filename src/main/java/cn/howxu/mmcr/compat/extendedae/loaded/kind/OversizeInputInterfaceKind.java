@@ -20,8 +20,8 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 public final class OversizeInputInterfaceKind implements InterfaceLogicKind {
     public static final OversizeInputInterfaceKind INSTANCE = new OversizeInputInterfaceKind();
     private final PortDefinition definition = AE2ResourceFamilies.definition(MMCR.id(id()), List.of(
-            AE2ResourceFamilies.itemBinding(CapabilityDirections.input(), host -> host.nativeItemHandler()),
-            AE2ResourceFamilies.fluidBinding(CapabilityDirections.input(), host -> host.nativeFluidHandler())));
+            AE2ResourceFamilies.itemBinding(CapabilityDirections.input(), host -> host.nativeItemHandler(), false),
+            AE2ResourceFamilies.fluidBinding(CapabilityDirections.input(), host -> host.nativeFluidHandler(), false)));
     private OversizeInputInterfaceKind() {}
     @Override public String id() { return "eae_me_oversize_input_interface"; }
     @Override public IOType ioType() { return IOType.INPUT; }

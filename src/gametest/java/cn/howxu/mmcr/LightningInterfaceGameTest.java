@@ -1,5 +1,7 @@
 package cn.howxu.mmcr;
 
+import appeng.api.AECapabilities;
+import appeng.api.config.Actionable;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.IGridConnection;
 import appeng.api.networking.security.IActionSource;
@@ -57,6 +59,14 @@ public final class LightningInterfaceGameTest {
         helper.assertTrue(query.storage().amount(0) == 123L && query.storage().amount(1) == 456L,
                 "Both native lightning keys are visible through the internal resource view");
         helper.assertTrue(capability.facet(TransferFacet.class).isEmpty(), "ME lightning has no adjacent transfer facet");
+        var slots = helper.getLevel().getCapability(AECapabilities.GENERIC_INTERNAL_INV, input.getBlockPos(), null);
+        var me = helper.getLevel().getCapability(AECapabilities.ME_STORAGE, input.getBlockPos(), null);
+        slots.setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1));
+        helper.assertTrue(slots.getStack(0) == null && slots.insert(2, high, 1, Actionable.MODULATE) == 0
+                        && me.insert(high, 1, Actionable.MODULATE, IActionSource.empty()) == 0
+                        && me.extract(high, 1, Actionable.MODULATE, IActionSource.empty()) == 0
+                        && me.getAvailableStacks().isEmpty() && query.storage().amount(0) == 123,
+                "Lightning is internal only; external views cannot replace or extract it");
         CompoundTag saved = input.saveWithoutMetadata(helper.getLevel().registryAccess());
         input.getStorage().clear();
         input.loadWithComponents(saved, helper.getLevel().registryAccess());

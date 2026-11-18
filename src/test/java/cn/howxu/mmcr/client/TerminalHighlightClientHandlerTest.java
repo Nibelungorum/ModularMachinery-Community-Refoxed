@@ -23,6 +23,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -75,7 +77,7 @@ class TerminalHighlightClientHandlerTest {
     @Test
     void projects_rotated_schema_colors_even_with_ghost_preview_disabled() {
         for (Direction facing : List.of(Direction.SOUTH, Direction.EAST, Direction.UP)) {
-            TerminalHighlightClientHandler.applyState(data(), ID, facing);
+            TerminalHighlightClientHandler.applyState(data(), ID, facing, null);
             Map<BlockPos, Integer> expected = new LinkedHashMap<>();
             new StructurePreviewSchemaFactory().create(machine.structureStages().getFirst(), ID, facing)
                     .highlights().forEach((pos, mask) -> expected.put(ORIGIN.offset(pos), PreviewHighlights.color(mask)));
@@ -87,36 +89,49 @@ class TerminalHighlightClientHandlerTest {
 
     @Test
     void stage_and_layer_changes_replace_positions_instead_of_leaving_stale_highlights() {
-        TerminalHighlightClientHandler.applyState(data(), ID, Direction.SOUTH);
+        TerminalHighlightClientHandler.applyState(data(), ID, Direction.SOUTH, null);
         assertThat(visible()).containsKey(ORIGIN.offset(1, 2, 3));
-        TerminalHighlightClientHandler.applyState(data().withStage(2), ID, Direction.SOUTH);
+        TerminalHighlightClientHandler.applyState(data().withStage(2), ID, Direction.SOUTH, null);
         assertThat(visible()).containsOnly(Map.entry(ORIGIN.offset(0, -1, 2), 0x44FF0000));
-        TerminalHighlightClientHandler.applyState(data().withStage(2).withPreview(false, 2), ID, Direction.SOUTH);
+        TerminalHighlightClientHandler.applyState(data().withStage(2).withPreview(false, 2), ID, Direction.SOUTH, null);
         assertThat(visible()).isEmpty();
-        TerminalHighlightClientHandler.applyState(data().withStage(2).withPreview(false, -1), ID, Direction.SOUTH);
+        TerminalHighlightClientHandler.applyState(data().withStage(2).withPreview(false, -1), ID, Direction.SOUTH, null);
         assertThat(visible()).containsKey(ORIGIN.offset(0, -1, 2));
     }
 
     @Test
     void disabled_unavailable_and_invalid_stage_states_clear_projection() {
         for (TerminalData state : List.of(data().withHighlight(false), data().clear(), data().withStage(99))) {
-            TerminalHighlightClientHandler.applyState(data(), ID, Direction.SOUTH);
-            TerminalHighlightClientHandler.applyState(state, ID, Direction.SOUTH);
+            TerminalHighlightClientHandler.applyState(data(), ID, Direction.SOUTH, null);
+            TerminalHighlightClientHandler.applyState(state, ID, Direction.SOUTH, null);
             assertThat(visible()).isEmpty();
         }
-        TerminalHighlightClientHandler.applyState(data(), ID, Direction.SOUTH);
-        TerminalHighlightClientHandler.applyState(data(), null, Direction.SOUTH);
+        TerminalHighlightClientHandler.applyState(data(), ID, Direction.SOUTH, null);
+        TerminalHighlightClientHandler.applyState(data(), null, Direction.SOUTH, null);
         assertThat(visible()).isEmpty();
     }
 
     @Test
     void radius_filter_and_world_unload_clear_do_not_leave_positions() {
-        TerminalHighlightClientHandler.applyState(data(), ID, Direction.SOUTH);
+        TerminalHighlightClientHandler.applyState(data(), ID, Direction.SOUTH, null);
         Map<BlockPos, Integer> visible = new LinkedHashMap<>();
         TerminalHighlightClientHandler.forEachVisibleHighlight(Vec3.ZERO, 1, visible::put);
         assertThat(visible).isEmpty();
         TerminalHighlightClientHandler.clear();
         assertThat(visible()).isEmpty();
+    }
+
+    @Test
+    void bounds_cover_whole_blocks_and_survive_layer_filter_with_other_overlays_off() {
+        TerminalData state = data().withHighlight(false).withBounds(true).withPreview(false, 3);
+        BoundingBox relative = new BoundingBox(-2, -1, 1, 4, 6, 3);
+        TerminalHighlightClientHandler.applyState(state, ID, Direction.UP, relative);
+        Vec3 edge = ORIGIN.getCenter().add(4, 6, 3);
+        assertThat(TerminalHighlightClientHandler.visibleBounds(edge, 1))
+                .isEqualTo(new AABB(-2, -1, 1, 5, 7, 4).move(ORIGIN));
+        assertThat(visible()).isEmpty();
+        TerminalHighlightClientHandler.applyState(state, null, Direction.SOUTH, null);
+        assertThat(TerminalHighlightClientHandler.visibleBounds(edge, 1)).isNull();
     }
 
     private static TerminalData data() {

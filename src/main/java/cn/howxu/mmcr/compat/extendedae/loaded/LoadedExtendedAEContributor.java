@@ -2,9 +2,8 @@ package cn.howxu.mmcr.compat.extendedae.loaded;
 
 import appeng.api.AECapabilities;
 import appeng.api.behaviors.GenericInternalInventory;
-import appeng.api.storage.MEStorage;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.LoadedAE2Bridge;
 import cn.howxu.mmcr.compat.appmek.AppMekBridge;
-import appeng.helpers.InterfaceLogicHost;
 import appeng.me.helpers.IGridConnectedBlockEntity;
 import appeng.menu.ISubMenu;
 import appeng.menu.MenuOpener;
@@ -124,19 +123,11 @@ public final class LoadedExtendedAEContributor implements ExtendedAEContributor 
 
     private static BlockEntityType<?> type(String id) { return ModBlockEntities.BES.get(id).get(); }
 
-    private static <T extends cn.howxu.mmcr.internal.tile.IOPortBlockEntity & InterfaceLogicHost
-            & IGridConnectedBlockEntity> void registerInterface(
+    private static <T extends IOPortBlockEntity & IGridConnectedBlockEntity> void registerInterface(
             RegisterCapabilitiesEvent event, String id, Class<T> hostType, boolean storage) {
         BlockEntityType<?> type = type(id);
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, type,
                 (be, v) -> hostType.isInstance(be) ? hostType.cast(be) : null);
-        if (storage) {
-            event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
-                    (be, direction) -> hostType.isInstance(be) ? (GenericInternalInventory) AppMekBridge.get()
-                            .inventoryView(hostType.cast(be).getInterfaceLogic().getStorage()) : null);
-            event.registerBlockEntity(AECapabilities.ME_STORAGE, type,
-                    (be, direction) -> hostType.isInstance(be) ? (MEStorage) AppMekBridge.get()
-                            .storageView(hostType.cast(be).getInterfaceLogic().getInventory()) : null);
-        }
+        if (storage) LoadedAE2Bridge.registerInputStorage(event, type);
     }
 }

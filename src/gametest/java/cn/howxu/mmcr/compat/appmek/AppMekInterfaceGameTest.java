@@ -380,31 +380,38 @@ public final class AppMekInterfaceGameTest {
         helper.succeed();
     }
 
-    public void genericCapabilitiesAcceptRadioactiveChemicals(GameTestHelper helper) {
+    public void externalChemicalSlots(GameTestHelper helper, String kind) {
         BlockPos pos = new BlockPos(1, 1, 1);
-        helper.setBlock(pos, ModBlocks.BLOCKS.get("ae2_me_input_interface").get().defaultBlockState());
-        BlockPos world = helper.absolutePos(pos);
+        helper.setBlock(pos, ModBlocks.BLOCKS.get(kind).get().defaultBlockState());
         InputInterfaceBlockEntity host = helper.getBlockEntity(pos);
-        helper.assertTrue(helper.getLevel().getCapability(AECapabilities.ME_STORAGE, world, null) == null,
-                "An unconfigured disconnected interface preserves the native absence of ME storage");
+        var world = host.getBlockPos();
         var chemicals = helper.getLevel().getCapability(Capabilities.CHEMICAL.block(), world, null);
-        helper.assertTrue(chemicals != null, "AppMek adapts the MMCR generic inventory capability");
-        var waste = AppMekGameTestFixtures.chemical("nuclear_waste", 100L);
-        helper.assertTrue(chemicals.insertChemical(0, waste, Action.SIMULATE).isEmpty(),
-                "External chemical simulation accepts radioactive material");
-        helper.assertTrue(chemicals.insertChemical(0, waste, Action.EXECUTE).isEmpty(),
-                "External chemical execution accepts radioactive material");
-        host.getInterfaceLogic().getConfig().setStack(0, new GenericStack(MekanismKey.of(waste), 500L));
-        MEStorage storage = helper.getLevel().getCapability(AECapabilities.ME_STORAGE, world, null);
-        helper.assertTrue(storage != null, "A configured interface exposes native local ME storage");
-        helper.assertTrue(storage.insert(MekanismKey.of(waste), 100L, Actionable.MODULATE, new BaseActionSource()) == 100L,
-                "ME storage access accepts radioactive material through native filters");
-        GenericInternalInventory generic = helper.getLevel().getCapability(AECapabilities.GENERIC_INTERNAL_INV, world, null);
-        helper.assertTrue(generic.insert(0, MekanismKey.of(waste), 100L, Actionable.MODULATE) == 100L,
-                "Generic inventory access accepts radioactive material through native filters");
-        helper.assertTrue(host.getStorage().getAmount(0) == 300L, "All native entry points conserve the radioactive input");
-        helper.assertTrue(chemicals.insertChemical(1, AppMekGameTestFixtures.chemical("oxygen", 500L), Action.EXECUTE).isEmpty(),
-                "Ordinary and radioactive chemicals share different native slots");
+        MEStorage me = helper.getLevel().getCapability(AECapabilities.ME_STORAGE, world, null);
+        GenericInternalInventory slots = helper.getLevel().getCapability(AECapabilities.GENERIC_INTERNAL_INV, world, null);
+        var internal = ((ChemicalHandlerPort) host.capability(new CapabilityType(MekanismRecipeTypes.CHEMICAL))).chemicalHandler();
+        var source = new BaseActionSource();
+        for (String id : List.of("oxygen", "nuclear_waste")) {
+            var stack = AppMekGameTestFixtures.chemical(id, 100L);
+            var key = MekanismKey.of(stack);
+            helper.assertTrue(chemicals.insertChemical(0, stack, Action.SIMULATE).isEmpty() && slots.getAmount(0) == 0
+                    && chemicals.insertChemical(0, stack, Action.EXECUTE).isEmpty(), id + " enters an open local slot");
+            host.getConfig().setStack(0, new GenericStack(key, 100L));
+            helper.assertTrue(slots.getStack(0) == null && !chemicals.insertChemical(0, stack, Action.EXECUTE).isEmpty()
+                    && chemicals.extractChemical(0, 100L, Action.EXECUTE).isEmpty(), id + " configured slot is private");
+            host.recordNetworkPull(0, key, 100L);
+            host.getConfig().setStack(0, null);
+            helper.assertTrue(chemicals.getChemicalInTank(0).isEmpty() && slots.insert(0, key, 10, Actionable.MODULATE) == 0
+                    && me.getAvailableStacks().isEmpty() && me.extract(key, 100L, Actionable.MODULATE, source) == 0,
+                    id + " network-owned slot remains private after its filter is cleared");
+            helper.assertTrue(me.insert(key, 50L, Actionable.MODULATE, source) == 50
+                    && chemicals.extractChemical(1, 100L, Action.SIMULATE).getAmount() == 50
+                    && me.getAvailableStacks().get(key) == 50 && me.extract(key, 100, Actionable.MODULATE, source) == 50,
+                    id + " storage bus uses the next open slot, not the network stock");
+            helper.assertTrue(internal.extractChemical(0, 100L, Action.EXECUTE).getAmount() == 100L
+                    && slots.insert(0, key, 1L, Actionable.MODULATE) == 1L
+                    && chemicals.extractChemical(0, 1L, Action.EXECUTE).getAmount() == 1L,
+                    id + " recipe consumption releases the slot for local IO");
+        }
         helper.succeed();
     }
 }

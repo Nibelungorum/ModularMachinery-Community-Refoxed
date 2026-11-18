@@ -20,11 +20,11 @@ public interface AppMekBridge {
     static AppMekBridge get() { return AppMekBridgeBootstrap.get(); }
 
     boolean available();
+    default boolean isChemicalKeyType(Object type) { return false; }
     List<CapabilityBinding> appendBindings(List<CapabilityBinding> base, CapabilityDirections directions, boolean transfer);
     List<PortFamilyDescriptor> appendFamilies(List<PortFamilyDescriptor> base);
     void configureInventory(Object inventory);
     Object inventoryView(Object inventory);
-    Object storageView(Object storage);
     boolean supportsPatternInput(Object key);
     Optional<MachineOutput> patternOutput(Object key, long amount);
     PatternRequest patternRequest(Object holders);
