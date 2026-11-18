@@ -21,10 +21,9 @@ MMCREvents.server(event => {
         .pattern(['XXX', 'XCX', 'XXX'])
         .set('X', api.anyOf(
             api.block('minecraft:iron_block'),
-            api.anyOfItemInput(),
-            api.anyOfItemOutput(),
+            api.ports(),
             api.parallelControllers(),
-            api.factoryController(),
+            api.factoryController()
         ))
         .controller('C')
         .build()

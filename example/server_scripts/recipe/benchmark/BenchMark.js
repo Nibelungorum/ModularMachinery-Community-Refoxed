@@ -19,7 +19,12 @@ ServerEvents.recipes(event => {
                     id: 'minecraft:diamond',
                     count: 9
                 } 
-            }
+            },
+            {
+                type: 'neoforge:energy',
+                io: 'input',
+                fe_per_tick: 20
+            },
         ]
     })
 
