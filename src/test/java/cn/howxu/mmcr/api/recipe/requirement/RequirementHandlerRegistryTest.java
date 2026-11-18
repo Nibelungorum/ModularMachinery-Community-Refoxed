@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.internal.recipe.EnergyPrefetchPlanner;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.MapCodec;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.OptionalLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -124,6 +126,29 @@ class RequirementHandlerRegistryTest {
                 .isSameAs(FluidRequirement.TYPE);
         assertThat(RequirementHandlerRegistry.typeFor(Identifier.parse("neoforge:energy")))
                 .isSameAs(EnergyRequirement.TYPE);
+    }
+
+    @Test
+    void prefetch_replaces_only_inputs_supported_by_the_registered_handler() {
+        var capable = new RequirementHandler<TestRequirement>() {
+            @Override
+            public RequirementPlan plan(TestRequirement requirement, List<MachineCapability> ports, PlanningContext context) {
+                return TEST_HANDLER.plan(requirement, ports, context);
+            }
+
+            @Override
+            public OptionalLong prefetchEnergyPerTick(TestRequirement value) {
+                return value.io().isInput() ? OptionalLong.of(3L) : OptionalLong.empty();
+            }
+        };
+        var type = new RequirementType.Definition<>(Identifier.fromNamespaceAndPath("mmcr_test", "prefetch_input"), TEST_TYPE.codec(), capable);
+        RequirementHandlerRegistry.register(type);
+        var input = new TestRequirement(type, RecipeModifier.IOType.INPUT);
+        var output = new TestRequirement(type, RecipeModifier.IOType.OUTPUT);
+        var substitute = new TestRequirement(new IdentityType(type.id()), RecipeModifier.IOType.INPUT);
+        List<MachineRequirement> requirements = List.of(input, output, substitute);
+        assertThat(EnergyPrefetchPlanner.startRequirements(requirements, true)).containsExactly(output, substitute);
+        assertThat(EnergyPrefetchPlanner.startRequirements(requirements, false)).containsExactlyElementsOf(requirements);
     }
 
     private static RequirementType<TestRequirement> type(String path) {

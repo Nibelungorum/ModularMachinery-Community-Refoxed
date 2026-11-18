@@ -46,6 +46,8 @@ import cn.howxu.mmcr.api.machine.definition.RecipeTickContext;
 import cn.howxu.mmcr.api.controller.ControllerScreenText;
 import cn.howxu.mmcr.api.capability.facet.AsyncPlanningFacet;
 import cn.howxu.mmcr.api.capability.facet.RecipeEnergyPrefetchFacet;
+import cn.howxu.mmcr.internal.recipe.EnergyPrefetchPlanner;
+import cn.howxu.mmcr.internal.recipe.EnergyPrefetchPlanner.Allocation;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.ExecutionIdentity;
@@ -64,18 +66,13 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
-import cn.howxu.mmcr.util.SaturatingLong;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.LongTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
-import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.jetbrains.annotations.Nullable;
 
@@ -194,14 +191,7 @@ public final class CraftingRuntime {
     private boolean attemptExecuting;
     private @Nullable ControllerScreenText lastBehaviorScreenText;
     private @Nullable RecipeFinishContext preparedAsyncFinishContext;
-    private List<ActivePrefetch> activePrefetches = List.of();
-    private long prefetchedEnergyPerTick;
-    private long prefetchedEnergyRemaining;
-    private final PrefetchJournal prefetchJournal = new PrefetchJournal();
-    private static final String PREFETCH_RESERVATION_KEY = "prefetched_energy_reservation";
-    private static final String PREFETCH_ALLOCATIONS_KEY = "prefetched_energy_allocations";
-    private static final String PREFETCH_ALLOCATION_KEY = "key";
-    private static final String PREFETCH_ALLOCATION_AMOUNT = "amount";
+    private final EnergyPrefetchLedger prefetch = new EnergyPrefetchLedger();
 
     public CraftingRuntime(MachineControllerBlockEntity controller, ComponentRuntime components) {
         if (controller == null) throw new IllegalArgumentException("controller must not be null");
@@ -504,7 +494,7 @@ public final class CraftingRuntime {
 
     private boolean canAdvanceWithoutEffects(InstalledRecipeProgram execution, ActiveMachineRecipe recipe) {
         return !recipe.needsFinishCommit() && !recipe.isFinishPending() && failure == null
-                && capabilityTickFailure == null && asyncTickPreparation == null && activePrefetches.isEmpty()
+                && capabilityTickFailure == null && asyncTickPreparation == null && prefetch.isEmpty()
                 && !installedBehavior.hasRecipeTick() && components.tickFacetsKnownAbsent()
                 && execution.hasNoContinuousRequirements() && perTickRequirements().isEmpty();
     }
@@ -628,10 +618,10 @@ public final class CraftingRuntime {
     }
 
     private boolean consumePaidPrefetch(RecipeCommitLedger payment) {
-        if (activePrefetches.isEmpty()) return true;
+        if (prefetch.isEmpty()) return true;
         TickAttempt attempt = tickAttempt;
         try {
-            ExecutionStatus rejected = consumePrefetchedEnergy();
+            ExecutionStatus rejected = prefetch.consume(() -> failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.PER_TICK, Map.of()));
             if (!attemptCurrent(attempt)) return false;
             if (rejected == null) return true;
             // The existing reservation boundary follows the ordinary resource commit. Never replay the latter.
@@ -877,7 +867,7 @@ public final class CraftingRuntime {
                 Set.of(), Set.of());
         CraftingPlan plan = result.plan();
         if (!result.successful() || plan == null) return null;
-        List<PreparedPrefetch> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
+        List<Allocation> prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
         if (prefetches == null) return null;
         PreparedStart prepared = new PreparedStart(effectiveRecipe, runtime, catalogVersion, effective, plan, prefetches,
                 requestCapabilities == null ? List.of() : requestCapabilities, !facets.isEmpty());
@@ -885,7 +875,7 @@ public final class CraftingRuntime {
                 || pendingPatternStart != null || pendingPaymentStart != null || patternStartReserved
                 || !Objects.equals(domain, controller.resourceDomain()) || !preparedStartCurrent(prepared)
                 || requestSource != null && !controller.currentRuntimeSnapshot().linkedPortPositions().contains(requestSource)) {
-            releaseUnpaidPrefetches(prefetches);
+            EnergyPrefetchPlanner.discard(prefetches);
             return null;
         }
         pendingPatternStart = prepared;
@@ -1026,24 +1016,13 @@ public final class CraftingRuntime {
             }
             pendingPrefetchStart = null;
         }
-        releaseUnpaidPrefetches(prepared.prefetches());
-    }
-
-    private void releaseUnpaidPrefetches(List<PreparedPrefetch> prefetches) {
-        for (PreparedPrefetch prefetch : prefetches) {
-            try {
-                prefetch.facet().restoreReservation(prefetch.plan().amount());
-            } catch (RuntimeException exception) {
-                MMCR.LOG.warn("Failed to release prepared start energy: controller={} key={}",
-                        controller.getBlockPos(), prefetch.reservationKey(), exception);
-            }
-        }
+        EnergyPrefetchPlanner.discard(prepared.prefetches());
     }
 
     private void releasePaidStartPrefetches(PreparedStart prepared) {
         if (pendingPrefetchStart == null || pendingPrefetchStart.prepared() != prepared) return;
         pendingPrefetchStart = null;
-        for (PreparedPrefetch prefetch : prepared.prefetches()) {
+        for (Allocation prefetch : prepared.prefetches()) {
             try {
                 prefetch.facet().releaseReservation(prefetch.plan().amount());
             } catch (RuntimeException exception) {
@@ -1110,7 +1089,7 @@ public final class CraftingRuntime {
                 .map(MachineRequirement::copyOf).toList());
         effectiveOutputs = MachineOutput.copyList(prepared.effective().outputs());
         presentationEpoch++;
-        activatePrefetches(prepared.prefetches(), effectiveRequirements, activeRecipe.getParallelism());
+        prefetch.activate(prepared.prefetches(), effectiveRequirements, activeRecipe.getParallelism());
         Set<Integer> admittedInputs = new HashSet<>();
         for (int index = 0; index < effectiveRequirements.size(); index++) {
             if (activeRecipe.inputConsumptionPlan().consumedBatches(index) > 0) admittedInputs.add(index);
@@ -1132,7 +1111,7 @@ public final class CraftingRuntime {
 
     public record PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
                                 RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
-                                List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities,
+                                List<Allocation> prefetches, List<MachineCapability> requestCapabilities,
                                 boolean energyInputsExcluded) {
         public PreparedStart {
             prefetches = List.copyOf(prefetches);
@@ -1141,26 +1120,22 @@ public final class CraftingRuntime {
 
         public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
                              RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
-                             List<PreparedPrefetch> prefetches, List<MachineCapability> requestCapabilities) {
+                             List<Allocation> prefetches, List<MachineCapability> requestCapabilities) {
             this(recipe, runtime, catalogVersion, effective, plan, prefetches, requestCapabilities, !prefetches.isEmpty());
         }
 
         public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime, long catalogVersion,
                              RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
-                             List<PreparedPrefetch> prefetches) {
+                             List<Allocation> prefetches) {
             this(recipe, runtime, catalogVersion, effective, plan, prefetches, List.of());
         }
 
         public PreparedStart(EffectiveRecipe recipe, ControllerRuntimeSnapshot runtime,
                              RecipeStartContext.ExecutionSnapshot effective, CraftingPlan plan,
-                             List<PreparedPrefetch> prefetches) {
+                             List<Allocation> prefetches) {
             this(recipe, runtime, CraftingRuntime.catalogVersion(recipe.source().recipePoolId()), effective, plan,
                     prefetches);
         }
-    }
-
-    record PreparedPrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet,
-                            RecipeEnergyPrefetchFacet.PrefetchPlan plan) {
     }
 
     /** Owns start reservations until activation or cancellation, independently of a replacement ledger.
@@ -1293,7 +1268,7 @@ public final class CraftingRuntime {
         PreparedStart prepared;
         List<MachineRequirement> executionRequirements;
         List<MachineOutput> executionOutputs;
-        List<PreparedPrefetch> prefetches = List.of();
+        List<Allocation> prefetches = List.of();
         try {
             if (!reserveStartSlot()) return status;
             ControllerRuntimeSnapshot runtime = controller.currentRuntimeSnapshot();
@@ -1341,7 +1316,7 @@ public final class CraftingRuntime {
             if (!result.successful() || plan == null) return fail(result.failure());
             prefetches = planPrefetches(requirements, effective.duration(), plan.parallelism(), facets);
             if (!startAttemptCurrent(lifecycle, originalLedger)) {
-                if (prefetches != null) releaseUnpaidPrefetches(prefetches);
+                if (prefetches != null) EnergyPrefetchPlanner.discard(prefetches);
                 return status;
             }
             if (prefetches == null) return fail(failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.RECIPE_START, Map.of()));
@@ -1349,7 +1324,7 @@ public final class CraftingRuntime {
                     catalogVersion(effectiveRecipe.source().recipePoolId()), effective, plan, prefetches,
                     List.of(), !facets.isEmpty());
         } catch (RuntimeException exception) {
-            if (prefetches != null) releaseUnpaidPrefetches(prefetches);
+            if (prefetches != null) EnergyPrefetchPlanner.discard(prefetches);
             MMCR.LOG.warn("Recipe start planning failed: recipe={} controller={}",
                     recipe.id(), controller.getBlockPos(), exception);
             if (!startAttemptCurrent(lifecycle, originalLedger)) return status;
@@ -1398,7 +1373,7 @@ public final class CraftingRuntime {
         effectiveOutputs = executionOutputs;
         presentationEpoch++;
         try {
-            activatePrefetches(prefetches, effectiveRequirements, activeRecipe.getParallelism());
+            prefetch.activate(prefetches, effectiveRequirements, activeRecipe.getParallelism());
             captureInputState(effectiveRequirements, plan, prepared.energyInputsExcluded());
             captureVersions(runtime);
             status = CraftingStatus.working();
@@ -2243,7 +2218,7 @@ public final class CraftingRuntime {
                 return;
             }
         }
-        if (!restorePrefetches(restored, requirements)) {
+        if (!prefetch.restore(restored, requirements, () -> prefetchFacets(List.of()), errorPaused())) {
             failLoad();
             return;
         }
@@ -2310,7 +2285,7 @@ public final class CraftingRuntime {
             output.putLong("modifier_version", modifierVersion);
             output.putLong("component_state_version", componentStateVersion);
             output.putLong("upgrade_content_revision", upgradeContentRevision);
-            savePrefetchAllocations();
+            prefetch.save(activeRecipe);
             saveInputScope(output, activeInputScope);
             activeRecipe.serialize(output.child("recipe"), registryAccess());
         }
@@ -2537,46 +2512,13 @@ public final class CraftingRuntime {
 
     private static List<MachineRequirement> startRequirements(List<MachineRequirement> requirements,
                                                                List<RecipeEnergyPrefetchFacet> facets) {
-        if (facets.isEmpty()) return requirements;
-        return requirements.stream().filter(requirement -> !(requirement instanceof EnergyRequirement energy
-                && energy.io() == RecipeModifier.IOType.INPUT)).toList();
+        return EnergyPrefetchPlanner.startRequirements(requirements, !facets.isEmpty());
     }
 
-    private @Nullable List<PreparedPrefetch> planPrefetches(List<MachineRequirement> requirements, int duration,
+    private static @Nullable List<Allocation> planPrefetches(List<MachineRequirement> requirements, int duration,
                                                              long parallelism, List<RecipeEnergyPrefetchFacet> facets) {
-        if (facets.isEmpty()) return List.of();
-        boolean hasEnergyInput = requirements.stream().anyMatch(requirement -> requirement instanceof EnergyRequirement energy
-                && energy.io() == RecipeModifier.IOType.INPUT);
-        if (!hasEnergyInput) return List.of();
-        Set<String> reservationKeys = new HashSet<>();
-        for (RecipeEnergyPrefetchFacet facet : facets) {
-            String reservationKey = facet.reservationKey();
-            if (reservationKey == null || reservationKey.isBlank() || !reservationKeys.add(reservationKey)) return null;
-        }
-        List<PreparedPrefetch> prefetches = new ArrayList<>();
-        boolean complete = false;
-        try {
-            for (MachineRequirement requirement : requirements) {
-                if (!(requirement instanceof EnergyRequirement energy)
-                        || energy.io() != RecipeModifier.IOType.INPUT) continue;
-                long remaining = SaturatingLong.multiply(SaturatingLong.multiply(energy.fePerTick(), duration), parallelism);
-                for (RecipeEnergyPrefetchFacet facet : facets) {
-                    if (remaining <= 0L) break;
-                    var planned = facet.planPrefetch(remaining);
-                    if (planned.isEmpty()) continue;
-                    RecipeEnergyPrefetchFacet.PrefetchPlan plan = planned.get();
-                    prefetches.add(new PreparedPrefetch(facet.reservationKey(), facet, plan));
-                    if (plan.amount() > remaining) return null;
-                    remaining -= plan.amount();
-                }
-                if (remaining > 0L) return null;
-            }
-            List<PreparedPrefetch> result = List.copyOf(prefetches);
-            complete = true;
-            return result;
-        } finally {
-            if (!complete) releaseUnpaidPrefetches(prefetches);
-        }
+        var reserved = EnergyPrefetchPlanner.reserve(requirements, duration, parallelism, facets);
+        return reserved.failedIndex() < 0 ? reserved.allocations() : null;
     }
 
     private @Nullable ExecutionStatus commitPreparedStart(PreparedStart prepared, TransactionContext transaction) {
@@ -2601,7 +2543,7 @@ public final class CraftingRuntime {
             ExecutionStatus failure = prepared.plan().failure();
             return failure == null ? missingInputStatus() : failure;
         }
-        for (PreparedPrefetch prefetch : prepared.prefetches()) {
+        for (Allocation prefetch : prepared.prefetches()) {
             CapabilityResult result = prefetch.plan().operation().commit(transaction);
             if (result == null || !result.success()) {
                 return result == null || result.status() == null
@@ -2657,20 +2599,7 @@ public final class CraftingRuntime {
         ActiveMachineRecipe saved = new ActiveMachineRecipe(prepared.recipe().source(), prepared.plan().parallelism(),
                 prepared.effective());
         saved.setInputConsumptionPlan(acceptedRecipe.inputConsumptionPlan());
-        if (!prepared.prefetches().isEmpty()) {
-            Map<String, Long> allocations = new LinkedHashMap<>();
-            for (PreparedPrefetch prefetch : prepared.prefetches()) {
-                allocations.merge(prefetch.reservationKey(), prefetch.plan().amount(), SaturatingLong::add);
-            }
-            ListTag tags = new ListTag();
-            allocations.forEach((key, amount) -> {
-                CompoundTag tag = new CompoundTag();
-                tag.putString(PREFETCH_ALLOCATION_KEY, key);
-                tag.putLong(PREFETCH_ALLOCATION_AMOUNT, amount);
-                tags.add(tag);
-            });
-            saved.getDataCompound().put(PREFETCH_ALLOCATIONS_KEY, tags);
-        }
+        EnergyPrefetchLedger.savePrepared(saved, prepared.prefetches());
         output.putBoolean("active", true);
         saveInputScope(output, prepared.plan().inputScope());
         ledger.save(output);
@@ -2686,169 +2615,8 @@ public final class CraftingRuntime {
         return failure(BuiltinFailureReasons.MISSING_INPUT, FailurePhase.RECIPE_START, Map.of());
     }
 
-    private void activatePrefetches(List<PreparedPrefetch> prefetches, List<MachineRequirement> requirements,
-                                    long parallelism) {
-        Map<String, ActivePrefetch> allocations = new LinkedHashMap<>();
-        for (PreparedPrefetch prefetch : prefetches) {
-            ActivePrefetch existing = allocations.get(prefetch.reservationKey());
-            long remaining = existing == null ? prefetch.plan().amount()
-                    : SaturatingLong.add(existing.remaining(), prefetch.plan().amount());
-            allocations.put(prefetch.reservationKey(), new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(),
-                    remaining));
-        }
-        activePrefetches = List.copyOf(allocations.values());
-        prefetchedEnergyPerTick = prefetchedEnergyPerTick(requirements, parallelism);
-        prefetchedEnergyRemaining = activePrefetches.stream()
-                .mapToLong(ActivePrefetch::remaining).reduce(0L, SaturatingLong::add);
-    }
-
-    private boolean restorePrefetches(ActiveMachineRecipe restored, List<MachineRequirement> requirements) {
-        activePrefetches = List.of();
-        prefetchedEnergyPerTick = 0L;
-        prefetchedEnergyRemaining = 0L;
-        CompoundTag data = restored.getDataCompound();
-        var storedAllocations = data.getList(PREFETCH_ALLOCATIONS_KEY);
-        if (!data.contains(PREFETCH_ALLOCATIONS_KEY)) {
-            return !data.getBooleanOr(PREFETCH_RESERVATION_KEY, false);
-        }
-        if (storedAllocations.isEmpty()) return false;
-        List<StoredPrefetch> allocations = new ArrayList<>();
-        Set<String> storedKeys = new HashSet<>();
-        ListTag allocationList = storedAllocations.get();
-        for (int index = 0; index < allocationList.size(); index++) {
-            CompoundTag allocation = allocationList.getCompound(index).orElse(null);
-            if (allocation == null) return false;
-            String reservationKey = allocation.getString(PREFETCH_ALLOCATION_KEY).orElse("");
-            if (!(allocation.get(PREFETCH_ALLOCATION_AMOUNT) instanceof LongTag longTag)) return false;
-            long amount = longTag.longValue();
-            if (reservationKey.isBlank() || !storedKeys.add(reservationKey) || amount < 0L) return false;
-            allocations.add(new StoredPrefetch(reservationKey, amount));
-        }
-        if (allocations.isEmpty()) return false;
-
-        Map<String, RecipeEnergyPrefetchFacet> facetsByKey = new LinkedHashMap<>();
-        for (RecipeEnergyPrefetchFacet facet : prefetchFacets(List.of())) {
-            String reservationKey;
-            try {
-                reservationKey = facet.reservationKey();
-            } catch (RuntimeException exception) {
-                return false;
-            }
-            if (reservationKey == null || reservationKey.isBlank() || facetsByKey.putIfAbsent(reservationKey, facet) != null) {
-                return false;
-            }
-        }
-        long perTick = prefetchedEnergyPerTick(requirements, restored.getParallelism());
-        long total = SaturatingLong.multiply(perTick, restored.getTotalTick());
-        int committedTicks = restored.getTick() + (restored.isFinishPending() ? 1 : 0);
-        long remaining = Math.max(0L, total - SaturatingLong.multiply(perTick, committedTicks));
-        long allocationTotal = 0L;
-        List<ActivePrefetch> restoredPrefetches = new ArrayList<>(allocations.size());
-        for (StoredPrefetch allocation : allocations) {
-            if (!facetsByKey.containsKey(allocation.reservationKey())) return false;
-            try {
-                allocationTotal = Math.addExact(allocationTotal, allocation.amount());
-            } catch (ArithmeticException exception) {
-                return false;
-            }
-        }
-        if (allocationTotal != remaining && !(errorPaused() && remaining >= perTick && allocationTotal == remaining - perTick)) return false;
-        try {
-            for (StoredPrefetch allocation : allocations) {
-                RecipeEnergyPrefetchFacet facet = facetsByKey.get(allocation.reservationKey());
-                ActivePrefetch restoredPrefetch = new ActivePrefetch(allocation.reservationKey(), facet,
-                        allocation.amount());
-                restoredPrefetches.add(restoredPrefetch);
-                if (allocation.amount() > 0L) facet.restoreReservation(allocation.amount());
-            }
-        } catch (RuntimeException exception) {
-            rollbackRestoredPrefetches(restoredPrefetches);
-            return false;
-        }
-        activePrefetches = List.copyOf(restoredPrefetches);
-        prefetchedEnergyPerTick = perTick;
-        prefetchedEnergyRemaining = allocationTotal;
-        return true;
-    }
-
-    private void savePrefetchAllocations() {
-        if (activeRecipe == null) return;
-        CompoundTag data = activeRecipe.getDataCompound();
-        data.remove(PREFETCH_RESERVATION_KEY);
-        data.remove(PREFETCH_ALLOCATIONS_KEY);
-        if (activePrefetches.isEmpty()) return;
-        ListTag allocations = new ListTag();
-        for (ActivePrefetch prefetch : activePrefetches) {
-            CompoundTag allocation = new CompoundTag();
-            allocation.putString(PREFETCH_ALLOCATION_KEY, prefetch.reservationKey());
-            allocation.putLong(PREFETCH_ALLOCATION_AMOUNT, prefetch.remaining());
-            allocations.add(allocation);
-        }
-        data.put(PREFETCH_ALLOCATIONS_KEY, allocations);
-    }
-
-    private static void rollbackRestoredPrefetches(List<ActivePrefetch> restoredPrefetches) {
-        for (ActivePrefetch prefetch : restoredPrefetches) {
-            if (prefetch.remaining() <= 0L) continue;
-            try {
-                prefetch.facet().releaseReservation(prefetch.remaining());
-            } catch (RuntimeException ignored) {
-                // Continue releasing the remaining facets after one rollback failure.
-            }
-        }
-    }
-
-    private static long prefetchedEnergyPerTick(List<MachineRequirement> requirements, long parallelism) {
-        long total = 0L;
-        for (MachineRequirement requirement : requirements) {
-            if (requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.INPUT) {
-                total = SaturatingLong.add(total, SaturatingLong.multiply(energy.fePerTick(), parallelism));
-            }
-        }
-        return total;
-    }
-
-    private @Nullable ExecutionStatus consumePrefetchedEnergy() {
-        long remaining = Math.min(prefetchedEnergyPerTick, prefetchedEnergyRemaining);
-        if (remaining <= 0L) return null;
-        List<ActivePrefetch> next = activePrefetches.size() == 1 ? activePrefetches : new ArrayList<>(activePrefetches.size());
-        try (Transaction transaction = Transaction.openRoot()) {
-            for (ActivePrefetch prefetch : activePrefetches) {
-                long consumed = Math.min(remaining, prefetch.remaining());
-                if (consumed > 0L) {
-                    CapabilityResult result = prefetch.facet().consumeReservation(consumed, transaction);
-                    if (result == null || !result.success()) {
-                        return result == null || result.status() == null
-                                ? failure(BuiltinFailureReasons.MISSING_ENERGY, FailurePhase.PER_TICK, Map.of()) : result.status();
-                    }
-                }
-                ActivePrefetch updated = new ActivePrefetch(prefetch.reservationKey(), prefetch.facet(), prefetch.remaining() - consumed);
-                if (activePrefetches.size() == 1) next = List.of(updated);
-                else next.add(updated);
-                remaining -= consumed;
-            }
-            prefetchJournal.updateSnapshots(transaction);
-            activePrefetches = List.copyOf(next);
-            prefetchedEnergyRemaining = Math.max(0L, prefetchedEnergyRemaining - prefetchedEnergyPerTick);
-            transaction.commit();
-        }
-        return null;
-    }
-
     private void releaseActivePrefetches() {
-        List<ActivePrefetch> prefetches = activePrefetches;
-        activePrefetches = List.of();
-        prefetchedEnergyPerTick = 0L;
-        prefetchedEnergyRemaining = 0L;
-        for (ActivePrefetch prefetch : prefetches) {
-            if (prefetch.remaining() <= 0L) continue;
-            try {
-                prefetch.facet().releaseReservation(prefetch.remaining());
-            } catch (RuntimeException exception) {
-                MMCR.LOG.warn("Failed to release prefetched recipe energy: controller={} key={}",
-                        controller.getBlockPos(), prefetch.reservationKey(), exception);
-            }
-        }
+        prefetch.release(controller.getBlockPos());
     }
 
     private PlanningResult planPerTick(CraftingContext context) {
@@ -2952,7 +2720,7 @@ public final class CraftingRuntime {
     }
 
     private List<MachineRequirement> perTickRequirements() {
-        boolean hasPrefetches = !activePrefetches.isEmpty();
+        boolean hasPrefetches = !prefetch.isEmpty();
         if (cachedPerTickSource == effectiveRequirements && cachedPerTickConsumed == consumedAtStart
                 && cachedPerTickRetained == retainedInputs && cachedPerTickHasPrefetches == hasPrefetches) {
             return cachedPerTickRequirements;
@@ -3180,26 +2948,6 @@ public final class CraftingRuntime {
     /** Identity shared by preparation, payment and both AFTER phases. @author howxu <dev@howxu.cn> */
     private record TickAttempt(ActiveMachineRecipe recipe, RecipeCommitLedger payment,
                                @Nullable InstalledRecipeProgram installed, long lifecycleEpoch) { }
-
-    /** Keeps reservation bookkeeping authoritative during root notification/save reentry. @author howxu <dev@howxu.cn> */
-    private final class PrefetchJournal extends SnapshotJournal<PrefetchState> {
-        @Override
-        protected PrefetchState createSnapshot() { return new PrefetchState(activePrefetches, prefetchedEnergyRemaining); }
-        @Override
-        protected void revertToSnapshot(PrefetchState state) {
-            activePrefetches = state.allocations();
-            prefetchedEnergyRemaining = state.remaining();
-        }
-    }
-
-    /** Transaction-local reservation bookkeeping. @author howxu <dev@howxu.cn> */
-    private record PrefetchState(List<ActivePrefetch> allocations, long remaining) { }
-
-    private record StoredPrefetch(String reservationKey, long amount) {
-    }
-
-    private record ActivePrefetch(String reservationKey, RecipeEnergyPrefetchFacet facet, long remaining) {
-    }
 
     private static String failureUnloc(ExecutionStatus status) {
         if (status == null) return "";

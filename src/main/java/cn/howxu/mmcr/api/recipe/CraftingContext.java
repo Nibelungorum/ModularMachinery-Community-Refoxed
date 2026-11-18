@@ -32,6 +32,7 @@ import cn.howxu.mmcr.internal.capability.NativeAsyncResourceValues;
 import cn.howxu.mmcr.internal.recipe.AsyncRequirementPlanner;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
+import cn.howxu.mmcr.internal.recipe.EnergyPrefetchPlanner;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.resources.Identifier;
 import net.minecraft.core.BlockPos;
@@ -40,7 +41,6 @@ import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -299,9 +299,7 @@ public final class CraftingContext {
     private List<MachineRequirement> startRequirements(List<MachineRequirement> requirements) {
         boolean hasPrefetch = capabilities.stream()
                 .anyMatch(capability -> capability.facet(RecipeEnergyPrefetchFacet.class).isPresent());
-        if (!hasPrefetch) return requirements;
-        return requirements.stream().filter(requirement -> !(requirement instanceof EnergyRequirement energy
-                && energy.io() == RecipeModifier.IOType.INPUT)).toList();
+        return EnergyPrefetchPlanner.startRequirements(requirements, hasPrefetch);
     }
 
     private @Nullable PlanningResult validatePrefetch(List<MachineRequirement> requirements, int duration,
@@ -309,47 +307,10 @@ public final class CraftingContext {
         List<RecipeEnergyPrefetchFacet> facets = capabilities.stream()
                 .map(capability -> capability.facet(RecipeEnergyPrefetchFacet.class).orElse(null))
                 .filter(Objects::nonNull).toList();
-        if (facets.isEmpty()) return null;
-        int firstEnergyIndex = -1;
-        for (int index = 0; index < requirements.size(); index++) {
-            if (requirements.get(index) instanceof EnergyRequirement energy
-                    && energy.io() == RecipeModifier.IOType.INPUT) {
-                firstEnergyIndex = index;
-                break;
-            }
-        }
-        if (firstEnergyIndex < 0) return null;
-        int energyIndex = firstEnergyIndex;
-        List<Map.Entry<RecipeEnergyPrefetchFacet, RecipeEnergyPrefetchFacet.PrefetchPlan>> planned = new ArrayList<>();
-        try {
-            Set<String> reservationKeys = new HashSet<>();
-            if (facets.stream().anyMatch(facet -> facet.reservationKey() == null
-                    || facet.reservationKey().isBlank() || !reservationKeys.add(facet.reservationKey()))) {
-                return prefetchFailure(requirements, energyIndex);
-            }
-            for (int index = 0; index < requirements.size(); index++) {
-                MachineRequirement requirement = requirements.get(index);
-                if (!(requirement instanceof EnergyRequirement energy)
-                        || energy.io() != RecipeModifier.IOType.INPUT) continue;
-                long remaining = scaled(scaled(energy.fePerTick(), duration), parallelism);
-                for (RecipeEnergyPrefetchFacet facet : facets) {
-                    if (remaining <= 0L) break;
-                    Optional<RecipeEnergyPrefetchFacet.PrefetchPlan> candidate = facet.planPrefetch(remaining);
-                    if (candidate.isEmpty()) continue;
-                    RecipeEnergyPrefetchFacet.PrefetchPlan plan = candidate.get();
-                    if (plan.amount() <= 0L || plan.amount() > remaining) return prefetchFailure(requirements, index);
-                    planned.add(Map.entry(facet, plan));
-                    remaining -= plan.amount();
-                }
-                if (remaining > 0L) return prefetchFailure(requirements, index);
-            }
-            return null;
-        } finally {
-            for (int index = planned.size() - 1; index >= 0; index--) {
-                var entry = planned.get(index);
-                entry.getKey().restoreReservation(entry.getValue().amount());
-            }
-        }
+        var reserved = EnergyPrefetchPlanner.reserve(requirements, duration, parallelism, facets);
+        if (reserved.failedIndex() >= 0) return prefetchFailure(requirements, reserved.failedIndex());
+        EnergyPrefetchPlanner.discard(reserved.allocations());
+        return null;
     }
 
     private static PlanningResult prefetchFailure(List<MachineRequirement> requirements, int requirementIndex) {
