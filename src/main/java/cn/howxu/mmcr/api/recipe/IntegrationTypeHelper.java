@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.api.recipe;
 
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeModifiers;
 
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import net.minecraft.world.item.ItemStack;
@@ -16,8 +16,8 @@ public final class IntegrationTypeHelper {
     public static final String TARGET_ITEM = "item";
     public static final String TARGET_FLUID = "fluid";
     public static final String TARGET_ENERGY = "energy";
-    public static final String TARGET_CHEMICAL = "chemical";
-    public static final String TARGET_HEAT = "heat";
+    public static final String TARGET_CHEMICAL = MekanismRecipeModifiers.TARGET_CHEMICAL;
+    public static final String TARGET_HEAT = MekanismRecipeModifiers.TARGET_HEAT;
 
     private IntegrationTypeHelper() {
     }
@@ -68,29 +68,19 @@ public final class IntegrationTypeHelper {
     }
 
     public static float applyChemicalInputChance(List<RecipeModifier> modifiers, float chance) {
-        if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
-        return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL, RecipeModifier.IOType.INPUT, chance, true));
+        return MekanismRecipeModifiers.applyChemicalInputChance(modifiers, chance);
     }
 
     public static float applyChemicalOutputChance(List<RecipeModifier> modifiers, float chance) {
-        if (modifiers == null || modifiers.isEmpty()) return MachineOutput.clampChance(chance);
-        return MachineOutput.clampChance(RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL,
-                RecipeModifier.IOType.OUTPUT, chance, true));
+        return MekanismRecipeModifiers.applyChemicalOutputChance(modifiers, chance);
     }
 
     public static long applyChemical(List<RecipeModifier> modifiers, long amount, RecipeModifier.IOType io) {
-        if (modifiers == null || modifiers.isEmpty()) return amount;
-        double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_CHEMICAL, io, (double) amount, false);
-        if (Double.isNaN(adjusted) || adjusted <= 1D) return 1L;
-        if (adjusted >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
-        return Math.max(1L, (long) Math.floor(adjusted));
+        return MekanismRecipeModifiers.applyChemical(modifiers, amount, io);
     }
 
     public static double applyHeat(List<RecipeModifier> modifiers, double heat, RecipeModifier.IOType io) {
-        if (modifiers == null || modifiers.isEmpty()) return heat;
-        double adjusted = RecipeModifier.applyModifiers(modifiers, TARGET_HEAT, io, heat, false);
-        if (Double.isNaN(adjusted) || adjusted <= 0D) return 0D;
-        return Double.isInfinite(adjusted) ? Double.MAX_VALUE : adjusted;
+        return MekanismRecipeModifiers.applyHeat(modifiers, heat, io);
     }
 
     public static long applyEnergy(List<RecipeModifier> modifiers, long fePerTick) {

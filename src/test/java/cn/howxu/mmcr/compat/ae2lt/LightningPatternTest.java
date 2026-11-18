@@ -11,13 +11,11 @@ import appeng.api.stacks.KeyCounter;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LoadedLightningBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRequestState;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.BlockPos;
@@ -214,13 +212,11 @@ class LightningPatternTest {
     }
 
     @Test
-    void lightningOutputPatternMatchesOnlySameTierAndAmount() throws Exception {
-        var method = MachineControllerBlockEntity.class.getDeclaredMethod("samePatternOutput", MachineOutput.class, MachineOutput.class);
-        method.setAccessible(true);
+    void lightningOutputPatternMatchesOnlySameTierAndAmount() {
         var expected = new LightningOutput(HIGH_VOLTAGE, 17L, 1F);
-        assertThat(method.invoke(null, expected, new LightningOutput(HIGH_VOLTAGE, 17L, 1F))).isEqualTo(true);
-        assertThat(method.invoke(null, expected, new LightningOutput(EXTREME_HIGH_VOLTAGE, 17L, 1F))).isEqualTo(false);
-        assertThat(method.invoke(null, expected, new LightningOutput(HIGH_VOLTAGE, 18L, 1F))).isEqualTo(false);
+        assertThat(expected.matchesPatternOutput(new LightningOutput(HIGH_VOLTAGE, 17L, 0.25F))).isTrue();
+        assertThat(expected.matchesPatternOutput(new LightningOutput(EXTREME_HIGH_VOLTAGE, 17L, 1F))).isFalse();
+        assertThat(expected.matchesPatternOutput(new LightningOutput(HIGH_VOLTAGE, 18L, 1F))).isFalse();
         var high = LoadedLightningBridge.FAMILY.adapter().toKey(HIGH_VOLTAGE);
         assertThat(AE2ResourceFamilies.patternOutput(new GenericStack(high, 17L))).contains(expected);
         assertThat(AE2ResourceFamilies.patternOutput(new GenericStack(high, 2_147_483_648L))).isEmpty();

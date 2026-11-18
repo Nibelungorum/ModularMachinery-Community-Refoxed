@@ -175,13 +175,10 @@ final class RecipeSearchCapture {
             boolean material = false;
             for (int index = 0; index < recipe.requirements().size(); index++) {
                 MachineRequirement requirement = recipe.requirements().get(index);
-                boolean input = requirement.io() == RecipeModifier.IOType.INPUT;
-                boolean materialRule = input && requirement.type().capabilityIds().stream()
-                        .anyMatch(id -> RequirementPlanner.isMaterialInput(IOType.INPUT, id));
+                boolean materialRule = requirement.usesInputScope();
                 material |= materialRule;
                 if (materialRule && routingOmitted) { proof = RecipeSearchProof.Reason.INCOMPLETE_ROUTING; proofIndex = index; }
-                if (requirement instanceof EnergyRequirement energy && energy.io() == RecipeModifier.IOType.INPUT
-                        && hasPrefetch
+                if (hasPrefetch && requirement.prefetchEnergyPerTick().isPresent()
                         && proof == null) { proof = RecipeSearchProof.Reason.LIVE_CAPABILITY; proofIndex = index; }
                 if (!nativeHandlers.computeIfAbsent(requirement, RecipeSearchCapture::nativeHandler)) {
                     if (proof == null) { proof = RecipeSearchProof.Reason.OPAQUE_REQUIREMENT; proofIndex = index; }
@@ -336,7 +333,7 @@ final class RecipeSearchCapture {
             }
         }
         return new Rule(index, requirement.type().id(), kind, direction, Math.max(0L, amount), heat, chance, consume,
-                output && partial, valid, accepted, outputValue, ports, reason);
+                output && partial, valid, accepted, outputValue, ports, reason, requirement.usesInputScope());
     }
 
     private CapturedPorts capturePorts(MachineRequirement requirement, Kind kind, List<Integer> matching,

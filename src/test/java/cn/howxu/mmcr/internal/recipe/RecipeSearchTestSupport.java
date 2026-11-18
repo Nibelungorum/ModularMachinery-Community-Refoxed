@@ -44,12 +44,12 @@ final class RecipeSearchTestSupport {
 
     static Rule input(int index, long amount, float consume, List<Port> ports) {
         return new Rule(index, ITEM, Kind.RESOURCE, IOType.INPUT, amount, 0D, 1F, consume,
-                false, true, Set.of(IRON), null, ports, BuiltinFailureReasons.MISSING_INPUT.id());
+                false, true, Set.of(IRON), null, ports, BuiltinFailureReasons.MISSING_INPUT.id(), true);
     }
 
     static Rule output(int index, long amount, boolean partial, float chance, List<Port> ports) {
         return new Rule(index, ITEM, Kind.RESOURCE, IOType.OUTPUT, amount, 0D, chance, 1F,
-                partial, true, Set.of(), IRON, ports, BuiltinFailureReasons.MISSING_OUTPUT.id());
+                partial, true, Set.of(), IRON, ports, BuiltinFailureReasons.MISSING_OUTPUT.id(), false);
     }
 
     static Candidate candidate(String id, long maximum, List<Rule> rules, List<Scope> scopes) {

@@ -3,7 +3,7 @@ package cn.howxu.mmcr.compat.ae2lt;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.StartMaterial;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 
 import java.util.List;
@@ -13,7 +13,7 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record LightningRequirement(LightningTier tier, RecipeModifier.IOType io,
-                                   long amount, float chance, List<String> tags) implements MachineRequirement {
+                                   long amount, float chance, List<String> tags) implements StartMaterial {
     public LightningRequirement {
         Objects.requireNonNull(tier, "tier");
         Objects.requireNonNull(io, "io");

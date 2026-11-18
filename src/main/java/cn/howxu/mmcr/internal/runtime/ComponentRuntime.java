@@ -34,7 +34,6 @@ import cn.howxu.mmcr.api.recipe.MachineComponent;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
-import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
@@ -254,7 +253,7 @@ public final class ComponentRuntime {
             MachineCapability capability = segment.capability;
             if (legacyCapabilitySources.contains(segment.sourcePos) && capability.type() != null
                     && capability.view().directions().supports(IOType.INPUT)
-                    && RequirementPlanner.isMaterialInput(IOType.INPUT, capability.type().id())) {
+                    && capability.scopedMaterialEndpoint()) {
                 effectiveSettings.putIfAbsent(segment.sourcePos, false);
             }
         }

@@ -7,7 +7,7 @@ import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.compat.mekanism.HeatRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
-import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
+import cn.howxu.mmcr.compat.mekanism.MekanismRecipeModifiers;
 import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
@@ -22,6 +22,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
+import java.util.Set;
 import java.util.Objects;
 
 /**
@@ -31,6 +32,9 @@ import java.util.Objects;
  */
 public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement heat, List<String> tags)
         implements MachineRequirement {
+    @Override
+    public boolean perTickOutput() { return !io.isInput(); }
+
     private static final RequirementHandler<LoadedHeatRequirement> UNAVAILABLE =
             (requirement, capabilities, context) -> unavailable(requirement, context);
     private static volatile RequirementHandler<LoadedHeatRequirement> delegate = UNAVAILABLE;
@@ -101,7 +105,7 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
 
     public static LoadedHeatRequirement applyModifiers(LoadedHeatRequirement requirement,
                                                         List<RecipeModifier> modifiers) {
-        double value = IntegrationTypeHelper.applyHeat(modifiers, requirement.heat().value(), requirement.io());
+        double value = MekanismRecipeModifiers.applyHeat(modifiers, requirement.heat().value(), requirement.io());
         HeatRequirement heat = requirement.heat().kind() == HeatRequirement.Kind.OUTPUT_HEAT
                 ? HeatRequirement.outputHeat(value) : HeatRequirement.minimumTemperature(value);
         return new LoadedHeatRequirement(requirement.io(), heat, requirement.tags());
@@ -119,7 +123,9 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
                 kind == HeatRequirement.Kind.OUTPUT_HEAT ? HeatRequirement.outputHeat(value)
                         : HeatRequirement.minimumTemperature(value), tags)));
         return new RequirementType.Definition<>(id, codec, DELEGATING_HANDLER,
-                LoadedHeatRequirement::copy, RecipeSyncCodec.json(codec.codec()));
+                LoadedHeatRequirement::copy, RecipeSyncCodec.json(codec.codec())) {
+            @Override public Set<Identifier> capabilityIds() { return Set.of(MekanismRecipeTypes.HEAT); }
+        };
     }
 
     private static LoadedHeatRequirement copy(LoadedHeatRequirement requirement) {

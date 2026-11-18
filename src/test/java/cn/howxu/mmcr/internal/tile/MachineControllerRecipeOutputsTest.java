@@ -20,6 +20,7 @@ import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
 import cn.howxu.mmcr.test.ConfigTestSupport;
 import cn.howxu.mmcr.internal.runtime.FactorySnapshot;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
+import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Codec;
@@ -65,6 +66,20 @@ class MachineControllerRecipeOutputsTest {
         assertThat(merged).hasSize(1);
         assertThat(merged.get(0).amount()).isEqualTo(10L);
         assertThat(((MachineOutput.ItemOutput) merged.get(0).output()).stack().getCount()).isEqualTo(4);
+    }
+
+    @Test
+    void factoryAggregationKeepsDistinctChemicalsWithinOneOutputType() {
+        try (var scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(LoadedChemicalOutput.TYPE);
+            var controller = TestBootstrap.newController();
+            var first = Identifier.parse("mmcr_test:first");
+            var second = Identifier.parse("mmcr_test:second");
+            TestBootstrap.bindFactoryWithOutputs(controller, List.of(
+                    new LoadedChemicalOutput(first, 3L, 1F), new LoadedChemicalOutput(second, 2L, 1F)));
+            TestBootstrap.bindFactoryWithOutputs(controller, List.of(new LoadedChemicalOutput(first, 4L, 0.5F)));
+            assertThat(controller.recipeOutputs()).extracting(MachineOutputAmount::amount).containsExactly(7L, 2L);
+        }
     }
 
     @Test

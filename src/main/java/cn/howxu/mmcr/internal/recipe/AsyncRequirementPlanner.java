@@ -34,12 +34,10 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismFailureReasons;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.api.port.PortFamily;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
@@ -49,6 +47,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.TreeSet;
 
 /**
@@ -117,8 +116,7 @@ public final class AsyncRequirementPlanner {
         List<Integer> mainThreadRequirements = new ArrayList<>();
 
         for (Requirement requirement : requirements) {
-            boolean material = requirement.requests().stream().anyMatch(request ->
-                    RequirementPlanner.isMaterialInput(IOType.INPUT, request.capabilityId()));
+            boolean material = !requirement.scopedFamilies().isEmpty();
             boolean constrained = scope.kind() != InputScope.Kind.LEGACY;
             if (material && constrained && (requirement.direction() == null
                     || requirement.direction() == IOType.INPUT && (routing == null
@@ -136,7 +134,7 @@ public final class AsyncRequirementPlanner {
             for (AsyncCapabilityRequest request : requirement.requests()) {
                 for (int capabilityIndex = 0; capabilityIndex < capabilities.size() && remaining > 0L; capabilityIndex++) {
                     Capability capability = capabilities.get(capabilityIndex);
-                    if (constrained && RequirementPlanner.isMaterialInput(requirement.direction(), request.capabilityId())
+                    if (constrained && requirement.direction() == IOType.INPUT && requirement.scopedFamilies().contains(request.capabilityId())
                             && (routing == null || !routing.allows(scope, capability.sourceCapabilityIndex()))) continue;
                     if (requirement.direction() != null && !capability.directions().contains(requirement.direction())) {
                         continue;
@@ -284,11 +282,18 @@ public final class AsyncRequirementPlanner {
     }
 
     /** A main-thread-prepared, worker-safe recipe requirement. */
-    public record Requirement(int index, long amount, IOType direction, List<AsyncCapabilityRequest> requests) {
+    public record Requirement(int index, long amount, IOType direction, List<AsyncCapabilityRequest> requests,
+                              Set<Identifier> scopedFamilies) {
         public Requirement {
             if (index < 0 || amount <= 0L) throw new IllegalArgumentException("index must be non-negative and amount positive");
             requests = List.copyOf(Objects.requireNonNull(requests, "requests"));
+            scopedFamilies = Set.copyOf(scopedFamilies);
             if (requests.isEmpty()) throw new IllegalArgumentException("requests must not be empty");
+        }
+
+        public Requirement(int index, long amount, IOType direction, List<AsyncCapabilityRequest> requests) {
+            this(index, amount, direction, requests, requests.stream().map(AsyncCapabilityRequest::capabilityId)
+                    .filter(PortFamily::scopesInputs).collect(Collectors.toUnmodifiableSet()));
         }
 
         public Requirement(int index, long amount, List<AsyncCapabilityRequest> requests) {
@@ -481,12 +486,7 @@ public final class AsyncRequirementPlanner {
                     boolean retainedPresent = true;
                     if (scope.kind() != InputScope.Kind.LEGACY) {
                         List<MachineRequirement> retained = candidate.runtimeRequirements(modifiers).stream()
-                                .filter(requirement -> requirement.io() == RecipeModifier.IOType.INPUT
-                                        && (requirement instanceof ItemRequirement item && item.consumeChance() == 0F
-                                        || requirement instanceof FluidRequirement fluid
-                                        && fluid.consumeChance() == 0F
-                                        || requirement instanceof LoadedChemicalRequirement chemical
-                                        && chemical.consumeChance() == 0F)).toList();
+                                .filter(MachineRequirement::isCatalyst).toList();
                         retainedPresent = retained.isEmpty() || context.planInputs(retained, 1L, Set.of(), Set.of()).successful();
                     }
                     boolean inputWaiting = retainedPresent && !context.planInputs(candidate, request.maximumParallelism()).successful()

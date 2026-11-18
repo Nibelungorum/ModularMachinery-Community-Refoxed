@@ -109,7 +109,7 @@ class RecipeSearchPlannerTest {
             Rule catalyst = new Rule(template.index(), family, template.kind(), template.direction(),
                     template.amount(), template.heat(), template.chance(), template.consumeChance(),
                     template.partial(), template.valid(), template.resources(), template.output(), template.ports(),
-                    template.failureReason());
+                    template.failureReason(), template.scopedInput());
             var rules = List.of(catalyst, input(1, 1L, 1F, List.of(new Port(1, 1, 0L, Long.MAX_VALUE))),
                     output(2, 1L, false, 1F, List.of(new Port(2, 2, parallelism, Long.MAX_VALUE))));
             var candidate = candidate("catalyst", parallelism + 1L, rules, List.of(LEGACY));
@@ -165,7 +165,7 @@ class RecipeSearchPlannerTest {
             Rule rule = new Rule(template.index(), family, template.kind(), template.direction(),
                     template.amount(), template.heat(), template.chance(), template.consumeChance(),
                     template.partial(), template.valid(), template.resources(), template.output(), template.ports(),
-                    template.failureReason());
+                    template.failureReason(), template.scopedInput());
             AtomicInteger draws = new AtomicInteger();
             var planner = new RecipeSearchPlanner(snapshot(List.of(pool(0L)),
                     List.of(candidate("expected", 100L, List.of(rule), List.of(LEGACY)))), () -> {

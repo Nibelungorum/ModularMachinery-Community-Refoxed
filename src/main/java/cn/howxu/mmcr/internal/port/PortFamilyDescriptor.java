@@ -2,6 +2,7 @@ package cn.howxu.mmcr.internal.port;
 
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.api.port.PortFamily;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
@@ -18,6 +19,10 @@ public record PortFamilyDescriptor(
         IOType ioType,
         int detectionTier,
         List<String> countAliases) {
+
+    public boolean scopedInput() {
+        return ioType == IOType.INPUT && PortFamily.scopesInputs(familyId);
+    }
 
     public PortFamilyDescriptor {
         if (familyId == null) throw new IllegalArgumentException("familyId null");

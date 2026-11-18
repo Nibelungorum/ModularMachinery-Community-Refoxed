@@ -3,6 +3,8 @@ package cn.howxu.mmcr.api.recipe.requirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.RecipeIoDeclaration;
 import com.mojang.serialization.Codec;
@@ -11,12 +13,14 @@ import com.mojang.serialization.DynamicOps;
 import com.mojang.datafixers.util.Pair;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.port.PortFamily;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalLong;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -29,6 +33,35 @@ public interface MachineRequirement extends RecipeIoDeclaration {
     RequirementType<? extends MachineRequirement> type();
 
     RecipeModifier.IOType io();
+
+    /** Whether an input must come from the selected physical port group. Independent of payment timing. */
+    default boolean usesInputScope(Identifier capabilityId) {
+        return io().isInput() && PortFamily.scopesInputs(capabilityId);
+    }
+
+    default boolean usesInputScope() {
+        return type().capabilityIds().stream().anyMatch(this::usesInputScope);
+    }
+
+    /** Whether admission settles this input once and persists its result by requirement index. */
+    default boolean paysAtStart() { return false; }
+
+    default boolean isCatalyst() { return false; }
+
+    /** Non-consuming presence check for a material retained at admission. */
+    default MachineRequirement retainedInput() { return this; }
+
+    /** Present (including zero) when ordinary per-tick energy can be reserved up front. */
+    default OptionalLong prefetchEnergyPerTick() {
+        return RequirementHandlerRegistry.prefetchEnergyPerTick(this);
+    }
+
+    /** True for output that is committed per tick rather than at completion. */
+    default boolean perTickOutput() { return false; }
+
+    default FailureReason shortageReason() {
+        return io().isInput() ? BuiltinFailureReasons.MISSING_INPUT : BuiltinFailureReasons.MISSING_OUTPUT;
+    }
 
     default List<String> tags() {
         return List.of();

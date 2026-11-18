@@ -102,7 +102,7 @@ public final class CraftingContext {
             if (source.capabilityIndex() >= capabilities.size()) continue;
             MachineCapability capability = capabilities.get(source.capabilityIndex());
             // Physical inputs may supplement the request within its scope; return-only views may not.
-            if (!RequirementPlanner.isMaterialInput(IOType.INPUT, capability.view().type().id())
+            if (!capability.scopedMaterialEndpoint()
                     || capability.view().directions().supports(IOType.INPUT)) sources.add(source);
         }
         if (host != null) {
@@ -168,17 +168,15 @@ public final class CraftingContext {
         }
         // Multiple alternative sources require a synchronous selection before worker execution.
         InputScope selected = scope == null ? routing == null ? InputScope.legacy() : routing.ordinaryScope() : scope;
-        boolean materialInputs = requirements.stream().anyMatch(requirement -> requirement.type().capabilityIds().stream()
-                .anyMatch(id -> RequirementPlanner.isMaterialInput(IOType.valueOf(requirement.io().name()), id)));
+        boolean materialInputs = requirements.stream().anyMatch(MachineRequirement::usesInputScope);
         boolean unresolved = routing != null && scope == null && routing.scopes(materialInputs).size() > 1;
         List<AsyncRequirementPlanner.Requirement> preparedRequirements = new ArrayList<>();
         List<Integer> fallback = new ArrayList<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
             boolean unknownSource = selected.kind() != InputScope.Kind.LEGACY
-                    && requirement.type().capabilityIds().stream().anyMatch(id ->
-                    RequirementPlanner.isMaterialInput(IOType.valueOf(requirement.io().name()), id)
-                            && asyncCapabilities.stream().anyMatch(capability -> capability.capabilityId().equals(id)
+                    && requirement.usesInputScope()
+                    && requirement.type().capabilityIds().stream().anyMatch(id -> asyncCapabilities.stream().anyMatch(capability -> capability.capabilityId().equals(id)
                             && capability.directions().contains(IOType.INPUT)
                             && (capability.sourceCapabilityIndex() < 0 || routing == null
                             || routing.sources().stream().noneMatch(source -> source.capabilityIndex()

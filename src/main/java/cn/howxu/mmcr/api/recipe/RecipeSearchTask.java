@@ -18,10 +18,7 @@ import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.LevelRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
@@ -258,13 +255,7 @@ public final class RecipeSearchTask {
             CraftingContext context = new CraftingContext(capabilities, modifiers, selectedScope);
             if (selectedScope.kind() != InputScope.Kind.LEGACY) {
                 List<MachineRequirement> retained = earlier.runtimeRequirements(modifiers)
-                        .stream().filter(requirement -> requirement.io() == RecipeModifier.IOType.INPUT
-                                && (requirement instanceof ItemRequirement item
-                                && item.consumeChance() == 0F
-                                || requirement instanceof FluidRequirement fluid
-                                && fluid.consumeChance() == 0F
-                                || requirement instanceof LoadedChemicalRequirement chemical
-                                && chemical.consumeChance() == 0F)).toList();
+                        .stream().filter(MachineRequirement::isCatalyst).toList();
                 if (!retained.isEmpty() && !context.planInputs(retained, 1L, Set.of(), Set.of()).successful()) continue;
             }
             PlanningResult inputs;

@@ -3,6 +3,7 @@ package cn.howxu.mmcr.api.capability;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.util.IOType;
+import cn.howxu.mmcr.api.port.PortFamily;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -14,6 +15,9 @@ import java.util.Optional;
  */
 public interface MachineCapability {
     CapabilityType type();
+
+    /** Whether this endpoint supplies scoped materials, including on legacy non-port hosts. */
+    default boolean scopedMaterialEndpoint() { return PortFamily.scopesInputs(type().id()); }
 
     default CapabilityDirections directions() {
         return CapabilityDirections.of(ioType());

@@ -54,6 +54,23 @@ public interface MachineOutput {
 
     float chance();
 
+    default boolean perTickOutput() { return false; }
+
+    /** Key used for grouping controller display rows; custom outputs may declare their resource identity. */
+    default Object displayAggregationKey() {
+        Object resource = resourceIdentity();
+        return resource == null ? outputType() : List.of(outputType(), resource);
+    }
+
+    /** A quantity- and probability-independent identity, or null if exact pattern matching is unsupported. */
+    default Object resourceIdentity() { return null; }
+
+    default boolean matchesPatternOutput(MachineOutput other) {
+        if (other == null || other.outputType() != outputType() || scaledAmount(this) != scaledAmount(other)) return false;
+        Object identity = resourceIdentity();
+        return identity != null && identity.equals(other.resourceIdentity());
+    }
+
     /**
      * Amount represented by this output for controller-side aggregation and presentation.
      */
@@ -106,7 +123,7 @@ public interface MachineOutput {
     }
 
     record ItemOutput(ItemStack stack, float chance, DataComponentPredicateSet components) implements CustomOutput {
-        static final OutputType<ItemOutput> TYPE = new OutputType.Definition<>(
+        public static final OutputType<ItemOutput> TYPE = new OutputType.Definition<>(
                 MMCR.id("item"),
                 RecordCodecBuilder.mapCodec(instance -> instance.group(
                         Codec.STRING.fieldOf("type").forGetter(ignored -> "item"),
@@ -147,6 +164,9 @@ public interface MachineOutput {
         }
 
         @Override
+        public Object resourceIdentity() { return aggregationKey(this); }
+
+        @Override
         public OutputType<ItemOutput> outputType() {
             return TYPE;
         }
@@ -170,7 +190,7 @@ public interface MachineOutput {
     }
 
     record FluidOutput(FluidStack stack, float chance) implements CustomOutput {
-        static final OutputType<FluidOutput> TYPE = new OutputType.Definition<>(
+        public static final OutputType<FluidOutput> TYPE = new OutputType.Definition<>(
                 MMCR.id("fluid"),
                 RecordCodecBuilder.mapCodec(instance -> instance.group(
                         Codec.STRING.fieldOf("type").forGetter(ignored -> "fluid"),
@@ -197,6 +217,9 @@ public interface MachineOutput {
             stack = stack == null ? FluidStack.EMPTY : stack.copy();
             chance = clampChance(chance);
         }
+
+        @Override
+        public Object resourceIdentity() { return aggregationKey(this); }
 
         @Override
         public OutputType<FluidOutput> outputType() {

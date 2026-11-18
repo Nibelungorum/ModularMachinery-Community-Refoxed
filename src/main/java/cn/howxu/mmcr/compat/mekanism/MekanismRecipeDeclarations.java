@@ -22,7 +22,9 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.Identifier;
 
+import cn.howxu.mmcr.api.recipe.requirement.StartMaterial;
 import java.util.List;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -60,7 +62,9 @@ public final class MekanismRecipeDeclarations {
             MekanismRecipeTypes.HEAT, HeatRequirement.Kind.OUTPUT_HEAT);
     static final RequirementType<UnavailableHeatRequirement> TEMPERATURE_TYPE = new RequirementType.Definition<>(
             MekanismRecipeTypes.HEAT_TEMPERATURE, TEMPERATURE_CODEC, HEAT_UNAVAILABLE,
-            RecipeSyncCodec.json(TEMPERATURE_CODEC.codec()));
+            RecipeSyncCodec.json(TEMPERATURE_CODEC.codec())) {
+        @Override public Set<Identifier> capabilityIds() { return Set.of(MekanismRecipeTypes.HEAT); }
+    };
     static final RequirementType<UnavailableHeatRequirement> HEAT_TYPE = new RequirementType.Definition<>(
             MekanismRecipeTypes.HEAT, HEAT_CODEC, HEAT_UNAVAILABLE,
             RecipeSyncCodec.json(HEAT_CODEC.codec()));
@@ -164,7 +168,7 @@ public final class MekanismRecipeDeclarations {
     }
 
     record UnavailableChemicalRequirement(RecipeModifier.IOType io, ChemicalIngredient ingredient,
-                                          float chance, List<String> tags, float consumeChance) implements MachineRequirement {
+                                          float chance, List<String> tags, float consumeChance) implements StartMaterial {
         UnavailableChemicalRequirement {
             Objects.requireNonNull(io, "io");
             Objects.requireNonNull(ingredient, "ingredient");
@@ -211,6 +215,9 @@ public final class MekanismRecipeDeclarations {
         }
 
         @Override
+        public boolean perTickOutput() { return !io.isInput(); }
+
+        @Override
         public RequirementType<UnavailableHeatRequirement> type() {
             return heat.kind() == HeatRequirement.Kind.OUTPUT_HEAT ? HEAT_TYPE : TEMPERATURE_TYPE;
         }
@@ -242,6 +249,8 @@ public final class MekanismRecipeDeclarations {
     }
 
     record UnavailableHeatOutput(double heat) implements MachineOutput {
+        @Override public boolean perTickOutput() { return true; }
+
         UnavailableHeatOutput {
             if (!Double.isFinite(heat) || heat < 0D) throw new IllegalArgumentException("heat must be non-negative");
         }

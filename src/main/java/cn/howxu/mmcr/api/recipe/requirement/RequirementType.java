@@ -25,6 +25,9 @@ public interface RequirementType<R extends MachineRequirement> {
         return Set.of(id());
     }
 
+    /** Checks cross-entry constraints once for this type when a recipe is assembled. */
+    default void validateRecipe(List<MachineRequirement> requirements) { }
+
     MapCodec<R> codec();
 
     RequirementHandler<R> handler();
@@ -94,7 +97,7 @@ public interface RequirementType<R extends MachineRequirement> {
      * @param <R> the requirement type
      * @author howxu <dev@howxu.cn>
      */
-    final class Definition<R extends MachineRequirement> implements RequirementType<R> {
+    class Definition<R extends MachineRequirement> implements RequirementType<R> {
         private final Identifier id;
         private final MapCodec<R> codec;
         private final RequirementHandler<R> handler;

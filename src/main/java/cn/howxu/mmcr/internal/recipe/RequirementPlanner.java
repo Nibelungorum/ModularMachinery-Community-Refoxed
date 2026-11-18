@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport.Sampling;
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.capability.plan.InputRoutingIndex;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
@@ -17,17 +16,12 @@ import cn.howxu.mmcr.api.capability.status.ExecutionStatus;
 import cn.howxu.mmcr.api.capability.status.FailureOccurrence;
 import cn.howxu.mmcr.api.capability.status.FailurePhase;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
-import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
-import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -77,8 +71,7 @@ public final class RequirementPlanner {
             return fixed ? planFixedSingle(requirements, capabilities, context, indexes, allowed)
                     : planSingle(requirements, capabilities, context, indexes, allowed);
         }
-        boolean materialInputs = requirements.stream().anyMatch(requirement -> requirement.type().capabilityIds()
-                .stream().anyMatch(id -> isMaterialInput(IOType.valueOf(requirement.io().name()), id)));
+        boolean materialInputs = requirements.stream().anyMatch(MachineRequirement::usesInputScope);
         List<InputScope> scopes = context.inputRouting().scopes(materialInputs);
         Sampling sampling = scopes.size() > 1 ? new Sampling() : null;
         PlanningResult bestFailure = null;
@@ -211,14 +204,13 @@ public final class RequirementPlanner {
             // Its factory may reserve again, or may only create operations; neither changes feasibility.
             materializationBases.add(feasibilityReservations.copy());
             RequirementPlan resolved;
-            RequirementHandler<?> registered = RequirementHandlerRegistry.handlerFor(requirement.type());
-            if (requirement instanceof EnergyRequirement energy
-                    && registered instanceof EnergyRequirementHandler energyHandler) {
-                RequirementPlan.OperationPlan operations = energyHandler.planFixed(energy, matching, requirementContext);
+            var registered = handler(requirement.type());
+            var operations = registered.planFixed(requirement, matching, requirementContext);
+            if (operations != null) {
                 resolved = RequirementPlan.withOutputSimulation(originalIndex, selected, operations.operations(),
                         operations.failure(), operations.outputSimulation());
             } else {
-                RequirementPlan plan = handler(requirement.type()).plan(requirement, matching, requirementContext);
+                RequirementPlan plan = registered.plan(requirement, matching, requirementContext);
                 if (!plan.successful()) return failed(plan.failure(), originalIndex, plans, plan);
                 if (plan.maxParallelism() < selected) {
                     return failed(failure(requirement, originalIndex), originalIndex, plans, plan);
@@ -309,13 +301,6 @@ public final class RequirementPlanner {
         return matchingCapabilities(requirement, capabilities, null, null);
     }
 
-    public static boolean isMaterialInput(IOType direction, Identifier capabilityId) {
-        return direction == IOType.INPUT && (BuiltinCapabilityDefinitions.ITEM_TYPE.id().equals(capabilityId)
-                || BuiltinCapabilityDefinitions.FLUID_TYPE.id().equals(capabilityId)
-                || MekanismPortFamilies.CHEMICAL.equals(capabilityId)
-                || LightningRecipeTypes.LIGHTNING.equals(capabilityId));
-    }
-
     public static List<MachineCapability> matchingCapabilities(MachineRequirement requirement,
             List<MachineCapability> capabilities, @Nullable InputRoutingFacet routing, @Nullable InputScope scope) {
         IntPredicate allowed = scope == null || scope.kind() == InputScope.Kind.LEGACY ? ignored -> true
@@ -330,11 +315,9 @@ public final class RequirementPlanner {
         return IntStream.range(0, capabilities.size())
                 .filter(index -> {
                     var view = capabilities.get(index).view();
-                    return (capabilityIds.contains(view.type().id())
-                            || MekanismPortFamilies.HEAT_TEMPERATURE.equals(requirement.type().id())
-                            && MekanismPortFamilies.HEAT.equals(view.type().id()))
+                    return capabilityIds.contains(view.type().id())
                             && view.directions().supports(direction)
-                            && (!isMaterialInput(direction, view.type().id()) || allowed.test(index));
+                            && (!requirement.usesInputScope(view.type().id()) || allowed.test(index));
                 })
                 .mapToObj(capabilities::get)
                 .filter(capability -> requirement.tags().isEmpty()
@@ -351,11 +334,7 @@ public final class RequirementPlanner {
 
     private static @Nullable ExecutionStatus failure(MachineRequirement requirement, int requirementIndex) {
         if (requirement == null) return null;
-        FailureReason reason = requirement.io() == RecipeModifier.IOType.OUTPUT
-                ? BuiltinFailureReasons.MISSING_OUTPUT
-                : requirement instanceof EnergyRequirement
-                ? BuiltinFailureReasons.MISSING_ENERGY : BuiltinFailureReasons.MISSING_INPUT;
-        return failure(requirement, requirementIndex, reason);
+        return failure(requirement, requirementIndex, requirement.shortageReason());
     }
 
     private static @Nullable ExecutionStatus failure(MachineRequirement requirement, int requirementIndex,

@@ -12,6 +12,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import cn.howxu.mmcr.api.port.PortFamily;
 import net.minecraft.resources.Identifier;
 
 import java.util.EnumMap;
@@ -25,7 +26,7 @@ import java.util.Set;
 public final class LightningRecipeTypes {
     public static final Identifier HIGH_VOLTAGE = LightningTier.HIGH_VOLTAGE.requirementId();
     public static final Identifier EXTREME_HIGH_VOLTAGE = LightningTier.EXTREME_HIGH_VOLTAGE.requirementId();
-    public static final Identifier LIGHTNING = Identifier.fromNamespaceAndPath("ae2lt", "lightning");
+    public static final Identifier LIGHTNING = PortFamily.declare(Identifier.fromNamespaceAndPath("ae2lt", "lightning"), true).id();
     public static final long MAX_AMOUNT = Integer.MAX_VALUE;
 
     private static final Codec<Long> AMOUNT_CODEC = Codec.LONG.validate(amount -> amount > 0L
@@ -108,6 +109,11 @@ public final class LightningRecipeTypes {
             @Override
             public Identifier id() {
                 return tier.requirementId();
+            }
+
+            @Override
+            public void validateRecipe(List<MachineRequirement> requirements) {
+                validateRecipeAmounts(requirements.stream().filter(entry -> entry.type() == this).toList());
             }
 
             @Override

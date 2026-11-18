@@ -21,7 +21,12 @@ import java.util.Optional;
 /**
  * @author howxu <dev@howxu.cn>
  */
-public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, float chance, List<String> tags, float consumeChance) implements MachineRequirement {
+public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredient fluid, int amount, FluidStack stack, float chance, List<String> tags, float consumeChance) implements StartMaterial {
+    @Override
+    public FluidRequirement retainedInput() {
+        return consumeChance == 0F ? this : new FluidRequirement(io, fluid, amount, stack, chance, tags, 0F);
+    }
+
     private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("minecraft", "fluid");
     public static final MapCodec<FluidRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),

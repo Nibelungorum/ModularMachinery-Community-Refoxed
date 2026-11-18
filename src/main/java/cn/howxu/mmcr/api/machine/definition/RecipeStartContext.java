@@ -4,7 +4,6 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
@@ -115,12 +114,14 @@ public final class RecipeStartContext {
     }
 
     public void setRequirements(List<MachineRequirement> requirements) {
-        if (outputs.stream().anyMatch(output -> !(output instanceof MachineOutput.ItemOutput)
-                && !(output instanceof MachineOutput.FluidOutput))) {
+        if (!outputs.stream().allMatch(OutputRegistry::canRebuild)) {
             throw new IllegalStateException("RecipeStartContext cannot derive registered custom outputs from requirements");
         }
-        this.requirements = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
-        this.outputs = outputsFromRequirements(this.requirements);
+        var next = MachineRequirement.copyList(Objects.requireNonNull(requirements, "requirements"));
+        MachineRecipe.validateRecipe(next);
+        var nextOutputs = outputsFromRequirements(next);
+        this.requirements = next;
+        this.outputs = nextOutputs;
     }
 
     public List<MachineOutput> outputs() {
@@ -142,6 +143,7 @@ public final class RecipeStartContext {
             outputIndex++;
         }
         while (outputIndex < replacement.size()) nextRequirements.add(replacement.get(outputIndex++));
+        MachineRecipe.validateRecipe(nextRequirements);
         this.requirements = MachineRequirement.copyList(nextRequirements);
         this.outputs = copy;
     }
@@ -161,13 +163,8 @@ public final class RecipeStartContext {
     private static List<MachineOutput> outputsFromRequirements(List<MachineRequirement> requirements) {
         List<MachineOutput> result = new ArrayList<>();
         for (MachineRequirement requirement : requirements) {
-            if (requirement instanceof ItemRequirement item
-                    && item.io() == RecipeModifier.IOType.OUTPUT) {
-                result.add(new MachineOutput.ItemOutput(item.stack(), item.chance(), item.components()));
-            } else if (requirement instanceof FluidRequirement fluid
-                    && fluid.io() == RecipeModifier.IOType.OUTPUT) {
-                result.add(new MachineOutput.FluidOutput(fluid.stack(), fluid.chance()));
-            }
+            MachineOutput output = OutputRegistry.fromRequirement(requirement);
+            if (output != null) result.add(output);
         }
         return List.copyOf(result);
     }

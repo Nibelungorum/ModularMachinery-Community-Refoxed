@@ -9,12 +9,22 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.Identifier;
 
+import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
+import cn.howxu.mmcr.api.capability.status.FailureReason;
 import java.util.List;
 
 /**
  * @author howxu <dev@howxu.cn>
  */
 public record EnergyRequirement(RecipeModifier.IOType io, long fePerTick, List<String> tags) implements MachineRequirement {
+    @Override
+    public FailureReason shortageReason() {
+        return io.isInput() ? BuiltinFailureReasons.MISSING_ENERGY : BuiltinFailureReasons.MISSING_OUTPUT;
+    }
+
+    @Override
+    public boolean perTickOutput() { return !io.isInput(); }
+
     private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("neoforge", "energy");
     public static final MapCodec<EnergyRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),

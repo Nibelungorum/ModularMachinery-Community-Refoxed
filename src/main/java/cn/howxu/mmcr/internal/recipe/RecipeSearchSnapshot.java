@@ -40,7 +40,7 @@ public record RecipeSearchSnapshot(Stamp stamp, List<AsyncCapabilitySnapshot> po
     public record Rule(int index, Identifier type, Kind kind, IOType direction, long amount,
                        double heat, float chance, float consumeChance, boolean partial, boolean valid,
                        Set<AsyncResourceValue> resources, @Nullable AsyncResourceValue output,
-                       List<Port> ports, Identifier failureReason) {
+                       List<Port> ports, Identifier failureReason, boolean scopedInput) {
         public Rule {
             resources = Set.copyOf(resources);
             ports = List.copyOf(ports);

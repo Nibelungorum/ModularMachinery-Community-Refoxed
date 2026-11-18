@@ -23,7 +23,6 @@ import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.InputScope;
-import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
 import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -54,10 +53,8 @@ import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.VersionStamp;
 import cn.howxu.mmcr.internal.recipe.RecipeProgramCompiler;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
@@ -909,9 +906,7 @@ public final class CraftingRuntime {
         Set<Integer> validated = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            if (requirement.io() != IOType.INPUT
-                    || !(requirement instanceof ItemRequirement item && item.consumeChance() == 0F
-                    || requirement instanceof FluidRequirement fluid && fluid.consumeChance() == 0F)) continue;
+            if (!requirement.isCatalyst()) continue;
             PlanningResult result = context.planInputs(List.of(requirement), parallelism, Set.of(), Set.of());
             if (result.successful() && result.plan() != null && result.plan().parallelism() == parallelism) validated.add(index);
         }
@@ -2272,9 +2267,7 @@ public final class CraftingRuntime {
         Set<Integer> retained = new HashSet<>();
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            if (!(ItemRequirement.TYPE.equals(requirement.type()) || FluidRequirement.TYPE.equals(requirement.type())
-                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()) || requirement instanceof LightningRequirement)
-                    || requirement.io() != RecipeModifier.IOType.INPUT) continue;
+            if (!requirement.paysAtStart()) continue;
             if (restored.inputConsumptionPlan().consumedBatches(index) > 0) consumed.add(index);
             else retained.add(index);
         }
@@ -2598,7 +2591,7 @@ public final class CraftingRuntime {
         if (!prepared.energyInputsExcluded()) {
             List<MachineRequirement> requirements = prepared.effective().requirements();
             for (int index = 0; index < requirements.size(); index++) {
-                if (requirements.get(index) instanceof EnergyRequirement energy && energy.io() == IOType.INPUT) {
+                if (requirements.get(index).prefetchEnergyPerTick().isPresent()) {
                     continuousEnergyInputs.add(index);
                 }
             }
@@ -2631,11 +2624,8 @@ public final class CraftingRuntime {
         int planIndex = 0;
         for (int index = 0; index < prepared.effective().requirements().size(); index++) {
             MachineRequirement requirement = prepared.effective().requirements().get(index);
-            boolean prefetched = prepared.energyInputsExcluded() && requirement instanceof EnergyRequirement
-                    && requirement.io() == IOType.INPUT;
-            boolean input = requirement.io() == IOType.INPUT && (ItemRequirement.TYPE.equals(requirement.type())
-                    || FluidRequirement.TYPE.equals(requirement.type()) || LoadedChemicalRequirement.TYPE.equals(requirement.type())
-                    || requirement instanceof LightningRequirement);
+            boolean prefetched = prepared.energyInputsExcluded() && requirement.prefetchEnergyPerTick().isPresent();
+            boolean input = requirement.paysAtStart();
             consumed.add(input && (prepared.plan().hasOperations(planIndex) || validatedInputs.contains(index)) ? 1 : 0);
             if (!prefetched) planIndex++;
         }
@@ -2951,9 +2941,7 @@ public final class CraftingRuntime {
             if (sourceIndex < 0 || sourceIndex >= capabilities.size()) return false;
             MachineRequirement requirement = requirements.get(operation.requirementIndex());
             if (activeInputScope != null && activeInputScope.kind() != InputScope.Kind.LEGACY
-                    && RequirementPlanner.isMaterialInput(requirement.io() == IOType.INPUT
-                    ? cn.howxu.mmcr.util.IOType.INPUT : cn.howxu.mmcr.util.IOType.OUTPUT,
-                    operation.operation().capabilityId())) {
+                    && requirement.usesInputScope(operation.operation().capabilityId())) {
                 if (routing == null || routing.sources().stream().noneMatch(source ->
                         source.capabilityIndex() == sourceIndex && activeInputScope.sources().contains(source.position()))) {
                     return false;
@@ -2974,17 +2962,9 @@ public final class CraftingRuntime {
         for (int index = 0; index < source.size(); index++) {
             MachineRequirement requirement = source.get(index);
             if (requirement.io() == RecipeModifier.IOType.INPUT) {
-                if (hasPrefetches && requirement instanceof EnergyRequirement) continue;
+                if (hasPrefetches && requirement.prefetchEnergyPerTick().isPresent()) continue;
                 if (consumedAtStart.contains(index)) continue;
-                if (retainedInputs.contains(index) && requirement instanceof ItemRequirement(
-                        RecipeModifier.IOType io, net.minecraft.world.item.crafting.Ingredient item1, int count,
-                        net.minecraft.world.item.ItemStack stack, float chance, List<String> tags,
-                        cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet components1, float consumeChance
-                )
-                        && consumeChance > 0F) {
-                    requirement = new ItemRequirement(io, item1, count, stack,
-                            chance, tags, components1, 0F);
-                }
+                if (retainedInputs.contains(index)) requirement = requirement.retainedInput();
                 requirements.add(requirement);
             } else if (isPerTickOutput(requirement)) {
                 requirements.add(requirement);
@@ -2999,13 +2979,11 @@ public final class CraftingRuntime {
     }
 
     private static boolean isPerTickOutput(MachineRequirement requirement) {
-        return requirement.io() == RecipeModifier.IOType.OUTPUT
-                && (requirement instanceof EnergyRequirement
-                || MekanismRecipeTypes.HEAT.equals(requirement.type().id()));
+        return requirement.perTickOutput();
     }
 
     private static boolean isPerTickOutput(MachineOutput output) {
-        return MekanismRecipeTypes.HEAT.equals(output.outputType().id());
+        return output.perTickOutput();
     }
 
     private RecipeBehavior recipeBehavior(ControllerRuntimeSnapshot runtime) {
@@ -3104,12 +3082,8 @@ public final class CraftingRuntime {
         int planIndex = 0;
         for (int index = 0; index < requirements.size(); index++) {
             MachineRequirement requirement = requirements.get(index);
-            boolean prefetchedEnergy = prefetchesEnergy && requirement instanceof EnergyRequirement
-                    && requirement.io() == RecipeModifier.IOType.INPUT;
-            if (!(ItemRequirement.TYPE.equals(requirement.type())
-                    || FluidRequirement.TYPE.equals(requirement.type())
-                    || LoadedChemicalRequirement.TYPE.equals(requirement.type()) || requirement instanceof LightningRequirement)
-                    || requirement.io() != RecipeModifier.IOType.INPUT) {
+            boolean prefetchedEnergy = prefetchesEnergy && requirement.prefetchEnergyPerTick().isPresent();
+            if (!requirement.paysAtStart()) {
                 if (!prefetchedEnergy) planIndex++;
                 continue;
             }

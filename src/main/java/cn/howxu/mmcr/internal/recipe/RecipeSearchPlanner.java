@@ -6,7 +6,6 @@ import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.api.recipe.InputScope;
 import cn.howxu.mmcr.api.recipe.requirement.OutputExpectation;
-import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Candidate;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Kind;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchSnapshot.Port;
@@ -339,14 +338,7 @@ public final class RecipeSearchPlanner {
     }
 
     private static boolean allowed(Rule rule, Scope scope, Port port) {
-        // Lightning requirement IDs name tiers; both use the shared lightning capability ID.
-        return !(RequirementPlanner.isMaterialInput(rule.direction(), rule.type())
-                || rule.direction() == IOType.INPUT && lightning(rule)) || scope.allows(port.sourceIndex());
-    }
-
-    private static boolean lightning(Rule rule) {
-        return rule.type().equals(LightningTier.HIGH_VOLTAGE.requirementId())
-                || rule.type().equals(LightningTier.EXTREME_HIGH_VOLTAGE.requirementId());
+        return !rule.scopedInput() || scope.allows(port.sourceIndex());
     }
 
     private static long pair(int candidate, int earlier) { return (long) candidate << 32 | earlier & 0xffffffffL; }

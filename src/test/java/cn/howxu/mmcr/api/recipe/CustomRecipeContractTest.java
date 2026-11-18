@@ -5,6 +5,7 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.machine.definition.MachineIoPlan;
+import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
 import cn.howxu.mmcr.api.capability.plan.PlanningContext;
 import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
 import cn.howxu.mmcr.api.recipe.RecipeIoValidation;
@@ -109,6 +110,14 @@ class CustomRecipeContractTest {
             assertThat(recipe.requirements()).containsExactly(input);
             assertThat(recipe.machineOutputs()).containsExactly(output);
 
+            var start = new RecipeStartContext(recipe, 1L, 1L);
+            assertThatThrownBy(() -> start.setRequirements(List.of())).isInstanceOf(IllegalStateException.class);
+            assertThat(start.requirements()).contains(input);
+            assertThat(start.outputs()).containsExactly(output);
+            var paid = new ActiveMachineRecipe.InputConsumptionPlan(List.of(1));
+            assertThat(ActiveMachineRecipe.InputConsumptionPlan.deserialize(paid.serialize()).isValidFor(List.of(input))).isTrue();
+            assertThat(paid.isValidFor(List.of(new TestRequirement(IOType.OUTPUT, 3)))).isFalse();
+
             var builder = new MachineRecipeBuilderJS("mmcr:custom_contract_rhino");
             builder.recipePoolId = id("machine");
             var context = new ContextFactory().enter();
@@ -166,6 +175,8 @@ class CustomRecipeContractTest {
             value -> new TestOutput(value.value(), value.chance()));
 
     private record TestRequirement(RecipeModifier.IOType io, int value) implements CustomRequirement {
+        @Override public boolean paysAtStart() { return io.isInput(); }
+
         @Override
         public RequirementType<TestRequirement> type() {
             return TEST_REQUIREMENT_TYPE;

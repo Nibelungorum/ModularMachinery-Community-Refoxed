@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 
 /**
@@ -81,7 +82,13 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
                         allowPartialOutput, false)));
     }
 
+    @Override
+    public OptionalLong prefetchEnergyPerTick(EnergyRequirement requirement) {
+        return requirement.io().isInput() ? OptionalLong.of(requirement.fePerTick()) : OptionalLong.empty();
+    }
+
     /** Materializes exactly the requested parallelism without searching for an energy maximum. */
+    @Override
     public RequirementPlan.OperationPlan planFixed(EnergyRequirement requirement,
                                                    List<MachineCapability> candidates,
                                                    PlanningContext context) {

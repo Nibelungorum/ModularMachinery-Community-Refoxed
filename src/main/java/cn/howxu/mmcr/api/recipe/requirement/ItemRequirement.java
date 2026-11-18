@@ -26,7 +26,12 @@ import java.util.Optional;
  * @author howxu <dev@howxu.cn>
  */
 public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient item, int count, ItemStack stack, float chance, List<String> tags,
-                              DataComponentPredicateSet components, float consumeChance) implements MachineRequirement {
+                              DataComponentPredicateSet components, float consumeChance) implements StartMaterial {
+    @Override
+    public ItemRequirement retainedInput() {
+        return consumeChance == 0F ? this : new ItemRequirement(io, item, count, stack, chance, tags, components, 0F);
+    }
+
     private static final Identifier TYPE_ID = Identifier.fromNamespaceAndPath("minecraft", "item");
     public static final MapCodec<ItemRequirement> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> TYPE_ID.toString()),

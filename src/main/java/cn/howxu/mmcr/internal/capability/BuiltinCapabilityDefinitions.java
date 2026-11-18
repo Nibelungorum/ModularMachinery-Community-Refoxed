@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.capability.type.CapabilityCreationContext;
 import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.api.port.PortFamily;
 import net.minecraft.resources.Identifier;
 
 import java.util.Set;
@@ -24,9 +25,9 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class BuiltinCapabilityDefinitions {
-    public static final CapabilityType ITEM_TYPE = new CapabilityType(Identifier.fromNamespaceAndPath("minecraft", "item"));
-    public static final CapabilityType FLUID_TYPE = new CapabilityType(Identifier.fromNamespaceAndPath("minecraft", "fluid"));
-    public static final CapabilityType ENERGY_TYPE = new CapabilityType(Identifier.fromNamespaceAndPath("neoforge", "energy"));
+    public static final CapabilityType ITEM_TYPE = new CapabilityType(PortFamily.declare(Identifier.fromNamespaceAndPath("minecraft", "item"), true).id());
+    public static final CapabilityType FLUID_TYPE = new CapabilityType(PortFamily.declare(Identifier.fromNamespaceAndPath("minecraft", "fluid"), true).id());
+    public static final CapabilityType ENERGY_TYPE = new CapabilityType(PortFamily.declare(Identifier.fromNamespaceAndPath("neoforge", "energy"), false).id());
 
     private BuiltinCapabilityDefinitions() {
     }

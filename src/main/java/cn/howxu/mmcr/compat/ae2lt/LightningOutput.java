@@ -10,6 +10,9 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record LightningOutput(LightningTier tier, long amount, float chance) implements MachineOutput {
+    @Override
+    public Object resourceIdentity() { return outputType(); }
+
     public LightningOutput {
         Objects.requireNonNull(tier, "tier");
         amount = LightningRecipeTypes.recipeAmount(amount);

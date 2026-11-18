@@ -88,6 +88,14 @@ public final class OutputRegistry {
         return null;
     }
 
+    /** True when reconstructing requirements will retain this exact output, including its chance. */
+    public static boolean canRebuild(MachineOutput output) {
+        MachineRequirement requirement = tryToRequirement(output, List.of());
+        if (requirement == null) return false;
+        MachineOutput rebuilt = fromRequirement(requirement);
+        return rebuilt != null && rebuilt.outputType() == output.outputType() && sameOutput(output, rebuilt);
+    }
+
     public static List<ItemStack> itemStacks(List<MachineOutput> outputs) {
         return outputs.stream()
                 .filter(MachineOutput.ItemOutput.class::isInstance)

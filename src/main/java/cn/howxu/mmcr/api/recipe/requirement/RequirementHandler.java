@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -23,6 +24,15 @@ import java.util.function.Predicate;
  */
 public interface RequirementHandler<R extends MachineRequirement> {
     RequirementPlan plan(R requirement, List<MachineCapability> capabilities, PlanningContext context);
+
+    /** Opt in only when reserving this many FE replaces all per-tick input operations. */
+    default OptionalLong prefetchEnergyPerTick(R requirement) { return OptionalLong.empty(); }
+
+    /** Exact-parallelism optimization; null requests ordinary reservation and materialization. */
+    default @Nullable RequirementPlan.OperationPlan planFixed(R requirement, List<MachineCapability> capabilities,
+                                                              PlanningContext context) {
+        return null;
+    }
 
     /** Applies recipe modifiers to the handler-owned requirement representation. */
     default R applyModifiers(R requirement, List<RecipeModifier> modifiers) {

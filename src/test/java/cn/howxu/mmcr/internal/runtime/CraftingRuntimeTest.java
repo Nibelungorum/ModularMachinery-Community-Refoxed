@@ -402,6 +402,65 @@ class CraftingRuntimeTest {
     }
 
     @Test
+    void crystal_shards_are_paid_once_and_the_retained_color_stays_in_the_paid_scope_after_reload() {
+        try (var scope = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(CrystalShard.TYPE);
+            var first = new CrystalShard.Port(new BlockPos(1, 0, 0));
+            var second = new CrystalShard.Port(new BlockPos(2, 0, 0));
+            first.setInputIsolated(true);
+            second.setInputIsolated(true);
+            var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), first, second);
+            var runtime = new CraftingRuntime(controller, controller.componentRuntime());
+            var recipe = recipe("crystal_shard_scope", 4, List.of(
+                    new CrystalShard(RecipeModifier.IOType.INPUT, "blue", 2, 1F),
+                    new CrystalShard(RecipeModifier.IOType.INPUT, "amber", 1, 0F)));
+            RecipeRegistry.registerStatic(recipe);
+            first.store.cell("blue").setAmount(4L);
+            second.store.cell("amber").setAmount(1L);
+            assertThat(runtime.start(recipe, 1).isCrafting()).isFalse();
+            assertThat(first.store.cell("blue").amount()).isEqualTo(4L);
+
+            first.store.cell("amber").setAmount(1L);
+            assertThat(runtime.start(recipe, 1).isCrafting()).isTrue();
+            assertThat(runtime.activeInputScope().sources()).containsExactly(first.getBlockPos());
+            assertThat(first.store.cell("blue").amount()).isEqualTo(2L);
+            var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+            var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
+            runtime.save(saved);
+            var restored = new CraftingRuntime(controller, controller.componentRuntime());
+            restored.load(TagValueInput.create(ProblemReporter.DISCARDING, lookup, saved.buildResult()), null);
+
+            assertThat(restored.active()).isTrue();
+            assertThat(restored.tick().isCrafting()).isTrue();
+            assertThat(first.store.cell("blue").amount()).isEqualTo(2L);
+            assertThat(first.store.cell("amber").amount()).isEqualTo(1L);
+            int paidTick = restored.tickCount();
+            first.store.cell("amber").setAmount(0L);
+            LevelStub.setGameTime(controller.getLevel(), 2L);
+            restored.tick();
+            assertThat(restored.tickCount()).isEqualTo(paidTick);
+            assertThat(restored.failure()).isNotNull();
+            assertThat(second.store.cell("amber").amount()).isEqualTo(1L);
+        }
+    }
+
+    @Test
+    void crystal_shard_outputs_keep_color_quantity_and_chance_when_start_requirements_change() {
+        try (var scope = RequirementHandlerRegistry.openTestScope(); var outputs = OutputRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(CrystalShard.TYPE);
+            OutputRegistry.register(CrystalShard.Output.TYPE);
+            var output = new CrystalShard.Output("blue", 3, 0.25F);
+            var recipe = MachineRecipe.fromCanonical(MMCR.id("crystal_output"), MMCR.id("test_cube"), 2,
+                    List.of(), List.of(output), List.of(), 0, 1, false, false, false, Set.of());
+            var start = new RecipeStartContext(recipe, 1L, 1L);
+            var replacement = new CrystalShard.Output("amber", 2, 0.5F);
+            start.setRequirements(List.of(replacement.asRequirement()));
+            assertThat(start.outputs()).containsExactly(replacement);
+            assertThat(output.displayAggregationKey()).isNotEqualTo(replacement.displayAggregationKey());
+        }
+    }
+
+    @Test
     void save_restore_keeps_the_paid_source_even_when_it_is_now_ordinary() {
         var lookup = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
         ItemInputBusBlockEntity first = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));

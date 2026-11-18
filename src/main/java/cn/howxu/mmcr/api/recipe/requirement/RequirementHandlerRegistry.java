@@ -7,6 +7,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -77,6 +78,11 @@ public final class RequirementHandlerRegistry {
         RequirementType<?> canonical = canonicalType(requirement.type());
         if (canonical == null || canonical != requirement.type()) return List.of();
         return resourceWakeups(canonical, requirement);
+    }
+
+    static OptionalLong prefetchEnergyPerTick(MachineRequirement requirement) {
+        OptionalLong rate = dispatch(requirement, RequirementHandler::prefetchEnergyPerTick);
+        return rate == null ? OptionalLong.empty() : rate;
     }
 
     public static MachineRequirement applyModifiers(MachineRequirement requirement,
