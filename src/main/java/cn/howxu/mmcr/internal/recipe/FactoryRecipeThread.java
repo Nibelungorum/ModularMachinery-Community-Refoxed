@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.runtime.ControllerRuntimeSnapshot;
+import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import cn.howxu.mmcr.internal.runtime.ResourceAvailabilityNotifier;
 import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -53,6 +54,7 @@ public final class FactoryRecipeThread extends RecipeThread {
     private final boolean baseThread;
     private final String threadName;
     private final String laneId;
+    private final ControllerScreenTextState laneText;
     private final Set<MachineRecipe> recipeSet = new LinkedHashSet<>();
     private Runnable searchScheduleChanged = () -> { };
     private int idleTicks;
@@ -103,7 +105,8 @@ public final class FactoryRecipeThread extends RecipeThread {
         this.laneId = explicitLaneId != null && !explicitLaneId.isBlank() ? explicitLaneId
                 : baseThread ? "base" : coreThread ? "core-" + this.threadName
                 : this.threadName.startsWith("factory-") ? this.threadName : "factory";
-        this.runtime.setScreenText(controller.recipeScreenText(this.laneId));
+        laneText = controller.recipeScreenText(laneId);
+        this.runtime.setScreenText(laneText);
         suppliedCandidatePool = currentRecipePoolId();
         suppliedCandidateCatalogVersion = currentRecipeCatalog().version();
         bindInstalledLane();
@@ -228,6 +231,8 @@ public final class FactoryRecipeThread extends RecipeThread {
     public long searchGameTime() { return currentSearchGameTime; }
     public boolean isBaseThread() { return baseThread; }
     public String threadName() { return threadName; }
+    @Override protected void clearLaneScreenText() { laneText.clearLane(); }
+
     @Override public String laneId() { return laneId; }
     public long coreRecipeSetVersion() { return recipeSetVersion; }
 

@@ -35,6 +35,17 @@ public final class ControllerScreenTextState implements ControllerScreenText {
     private int validatedMaxLines = -1;
     private int validatedMaxEncodedTextBytes = -1;
 
+    public ControllerScreenTextState() {}
+
+    public ControllerScreenTextState(long initialRevision) {
+        revision = initialRevision;
+    }
+
+    public void clearLane() {
+        clear(ControllerScreenTextScope.CONTROLLER);
+        clear(ControllerScreenTextScope.OPERATION);
+    }
+
     @Override
     public void append(ControllerScreenTextScope scope, ResourceLocation lineId, Component text) {
         Objects.requireNonNull(scope, "scope");

@@ -62,6 +62,7 @@ public final class MachineControllerRuntime {
     private final ControllerScreenTextState screenText = new ControllerScreenTextState();
     private final JadeText jadeText = JadeTextSupport.create();
     private final Map<String, ControllerScreenTextState> recipeScreenTexts = new LinkedHashMap<>();
+    private long nextLaneTextRevision;
     private Map<BlockPos, DataStorage> dataStorages = Map.of();
     private @Nullable DataStorage primaryDataStorage;
     private Map<String, DataValue> clientDataStorageValues = Map.of();
@@ -197,14 +198,18 @@ public final class MachineControllerRuntime {
 
     public ControllerScreenTextState recipeScreenText(String laneId) {
         Objects.requireNonNull(laneId, "laneId");
-        return recipeScreenTexts.computeIfAbsent(laneId, ignored -> new ControllerScreenTextState());
+        return recipeScreenTexts.computeIfAbsent(laneId, ignored -> new ControllerScreenTextState(nextLaneTextRevision));
     }
 
     public void clearRecipeScreenText(String laneId) {
         ControllerScreenTextState state = recipeScreenTexts.get(laneId);
-        if (state == null) return;
-        state.clear(ControllerScreenTextScope.CONTROLLER);
-        state.clear(ControllerScreenTextScope.OPERATION);
+        if (state != null) state.clearLane();
+    }
+
+    void retireRecipeScreenText(String laneId, long tombstoneRevision) {
+        recipeScreenTexts.remove(laneId);
+        // A recreated named lane must supersede even a tombstone already delivered to a viewer.
+        nextLaneTextRevision = Math.max(nextLaneTextRevision, tombstoneRevision + 1L);
     }
 
     public void clearOperationText() {

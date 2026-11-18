@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
 import cn.howxu.mmcr.api.controller.ui.UiProtocolRegistration;
 import cn.howxu.mmcr.client.controller.ui.ControllerUiClientSession;
@@ -1407,6 +1408,28 @@ class FactoryRuntimeTest {
         assertThat(rebuilt.presentationLanes().getFirst().laneId()).isEqualTo(before.presentationLanes().getFirst().laneId());
         assertThat(rebuilt.presentationLanes().getFirst()).isNotSameAs(before.presentationLanes().getFirst());
         assertThat(before.presentationLanes()).allSatisfy(lane -> assertThat(lane.active()).isTrue());
+    }
+
+    @Test
+    void recreated_lane_owns_fresh_text_newer_than_the_retirement_and_isolated_from_the_old_lane() {
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
+        FactoryRuntime factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        factory.snapshot();
+        var oldLane = laneThreadSnapshots(factory).keySet().iterator().next();
+        var old = controller.recipeScreenText("base");
+        old.append(ControllerScreenTextScope.OPERATION, MMCR.id("progress"), Component.literal("old"));
+        factory.clear();
+        assertThat(old.snapshot().lines()).isEmpty();
+        long deletion = old.revision() + 1;
+        factory.ensureBaseLane(controller);
+        var fresh = controller.recipeScreenText("base");
+        assertThat(fresh).isNotSameAs(old);
+        assertThat(fresh.revision()).isGreaterThan(deletion);
+        fresh.append(ControllerScreenTextScope.OPERATION, MMCR.id("progress"), Component.literal("new"));
+        oldLane.invalidate();
+        assertThat(factory.screenTextSnapshots().get("base").lines()).singleElement()
+                .satisfies(line -> assertThat(line.text().getString()).isEqualTo("new"));
     }
 
     @Test

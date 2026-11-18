@@ -1759,6 +1759,30 @@ class MachineControllerBlockEntityTest {
     }
 
     @Test
+    void only_published_lane_text_needs_a_tombstone_and_recreated_text_supersedes_it() throws Exception {
+        var controller = factoryTextController(MMCR.id("controller_text_retired"));
+        var factory = runtimeOf(controller).factoryRuntime();
+        controller.recipeScreenText("never-sent");
+        controller.markRecipeScreenTextRemoved("never-sent", 0L);
+        factory.ensureBaseLane(controller);
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        ServerPlayer viewer = player(level, controller.getBlockPos());
+        viewer.containerMenu = new FactoryControllerMenu(2, new Inventory(null), controller);
+        setPlayers(level, List.of(viewer));
+        invokeSyncOpenText(controller);
+        long published = lastSentRecipeScreenTextRevisions(controller).get("base");
+        factory.clear();
+        invokeSyncOpenText(controller);
+        long deletion = lastSentRecipeScreenTextRevisions(controller).get("base");
+        assertThat(deletion).isGreaterThan(published);
+        assertThat(textPackets(viewer)).anyMatch(p -> p.laneId().equals("base") && p.revision() == deletion && p.lines().isEmpty());
+        factory.ensureBaseLane(controller);
+        invokeSyncOpenText(controller);
+        assertThat(textPackets(viewer)).anyMatch(p -> p.laneId().equals("base") && p.revision() > deletion)
+                .noneMatch(p -> p.laneId().equals("never-sent"));
+    }
+
+    @Test
     void unopened_controller_menus_do_not_materialize_factory_lane_text() throws Exception {
         MachineControllerBlockEntity controller = factoryTextController(MMCR.id("controller_text_no_viewer"));
         MachineControllerRuntime runtime = runtimeOf(controller);
