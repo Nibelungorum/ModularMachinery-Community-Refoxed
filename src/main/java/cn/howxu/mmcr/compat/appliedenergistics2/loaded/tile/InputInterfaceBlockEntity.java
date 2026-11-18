@@ -21,6 +21,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamili
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ExternalInputInventory;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -70,6 +71,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
             .setInWorldNode(true);
     private final InterfaceLogic logic;
     private final GenericStack[] networkOwned;
+    private final ExternalInputInventory externalInventory;
     private final Map<AE2ResourceFamily<?>, ResourceStorage<?>> resourceStorages = new LinkedHashMap<>();
     private CapabilitySnapshot capabilitySnapshot;
     private boolean loadingProvenance;
@@ -81,6 +83,7 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
         InterfaceLogicKind logicKind = (InterfaceLogicKind) kind;
         logic = logicKind.createInterfaceLogic(mainNode, this, AEBlocks.INTERFACE.asItem());
         networkOwned = new GenericStack[logic.getStorage().size()];
+        externalInventory = new ExternalInputInventory(this);
         for (var family : AE2ResourceFamilies.all()) {
             resourceStorages.put(family, family.standardInputView(logic.getStorage()));
         }
@@ -104,6 +107,15 @@ public final class InputInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public InterfaceLogic getInterfaceLogic() {
         return logic;
+    }
+
+    /** Keep a network slot reserved even if an uncommitted machine extraction temporarily empties it. */
+    public boolean isExternalInputSlot(int slot) {
+        return logic.getConfig().getKey(slot) == null && networkOwned[slot] == null;
+    }
+
+    public ExternalInputInventory externalInventory() {
+        return externalInventory;
     }
 
     @Override

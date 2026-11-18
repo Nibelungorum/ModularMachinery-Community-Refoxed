@@ -100,6 +100,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.neoforged.neoforge.network.connection.ConnectionType;
 import net.neoforged.neoforge.network.registration.ChannelAttributes;
@@ -211,6 +212,8 @@ public class AE2InterfaceGameTest {
                         "MMCR AE2 input interface capability does not expose TransferFacet");
             }
 
+            genericInv.insert(0, AEItemKey.of(Items.IRON_INGOT), INITIAL_ITEM_COUNT, Actionable.MODULATE);
+            genericInv.insert(1, AEFluidKey.of(Fluids.WATER), INITIAL_FLUID_AMOUNT, Actionable.MODULATE);
             GenericStackInv storageInv = entity.getInterfaceLogic().getStorage();
             entity.getInterfaceLogic().getConfig().setStack(0,
                     new GenericStack(AEItemKey.of(Items.IRON_INGOT), 8L));
@@ -256,14 +259,6 @@ public class AE2InterfaceGameTest {
             helper.assertTrue(entity.getInterfaceLogic().getUpgrades().isEmpty(),
                     "AE2 upgrade inventory slots are empty before any upgrade is installed");
 
-            if (genericInv != null) {
-                genericInv.insert(0, AEItemKey.of(Items.IRON_INGOT), INITIAL_ITEM_COUNT,
-                        Actionable.MODULATE);
-            }
-            if (genericInv != null) {
-                genericInv.insert(1, AEFluidKey.of(Fluids.WATER), INITIAL_FLUID_AMOUNT,
-                        Actionable.MODULATE);
-            }
             helper.assertTrue(entity.itemStorage().amount(0) == INITIAL_ITEM_COUNT,
                     "GENERIC_INTERNAL_INV item insert flows into the MMCR item storage view");
             helper.assertTrue(entity.fluidStorage().amount(1) == INITIAL_FLUID_AMOUNT,
@@ -374,6 +369,73 @@ public class AE2InterfaceGameTest {
         });
     }
 
+    public static void externalInput(GameTestHelper helper, String kind) {
+        helper.setBlock(BlockPos.ZERO, ModBlocks.BLOCKS.get(kind).get().defaultBlockState());
+        var host = helper.getBlockEntity(BlockPos.ZERO, InputInterfaceBlockEntity.class);
+        var pos = host.getBlockPos();
+        var slots = helper.getLevel().getCapability(AECapabilities.GENERIC_INTERNAL_INV, pos, Direction.NORTH);
+        var me = helper.getLevel().getCapability(AECapabilities.ME_STORAGE, pos, Direction.NORTH);
+        var items = helper.getLevel().getCapability(Capabilities.Item.BLOCK, pos, Direction.NORTH);
+        var fluids = helper.getLevel().getCapability(Capabilities.Fluid.BLOCK, pos, Direction.NORTH);
+        helper.assertTrue(slots != null && me != null && items != null && fluids != null,
+                "All external views work without a grid");
+
+        var source = IActionSource.empty();
+        var iron = AEItemKey.of(Items.IRON_INGOT);
+        var water = AEFluidKey.of(Fluids.WATER);
+        var stored = host.getInterfaceLogic().getStorage();
+        int tank = slots.size() - 1;
+        host.getConfig().setStack(0, new GenericStack(iron, 40));
+        host.getConfig().setStack(tank, new GenericStack(water, 500));
+        stored.setStack(0, new GenericStack(iron, 40));
+        stored.setStack(tank, new GenericStack(water, 500));
+        host.recordNetworkPull(0, iron, 40);
+        host.recordNetworkPull(tank, water, 500);
+        helper.assertTrue(me.insert(iron, 20, Actionable.MODULATE, source) == 20
+                && slots.insert(2, water, 250, Actionable.MODULATE) == 250, "External slots accept local stock");
+        host.getConfig().setStack(0, null);
+        host.getConfig().setStack(tank, null);
+        reloadBlockEntity(host, helper);
+        slots.setStack(0, null);
+        slots.setStack(tank, new GenericStack(iron, 1));
+        helper.assertTrue(slots.getStack(0) == null && slots.extract(tank, water, 500, Actionable.MODULATE) == 0
+                && me.getAvailableStacks().get(iron) == 20 && me.getAvailableStacks().get(water) == 250,
+                "Clearing config and reloading never expose remaining network stock");
+
+        var item = ItemResource.of(Items.IRON_INGOT);
+        var fluid = FluidResource.of(Fluids.WATER);
+        try (var tx = Transaction.openRoot()) {
+            helper.assertTrue(host.itemStorage().extract(0, item, 40, tx) == 40 && items.insert(0, item, 1, tx) == 0,
+                    "Temporarily emptying a network slot in an uncommitted recipe does not unlock it");
+            helper.assertTrue(items.extract(0, item, 40, tx) == 0 && fluids.insert(tank, fluid, 1, tx) == 0,
+                    "Slot-addressed automation cannot touch network stock");
+            helper.assertTrue(items.extract(item, 64, tx) == 20 && fluids.extract(fluid, 1000, tx) == 250,
+                    "Pipes extract only from external slots, including when keys match");
+        }
+        helper.assertTrue(me.extract(iron, 64, Actionable.SIMULATE, source) == 20
+                && me.extract(iron, 64, Actionable.MODULATE, source) == 20
+                && me.extract(water, 1000, Actionable.MODULATE, source) == 250,
+                "Rollback and ME simulation leave all external stock available");
+        try (var tx = Transaction.openRoot()) {
+            helper.assertTrue(items.insert(item, 3, tx) == 3 && fluids.insert(fluid, 100, tx) == 100,
+                    "Pipes insert items and fluid after external slots empty");
+            tx.commit();
+        }
+        helper.assertTrue(me.getAvailableStacks().get(iron) == 3 && me.getAvailableStacks().get(water) == 100
+                && stored.getAmount(0) == 40 && stored.getAmount(tank) == 500,
+                "ME and pipe views share local inventory without changing either network slot");
+        try (var tx = Transaction.openRoot()) {
+            helper.assertTrue(host.itemStorage().extract(0, item, 40, tx) == 40, "Recipes can use the reserved stock");
+            tx.commit();
+        }
+        helper.assertTrue(slots.insert(0, iron, 1, Actionable.MODULATE) == 1,
+                "The slot becomes available after its last network item is consumed and committed");
+        for (int slot = 0; slot < slots.size(); slot++) host.getConfig().setStack(slot, new GenericStack(iron, 1));
+        helper.assertTrue(me.insert(iron, 1, Actionable.MODULATE, source) == 0 && me.getAvailableStacks().isEmpty(),
+                "Even an empty configured slot is reserved for the network");
+        helper.succeed();
+    }
+
     public void inputInterfaceDoesNotReturnManualCacheItems(GameTestHelper helper) {
         helper.assertTrue(AE2Bridge.get().available(),
                 "AE2 must be loaded for this integration test");
@@ -420,13 +482,25 @@ public class AE2InterfaceGameTest {
             helper.assertTrue(storage.getAmount(0) == CONFIGURED_ITEM_AMOUNT,
                     "Configured items are pulled into the input cache");
 
-            storage.insert(0, AEItemKey.of(Items.IRON_INGOT), MANUAL_ITEM_AMOUNT, Actionable.MODULATE);
+            var iron = AEItemKey.of(Items.IRON_INGOT);
+            input.getConfig().setStack(0, new GenericStack(iron, 4));
+            var node = input.getMainNode().getNode();
+            node.getService(IGridTickable.class).tickingRequest(node, 1);
+            helper.assertTrue(storage.getAmount(0) == 4 && input.networkOwnedAmount(0, iron) == 4,
+                    "A partial network return keeps the remainder network-owned");
+            storage.insert(0, iron, MANUAL_ITEM_AMOUNT, Actionable.MODULATE);
             input.getInterfaceLogic().getConfig().setStack(0, null);
         });
 
         helper.runAtTickTime(30, () -> {
             InputInterfaceBlockEntity input = helper.getBlockEntity(inputPos,
                     InputInterfaceBlockEntity.class);
+            var me = helper.getLevel().getCapability(AECapabilities.ME_STORAGE, input.getBlockPos(), Direction.NORTH);
+            var iron = AEItemKey.of(Items.IRON_INGOT);
+            helper.assertTrue(me.extract(iron, Long.MAX_VALUE, Actionable.SIMULATE, IActionSource.empty()) == MANUAL_ITEM_AMOUNT
+                            && helper.getBlockEntity(chestPos, MEChestBlockEntity.class).getInventory()
+                                    .getAvailableStacks().get(iron) == NETWORK_ITEM_AMOUNT,
+                    "With no config a storage bus still sees only local stock, never the connected ME chest");
             helper.assertTrue(input.getInterfaceLogic().getStorage().getAmount(0) == MANUAL_ITEM_AMOUNT,
                     "Manually inserted items remain in the input cache after config cancellation, actual="
                             + input.getInterfaceLogic().getStorage().getAmount(0));
@@ -707,6 +781,8 @@ public class AE2InterfaceGameTest {
                     helper.assertTrue(chest.getInventory().extract(AEItemKey.of(Items.IRON_INGOT), Long.MAX_VALUE,
                                     Actionable.SIMULATE, IActionSource.empty()) == 1L,
                             "One ingot was consumed to produce exactly nine cached nuggets");
+                    helper.assertTrue(host.networkOwnedAmount(slot, AEItemKey.of(Items.IRON_NUGGET)) == 9,
+                            "Crafting-card delivery is network stock, not external input");
                     provider.getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE, LockCraftingMode.LOCK_WHILE_LOW);
                     provider.getLogic().updateRedstoneState();
                     Slot stored = slot == 35 ? menu.getSlots(ExSemantics.EX_8).getLast()

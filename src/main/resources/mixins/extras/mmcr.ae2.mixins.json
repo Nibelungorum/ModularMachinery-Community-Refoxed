@@ -11,6 +11,7 @@
     "CraftingSimulationStateMixin",
     "GenericStackInvAccessor",
     "GenericStackInvHandlerMixin",
+    "InterfaceLogicAccessor",
     "InterfaceLogicMixin",
     "PatternProviderLogicMixin"
   ],

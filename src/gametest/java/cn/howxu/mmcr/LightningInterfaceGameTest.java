@@ -1,6 +1,9 @@
 package cn.howxu.mmcr;
 
+import appeng.api.AECapabilities;
+import appeng.api.config.Actionable;
 import appeng.api.networking.GridHelper;
+import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.IGridConnection;
 import appeng.api.networking.ticking.IGridTickable;
 import appeng.api.stacks.AEFluidKey;
@@ -168,6 +171,15 @@ public class LightningInterfaceGameTest {
                     && outputView.insert(1, EXTREME_HIGH_VOLTAGE, 654L, transaction) == 654L, "Offline normal output uses its local cache");
             transaction.commit();
         }
+        var slots = helper.getLevel().getCapability(AECapabilities.GENERIC_INTERNAL_INV, input.getBlockPos(), null);
+        var me = helper.getLevel().getCapability(AECapabilities.ME_STORAGE, input.getBlockPos(), null);
+        var high = family.adapter().toKey(HIGH_VOLTAGE);
+        slots.setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1));
+        helper.assertTrue(slots.getStack(0) == null && slots.insert(2, high, 1, Actionable.MODULATE) == 0
+                        && me.insert(high, 1, Actionable.MODULATE, IActionSource.empty()) == 0
+                        && me.extract(high, 1, Actionable.MODULATE, IActionSource.empty()) == 0
+                        && me.getAvailableStacks().isEmpty() && inputView.amount(0) == 123,
+                "Lightning is usable by the machine but cannot be listed, replaced or transferred externally");
         var inputSaved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
         var outputSaved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
         input.saveAdditional(inputSaved);

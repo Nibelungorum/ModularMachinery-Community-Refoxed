@@ -523,6 +523,10 @@ public final class GameTestRegistry {
                         helper -> new AE2InterfaceGameTest().inputUpgradeToolboxAndOversizeAmount(helper));
                 register(event, "eae_pattern_menu_terminal", 100,
                         helper -> new AE2PatternInterfaceGameTest().extendedPatternMenuStateAndTerminalVisibility(helper));
+                register(event, "eae_extended_external_input", 40,
+                        helper -> AE2InterfaceGameTest.externalInput(helper, "eae_me_extended_input_interface"));
+                register(event, "eae_oversize_external_input", 40,
+                        helper -> AE2InterfaceGameTest.externalInput(helper, "eae_me_oversize_input_interface"));
                 register(event, "eae_me_extended_input_provenance", 100,
                         helper -> new AE2InterfaceGameTest().extendedInputReturnsOnlyAeOwnedResourcesAfterCommittedExtraction(helper));
                 register(event, "eae_me_extended_output_menu", 100,
@@ -532,6 +536,8 @@ public final class GameTestRegistry {
             }
             register(event, "ae2_me_input_interface", 200,
                     helper -> new AE2InterfaceGameTest().interfaceFeedsMmcrInputs(helper));
+            register(event, "ae2_external_input", 40,
+                    helper -> AE2InterfaceGameTest.externalInput(helper, "ae2_me_input_interface"));
             register(event, "ae2_me_input_manual_cache", 100,
                     helper -> new AE2InterfaceGameTest().inputInterfaceDoesNotReturnManualCacheItems(helper));
             register(event, "ae2_me_input_memory_card", 100,

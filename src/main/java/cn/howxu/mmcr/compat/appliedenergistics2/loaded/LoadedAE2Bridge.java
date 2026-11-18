@@ -183,17 +183,19 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         if (port instanceof PatternInterfaceBlockEntity host) host.getLogic().updateRedstoneState();
     }
 
+    public static void registerInputStorage(RegisterCapabilitiesEvent event, BlockEntityType<?> type) {
+        event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, type,
+                (be, _) -> be instanceof InputInterfaceBlockEntity host ? host.externalInventory() : null);
+        event.registerBlockEntity(AECapabilities.ME_STORAGE, type,
+                (be, _) -> be instanceof InputInterfaceBlockEntity host ? host.externalInventory() : null);
+    }
+
     @Override
     public void registerCapabilities(RegisterCapabilitiesEvent event) {
         BlockEntityType<?> inputInterfaceType = ModBlockEntities.BES.get(INPUT_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, inputInterfaceType,
                 (be, ignored) -> be instanceof InputInterfaceBlockEntity host ? host : null);
-        event.registerBlockEntity(AECapabilities.GENERIC_INTERNAL_INV, inputInterfaceType,
-                (be, _) -> be instanceof InputInterfaceBlockEntity host
-                        ? host.getInterfaceLogic().getStorage() : null);
-        event.registerBlockEntity(AECapabilities.ME_STORAGE, inputInterfaceType,
-                (be, _) -> be instanceof InputInterfaceBlockEntity host
-                        ? host.getInterfaceLogic().getInventory() : null);
+        registerInputStorage(event, inputInterfaceType);
         BlockEntityType<?> stockingInterfaceType = ModBlockEntities.BES.get(STOCKING_INTERFACE_ID).get();
         event.registerBlockEntity(AECapabilities.IN_WORLD_GRID_NODE_HOST, stockingInterfaceType,
                 (be, ignored) -> be instanceof StockingInterfaceBlockEntity host ? host : null);
