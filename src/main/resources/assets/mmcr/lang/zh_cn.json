@@ -532,6 +532,7 @@
   "jade.mmcr.machine_controller.progress.tick": "%s/%s tick",
   "jade.mmcr.machine_controller.recipe_pool": "配方池",
   "jade.mmcr.machine_controller.recipe_output": "配方输出:",
+  "jade.mmcr.machine_controller.recipe_output.generic": "%s × %s",
   "jade.mmcr.machine_controller.recipe_output.item": "%s%s",
   "jade.mmcr.machine_controller.recipe_output.fluid": "%s %s",
   "jade.mmcr.machine_controller.state": "状态",

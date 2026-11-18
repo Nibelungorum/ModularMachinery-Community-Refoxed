@@ -2,6 +2,8 @@ package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
+import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import cn.howxu.mmcr.compat.mekanism.loaded.jade.ChemicalOutputRenderer;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
 import cn.howxu.mmcr.internal.runtime.JadeTextSupport;
@@ -36,6 +38,7 @@ public final class JadePlugin implements IWailaPlugin {
     public void registerClient(IWailaClientRegistration registration) {
         registration.addConfig(MachineControllerComponentProvider.UID, true);
         registration.registerBlockComponent(MachineControllerComponentProvider.INSTANCE, MachineControllerBlock.class);
+        if (MekanismBridge.get().available()) ChemicalOutputRenderer.register();
         registration.addConfig(RecipeOutputComponentProvider.UID, true);
         registration.registerBlockComponent(RecipeOutputComponentProvider.INSTANCE, MachineControllerBlock.class);
         registration.addConfig(ParallelControllerComponentProvider.UID, true);

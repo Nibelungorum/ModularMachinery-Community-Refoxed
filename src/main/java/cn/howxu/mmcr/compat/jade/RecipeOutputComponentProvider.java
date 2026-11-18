@@ -2,17 +2,13 @@ package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
+import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.util.ReadableNumber;
-import mekanism.api.MekanismAPI;
-import mekanism.api.chemical.Chemical;
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.Holder;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
 import snownee.jade.api.BlockAccessor;
@@ -24,8 +20,12 @@ import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.api.ui.JadeUI;
 import snownee.jade.overlay.DisplayHelper;
 
+import org.jetbrains.annotations.Nullable;
+
+import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Renders the controller's current recipe outputs at the tail of the Jade tooltip.
@@ -47,39 +47,50 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
         return TooltipPosition.TAIL - 9;
     }
 
+    /** A missing row suppresses an invalid value of a supported output type. */
+    @FunctionalInterface
+    public interface Renderer<O extends MachineOutput> {
+        @Nullable Consumer<ITooltip> row(O output, long amount);
+    }
+
+    private static final Map<OutputType<?>, Renderer<?>> RENDERERS = new IdentityHashMap<>();
+
+    static {
+        register(MachineOutput.ItemOutput.TYPE, (item, amount) ->
+                item.stack().isEmpty() ? null : tip -> renderItem(tip, item, amount));
+        register(MachineOutput.FluidOutput.TYPE, (fluid, amount) ->
+                fluid.stack().isEmpty() ? null : tip -> renderFluid(tip, fluid, amount));
+    }
+
+    public static <O extends MachineOutput> void register(OutputType<O> type, Renderer<O> renderer) {
+        Renderer<?> previous = RENDERERS.putIfAbsent(type, renderer);
+        if (previous != null && previous != renderer) throw new IllegalStateException("Duplicate Jade renderer for " + type.id());
+    }
+
     @Override
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
         List<MachineOutputAmount> outputs = RecipeOutputCodec.read(accessor.getServerData(),
                 accessor.getLevel().registryAccess().createSerializationContext(NbtOps.INSTANCE));
         boolean labelAdded = false;
         for (MachineOutputAmount output : outputs) {
-            MachineOutput owned = output.output();
-            long amount = output.amount();
-            if (!isRenderable(owned, amount)) continue;
+            if (output.amount() <= 0L) continue;
+            var row = row(output.output(), output.amount());
+            if (row == null) continue;
             if (!labelAdded) {
                 tooltip.add(Component.translatable("jade.mmcr.machine_controller.recipe_output"));
                 labelAdded = true;
             }
-            if (owned instanceof MachineOutput.ItemOutput item) renderItem(tooltip, item, amount);
-            else if (owned instanceof MachineOutput.FluidOutput fluid) renderFluid(tooltip, fluid, amount);
-            else if (owned instanceof LoadedChemicalOutput chemical) renderChemical(tooltip, chemical, amount);
+            row.accept(tooltip);
         }
     }
 
-    private static boolean isRenderable(MachineOutput output, long amount) {
-        if (output instanceof MachineOutput.ItemOutput item) {
-            return !item.stack().isEmpty() && amount > 0L;
-        }
-        if (output instanceof MachineOutput.FluidOutput fluid) {
-            return !fluid.stack().isEmpty() && amount > 0L;
-        }
-        if (output instanceof LoadedChemicalOutput chemical) {
-            if (amount <= 0L) return false;
-            Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
-                    ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemical.id()));
-            return holder != null && holder.isPresent();
-        }
-        return false;
+    @SuppressWarnings("unchecked") // register pairs each renderer with its canonical OutputType<O>.
+    private static @Nullable Consumer<ITooltip> row(MachineOutput output, long amount) {
+        var type = output.outputType();
+        var renderer = (Renderer<MachineOutput>) RENDERERS.get(type);
+        if (renderer != null) return renderer.row(output, amount);
+        Component name = Component.translatableWithFallback(type.presentation().translationKey(), type.id().toString());
+        return tooltip -> tooltip.add(Component.translatable("jade.mmcr.machine_controller.recipe_output.generic", amount, name));
     }
 
     private static void renderItem(ITooltip tooltip, MachineOutput.ItemOutput item, long amount) {
@@ -116,29 +127,4 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
                 formattedAmount, name));
     }
 
-    // for mekanism
-    private static void renderChemical(ITooltip tooltip, LoadedChemicalOutput chemical, long amount) {
-        if (amount <= 0L) return;
-        Optional<Holder.Reference<Chemical>> holder = MekanismAPI.CHEMICAL_REGISTRY.get(
-                ResourceKey.create(MekanismAPI.CHEMICAL_REGISTRY_NAME, chemical.id()));
-        if (holder == null || holder.isEmpty()) return;
-        Chemical value = holder.get().value();
-        String formattedAmount = amount <= 10L
-                ? ReadableNumber.formatForSlot(amount, 0, "mB")
-                : ReadableNumber.formatForSlot(amount, 3, "B");
-        Component name = ComponentUtils.wrapInSquareBrackets(value.getTextComponent())
-                .withStyle(ChatFormatting.WHITE);
-        // here get an icon
-        var icon = new JadeChemicalElement(value.getIcon(), value.getTint(), 10,8);
-        try {
-            int lineHeight = DisplayHelper.font().lineHeight;
-            icon.setFreeSpace(lineHeight + 1, lineHeight - 1);
-            tooltip.add(icon.offset(0, -1));
-        } catch (RuntimeException ignored) {
-            // Unit tests have no client font, but Jade can still lay out the default-sized icon.
-        }
-        tooltip.append(JadeUI.spacer(2, 0));
-        tooltip.append(Component.translatable("jade.mmcr.machine_controller.recipe_output.fluid",
-                formattedAmount, name));
-    }
 }

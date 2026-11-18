@@ -9,6 +9,7 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
+import cn.howxu.mmcr.compat.mekanism.loaded.jade.ChemicalOutputRenderer;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.serialization.Codec;
@@ -60,6 +61,7 @@ class RecipeOutputComponentProviderTest {
         MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
         OutputRegistry.register(LoadedChemicalOutput.TYPE);
+        ChemicalOutputRenderer.register();
         OutputRegistry.register(CountingOutput.TYPE);
         // Unit tests don't load resource packs, so seed the translation we assert against.
         var ctor = ClientLanguage.class.getDeclaredConstructor(Map.class, boolean.class);
@@ -67,6 +69,7 @@ class RecipeOutputComponentProviderTest {
         Language.inject(ctor.newInstance(Map.of(
                 "jade.mmcr.machine_controller.recipe_output", "Recipe Output",
                 "jade.mmcr.machine_controller.recipe_output.fluid", "%s %s",
+                "jade.mmcr.machine_controller.recipe_output.generic", "%s × %s",
                 "chat.square_brackets", "[%s]"), false));
     }
 
@@ -121,13 +124,15 @@ class RecipeOutputComponentProviderTest {
     @Test
     void tooltipTakesOneOwnedCopyToClassifyEachOutput() {
         CompoundTag data = new CompoundTag();
-        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(new CountingOutput(5L, 1F), 5L)));
+        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(new CountingOutput(5L, 1F), 4_294_967_297L)));
         CountingOutput.COPIES.set(0);
         assertThat(RecipeOutputCodec.read(data)).hasSize(1);
         int decodeCopies = CountingOutput.COPIES.get();
         CountingOutput.COPIES.set(0);
 
-        assertThat(collect(data)).isEmpty(); // Unsupported types still require only one owned classification copy.
+        assertThat(collect(data)).filteredOn(Component.class::isInstance)
+                .extracting(value -> ((Component) value).getString())
+                .contains("4294967297 × mmcr_test:jade_counting_output");
         assertThat(CountingOutput.COPIES).hasValue(decodeCopies + 1);
     }
 
