@@ -136,7 +136,7 @@ public final class AE2ResourceFamilies {
     }
 
     private static <R> CapabilityBinding inputBinding(AE2ResourceFamily<R> family) {
-        return transportBinding(family, family.inputBinding(host -> ((InputInterfaceBlockEntity) host).resourceStorage(family), false));
+        return internalStorage(family.inputBinding(host -> ((InputInterfaceBlockEntity) host).resourceStorage(family), false));
     }
 
     public static List<CapabilityBinding> stockingInputBindings() {
@@ -144,7 +144,7 @@ public final class AE2ResourceFamilies {
     }
 
     private static <R> CapabilityBinding stockingInputBinding(AE2ResourceFamily<R> family) {
-        return transportBinding(family, family.inputBinding(host -> ((StockingInterfaceBlockEntity) host).resourceStorage(family), false));
+        return internalStorage(family.inputBinding(host -> ((StockingInterfaceBlockEntity) host).resourceStorage(family), false));
     }
 
     /** Item/fluid retain their existing external exposure declarations in each output kind. */
@@ -154,7 +154,7 @@ public final class AE2ResourceFamilies {
     }
 
     private static <R> CapabilityBinding outputBinding(AE2ResourceFamily<R> family) {
-        return transportBinding(family, family.outputBinding(host -> ((OutputInterfaceBlockEntity) host).resourceStorage(family), false));
+        return internalStorage(family.outputBinding(host -> ((OutputInterfaceBlockEntity) host).resourceStorage(family), false));
     }
 
     public static List<CapabilityBinding> asyncOutputBindings() {
@@ -162,7 +162,7 @@ public final class AE2ResourceFamilies {
     }
 
     private static <R> CapabilityBinding asyncOutputBinding(AE2ResourceFamily<R> family) {
-        return transportBinding(family, family.outputBinding(host -> ((AsyncOutputInterfaceBlockEntity) host).resourceStorage(family), false));
+        return internalStorage(family.outputBinding(host -> ((AsyncOutputInterfaceBlockEntity) host).resourceStorage(family), false));
     }
 
     public static List<CapabilityBinding> patternBindings() {
@@ -170,12 +170,12 @@ public final class AE2ResourceFamilies {
     }
 
     private static <R> CapabilityBinding patternBinding(AE2ResourceFamily<R> family) {
-        return transportBinding(family, family.binding(IOType.OUTPUT, CapabilityDirections.bidirectional(),
+        return internalStorage(family.binding(IOType.OUTPUT, CapabilityDirections.bidirectional(),
                 host -> ((PatternInterfaceBlockEntity) host).resourceStorage(family), false, null));
     }
 
-    private static CapabilityBinding transportBinding(AE2ResourceFamily<?> family, CapabilityBinding binding) {
-        if (family == ITEM || family == FLUID) return binding;
+    // These bindings see the machine's full inventory, not AE2's externally accessible slots.
+    private static CapabilityBinding internalStorage(CapabilityBinding binding) {
         return CapabilityBinding.internalOnly(binding.type(), binding.directions(), binding.factory(), binding.tierPolicy());
     }
 

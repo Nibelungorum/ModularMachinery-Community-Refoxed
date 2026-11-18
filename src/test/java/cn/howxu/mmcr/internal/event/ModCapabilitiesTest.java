@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.CapabilityView;
 import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.capability.facet.ResourceFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
@@ -16,17 +17,21 @@ import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.api.port.PortTierPolicy;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.capabilities.BlockCapability;
+import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -35,6 +40,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 /**
  * Verifies native capability registration consumes binding exposure declarations.
@@ -48,52 +54,103 @@ class ModCapabilitiesTest {
     }
 
     @Test
-    void selects_external_exposures_from_generic_port_bindings() {
-        CapabilityBinding binding = new CapabilityBinding(new CapabilityType(MMCR.id("external_test")),CapabilityDirections.input(),_ -> null, PortTierPolicy.always(),
-                new CapabilityBinding.ExternalExposure<>(MMCR.id("external_test_native"), String.class,
-                        (_, _, _) -> "exposed"));
-        PortDefinition definition = PortDefinition.of(MMCR.id("external_test_port"), binding);
-        IOPortKind kind = new IOPortKind() {
-            @Override
-            public String id() {
-                return "external_test_port";
-            }
+    void resolves_only_the_queried_ports_handler_even_with_a_type_wide_adapter() throws Exception {
+        var adapters = new ExternalCapabilityContext();
+        var id = MMCR.id("test_sided_item_view");
+        var cap = BlockCapability.createSided(id, String.class);
+        var event = registrationEvent();
+        var item = PortKinds.ITEM_INPUT.bindings().getFirst().type();
+        adapters.bind(item, new CapabilityBinding.ExternalExposure<>(id, String.class,
+                (_, _, _) -> "adapter"));
 
-            @Override
-            public IOType ioType() {
-                return IOType.INPUT;
-            }
+        for (var kind : List.of(PortKinds.ITEM_INPUT, PortKinds.ITEM_OUTPUT, PortKinds.EXTENDED_ITEM_INPUT)) {
+            var binding = kind.bindings().getFirst();
+            var exposure = new CapabilityBinding.ExternalExposure<>(id, String.class,
+                    (host, _, _) -> {
+                        assertThat(((IOPortBlockEntity) host).kind().id()).isEqualTo(kind.id());
+                        return kind.id();
+                    });
+            var effective = kind == PortKinds.EXTENDED_ITEM_INPUT ? binding : new CapabilityBinding(
+                    binding.type(), binding.directions(), binding.factory(), binding.tierPolicy(), exposure);
+            ModCapabilities.registerNativePort(event, withBindings(kind, effective), adapters);
+        }
 
-            @Override
-            public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-                return (_, _) -> null;
-            }
-
-            @Override
-            public PortDefinition definition() {
-                return definition;
-            }
-        };
-
-        assertThat(ModCapabilities.externalBindings(kind)).containsExactly(binding);
+        for (var kind : List.of(PortKinds.ITEM_INPUT, PortKinds.ITEM_OUTPUT, PortKinds.EXTENDED_ITEM_INPUT)) {
+            var port = kind.entityFactory().create(BlockPos.ZERO, ModBlocks.BLOCKS.get(kind.id()).get().defaultBlockState());
+            var level = LevelStub.createWithBlockEntities(List.of(port));
+            var expected = kind == PortKinds.EXTENDED_ITEM_INPUT ? "adapter" : kind.id();
+            assertThat(cap.getCapability(level, BlockPos.ZERO, null, port, Direction.NORTH)).isEqualTo(expected);
+            port.setAutoIOSide(item, Direction.NORTH, false);
+            assertThat(cap.getCapability(level, BlockPos.ZERO, null, port, Direction.NORTH)).isNull();
+            assertThat(cap.getCapability(level, BlockPos.ZERO, null, port, Direction.SOUTH)).isEqualTo(expected);
+        }
     }
 
     @Test
-    void internal_only_binding_is_not_selected_for_native_transfer_registration() {
-        CapabilityBinding binding = CapabilityBinding.internalOnly(
-                new CapabilityType(MMCR.id("internal_only_test")), CapabilityDirections.input(), _ -> null,
-                PortTierPolicy.always());
-        PortDefinition definition = PortDefinition.of(MMCR.id("internal_only_test_port"), binding);
-        IOPortKind kind = new IOPortKind() {
-            @Override public String id() { return "internal_only_test_port"; }
-            @Override public IOType ioType() { return IOType.INPUT; }
-            @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
-                return (_, _) -> null;
-            }
-            @Override public PortDefinition definition() { return definition; }
-        };
+    void internal_only_binding_never_registers_a_global_provider() throws Exception {
+        var adapters = new ExternalCapabilityContext();
+        var kind = PortKinds.ITEM_INPUT;
+        var binding = kind.bindings().getFirst();
+        var id = MMCR.id("test_internal_view");
+        adapters.bind(binding.type(), new CapabilityBinding.ExternalExposure<>(id, String.class, (_, _, _) -> "leak"));
+        var event = registrationEvent();
+        ModCapabilities.registerNativePort(event, withBindings(kind, CapabilityBinding.internalOnly(
+                binding.type(), binding.directions(), binding.factory(), binding.tierPolicy())), adapters);
 
-        assertThat(ModCapabilities.nativeTransferBindings(kind, Set.of())).isEmpty();
+        assertThat(event.isBlockRegistered(BlockCapability.createSided(id, String.class),
+                ModBlocks.BLOCKS.get(kind.id()).get())).isFalse();
+    }
+
+    @Test
+    void global_adapter_cannot_publish_the_me_interfaces_internal_inventory() throws Exception {
+        var adapters = new ExternalCapabilityContext();
+        var id = MMCR.id("test_unrestricted_me_items");
+        var cap = BlockCapability.createSided(id, String.class);
+        adapters.bind(AE2ResourceFamilies.ITEM.capabilityType(),
+                new CapabilityBinding.ExternalExposure<>(id, String.class, (_, _, _) -> "unrestricted"));
+        var event = registrationEvent();
+        for (var bindings : List.of(AE2ResourceFamilies.inputBindings(), AE2ResourceFamilies.stockingInputBindings(),
+                AE2ResourceFamilies.asyncOutputBindings(), AE2ResourceFamilies.patternBindings())) {
+            var host = bindings.getFirst().directions().supports(IOType.INPUT) ? PortKinds.ITEM_INPUT : PortKinds.ITEM_OUTPUT;
+            ModCapabilities.registerNativePort(event, withBindings(host, bindings.toArray(CapabilityBinding[]::new)), adapters);
+            assertThat(event.isBlockRegistered(cap, ModBlocks.BLOCKS.get(host.id()).get())).isFalse();
+        }
+    }
+
+    @Test
+    void rejects_ambiguous_adapters_and_incompatible_local_overrides() throws Exception {
+        var kind = PortKinds.ITEM_INPUT;
+        var binding = kind.bindings().getFirst();
+        var id = MMCR.id("conflicting_external_id");
+        var exposure = new CapabilityBinding.ExternalExposure<>(id, String.class, (_, _, _) -> "adapter");
+        var adapters = new ExternalCapabilityContext();
+        adapters.bind(binding.type(), exposure);
+        var incompatible = new CapabilityBinding(binding.type(), binding.directions(), binding.factory(),
+                binding.tierPolicy(), new CapabilityBinding.ExternalExposure<>(id, Integer.class, (_, _, _) -> 1));
+        var event = registrationEvent();
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                ModCapabilities.registerNativePort(event, withBindings(kind, incompatible), adapters))
+                .withMessageContaining(id.toString()).withMessageContaining(kind.id());
+        adapters.bind(binding.type(), exposure);
+        assertThatIllegalArgumentException().isThrownBy(() -> ModCapabilities.registerNativePort(event, kind, adapters))
+                .withMessageContaining(binding.type().id().toString());
+    }
+
+    private static RegisterCapabilitiesEvent registrationEvent() throws ReflectiveOperationException {
+        var constructor = RegisterCapabilitiesEvent.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        return constructor.newInstance();
+    }
+
+    private static IOPortKind withBindings(IOPortKind kind, CapabilityBinding... bindings) {
+        return new IOPortKind() {
+            @Override public String id() { return kind.id(); }
+            @Override public IOType ioType() { return kind.ioType(); }
+            @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+                return kind.entityFactory();
+            }
+            @Override public PortDefinition definition() { return PortDefinition.of(MMCR.id(id()), bindings); }
+        };
     }
 
     @Test

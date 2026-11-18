@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.event;
 
-import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -18,8 +17,8 @@ import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
-import java.util.stream.Collectors;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.transfer.ResourceHandler;
@@ -32,6 +31,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import net.neoforged.neoforge.capabilities.Capabilities;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +48,6 @@ public final class ModCapabilities {
 
     public static void register(RegisterCapabilitiesEvent event) {
         ExternalCapabilityContext context = new ExternalCapabilityContext();
-        bindNativeExposures(context);
         ExternalCapabilityRegistry.global().freeze(context);
         for (IOPortKind kind : nativeCapabilityPorts()) {
             registerNativePort(event, kind, context);
@@ -82,48 +81,51 @@ public final class ModCapabilities {
                 .toList();
     }
 
-    private static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind,
-                                           ExternalCapabilityContext context) {
-        List<CapabilityBinding> externalBindings = externalBindings(kind);
-        Set<CapabilityType> externallyExposed = externalBindings.stream()
-                .filter(binding -> !context.bindings(binding.type()).isEmpty())
-                .map(CapabilityBinding::type)
-                .collect(Collectors.toSet());
-        for (CapabilityBinding binding : externalBindings) {
-            context.bindings(binding.type()).forEach(exposure -> registerExternalPort(event, kind, binding, exposure));
+    static void registerNativePort(RegisterCapabilitiesEvent event, IOPortKind kind,
+                                   ExternalCapabilityContext adapters) {
+        var bindings = kind.bindings().stream().filter(CapabilityBinding::nativeTransferExposure)
+                .filter(binding -> binding.directions().supports(kind.ioType())).toList();
+        Map<Identifier, Route> global = new LinkedHashMap<>();
+        Map<Identifier, Route> local = new LinkedHashMap<>();
+        for (CapabilityBinding binding : bindings) {
+            for (var exposure : adapters.bindings(binding.type())) {
+                addRoute(kind, global, new Route(binding, exposure));
+            }
+            binding.externalExposure().ifPresent(exposure -> addRoute(kind, local, new Route(binding, exposure)));
         }
-        List<CapabilityBinding> nativeBindings = nativeTransferBindings(kind, externallyExposed);
-        if (!nativeBindings.isEmpty()) registerFacetProviders(event, kind, nativeBindings);
+        local.forEach((id, route) -> global.merge(id, route, (adapter, override) -> {
+            if (adapter.exposure().valueType() != override.exposure().valueType()) {
+                throw conflictingRoutes(kind, adapter, override);
+            }
+            return override;
+        }));
+        global.values().forEach(route -> registerExternalPort(event, kind, route.binding(), route.exposure()));
+
+        // A local resolver owns its binding. Other bindings can still expose native facets, but must
+        // never bypass an explicit provider that declined a side or returned null for its ID.
+        var fallback = bindings.stream().filter(binding -> binding.externalExposure().isEmpty()).toList();
+        if (!fallback.isEmpty()) {
+            if (!global.containsKey(ITEM_BLOCK.name())) registerItemPort(event, kind, fallback);
+            if (!global.containsKey(FLUID_BLOCK.name())) registerFluidPort(event, kind, fallback);
+            if (!global.containsKey(ENERGY_BLOCK.name())) registerEnergyPort(event, kind, fallback);
+        }
     }
 
-    static List<CapabilityBinding> nativeTransferBindings(IOPortKind kind,
-                                                          Set<CapabilityType> externallyExposed) {
-        if (kind == null) return List.of();
-        Set<CapabilityType> exposed = externallyExposed == null ? Set.of() : externallyExposed;
-        return kind.definition().bindings().stream()
-                .filter(CapabilityBinding::nativeTransferExposure)
-                .filter(binding -> !exposed.contains(binding.type()))
-                .toList();
+    /** One external handler and the port binding whose direction and side policy guard it.
+     * @author howxu <dev@howxu.cn>
+     */
+    private record Route(CapabilityBinding binding, CapabilityBinding.ExternalExposure<?> exposure) { }
+
+    private static void addRoute(IOPortKind kind, Map<Identifier, Route> routes, Route route) {
+        Route previous = routes.putIfAbsent(route.exposure().id(), route);
+        if (previous != null) throw conflictingRoutes(kind, previous, route);
     }
 
-    static List<CapabilityBinding> externalBindings(IOPortKind kind) {
-        if (kind == null) return List.of();
-        return kind.definition().bindings().stream()
-                .filter(CapabilityBinding::nativeTransferExposure)
-                .filter(binding -> binding.externalExposure().isPresent())
-                .toList();
-    }
-
-    private static void bindNativeExposures(ExternalCapabilityContext context) {
-        PortKinds.all().forEach(kind -> kind.definition().bindings().stream()
-                .filter(CapabilityBinding::nativeTransferExposure)
-                .forEach(binding -> binding.externalExposure()
-                        .ifPresent(exposure -> bindExposure(context, binding.type(), exposure))));
-    }
-
-    private static <T> void bindExposure(ExternalCapabilityContext context, CapabilityType type,
-                                         CapabilityBinding.ExternalExposure<T> exposure) {
-        context.bind(type, exposure);
+    private static IllegalArgumentException conflictingRoutes(IOPortKind kind, Route first, Route second) {
+        return new IllegalArgumentException("Conflicting external capability " + first.exposure().id()
+                + " on port " + kind.id() + " for bindings " + first.binding().type().id()
+                + " and " + second.binding().type().id() + " (" + first.exposure().valueType().getName()
+                + ", " + second.exposure().valueType().getName() + ")");
     }
 
     private static <T> void registerExternalPort(RegisterCapabilitiesEvent event, IOPortKind kind,
@@ -185,14 +187,6 @@ public final class ModCapabilities {
                     if (storage == null) return null;
                     return new DirectionalEnergyHandler(energyHandler(storage), canInsert, !canInsert);
                 });
-    }
-
-    /** Registers NeoForge providers that discover their compatible storage through each binding's facets. */
-    private static void registerFacetProviders(RegisterCapabilitiesEvent event, IOPortKind kind,
-                                               List<CapabilityBinding> bindings) {
-        registerItemPort(event, kind, bindings);
-        registerFluidPort(event, kind, bindings);
-        registerEnergyPort(event, kind, bindings);
     }
 
     static <R> ResourceStorage<R> resourceStorage(IOPortBlockEntity port,
