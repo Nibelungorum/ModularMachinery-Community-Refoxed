@@ -112,6 +112,8 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
+import java.nio.charset.StandardCharsets;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
@@ -3202,6 +3204,56 @@ class CraftingRuntimeTest {
         restored.load(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_LOOKUP, output.buildResult()), null);
 
         assertThat(restored.failure()).isNull();
+    }
+
+    // Captured with CraftingRuntime.save on b78869fe, before the payment and prefetch refactors.
+    private static CompoundTag legacyFixture(String name) throws Exception {
+        try (var stream = CraftingRuntimeTest.class.getResourceAsStream("/legacy/b78869fe/" + name + ".snbt")) {
+            return TagParser.parseCompoundFully(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
+    void legacyPaidBatchFinishesWithItsOriginalOutputWithoutAnotherInput() throws Exception {
+        var input = RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0));
+        var output = RuntimeTestFixtures.itemOutput(new BlockPos(2, 0, 0));
+        var controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), input, output);
+        controller.setMachine(machine(controller.machineId(), RecipeBehavior.builder()
+                .beforeStart(ignored -> { throw new AssertionError("restoring a paid admission must not restart it"); }).build()));
+        RecipeRegistry.registerStatic(recipe("runtime_persisted_effective_snapshot", 20, List.of(
+                input(Items.IRON_INGOT, 1), output(Items.IRON_NUGGET, 1), output(Items.DIAMOND, 1))));
+        var restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), legacyFixture("paid")), null);
+        assertThat(restored.active()).isTrue();
+        assertThat(restored.activeRecipe().inputConsumptionPlan().consumedBatches(0)).isOne();
+        restored.tick();
+        restored.tick();
+        restored.finish();
+        assertThat(restored.active()).isFalse();
+        assertThat(item(output.itemStorage(), 0).is(Items.GOLD_NUGGET)).isTrue();
+        assertThat(output.itemStorage().amount(0)).isEqualTo(2);
+    }
+
+    @Test
+    void legacyPrefetchFinishesOnlyFromItsRemainingReservation() throws Exception {
+        var network = new PrefetchNetworkCapability(0L);
+        var controller = controllerWithPrefetchNetwork(network);
+        RecipeRegistry.registerStatic(RecipeTestSupport.create(MMCR.id("runtime_flux_restore_combined"),
+                MMCR.id("test_cube"), 3, List.of(), List.of(), List.of(), 0, 1, false, List.of(),
+                List.of(new EnergyRequirement(1), new EnergyRequirement(1))));
+        var restored = new CraftingRuntime(controller, controller.componentRuntime());
+        restored.load(TagValueInput.create(ProblemReporter.DISCARDING,
+                RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY), legacyFixture("prefetch")), null);
+        assertThat(restored.active()).isTrue();
+        assertThat(network.reserved()).isEqualTo(4);
+        restored.tick();
+        restored.tick();
+        assertThat(restored.finishPending()).isTrue();
+        restored.finish();
+        assertThat(restored.active()).isFalse();
+        assertThat(network.extracted()).isZero();
+        assertThat(network.released()).isZero();
     }
 
     @Test

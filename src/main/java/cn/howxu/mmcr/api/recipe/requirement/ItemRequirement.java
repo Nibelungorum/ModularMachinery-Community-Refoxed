@@ -104,6 +104,11 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
 
     @Override public float ioChance() { return io.isInput() ? consumeChance() : chance; }
 
+    @Override public Object batchIdentity(DynamicOps<?> ops) {
+        return io.isInput() ? List.of(type(), io, Ingredient.CODEC.encodeStart(ops, item).getOrThrow(), components, tags)
+                : MachineOutput.aggregationKey(new MachineOutput.ItemOutput(stack, 1F, components));
+    }
+
     @Override public OptionalLong ioAmount() {
         return OptionalLong.of(io.isInput() ? count : stack.getCount());
     }

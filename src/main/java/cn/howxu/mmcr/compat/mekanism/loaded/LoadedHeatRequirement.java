@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.api.compat.mekanism.HeatRate;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -34,7 +35,9 @@ import java.util.Objects;
  * @author howxu <dev@howxu.cn>
  */
 public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement heat, List<String> tags)
-        implements MachineRequirement {
+        implements MachineRequirement, HeatRate {
+    @Override public double outputHeatPerTick() { return io.isInput() ? 0D : heat.value(); }
+
     @Override
     public boolean perTickOutput() { return !io.isInput(); }
 
@@ -56,6 +59,9 @@ public record LoadedHeatRequirement(RecipeModifier.IOType io, HeatRequirement he
         public TickCapture.Demand captureTick(LoadedHeatRequirement requirement, long parallelism, TickCapture capture) {
             return delegate.captureTick(requirement, parallelism, capture);
         }
+
+        @Override
+        public boolean prefersLiveTickPlan() { return delegate.prefersLiveTickPlan(); }
 
         @Override
         public Object derivationToken() { return delegate.derivationToken(); }

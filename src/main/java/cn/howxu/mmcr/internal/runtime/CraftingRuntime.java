@@ -37,6 +37,7 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
 import cn.howxu.mmcr.api.machine.definition.MachineBehaviorContext;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
@@ -55,8 +56,6 @@ import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.Stage;
 import cn.howxu.mmcr.internal.recipe.CompiledRecipeProgram.VersionStamp;
 import cn.howxu.mmcr.internal.recipe.RecipeProgramCompiler;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
-import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.sync.FailureStatusCodec;
@@ -64,8 +63,6 @@ import cn.howxu.mmcr.internal.sync.FailureStatusMigration;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -738,32 +735,10 @@ public final class CraftingRuntime {
             Map<Object, Long> totals = new LinkedHashMap<>();
             var ops = registryAccess() == null ? JsonOps.INSTANCE : registryAccess().createSerializationContext(JsonOps.INSTANCE);
             for (MachineRequirement requirement : effective.requirements()) {
-                long amount;
-                Object key;
-                if (requirement instanceof ItemRequirement item) {
-                    amount = item.io() == IOType.INPUT ? item.count() : item.stack().getCount();
-                    if (item.io() == IOType.INPUT) {
-                        if (item.item() == null) return false;
-                        key = List.of(item.type().id(), item.io(), Ingredient.CODEC.encodeStart(ops, item.item()).getOrThrow(),
-                                item.components(), item.tags());
-                    } else key = MachineOutput.aggregationKey(new MachineOutput.ItemOutput(item.stack(), 1F, item.components()));
-                } else if (requirement instanceof FluidRequirement fluid) {
-                    amount = fluid.io() == IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
-                    if (fluid.io() == IOType.INPUT) {
-                        if (fluid.fluid() == null) return false;
-                        key = List.of(fluid.type().id(), fluid.io(), FluidIngredient.CODEC.encodeStart(ops, fluid.fluid()).getOrThrow(),
-                                fluid.tags());
-                    } else key = MachineOutput.aggregationKey(new MachineOutput.FluidOutput(fluid.stack(), 1F));
-                } else if (requirement instanceof EnergyRequirement energy) {
-                    amount = Math.multiplyExact(energy.fePerTick(), (long) effective.duration());
-                    key = List.of(energy.type().id(), energy.io());
-                } else if (requirement instanceof LightningRequirement lightning) {
-                    amount = lightning.amount();
-                    key = List.of(lightning.type().id(), lightning.io());
-                }
-                else continue;
-                if (amount < 0L) return false;
-                totals.merge(key, Math.multiplyExact(amount, parallelism), Math::addExact);
+                var amount = requirement.batchAmount(effective.duration());
+                if (amount.isEmpty()) continue;
+                if (amount.getAsLong() < 0L) return false;
+                totals.merge(requirement.batchIdentity(ops), Math.multiplyExact(amount.getAsLong(), parallelism), Math::addExact);
             }
             return true;
         } catch (RuntimeException exception) {
@@ -779,11 +754,11 @@ public final class CraftingRuntime {
             }
             long amount = MachineOutput.scaledAmount(output);
             if (amount <= 0L) throw new IllegalArgumentException("Invalid output amount");
-            Object key = MachineOutput.aggregationKey(output);
-            if (key.equals(MachineOutput.AggregationKey.EMPTY)) {
+            Object key = output.resourceIdentity();
+            if (key == null) {
                 key = MachineOutput.CODEC.encodeStart(JsonOps.INSTANCE, output).getOrThrow();
             }
-            totals.merge(List.of(key, output.chance()), Math.multiplyExact(amount, parallelism), Math::addExact);
+            totals.merge(List.of(output.outputType(), key, output.chance()), Math.multiplyExact(amount, parallelism), Math::addExact);
         }
         return totals;
     }
@@ -1543,8 +1518,10 @@ public final class CraftingRuntime {
                     context.inputRouting(), activeInputScope);
         }
         // Scalar-only ticks are cheaper to plan against live storage during shared-IO arbitration.
-        else if (requirements.stream().allMatch(requirement -> requirement instanceof EnergyRequirement
-                || requirement instanceof LoadedHeatRequirement)) {
+        else if (requirements.stream().allMatch(requirement -> {
+            var handler = RequirementHandlerRegistry.handlerFor(requirement.type());
+            return handler != null && handler.prefersLiveTickPlan();
+        })) {
             prepared = new AsyncRequirementPlanner.PreparedPlan(List.of(), List.of(),
                     IntStream.range(0, requirements.size()).boxed().toList(), context.inputRouting(), activeInputScope);
         } else {

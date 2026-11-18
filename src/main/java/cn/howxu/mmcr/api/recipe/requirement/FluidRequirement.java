@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.RecipeSyncCodec;
 import cn.howxu.mmcr.api.recipe.FluidInput;
 import cn.howxu.mmcr.api.recipe.FluidOutput;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -117,6 +118,11 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
     }
 
     @Override public float ioChance() { return io.isInput() ? consumeChance() : chance; }
+
+    @Override public Object batchIdentity(DynamicOps<?> ops) {
+        return io.isInput() ? List.of(type(), io, FluidIngredient.CODEC.encodeStart(ops, fluid).getOrThrow(), tags)
+                : MachineOutput.aggregationKey(new MachineOutput.FluidOutput(stack, 1F));
+    }
 
     @Override public OptionalLong ioAmount() {
         return OptionalLong.of(io.isInput() ? amount : stack.getAmount());

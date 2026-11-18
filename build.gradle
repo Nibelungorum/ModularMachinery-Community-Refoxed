@@ -59,5 +59,6 @@ tasks.named('jar', Jar) {
     exclude('assets/mmcr_test/**')
     exclude('.cache/**')
     exclude('org/**')
-    exclude('META-INF/services/**')
+    // Its provider lives under the excluded org/nibelungorum example sources.
+    exclude('META-INF/services/cn.howxu.mmcr.publicapi.registration.MachineDefinitionProvider')
 }

@@ -14,6 +14,7 @@ import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
+import cn.howxu.mmcr.internal.runtime.CrystalShard;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
@@ -96,6 +97,21 @@ class ControllerRecipeTextLinesTest {
                 "gui.mmcr.controller.recipe_output.item", "", styledName));
         assertThat(line.tooltip().getFirst()).isEqualTo(styledName);
         assertThat(line.color()).isEqualTo(MachineControllerScreen.STATUS_LABEL_COLOR);
+    }
+
+    @Test
+    void shardWithoutAnIconKeepsItsQuantityAndDoesNotHideTheNextFactoryIcon() {
+        try (var scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(CrystalShard.Output.TYPE);
+            var presentation = new ControllerRecipePresentation(List.of(
+                    new MachineOutputAmount(new CrystalShard.Output("blue", 2, 0.25F), 4_294_967_297L),
+                    new MachineOutputAmount(new MachineOutput.ItemOutput(new ItemStack(Items.STONE), 1F), 1)), 0, 0, 0);
+            var line = ControllerRecipeTextLines.outputs(presentation.outputs()).getFirst();
+            assertThat(line.icon()).isNull();
+            assertThat(line.text()).isEqualTo(Component.translatable("gui.mmcr.controller.recipe_output.generic", 4_294_967_297L,
+                    Component.translatableWithFallback(CrystalShard.Output.TYPE.presentation().translationKey(), CrystalShard.Output.TYPE.id().toString())));
+            assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation)).get().isInstanceOf(ControllerTextLine.ItemIcon.class);
+        }
     }
 
     @Test

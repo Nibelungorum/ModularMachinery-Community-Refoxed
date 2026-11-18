@@ -854,6 +854,8 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     private static final class HeatHandler implements RequirementHandler<LoadedHeatRequirement> {
+        @Override public boolean prefersLiveTickPlan() { return true; }
+
         private static final SearchDemand.Ports PORTS = new SearchDemand.Ports() {
             @Override public boolean accepts(MachineCapability port) { return acceptsHeatSearchPort(port); }
         };

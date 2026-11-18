@@ -113,9 +113,9 @@ public record MachineRecipeLayout(
     }
 
     private static int kindOrder(JeiDisplayEntry entry) {
-        if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) return 0;
         var adapter = JeiIngredientAdapterRegistry.get(entry.typeId());
         if (adapter.isPresent()) return adapter.get().displayOrder();
+        if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) return 0;
         if (entry.ingredientType() == VanillaTypes.ITEM_STACK) return 2;
         return 3;
     }

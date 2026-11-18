@@ -52,6 +52,9 @@ public interface MachineRequirement extends RecipeIoDeclaration {
     /** NaN means no probability was declared; display consumers must not infer certainty. */
     default float ioChance() { return paysAtStart() ? consumeChance() : Float.NaN; }
 
+    /** Declarations sharing this identity must fit one signed long when scaled together. */
+    default Object batchIdentity(DynamicOps<?> ops) { return List.of(type(), io()); }
+
     default OptionalLong batchAmount(int duration) { return ioAmount(); }
 
     /** For paid inputs, 0 retains the input and 1 consumes every admitted batch. */

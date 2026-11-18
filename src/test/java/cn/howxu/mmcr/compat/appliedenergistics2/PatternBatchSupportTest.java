@@ -241,6 +241,10 @@ class PatternBatchSupportTest {
             var blueKey = nativeKeys.toKey(LightningTier.HIGH_VOLTAGE);
             var amberKey = nativeKeys.toKey(LightningTier.EXTREME_HIGH_VOLTAGE);
             var promised = List.of(new GenericStack(amberKey, 6L));
+            var large = recipe("large_shard", List.of(shard), List.of(new CrystalShard.Output("blue", 4_294_967_297L, 0.25F)), true);
+            var fallback = MachineRecipeDisplay.from(large).entries().getLast();
+            assertThat(fallback.isTextOnly()).isTrue();
+            assertThat(fallback.count()).isEqualTo(4_294_967_297L);
             JeiIngredientAdapterRegistry.register(new JeiIngredientAdapter() {
                 private final IIngredientType<String> type = () -> String.class;
                 @Override public net.minecraft.resources.Identifier typeId() { return shard.type().id(); }
@@ -252,6 +256,9 @@ class PatternBatchSupportTest {
                 }
                 @Override public Optional<IRecipeTransferHandler<?, ?>> transferHandler() { return Optional.empty(); }
             });
+            var largeDisplay = MachineRecipeDisplay.from(large);
+            assertThat(MachineRecipeLayout.forDisplay(largeDisplay, 4).outputs().slots().getFirst().entry().displayEntry().count()).isEqualTo(4_294_967_297L);
+            assertThat(PatternTransfer.prepare(largeDisplay, List.of(), List.of()).fits(1, 1)).isFalse();
             var display = MachineRecipeDisplay.from(recipe);
             var entry = MachineRecipeLayout.forDisplay(display, 4).outputs().slots().getFirst().entry().displayEntry();
             assertThat(entry.role()).isEqualTo(RecipeIngredientRole.OUTPUT);
@@ -269,7 +276,7 @@ class PatternBatchSupportTest {
                     return key.equals(blueKey) ? Optional.of("blue") : key.equals(amberKey) ? Optional.of("amber") : Optional.empty();
                 }
                 @Override public MachineOutput patternOutput(String color, long amount) {
-                    return amount > Integer.MAX_VALUE ? null : new CrystalShard.Output(color, (int) amount, 1F);
+                    return new CrystalShard.Output(color, amount, 1F);
                 }
                 @Override public String patternResource(MachineOutput value) {
                     return value instanceof CrystalShard.Output out ? out.color() : null;
@@ -287,6 +294,7 @@ class PatternBatchSupportTest {
                     new PortFamilyDescriptor(family, cn.howxu.mmcr.util.IOType.OUTPUT, 0, List.of()),
                     inv -> { throw new AssertionError(); }, (net, keys) -> { throw new AssertionError(); },
                     (host, storage, io, expose) -> { throw new AssertionError(); }));
+            assertThat(PatternTransfer.prepare(largeDisplay, List.of(), List.of()).outputs()).containsExactly(new GenericStack(blueKey, 4_294_967_297L));
             var transfer = PatternTransfer.prepare(display, List.of(), List.of());
             assertThat(transfer.fits(1, 1)).isTrue();
             assertThat(transfer.fits(1, 0)).isFalse();
@@ -304,6 +312,9 @@ class PatternBatchSupportTest {
     void customRequirementIsValidatedByItsRuntimeHandlerRatherThanAProviderWhitelist() {
         try (var ignored = RequirementHandlerRegistry.openTestScope()) {
             RequirementHandlerRegistry.register(ExternalCondition.TYPE);
+            var unknown = MachineRecipeDisplay.entry(new ExternalCondition()).orElseThrow();
+            assertThat(unknown.count()).isNegative();
+            assertThat(unknown.chance()).isNaN();
             var recipe = recipe("custom_condition", List.of(input(), new ExternalCondition()), List.of(output(1)), true);
             var effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(4L), List.of());
             var profile = PatternBatchSupport.inspectRecipe(recipe, effective,

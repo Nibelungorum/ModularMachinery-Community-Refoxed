@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.mekanism.loaded;
 
+import cn.howxu.mmcr.api.compat.mekanism.HeatRate;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -19,7 +20,9 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record LoadedHeatOutput(double heat) implements MachineOutput {
+public record LoadedHeatOutput(double heat) implements MachineOutput, HeatRate {
+    @Override public double outputHeatPerTick() { return heat; }
+
     @Override
     public boolean perTickOutput() { return true; }
 

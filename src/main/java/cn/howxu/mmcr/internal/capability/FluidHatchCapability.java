@@ -172,6 +172,14 @@ public final class FluidHatchCapability implements MachineCapability, ResourceFa
     }
 
     @Override
+    public List<CapabilityDisplay> outputContents(CapabilityView ignored) {
+        return IntStream.range(0, storage.size())
+                .filter(slot -> storage.resource(slot) != null && storage.amount(slot) > 0L)
+                .mapToObj(slot -> new CapabilityDisplay("gui.mmcr.port.fluids", Long.toString(storage.amount(slot)), "mB", Optional.empty()))
+                .toList();
+    }
+
+    @Override
     public List<CapabilityDisplay> displays(CapabilityView ignored) {
         return IntStream.range(0, storage.size())
                 .mapToObj(slot -> new CapabilityDisplay("fluid", Long.toString(storage.amount(slot)), "mB", Optional.empty()))

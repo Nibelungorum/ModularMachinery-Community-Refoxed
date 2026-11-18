@@ -13,15 +13,18 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.recipe.MachineIngredient;
-import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.api.recipe.ActiveMachineRecipe;
+import cn.howxu.mmcr.internal.sync.MachineRecipeSyncCodec;
+import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
+import io.netty.buffer.Unpooled;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.api.recipe.OutputRegistry;
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
-import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
-import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LoadedLightningBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
@@ -36,17 +39,14 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.neoforge.transfer.fluid.FluidResource;
-import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 
@@ -55,6 +55,13 @@ import static cn.howxu.mmcr.api.compat.ae2lt.LightningTier.HIGH_VOLTAGE;
 
 /** @author howxu <dev@howxu.cn> */
 public class LightningPatternGameTest {
+    /** Samples exported from this admission test on b78869fe, using real AE2 registries. */
+    private static String legacyFixture(String file) {
+        try (var stream = LightningPatternGameTest.class.getResourceAsStream("/legacy/b78869fe/" + file)) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8).strip();
+        } catch (IOException e) { throw new UncheckedIOException(e); }
+    }
+
     public void nativePatternAdmissionAndPersistence(GameTestHelper helper) {
         var family = LoadedLightningBridge.FAMILY;
         var machineId = MMCR.id("lightning_pattern_admission_test");
@@ -70,16 +77,16 @@ public class LightningPatternGameTest {
         var machine = new DynamicMachine(machineId, "Lightning Pattern Test", new BlockArray(Map.of(
                 new BlockPos(0, 1, 0), new BlockPredicate.OfBlock(portBlock))));
         if (!MachineRegistry.containsStatic(machineId)) MachineRegistry.register(machine);
-        List<MachineOutput> outputs = List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F),
-                new LightningOutput(HIGH_VOLTAGE, 4L, 1F), new LightningOutput(EXTREME_HIGH_VOLTAGE, 5L, 1F));
-        List<MachineRequirement> requirements = new ArrayList<>(List.of(
-                MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                        MachineRequirement.fromInput(new MachineIngredient.FluidIngredient(FluidIngredient.of(Fluids.WATER), 250)),
-                        new LightningRequirement(HIGH_VOLTAGE, RecipeModifier.IOType.INPUT, 2L, 1F, List.of()),
-                        new LightningRequirement(EXTREME_HIGH_VOLTAGE, RecipeModifier.IOType.INPUT, 3L, 1F, List.of())));
-        outputs.forEach(output -> requirements.add(OutputRegistry.toRequirement(output, List.of())));
-        var recipe = MachineRecipe.fromCanonical(recipeId, machineId, 200, requirements, outputs,
-                List.of(), 0, 1, false, false, false, Set.of());
+        var registries = helper.getLevel().registryAccess();
+        var ops = registries.createSerializationContext(JsonOps.INSTANCE);
+        var recipe = MachineRecipe.CODEC.codec().parse(ops, JsonParser.parseString(legacyFixture("lightning.json"))).getOrThrow();
+        var buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(HexFormat.of().parseHex(legacyFixture("lightning.hex"))), registries);
+        try {
+            helper.assertTrue(ActiveMachineRecipe.sameDefinition(recipe, MachineRecipeSyncCodec.decode(buf), registries)
+                    && !buf.isReadable(), "The old recipe packet and datapack still describe the same recipe");
+        } finally {
+            buf.release();
+        }
         RecipeRegistry.registerStatic(recipe);
         controller.setMachine(machine);
         controller.requestImmediateStructureCheck();
@@ -95,7 +102,9 @@ public class LightningPatternGameTest {
                                     new GenericStack(high, 5L), new GenericStack(extreme, 7L)),
                             List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L),
                                     new GenericStack(high, 4L), new GenericStack(extreme, 5L)));
-                    host.getLogic().getPatternInv().addItems(encoded);
+                    var previous = ItemStack.CODEC.parse(ops, JsonParser.parseString(legacyFixture("pattern.json"))).getOrThrow();
+                    helper.assertTrue(ItemStack.isSameItemSameComponents(previous, encoded), "Processing pattern retains both native tier keys and quantities");
+                    host.getLogic().getPatternInv().addItems(previous);
                     var pattern = host.getLogic().getAvailablePatterns().getFirst();
                     KeyCounter[] holders = {new KeyCounter(), new KeyCounter(), new KeyCounter(), new KeyCounter()};
                     holders[0].add(iron, 3L);

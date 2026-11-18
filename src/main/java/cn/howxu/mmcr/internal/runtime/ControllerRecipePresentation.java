@@ -1,15 +1,11 @@
 package cn.howxu.mmcr.internal.runtime;
 
-import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
-
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatOutput;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
+import cn.howxu.mmcr.api.compat.mekanism.HeatRate;
 import cn.howxu.mmcr.internal.sync.MachineRecipeSyncCodec;
 import cn.howxu.mmcr.util.SaturatingLong;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -58,11 +54,9 @@ public record ControllerRecipePresentation(List<MachineOutputAmount> outputs,
         boolean foundHeatOutput = false;
         for (MachineOutput output : runtime.activeOutputs()) {
             if (output == null) continue;
-            if (MekanismRecipeTypes.HEAT.equals(output.outputType().id())) {
-                if (output instanceof LoadedHeatOutput(double heat1)) {
-                    heat = saturatingAdd(heat, saturatingMultiply(heat1, parallelism));
-                    foundHeatOutput = true;
-                }
+            if (output instanceof HeatRate rate) {
+                heat = saturatingAdd(heat, saturatingMultiply(rate.outputHeatPerTick(), parallelism));
+                foundHeatOutput = true;
                 continue;
             }
             long amount = MachineOutput.scaledAmount(output);
@@ -76,9 +70,9 @@ public record ControllerRecipePresentation(List<MachineOutputAmount> outputs,
         }
         if (!foundHeatOutput) {
             for (MachineRequirement requirement : runtime.activeRequirements()) {
-                if (!(requirement instanceof LoadedHeatRequirement loadedHeat)
+                if (!(requirement instanceof HeatRate rate)
                         || requirement.io() != RecipeModifier.IOType.OUTPUT) continue;
-                heat = saturatingAdd(heat, saturatingMultiply(loadedHeat.heat().value(), parallelism));
+                heat = saturatingAdd(heat, saturatingMultiply(rate.outputHeatPerTick(), parallelism));
             }
         }
 

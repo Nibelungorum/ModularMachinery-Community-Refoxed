@@ -12,4 +12,7 @@ import java.util.List;
  */
 public interface PresentationFacet extends CapabilityFacet {
     List<CapabilityDisplay> displays(CapabilityView view);
+
+    /** Occupied output rows owned by this facet. Labels are translation keys and units are optional. */
+    default List<CapabilityDisplay> outputContents(CapabilityView view) { return List.of(); }
 }

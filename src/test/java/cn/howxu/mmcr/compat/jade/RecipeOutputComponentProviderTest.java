@@ -2,6 +2,7 @@ package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.internal.runtime.CrystalShard;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
@@ -53,13 +54,17 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 class RecipeOutputComponentProviderTest {
+    private static OutputRegistry.TestScope outputScope;
 
     @BeforeAll
     static void bootstrap() throws Exception {
-        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
+        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
+        outputScope = OutputRegistry.openTestScope();
+        OutputRegistry.register(CrystalShard.Output.TYPE);
         OutputRegistry.register(LoadedChemicalOutput.TYPE);
         ChemicalOutputRenderer.register();
         OutputRegistry.register(CountingOutput.TYPE);
@@ -75,6 +80,7 @@ class RecipeOutputComponentProviderTest {
 
     @AfterAll
     static void resetMek() {
+        outputScope.close();
         MekanismBridgeBootstrap.resetForTesting();
     }
 
@@ -134,6 +140,21 @@ class RecipeOutputComponentProviderTest {
                 .extracting(value -> ((Component) value).getString())
                 .contains("4294967297 × mmcr_test:jade_counting_output");
         assertThat(CountingOutput.COPIES).hasValue(decodeCopies + 1);
+    }
+
+    @Test
+    void shardColorsStayDistinctFromFactoryAggregationThroughJadeTransport() {
+        var controller = TestBootstrap.newController();
+        TestBootstrap.bindFactoryWithOutputs(controller, List.of(new CrystalShard.Output("amber", 4_294_967_295L, 0.25F),
+                new CrystalShard.Output("blue", 8L, 1F)));
+        TestBootstrap.bindFactoryWithOutputs(controller, List.of(new CrystalShard.Output("amber", 2L, 1F)));
+        var payload = new CompoundTag();
+        RecipeOutputCodec.write(payload, controller.recipeOutputs());
+        assertThat(RecipeOutputCodec.read(payload)).extracting(row -> ((CrystalShard.Output) row.output()).color(), MachineOutputAmount::amount)
+                .containsExactly(tuple("amber", 4_294_967_297L), tuple("blue", 8L));
+        assertThat(collect(payload)).filteredOn(Component.class::isInstance)
+                .extracting(value -> ((Component) value).getString())
+                .contains("4294967297 × mmcr_test:crystal_shard", "8 × mmcr_test:crystal_shard");
     }
 
     @Test

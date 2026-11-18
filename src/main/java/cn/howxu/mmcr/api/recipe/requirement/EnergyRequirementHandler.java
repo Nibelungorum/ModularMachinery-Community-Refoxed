@@ -104,6 +104,9 @@ public final class EnergyRequirementHandler implements RequirementHandler<Energy
     }
 
     @Override
+    public boolean prefersLiveTickPlan() { return true; }
+
+    @Override
     public OptionalLong prefetchEnergyPerTick(EnergyRequirement requirement) {
         return requirement.io().isInput() ? OptionalLong.of(requirement.fePerTick()) : OptionalLong.empty();
     }

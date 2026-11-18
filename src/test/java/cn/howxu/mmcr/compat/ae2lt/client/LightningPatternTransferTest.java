@@ -12,6 +12,7 @@ import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
 import cn.howxu.mmcr.compat.jei.MachineRecipeDisplay;
 import cn.howxu.mmcr.test.TestBootstrap;
 import com.moakiee.ae2lt.me.key.LightningKey;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
@@ -118,6 +119,15 @@ class LightningPatternTransferTest {
 
         assertThat(transfer.inputs()).isSameAs(inputs);
         assertThat(transfer.outputs()).isSameAs(outputs);
+    }
+
+    @Test
+    void cannotClaimAnUnrelatedNativeSlotJustBecauseItsCountMatches() {
+        var recipe = display(List.of(MachineRequirement.itemOutput(new ItemStack(Items.IRON_INGOT, 4))));
+        var wrong = new GenericStack(AEItemKey.of(Items.COPPER_INGOT), 4);
+        var right = new GenericStack(AEItemKey.of(Items.IRON_INGOT), 4);
+        assertThat(PatternTransfer.prepare(recipe, List.of(), List.of(wrong)).fits(1, 1)).isFalse();
+        assertThat(PatternTransfer.prepare(recipe, List.of(), List.of(right)).fits(1, 1)).isTrue();
     }
 
     @Test

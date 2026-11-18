@@ -508,8 +508,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
         });
         if (entry.renderer() != null) {
             slot.setCustomRenderer((IIngredientType) entry.ingredientType(), entry.renderer());
-        }
-        if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
+        } else if (entry.ingredientType() == NeoForgeTypes.FLUID_STACK) {
             slot.setCustomRenderer(NeoForgeTypes.FLUID_STACK, FULL_FLUID_RENDERER);
         }
         if (entry.ingredient() instanceof List<?> ingredients) {

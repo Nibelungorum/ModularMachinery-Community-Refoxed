@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Builds controller text lines for a recipe's outputs.
@@ -97,7 +98,9 @@ final class ControllerRecipeTextLines {
         if (presentation == null) return Optional.empty();
         for (MachineOutputAmount output : presentation.outputs()) {
             MachineOutput ownedOutput = output.output();
-            if (isRenderable(ownedOutput, output.amount())) return Optional.of(icon(ownedOutput, output.amount()));
+            if (!isRenderable(ownedOutput, output.amount())) continue;
+            var icon = icon(ownedOutput, output.amount());
+            if (icon != null) return Optional.of(icon);
         }
         return Optional.empty();
     }
@@ -117,7 +120,7 @@ final class ControllerRecipeTextLines {
         if (output instanceof LoadedChemicalOutput chemical) {
             return MekanismBridge.get().chemicalRenderData(chemical.id()) != null;
         }
-        return false;
+        return true;
     }
 
     private static ControllerTextLine line(MachineOutput output, long amount) {
@@ -149,10 +152,13 @@ final class ControllerRecipeTextLines {
                     List.of(data.displayName(), exactFluidAmount(amount)),
                     OUTPUT_INDENT);
         }
-        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.outputType().id());
+        var type = output.outputType();
+        var name = Component.translatableWithFallback(type.presentation().translationKey(), type.id().toString());
+        return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.generic", amount, name),
+                MachineControllerScreen.STATUS_LABEL_COLOR, null, List.of(), OUTPUT_INDENT);
     }
 
-    private static ControllerTextLine.Icon icon(MachineOutput output, long amount) {
+    private static ControllerTextLine.@Nullable Icon icon(MachineOutput output, long amount) {
         if (output instanceof MachineOutput.ItemOutput item) {
             ItemStack stack = item.resolvedStack();
             stack.setCount(1);
@@ -166,7 +172,7 @@ final class ControllerRecipeTextLines {
         if (output instanceof LoadedChemicalOutput chemical) {
             return new ControllerTextLine.ChemicalIcon(chemical.id(), amount);
         }
-        throw new IllegalArgumentException("Unsupported controller recipe output: " + output.outputType().id());
+        return null;
     }
 
     private static ControllerTextLine summary(String textKey, String tooltipKey, String value, String exact) {

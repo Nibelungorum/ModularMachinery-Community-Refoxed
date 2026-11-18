@@ -38,6 +38,8 @@ import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.util.IOType;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DynamicOps;
+import java.util.OptionalLong;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -53,13 +55,13 @@ import java.util.Map;
 /** A test-only resource family. Colors share a port but cannot pay for one another.
  * @author howxu <dev@howxu.cn>
  */
-public record CrystalShard(RecipeModifier.IOType io, String color, int amount, float chance) implements StartMaterial {
+public record CrystalShard(RecipeModifier.IOType io, String color, long amount, float chance) implements StartMaterial {
     static final Identifier ID = PortFamily.declare(Identifier.parse("mmcr_test:crystal_shard"), true).id();
     static final MapCodec<CrystalShard> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.STRING.fieldOf("type").forGetter(value -> ID.toString()),
             RecipeModifier.IO_TYPE_CODEC.fieldOf("io").forGetter(CrystalShard::io),
             Codec.STRING.fieldOf("color").forGetter(CrystalShard::color),
-            Codec.INT.fieldOf("amount").forGetter(CrystalShard::amount),
+            Codec.LONG.fieldOf("amount").forGetter(CrystalShard::amount),
             Codec.FLOAT.fieldOf("chance").forGetter(CrystalShard::chance)
     ).apply(instance, (id, io, color, amount, chance) -> new CrystalShard(io, color, amount, chance)));
     public static final RequirementType<CrystalShard> TYPE = new RequirementType.Definition<>(ID, CODEC, new RequirementHandler<>() {
@@ -81,7 +83,8 @@ public record CrystalShard(RecipeModifier.IOType io, String color, int amount, f
     }
 
     @Override public RequirementType<CrystalShard> type() { return TYPE; }
-    @Override public java.util.OptionalLong ioAmount() { return java.util.OptionalLong.of(amount); }
+    @Override public OptionalLong ioAmount() { return OptionalLong.of(amount); }
+    @Override public Object batchIdentity(DynamicOps<?> ops) { return List.of(TYPE, io, color); }
     @Override public float ioChance() { return chance; }
     @Override public float consumeChance() { return io.isInput() ? chance : 1F; }
     @Override public CrystalShard retainedInput() { return new CrystalShard(io, color, amount, 0F); }
@@ -102,7 +105,7 @@ public record CrystalShard(RecipeModifier.IOType io, String color, int amount, f
         return RequirementHandlerSupport.blockedPlan(this, context, shortageReason());
     }
 
-    public record Output(String color, int quantity, float chance) implements MachineOutput {
+    public record Output(String color, long quantity, float chance) implements MachineOutput {
         public static final OutputType<Output> TYPE = new OutputType.Definition<>(ID,
                 CrystalShard.CODEC.xmap(value -> new Output(value.color, value.amount, value.chance), Output::asRequirement),
                 (value, chance) -> new Output(value.color, value.quantity, chance), (value, mods) -> value,

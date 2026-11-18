@@ -33,6 +33,9 @@ public interface RequirementHandler<R extends MachineRequirement> {
         return null;
     }
 
+    /** Prefer live arbitration when all the tick's requirements are cheap to plan there. */
+    default boolean prefersLiveTickPlan() { return false; }
+
     /** Opt in only when reserving this many FE replaces all per-tick input operations. */
     default OptionalLong prefetchEnergyPerTick(R requirement) { return OptionalLong.empty(); }
 

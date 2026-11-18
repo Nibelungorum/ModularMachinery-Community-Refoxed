@@ -126,8 +126,9 @@ class AE2InterfaceJadeProviderTest {
     void componentProviderRendersServerSynchronizedOutputCapabilityContentsWithoutInputContents() {
         CompoundTag serverData = new CompoundTag();
         AtomicReference<List<MachineCapability>> capabilities = new AtomicReference<>(List.of(
-                new PresentedCapability("item", "4", "item", IOType.INPUT),
-                new PresentedCapability("fluid", "1,000", "mB", IOType.OUTPUT)));
+                new PresentedCapability("gui.mmcr.port.items", "4", "item", IOType.INPUT),
+                new PresentedCapability("gui.mmcr.port.fluids", "1,000", "mB", IOType.OUTPUT),
+                new PresentedCapability("test.crystal_shard", "4294967297", "", IOType.OUTPUT)));
         List<Component> added = new ArrayList<>();
         Object serverHost = capabilityGridHost(capabilities);
 
@@ -137,10 +138,11 @@ class AE2InterfaceJadeProviderTest {
 
         assertThat(added).contains(
                 Component.translatable("gui.mmcr.port.fluids").append(Component.literal(" 1,000 mB")));
+        assertThat(added).contains(Component.translatable("test.crystal_shard").append(Component.literal(" 4294967297")));
         assertThat(added).doesNotContain(Component.translatable("gui.mmcr.port.items")
                 .append(Component.literal(" 4")));
 
-        capabilities.set(List.of(new PresentedCapability("fluid", "0", "mB", IOType.OUTPUT)));
+        capabilities.set(List.of(new PresentedCapability("gui.mmcr.port.fluids", "0", "mB", IOType.OUTPUT)));
         InterfaceJadeDataProvider.INSTANCE.appendServerData(serverData, accessor(serverHost, new CompoundTag()));
         added.clear();
         InterfaceJadeComponentProvider.INSTANCE.appendTooltip(
@@ -388,6 +390,11 @@ class AE2InterfaceJadeProviderTest {
         @Override
         public CapabilityOperation prepare(CapabilityRequest request) {
             throw new UnsupportedOperationException("Not used for Jade display tests");
+        }
+
+        @Override
+        public List<CapabilityDisplay> outputContents(CapabilityView ignored) {
+            return displays.stream().filter(row -> !row.value().equals("0")).toList();
         }
 
         @Override

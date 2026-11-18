@@ -47,9 +47,8 @@ public enum InterfaceJadeComponentProvider implements IComponentProvider<BlockAc
         };
         tooltip.add(Component.translatable(key)); // .withStyle(color)
         InterfaceJadeDataProvider.outputs(accessor.getServerData()).forEach(display -> tooltip.add(
-                Component.translatable("gui.mmcr.port."
-                                + (display.label().equals("energy") ? "energy" : display.label() + "s"))
+                Component.translatable(display.label())
                         .append(Component.literal(" " + display.value()
-                                + (display.unit().equals("item") ? "" : " " + display.unit())))));
+                                + (display.unit().isEmpty() ? "" : " " + display.unit())))));
     }
 }
