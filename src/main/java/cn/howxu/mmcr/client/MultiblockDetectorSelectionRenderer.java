@@ -65,7 +65,7 @@ public final class MultiblockDetectorSelectionRenderer {
                 renderBoxEdges(pose, buffer, camera, minX, minY, minZ, maxX, maxY, maxZ));
         if (shouldRenderMask(detector, selection)) {
             event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.debugFilledBox(),
-                    (pose, buffer) -> renderBoxFaces(pose, buffer, camera,
+                    (pose, buffer) -> renderRegionMask(pose, buffer, camera,
                             minX, minY, minZ, maxX, maxY, maxZ));
         }
     }
@@ -81,7 +81,7 @@ public final class MultiblockDetectorSelectionRenderer {
         return off.is(ModItems.MULTIBLOCK_DETECTOR.get()) ? off : ItemStack.EMPTY;
     }
 
-    static void renderBoxEdges(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
+    private static void renderBoxEdges(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
             double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
         line(pose, buffer, camera, minX, minY, minZ, maxX, minY, minZ);
         line(pose, buffer, camera, minX, minY, maxZ, maxX, minY, maxZ);
@@ -110,7 +110,7 @@ public final class MultiblockDetectorSelectionRenderer {
                 selection.controllerFace());
     }
 
-    private static void renderBoxFaces(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
+    static void renderRegionMask(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
             double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
         renderBoxFaces(pose, buffer, camera, minX, minY, minZ, maxX, maxY, maxZ, null);
     }

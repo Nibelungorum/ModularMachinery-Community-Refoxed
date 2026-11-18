@@ -3,6 +3,7 @@ package cn.howxu.mmcr.client;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
@@ -55,6 +56,21 @@ class MultiblockDetectorSelectionRendererTest {
     }
 
     @Test
+    void region_overlay_emits_six_translucent_green_quads_instead_of_lines() {
+        Vec3 camera = new Vec3(10, 20, 30);
+        List<Vertex> vertices = render((pose, buffer) -> MultiblockDetectorSelectionRenderer.renderRegionMask(
+                pose, buffer, camera, 11, 22, 33, 15, 27, 39));
+        assertThat(vertices).hasSize(24).extracting(Vertex::color).containsOnly(0x6600FF00);
+        assertThat(vertices).extracting(Vertex::position).contains(new Vec3(1, 2, 3), new Vec3(5, 7, 9));
+        for (int i = 0; i < vertices.size(); i += 4) {
+            List<Vertex> quad = vertices.subList(i, i + 4);
+            Vec3 corner = quad.getFirst().position();
+            assertThat(quad.get(1).position().subtract(corner).cross(quad.get(3).position().subtract(corner))
+                    .lengthSqr()).isPositive();
+        }
+    }
+
+    @Test
     void no_controller_overlay_is_emitted_without_a_position_and_selected_face() {
         assertThat(render(MultiblockDetectorSelection.EMPTY, Vec3.ZERO)).isEmpty();
         assertThat(render(new MultiblockDetectorSelection(BlockPos.ZERO, null, null, null), Vec3.ZERO)).isEmpty();
@@ -62,6 +78,10 @@ class MultiblockDetectorSelectionRendererTest {
     }
 
     private static List<Vertex> render(MultiblockDetectorSelection selection, Vec3 camera) {
+        return render((pose, buffer) -> MultiblockDetectorSelectionRenderer.renderControllerFaces(pose, buffer, camera, selection));
+    }
+
+    private static List<Vertex> render(SubmitNodeCollector.CustomGeometryRenderer geometry) {
         List<Vertex> vertices = new ArrayList<>();
         Vec3[] pendingPosition = new Vec3[1];
         VertexConsumer buffer = (VertexConsumer) Proxy.newProxyInstance(VertexConsumer.class.getClassLoader(),
@@ -76,7 +96,7 @@ class MultiblockDetectorSelectionRendererTest {
                     }
                     return proxy;
                 });
-        MultiblockDetectorSelectionRenderer.renderControllerFaces(new PoseStack().last(), buffer, camera, selection);
+        geometry.render(new PoseStack().last(), buffer);
         return vertices;
     }
 

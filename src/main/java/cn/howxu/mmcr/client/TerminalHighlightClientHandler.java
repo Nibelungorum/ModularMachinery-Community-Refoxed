@@ -96,9 +96,12 @@ public final class TerminalHighlightClientHandler {
                 || !minecraft.level.dimension().equals(controller.dimension())) return;
         Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
         AABB box = visibleBounds(camera, renderRadius());
-        if (box != null) event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.lines(),
-                (pose, buffer) -> MultiblockDetectorSelectionRenderer.renderBoxEdges(pose, buffer, camera,
-                        box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ));
+        if (box == null) return;
+        // Keep the translucent faces just outside the outer blocks to avoid z-fighting.
+        AABB mask = box.inflate(0.001D);
+        event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.debugFilledBox(),
+                (pose, buffer) -> MultiblockDetectorSelectionRenderer.renderRegionMask(pose, buffer, camera,
+                        mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ));
     }
 
     private static double renderRadius() {
