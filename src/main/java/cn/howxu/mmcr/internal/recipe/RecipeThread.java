@@ -416,7 +416,7 @@ public abstract class RecipeThread {
         }
         if (!runtime.active()) {
             finishPendingStart(token, next, StartResult.FAILED);
-            controller.clearRecipeScreenText(laneId());
+            clearLaneScreenText();
             controller.syncRecipeRuntimeFailure(runtime);
             return StartResult.FAILED;
         }
@@ -452,7 +452,7 @@ public abstract class RecipeThread {
         MMCR.LOG.warn("Recipe start attempt failed: controller={} lane={}", controller.getBlockPos(), laneId(), exception);
         if (runtime.active() && runtime.recipe() == next) return completeStartCommit(token, next, snapshot);
         finishPendingStart(token, next, StartResult.FAILED);
-        controller.clearRecipeScreenText(laneId());
+        clearLaneScreenText();
         controller.syncRecipeRuntimeFailure(runtime);
         return StartResult.FAILED;
     }
@@ -708,7 +708,7 @@ public abstract class RecipeThread {
                     }
                     if (!runtime.active()) {
                         finishPendingStart(token, next, StartResult.FAILED);
-                        controller.clearRecipeScreenText(laneId());
+                        clearLaneScreenText();
                         controller.syncRecipeRuntimeFailure(runtime);
                         completion.run();
                         return 0L;
@@ -747,7 +747,7 @@ public abstract class RecipeThread {
         boolean current = pending.snapshot().lifecycleEpoch() == controller.lifecycleEpoch();
         finishPendingStart(pending.token(), pending.recipe(), StartResult.FAILED);
         if (!current) return;
-        controller.clearRecipeScreenText(laneId());
+        clearLaneScreenText();
         controller.syncRecipeRuntimeFailure(runtime);
     }
 
@@ -834,7 +834,7 @@ public abstract class RecipeThread {
 
     private void invalidatePendingStart(long token, MachineRecipe recipe) {
         finishPendingStart(token, recipe, StartResult.DEFERRED);
-        controller.clearRecipeScreenText(laneId());
+        clearLaneScreenText();
         controller.syncRecipeRuntimeFailure(runtime);
     }
 
@@ -862,7 +862,7 @@ public abstract class RecipeThread {
 
     private void invalidatePendingStartForCatalog(long token, MachineRecipe recipe) {
         finishPendingStart(token, recipe, StartResult.NO_MATCH);
-        controller.clearRecipeScreenText(laneId());
+        clearLaneScreenText();
         onPendingStartCatalogChanged();
         controller.syncRecipeRuntimeFailure(runtime);
     }
@@ -874,7 +874,7 @@ public abstract class RecipeThread {
     public void tick(@Nullable ControllerRuntimeSnapshot tickSnapshot) {
         if (startPending && !isPendingStart(pendingStartToken, pendingStartRecipe)) {
             clearPendingStart(pendingStartToken, pendingStartRecipe);
-            controller.clearRecipeScreenText(laneId());
+            clearLaneScreenText();
         }
         if (!runtime.active()) return;
         if (controller.getLevel() instanceof ServerLevel level && controller.resourceDomain() != null) {
@@ -1415,7 +1415,7 @@ public abstract class RecipeThread {
         clearPendingTick();
         if (wasActive && !runtime.active()) {
             if (runtime.failure() == null && runtime.ledger().state().outputPaid()) {
-                controller.clearRecipeScreenText(laneId());
+                clearLaneScreenText();
                 try {
                     onRecipeFinished();
                 } finally {
@@ -1424,7 +1424,7 @@ public abstract class RecipeThread {
                 }
             } else {
                 onRecipeFailure();
-                controller.clearRecipeScreenText(laneId());
+                clearLaneScreenText();
             }
         }
     }
@@ -1438,7 +1438,7 @@ public abstract class RecipeThread {
         cancelProgramCompilation();
         releaseInstalledStart();
         runtime.invalidate();
-        controller.clearRecipeScreenText(laneId());
+        clearLaneScreenText();
         pendingAsyncStart = null;
         pendingAsyncStartExecution = null;
         asyncFinishPrepared = false;
@@ -1476,7 +1476,7 @@ public abstract class RecipeThread {
         cancelAsyncState();
         clearPendingStartUnconditionally();
         runtime.invalidate();
-        controller.clearRecipeScreenText(laneId());
+        clearLaneScreenText();
         onDiscardedForRecipePoolChange();
     }
 
@@ -1491,7 +1491,7 @@ public abstract class RecipeThread {
         if (runtime.active()) return;
         if (startPending) clearPendingStart(pendingStartToken, pendingStartRecipe);
         clearPendingTick();
-        controller.clearRecipeScreenText(laneId());
+        clearLaneScreenText();
     }
 
     protected void onStartSearchFailed(@Nullable ExecutionStatus failure) {
@@ -1542,6 +1542,7 @@ public abstract class RecipeThread {
     protected void onStartFailed(@Nullable RecipeSearchContextKey contextKey) { onStartFailed(); }
     protected void onPendingStartCatalogChanged() { }
     protected @Nullable RecipeSearchContextKey searchContextKeyForStart() { return null; }
+    protected void clearLaneScreenText() { controller.clearRecipeScreenText(laneId()); }
     protected String laneId() { return "base"; }
     public final String asyncLaneId() { return laneId(); }
 

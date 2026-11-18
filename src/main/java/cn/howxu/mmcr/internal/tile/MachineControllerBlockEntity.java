@@ -1641,8 +1641,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public void markRecipeScreenTextRemoved(String laneId, long revision) {
         if (laneId == null || laneId.isEmpty()) return;
-        long tombstoneRevision = Math.max(revision, lastSentRecipeScreenTextRevisions.getOrDefault(laneId, -1L)) + 1L;
-        removedRecipeScreenTextRevisions.merge(laneId, tombstoneRevision, Math::max);
+        Long published = lastSentRecipeScreenTextRevisions.get(laneId);
+        long tombstoneRevision = Math.max(revision, published == null ? -1L : published) + 1L;
+        runtime.retireRecipeScreenText(laneId, tombstoneRevision);
+        if (published != null) removedRecipeScreenTextRevisions.merge(laneId, tombstoneRevision, Math::max);
     }
 
     private void sendControllerScreenTextOnMenuOpen(ServerPlayer player) {
