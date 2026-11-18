@@ -150,7 +150,7 @@ class LightningResourceFamilyTest {
         assertThat(capability.view().facets()).doesNotContain(TransferFacet.class);
         assertThat(family.inputBinding(_ -> family.standardInputView(inventory), false).externalExposure()).isEmpty();
         for (var bindings : List.of(AE2ResourceFamilies.inputBindings(), AE2ResourceFamilies.stockingInputBindings(),
-                AE2ResourceFamilies.additionalOutputBindings(), AE2ResourceFamilies.asyncOutputBindings(), AE2ResourceFamilies.patternBindings())) {
+                AE2ResourceFamilies.outputBindings(), AE2ResourceFamilies.asyncOutputBindings(), AE2ResourceFamilies.patternBindings())) {
             assertThat(bindings).filteredOn(binding -> binding.type().equals(family.capabilityType())).singleElement()
                     .satisfies(binding -> {
                         assertThat(binding.nativeTransferExposure()).isFalse();

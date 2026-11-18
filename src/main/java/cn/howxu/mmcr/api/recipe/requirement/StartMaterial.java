@@ -6,7 +6,6 @@ import net.minecraft.resources.Identifier;
  * @author howxu <dev@howxu.cn>
  */
 public interface StartMaterial extends MachineRequirement {
-    default float consumeChance() { return 1F; }
 
     @Override
     default boolean usesInputScope(Identifier capabilityId) { return io().isInput(); }

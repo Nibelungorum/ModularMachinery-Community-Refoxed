@@ -1,8 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2.loaded;
 
 import appeng.api.crafting.IPatternDetails;
-import appeng.api.stacks.AEFluidKey;
-import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.GenericStack;
 import appeng.crafting.pattern.AEProcessingPattern;
@@ -10,15 +8,9 @@ import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
-import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
-import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
-import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
-import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -103,18 +95,9 @@ public final class PatternBatchSupport {
             // Conditions, custom requirements and callbacks are checked by actual start planning.
             boolean linear = supportsBatchInputs(effective.requirements());
             for (MachineRequirement requirement : effective.requirements()) {
-                long amount;
-                if (requirement instanceof ItemRequirement item) {
-                    amount = item.io() == IOType.INPUT ? item.count() : item.stack().getCount();
-                } else if (requirement instanceof FluidRequirement fluid) {
-                    amount = fluid.io() == IOType.INPUT ? fluid.amount() : fluid.stack().getAmount();
-                } else if (requirement instanceof EnergyRequirement energy) {
-                    amount = Math.multiplyExact(energy.fePerTick(), (long) effective.duration());
-                } else if (requirement instanceof LightningRequirement lightning) {
-                    amount = lightning.amount();
-                } else {
-                    continue;
-                }
+                var quantity = requirement.batchAmount(effective.duration());
+                if (quantity.isEmpty()) continue;
+                long amount = quantity.getAsLong();
                 if (amount <= 0L) return null;
                 maximum = Math.min(maximum, Long.MAX_VALUE / Math.multiplyExact(amount, crafts));
             }
@@ -138,13 +121,7 @@ public final class PatternBatchSupport {
     public static boolean supportsBatchInputs(List<MachineRequirement> requirements) {
         for (MachineRequirement requirement : requirements) {
             if (requirement.io() != IOType.INPUT) continue;
-            float consumeChance = switch (requirement) {
-                case ItemRequirement item -> item.consumeChance();
-                case FluidRequirement fluid -> fluid.consumeChance();
-                case LoadedChemicalRequirement chemical -> chemical.consumeChance();
-                case LightningRequirement lightning -> lightning.chance(); // Lightning inputs currently require 1.
-                default -> 1F;
-            };
+            float consumeChance = requirement.consumeChance();
             if (consumeChance != 0F && consumeChance != 1F) return false;
         }
         return true;
@@ -153,23 +130,9 @@ public final class PatternBatchSupport {
     private static boolean inputsMatch(List<MachineRequirement> requirements, IPatternDetails original) {
         for (MachineRequirement requirement : requirements) {
             if (requirement.io() != IOType.INPUT) continue;
-            if (!(requirement instanceof ItemRequirement) && !(requirement instanceof FluidRequirement)
-                    && !(requirement instanceof LightningRequirement)) continue;
-            boolean matched = false;
-            for (var input : original.getInputs()) {
-                for (GenericStack candidate : input.getPossibleInputs()) {
-                    if (requirement instanceof ItemRequirement item && candidate.what() instanceof AEItemKey key
-                            && item.item() != null && item.item().test(key.toStack())
-                            && item.components().matches(key.toStack())) matched = true;
-                    if (requirement instanceof FluidRequirement fluid && candidate.what() instanceof AEFluidKey key
-                            && fluid.fluid() != null && fluid.fluid().test(key.toStack(1))) matched = true;
-                    if (requirement instanceof LightningRequirement lightning) {
-                        MachineOutput output = AE2ResourceFamilies.patternOutput(new GenericStack(candidate.what(), 1L)).orElse(null);
-                        if (output instanceof LightningOutput value && value.tier().equals(lightning.tier())) matched = true;
-                    }
-                }
+            for (var family : AE2ResourceFamilies.all()) {
+                if (!inputMatches(family.adapter(), requirement, original)) return false;
             }
-            if (!matched) return false;
         }
         return true;
     }
@@ -186,18 +149,7 @@ public final class PatternBatchSupport {
     private static Map<AEKey, Long> outputTotals(List<MachineOutput> outputs) {
         Map<AEKey, Long> totals = new LinkedHashMap<>();
         for (MachineOutput output : outputs) {
-            AEKey key;
-            if (output instanceof MachineOutput.ItemOutput item) {
-                if (item.components().hasNonExactValues()) throw new IllegalArgumentException("Non-exact output components");
-                key = AEItemKey.of(item.resolvedStack());
-            }
-            else if (output instanceof MachineOutput.FluidOutput fluid) key = AEFluidKey.of(fluid.stack());
-            else if (output instanceof LightningOutput lightning) {
-                key = null;
-                for (AE2ResourceFamily<?> family : AE2ResourceFamilies.all()) {
-                    if (family.adapter().resourceType().isInstance(lightning.tier())) key = familyKey(family, lightning.tier());
-                }
-            } else throw new IllegalArgumentException("Unknown output family");
+            AEKey key = AE2ResourceFamilies.patternKey(output).orElseThrow(() -> new IllegalArgumentException("Unencodable pattern output"));
             long amount = MachineOutput.scaledAmount(output);
             if (key == null || amount <= 0L) throw new IllegalArgumentException("Invalid output");
             totals.merge(key, amount, Math::addExact);
@@ -205,7 +157,14 @@ public final class PatternBatchSupport {
         return totals;
     }
 
-    private static <R> AEKey familyKey(AE2ResourceFamily<R> family, Object resource) {
-        return family.adapter().toKey(family.adapter().resourceType().cast(resource));
+    private static <R> boolean inputMatches(AE2KeyAdapter<R> adapter, MachineRequirement requirement, IPatternDetails original) {
+        var input = adapter.patternInput(requirement);
+        if (input == null) return true; // Other port inputs and conditions are checked at actual start.
+        for (var slot : original.getInputs()) {
+            for (var candidate : slot.getPossibleInputs()) {
+                if (adapter.toResource(candidate.what()).filter(input).isPresent()) return true;
+            }
+        }
+        return false;
     }
 }

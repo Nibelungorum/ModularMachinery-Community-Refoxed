@@ -63,6 +63,15 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Predicate;
+import appeng.api.stacks.AEKeyType;
+import cn.howxu.mmcr.internal.runtime.CrystalShard;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -207,6 +216,55 @@ class PatternBatchSupportTest {
                     List.of(new LightningOutput(outputTier, 1L, chance)), 4L)).isTrue();
             assertThat(CraftingRuntime.samePromisedOutputs(effective.outputs(),
                     List.of(new LightningOutput(outputTier, 1L, chance == 1F ? 0.5F : 1F)), 4L)).isFalse();
+        } finally {
+            LightningBridgeBootstrap.resetForTesting();
+        }
+    }
+
+    @Test
+    void shard_pattern_requires_an_installed_adapter_and_matches_the_exact_color_in_both_directions() {
+        try (var requirements = RequirementHandlerRegistry.openTestScope(); var outputs = OutputRegistry.openTestScope()) {
+            LightningBridgeBootstrap.installForTesting(LightningBridgeBootstrap.selectForTesting(false));
+            RequirementHandlerRegistry.register(CrystalShard.TYPE);
+            OutputRegistry.register(CrystalShard.Output.TYPE);
+            var amber = new CrystalShard.Output("amber", 3, 0.25F);
+            var shard = new CrystalShard(IOType.INPUT, "blue", 1, 1F);
+            var recipe = recipe("shard_pattern", List.of(shard), List.of(amber), true);
+            var effective = new EffectiveRecipeResolver().resolve(recipe, snapshot(8), List.of());
+            // Borrow two real non-item keys in this fixture; the production lightning adapter is not installed.
+            var nativeKeys = LoadedLightningBridge.FAMILY.adapter();
+            var blueKey = nativeKeys.toKey(LightningTier.HIGH_VOLTAGE);
+            var amberKey = nativeKeys.toKey(LightningTier.EXTREME_HIGH_VOLTAGE);
+            var promised = List.of(new GenericStack(amberKey, 6L));
+            assertThat(PatternBatchSupport.inspectRecipe(recipe, effective, patternFor(blueKey, 2, promised))).isNull();
+            AE2ResourceFamilies.resetForTesting();
+            var adapter = new AE2KeyAdapter<String>() {
+                @Override public AEKeyType keyType() { return nativeKeys.keyType(); }
+                @Override public Class<String> resourceType() { return String.class; }
+                @Override public AEKey toKey(String color) { return color.equals("blue") ? blueKey : amberKey; }
+                @Override public Optional<String> toResource(AEKey key) {
+                    return key.equals(blueKey) ? Optional.of("blue") : key.equals(amberKey) ? Optional.of("amber") : Optional.empty();
+                }
+                @Override public MachineOutput patternOutput(String color, long amount) {
+                    return amount > Integer.MAX_VALUE ? null : new CrystalShard.Output(color, (int) amount, 1F);
+                }
+                @Override public String patternResource(MachineOutput value) {
+                    return value instanceof CrystalShard.Output out ? out.color() : null;
+                }
+                @Override public Predicate<String> patternInput(MachineRequirement value) {
+                    return value instanceof CrystalShard r && r.io().isInput() ? r.color()::equals : null;
+                }
+            };
+            var family = CrystalShard.TYPE.id();
+            AE2ResourceFamilies.register(new AE2ResourceFamily<>(new CapabilityType(family), adapter,
+                    new PortFamilyDescriptor(family, cn.howxu.mmcr.util.IOType.INPUT, 0, List.of()),
+                    new PortFamilyDescriptor(family, cn.howxu.mmcr.util.IOType.OUTPUT, 0, List.of()),
+                    inv -> { throw new AssertionError(); }, (net, keys) -> { throw new AssertionError(); },
+                    (host, storage, io, expose) -> { throw new AssertionError(); }));
+            var profile = PatternBatchSupport.inspectRecipe(recipe, effective, patternFor(blueKey, 2, promised));
+            assertThat(profile.binding().recipeCraftsPerPattern()).isEqualTo(2);
+            assertThat(PatternBatchSupport.inspectRecipe(recipe, effective, patternFor(amberKey, 2, promised))).isNull();
+            assertThat(AE2ResourceFamilies.patternOutput(promised.getFirst())).contains(new CrystalShard.Output("amber", 6, 1F));
         } finally {
             LightningBridgeBootstrap.resetForTesting();
         }

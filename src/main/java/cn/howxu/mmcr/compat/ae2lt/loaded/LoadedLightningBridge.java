@@ -9,6 +9,10 @@ import cn.howxu.mmcr.api.capability.type.CapabilityDefinition;
 import cn.howxu.mmcr.api.capability.type.CapabilityRegistry;
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
+import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2KeyAdapter;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
@@ -25,6 +29,7 @@ import com.moakiee.ae2lt.me.key.LightningKeyType;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.Set;
 
 /** @author howxu <dev@howxu.cn> */
@@ -36,6 +41,17 @@ public final class LoadedLightningBridge implements LightningBridge {
                     return LightningKeyType.INSTANCE;
                 }
 
+                @Override public MachineOutput patternOutput(LightningTier tier, long amount) {
+                    return amount > maxPatternTotal() ? null : new LightningOutput(tier, amount, 1F);
+                }
+                @Override public LightningTier patternResource(MachineOutput output) {
+                    return output instanceof LightningOutput lightning ? lightning.tier() : null;
+                }
+                @Override public Predicate<LightningTier> patternInput(MachineRequirement requirement) {
+                    return requirement instanceof LightningRequirement r && r.io().isInput()
+                            ? tier -> r.tier() == tier : null;
+                }
+                @Override public long maxPatternTotal() { return Integer.MAX_VALUE; }
                 @Override
                 public Class<LightningTier> resourceType() {
                     return LightningTier.class;

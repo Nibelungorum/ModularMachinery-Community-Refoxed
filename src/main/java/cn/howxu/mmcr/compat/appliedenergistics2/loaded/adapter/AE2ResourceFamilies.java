@@ -5,12 +5,17 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.AEKeyType;
 import appeng.api.stacks.GenericStack;
-import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
+import cn.howxu.mmcr.internal.event.ModCapabilities;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import java.util.ArrayList;
+import java.util.ServiceLoader;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
-import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
-import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.ItemResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.FluidResourceStorage;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.network.FluidNetworkResourceStorage;
@@ -33,6 +38,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -47,6 +53,23 @@ public final class AE2ResourceFamilies {
                 @Override
                 public AEKeyType keyType() {
                     return AEKeyType.items();
+                }
+
+                @Override public MachineOutput patternOutput(ItemResource resource, long amount) {
+                    return amount > Integer.MAX_VALUE ? null : new MachineOutput.ItemOutput(resource.toStack((int) amount), 1F);
+                }
+                @Override public ItemResource patternResource(MachineOutput output) {
+                    return output instanceof MachineOutput.ItemOutput value && !value.components().hasNonExactValues()
+                            ? ItemResource.of(value.resolvedStack()) : null;
+                }
+                @Override public Predicate<ItemResource> patternInput(MachineRequirement value) {
+                    if (!(value instanceof ItemRequirement r) || !r.io().isInput()) return null;
+                    return resource -> r.item() != null
+                            && r.item().test(resource.toStack(1)) && r.components().matches(resource.toStack(1));
+                }
+                @Override public CapabilityBinding.ExternalExposure<?> outputExposure() {
+                    return new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(), ResourceHandler.asClass(),
+                            (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).itemStorage(), false, true));
                 }
 
                 @Override
@@ -82,6 +105,24 @@ public final class AE2ResourceFamilies {
                     return AEKeyType.fluids();
                 }
 
+                @Override public MachineOutput patternOutput(FluidResource resource, long amount) {
+                    return amount > Integer.MAX_VALUE ? null : new MachineOutput.FluidOutput(resource.toStack((int) amount), 1F);
+                }
+                @Override public FluidResource patternResource(MachineOutput output) {
+                    return output instanceof MachineOutput.FluidOutput value
+                            ? FluidResource.of(value.stack()) : null;
+                }
+                @Override public Predicate<FluidResource> patternInput(MachineRequirement value) {
+                    if (!(value instanceof FluidRequirement r) || !r.io().isInput()) return null;
+                    return resource -> r.fluid() != null
+                            && r.fluid().test(resource.toStack(1));
+                }
+                @Override public CapabilityBinding.ExternalExposure<?> outputExposure() {
+                    return new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(), ResourceHandler.asClass(),
+                            (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).fluidStorage(), false, true));
+                }
+                @Override public long stockingAmount() { return 1_000L; }
+
                 @Override
                 public Class<FluidResource> resourceType() {
                     return FluidResource.class;
@@ -110,9 +151,35 @@ public final class AE2ResourceFamilies {
     private AE2ResourceFamilies() {
     }
 
+    private static final List<AE2ResourceFamily<?>> declarations = new ArrayList<>(List.of(ITEM, FLUID));
+    private static volatile List<AE2ResourceFamily<?>> frozen;
+
+    public static synchronized void register(AE2ResourceFamily<?> family) {
+        if (frozen != null) throw new IllegalStateException("AE2 resource families are frozen");
+        if (declarations.stream().anyMatch(existing -> existing.capabilityType().equals(family.capabilityType()))) {
+            throw new IllegalArgumentException("Duplicate AE2 resource family " + family.capabilityType().id());
+        }
+        declarations.add(family);
+    }
+
     public static List<AE2ResourceFamily<?>> all() {
-        return Stream.concat(Stream.<AE2ResourceFamily<?>>of(ITEM, FLUID),
-                LightningBridge.get().resourceFamilies().stream()).toList();
+        var result = frozen;
+        if (result != null) return result;
+        synchronized (AE2ResourceFamilies.class) {
+            if (frozen == null) {
+                for (var contributor : ServiceLoader.load(AE2FamilyContributor.class, AE2FamilyContributor.class.getClassLoader())) {
+                    contributor.contribute(AE2ResourceFamilies::register);
+                }
+                frozen = List.copyOf(declarations);
+            }
+            return frozen;
+        }
+    }
+
+    public static synchronized void resetForTesting() {
+        frozen = null;
+        declarations.clear();
+        declarations.addAll(List.of(ITEM, FLUID));
     }
 
     public static List<PortFamilyDescriptor> inputFamilies() {
@@ -128,7 +195,19 @@ public final class AE2ResourceFamilies {
     }
 
     public static boolean supportsKey(AEKey key) {
-        return key != null && all().stream().anyMatch(family -> family.adapter().toResource(key).isPresent());
+        return forKey(key).isPresent();
+    }
+
+    public static Optional<AE2ResourceFamily<?>> forKey(AEKey key) {
+        if (key == null) return Optional.empty();
+        AE2ResourceFamily<?> result = null;
+        for (var family : all()) {
+            if (family.adapter().toResource(key).isEmpty()) continue;
+            if (result != null) throw new IllegalStateException("Ambiguous AE2 key: " + key + " for "
+                    + result.capabilityType().id() + " and " + family.capabilityType().id());
+            result = family;
+        }
+        return Optional.ofNullable(result);
     }
 
     public static List<CapabilityBinding> inputBindings() {
@@ -147,14 +226,15 @@ public final class AE2ResourceFamilies {
         return internalStorage(family.inputBinding(host -> ((StockingInterfaceBlockEntity) host).resourceStorage(family), false));
     }
 
-    /** Item/fluid retain their existing external exposure declarations in each output kind. */
-    public static List<CapabilityBinding> additionalOutputBindings() {
-        return all().stream().filter(family -> family != ITEM && family != FLUID)
-                .map(AE2ResourceFamilies::outputBinding).toList();
+    public static List<CapabilityBinding> outputBindings() {
+        return all().stream().map(AE2ResourceFamilies::outputBinding).toList();
     }
 
     private static <R> CapabilityBinding outputBinding(AE2ResourceFamily<R> family) {
-        return internalStorage(family.outputBinding(host -> ((OutputInterfaceBlockEntity) host).resourceStorage(family), false));
+        var exposure = family.adapter().outputExposure();
+        var binding = family.binding(IOType.OUTPUT, CapabilityDirections.output(),
+                host -> ((OutputInterfaceBlockEntity) host).resourceStorage(family), exposure != null, exposure);
+        return exposure == null ? internalStorage(binding) : binding;
     }
 
     public static List<CapabilityBinding> asyncOutputBindings() {
@@ -180,20 +260,27 @@ public final class AE2ResourceFamilies {
     }
 
     public static Optional<MachineOutput> patternOutput(GenericStack stack) {
-        if (stack == null || stack.amount() <= 0L || stack.amount() > Integer.MAX_VALUE) return Optional.empty();
-        int amount = (int) stack.amount();
-        if (stack.what() instanceof AEItemKey item) {
-            return Optional.of(new MachineOutput.ItemOutput(item.toStack(amount), 1F));
+        if (stack == null || stack.amount() <= 0L) return Optional.empty();
+        return forKey(stack.what()).flatMap(family -> decode(family.adapter(), stack));
+    }
+
+    private static <R> Optional<MachineOutput> decode(AE2KeyAdapter<R> adapter, GenericStack stack) {
+        return adapter.toResource(stack.what()).map(resource -> adapter.patternOutput(resource, stack.amount()));
+    }
+
+    public static Optional<AEKey> patternKey(MachineOutput output) {
+        AEKey result = null;
+        for (var family : all()) {
+            AEKey key = encode(family.adapter(), output);
+            if (key == null) continue;
+            if (result != null || forKey(key).orElse(null) != family) throw new IllegalArgumentException("Ambiguous pattern output");
+            result = key;
         }
-        if (stack.what() instanceof AEFluidKey fluid) {
-            return Optional.of(new MachineOutput.FluidOutput(fluid.toStack(amount), 1F));
-        }
-        for (AE2ResourceFamily<?> family : all()) {
-            Object resource = family.adapter().toResource(stack.what()).orElse(null);
-            if (resource instanceof LightningTier tier) {
-                return Optional.of(new LightningOutput(tier, stack.amount(), 1F));
-            }
-        }
-        return Optional.empty();
+        return Optional.ofNullable(result);
+    }
+
+    private static <R> AEKey encode(AE2KeyAdapter<R> adapter, MachineOutput output) {
+        R resource = adapter.patternResource(output);
+        return resource == null ? null : adapter.toKey(resource);
     }
 }

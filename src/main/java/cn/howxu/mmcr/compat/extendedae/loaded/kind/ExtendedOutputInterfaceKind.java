@@ -6,27 +6,19 @@ import appeng.core.definitions.AEBlocks;
 import appeng.helpers.InterfaceLogic;
 import appeng.helpers.InterfaceLogicHost;
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.capability.CapabilityDirections;
-import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InterfaceLogicKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.OutputInterfaceBlockEntity;
-import cn.howxu.mmcr.internal.event.ModCapabilities;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
-import java.util.stream.Stream;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.transfer.ResourceHandler;
 
 /** @author howxu <dev@howxu.cn> */
 public final class ExtendedOutputInterfaceKind implements InterfaceLogicKind {
     public static final ExtendedOutputInterfaceKind INSTANCE = new ExtendedOutputInterfaceKind();
-    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), Stream.concat(Stream.of(
-            AE2ResourceFamilies.ITEM.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).itemStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Item.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).itemStorage(), false, true))),
-            AE2ResourceFamilies.FLUID.binding(IOType.OUTPUT, CapabilityDirections.output(), host -> ((OutputInterfaceBlockEntity) host).fluidStorage(), true, new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(), ResourceHandler.asClass(), (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).fluidStorage(), false, true)))), AE2ResourceFamilies.additionalOutputBindings().stream()).toList());
+    private final PortDefinition definition = PortDefinition.of(MMCR.id(id()), AE2ResourceFamilies.outputBindings());
     private ExtendedOutputInterfaceKind() {}
     @Override public List<Identifier> overlayTextures() { return List.of(MMCR.id("block/extendedae/" + id())); }
 

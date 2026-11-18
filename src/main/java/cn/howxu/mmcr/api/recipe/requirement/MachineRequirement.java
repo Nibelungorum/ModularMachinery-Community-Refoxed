@@ -46,6 +46,14 @@ public interface MachineRequirement extends RecipeIoDeclaration {
     /** Whether admission settles this input once and persists its result by requirement index. */
     default boolean paysAtStart() { return false; }
 
+    /** Nominal, unscaled integral units, if this declaration is quantified in integral units. */
+    default OptionalLong ioAmount() { return OptionalLong.empty(); }
+
+    default OptionalLong batchAmount(int duration) { return ioAmount(); }
+
+    /** For paid inputs, 0 retains the input and 1 consumes every admitted batch. */
+    default float consumeChance() { return 1F; }
+
     default boolean isCatalyst() { return false; }
 
     /** Non-consuming presence check for a material retained at admission. */

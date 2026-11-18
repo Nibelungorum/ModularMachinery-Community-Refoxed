@@ -10,7 +10,6 @@ import appeng.crafting.pattern.AEProcessingPattern;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
-import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchBinding;
@@ -157,16 +156,15 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
 
     static List<MachineOutput> outputs(List<GenericStack> stacks) {
         List<MachineOutput> outputs = new ArrayList<>();
-        Map<AEKey, Long> lightningAmounts = new HashMap<>();
+        Map<AEKey, Long> totals = new HashMap<>();
         for (GenericStack stack : stacks) {
             if (stack == null || stack.amount() <= 0L) return null;
             MachineOutput output = AE2ResourceFamilies.patternOutput(stack).orElse(null);
             if (output == null) return null;
-            if (output instanceof LightningOutput) {
-                long previous = lightningAmounts.getOrDefault(stack.what(), 0L);
-                if (stack.amount() > Integer.MAX_VALUE - previous) return null;
-                lightningAmounts.put(stack.what(), previous + stack.amount());
-            }
+            long limit = AE2ResourceFamilies.forKey(stack.what()).orElseThrow().adapter().maxPatternTotal();
+            long previous = totals.getOrDefault(stack.what(), 0L);
+            if (stack.amount() > limit - previous) return null;
+            totals.put(stack.what(), previous + stack.amount());
             outputs.add(output);
         }
         return outputs.isEmpty() ? null : List.copyOf(outputs);

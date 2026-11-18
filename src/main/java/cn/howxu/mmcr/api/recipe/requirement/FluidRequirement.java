@@ -16,6 +16,7 @@ import net.neoforged.neoforge.fluids.crafting.FluidIngredient;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Optional;
 
 /**
@@ -113,6 +114,11 @@ public record FluidRequirement(RecipeModifier.IOType io, @Nullable FluidIngredie
         if (requirement.tags().size() > 1024) {
             throw new IllegalArgumentException("Invalid tag count: " + requirement.tags().size());
         }
+    }
+
+    @Override
+    public OptionalLong ioAmount() {
+        return OptionalLong.of(io.isInput() ? amount : stack.getAmount());
     }
 
     @Override

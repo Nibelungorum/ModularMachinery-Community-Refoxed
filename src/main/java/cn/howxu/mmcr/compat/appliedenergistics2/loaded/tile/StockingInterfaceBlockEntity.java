@@ -9,7 +9,6 @@ import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.IStackWatcher;
 import appeng.api.networking.storage.IStorageWatcherNode;
 import appeng.api.stacks.AEKey;
-import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.GenericStack;
 import appeng.api.util.AECableType;
 import appeng.api.storage.MEStorage;
@@ -380,10 +379,9 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
         try {
             for (int slot = 0; slot < config.size(); slot++) {
                 GenericStack stack = config.getStack(slot);
-                long defaultAmount = stack != null && stack.what() instanceof AEFluidKey
-                        ? 1_000L
-                        : 1L;
-                if (stack != null && stack.amount() != defaultAmount) {
+                if (stack == null) continue;
+                long defaultAmount = AE2ResourceFamilies.forKey(stack.what()).map(family -> family.adapter().stockingAmount()).orElse(1L);
+                if (stack.amount() != defaultAmount) {
                     config.setStack(slot, new GenericStack(stack.what(), defaultAmount));
                 }
             }

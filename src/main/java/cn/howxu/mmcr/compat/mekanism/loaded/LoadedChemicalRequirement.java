@@ -25,6 +25,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -121,6 +122,8 @@ public record LoadedChemicalRequirement(RecipeModifier.IOType io, ChemicalIngred
         return new LoadedChemicalRequirement(RecipeModifier.IOType.OUTPUT,
                 ChemicalIngredient.chemical(id, amount), chance, List.of(), 1F);
     }
+
+    @Override public OptionalLong ioAmount() { return OptionalLong.of(ingredient.amount()); }
 
     @Override
     public RequirementType<LoadedChemicalRequirement> type() {

@@ -12,6 +12,7 @@ import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.status.FailureReason;
 import java.util.List;
+import java.util.OptionalLong;
 
 /**
  * @author howxu <dev@howxu.cn>
@@ -66,6 +67,15 @@ public record EnergyRequirement(RecipeModifier.IOType io, long fePerTick, List<S
         if (requirement.tags().size() > 1024) {
             throw new IllegalArgumentException("Invalid tag count: " + requirement.tags().size());
         }
+    }
+
+    @Override
+    public OptionalLong ioAmount() {
+        return OptionalLong.of(fePerTick);
+    }
+
+    @Override public OptionalLong batchAmount(int duration) {
+        return OptionalLong.of(Math.multiplyExact(fePerTick, (long) duration));
     }
 
     @Override

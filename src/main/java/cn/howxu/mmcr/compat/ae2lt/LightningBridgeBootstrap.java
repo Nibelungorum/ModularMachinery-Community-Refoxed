@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.ae2lt;
 
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamily;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import net.neoforged.fml.ModList;
 
 import java.util.List;
@@ -51,11 +52,13 @@ public final class LightningBridgeBootstrap {
 
     public static void installForTesting(LightningBridge testingBridge) {
         LightningBridgeBootstrap.testingBridge = Objects.requireNonNull(testingBridge, "testingBridge");
+        AE2ResourceFamilies.resetForTesting();
     }
 
     public static synchronized void resetForTesting() {
         testingBridge = null;
         bridge = null;
+        AE2ResourceFamilies.resetForTesting();
     }
 
     /** Empty bridge never resolves the native implementation.

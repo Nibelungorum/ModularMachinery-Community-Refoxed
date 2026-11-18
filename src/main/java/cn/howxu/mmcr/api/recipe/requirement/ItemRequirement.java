@@ -20,6 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Optional;
 
 /**
@@ -99,6 +100,11 @@ public record ItemRequirement(RecipeModifier.IOType io, @Nullable Ingredient ite
     @Override
     public ItemStack stack() {
         return stack.copy();
+    }
+
+    @Override
+    public OptionalLong ioAmount() {
+        return OptionalLong.of(io.isInput() ? count : stack.getCount());
     }
 
     @Override

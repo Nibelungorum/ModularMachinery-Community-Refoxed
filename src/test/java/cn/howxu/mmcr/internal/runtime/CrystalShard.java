@@ -81,6 +81,7 @@ public record CrystalShard(RecipeModifier.IOType io, String color, int amount, f
     }
 
     @Override public RequirementType<CrystalShard> type() { return TYPE; }
+    @Override public java.util.OptionalLong ioAmount() { return java.util.OptionalLong.of(amount); }
     @Override public float consumeChance() { return io.isInput() ? chance : 1F; }
     @Override public CrystalShard retainedInput() { return new CrystalShard(io, color, amount, 0F); }
 
@@ -100,8 +101,8 @@ public record CrystalShard(RecipeModifier.IOType io, String color, int amount, f
         return RequirementHandlerSupport.blockedPlan(this, context, shortageReason());
     }
 
-    record Output(String color, int quantity, float chance) implements MachineOutput {
-        static final OutputType<Output> TYPE = new OutputType.Definition<>(ID,
+    public record Output(String color, int quantity, float chance) implements MachineOutput {
+        public static final OutputType<Output> TYPE = new OutputType.Definition<>(ID,
                 CrystalShard.CODEC.xmap(value -> new Output(value.color, value.amount, value.chance), Output::asRequirement),
                 (value, chance) -> new Output(value.color, value.quantity, chance), (value, mods) -> value,
                 value -> value, OutputType.Presentation.defaults(ID), ID.toString(),

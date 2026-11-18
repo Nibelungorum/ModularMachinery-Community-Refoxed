@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.recipe.requirement.StartMaterial;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.Objects;
 
 /** One-shot lightning consumption or production, expressed per parallel recipe.
@@ -32,6 +33,8 @@ public record LightningRequirement(LightningTier tier, RecipeModifier.IOType io,
     public static LightningRequirement output(LightningTier tier, long amount, float chance) {
         return new LightningRequirement(tier, RecipeModifier.IOType.OUTPUT, amount, chance, List.of());
     }
+
+    @Override public OptionalLong ioAmount() { return OptionalLong.of(amount); }
 
     @Override
     public RequirementType<LightningRequirement> type() {
