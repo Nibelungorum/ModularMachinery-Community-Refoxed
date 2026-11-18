@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
@@ -115,6 +116,35 @@ class MultiblockAssemblyServiceTest {
                 new MultiblockAssemblyService.Placement(BlockPos.ZERO.above(3), Blocks.STONE.defaultBlockState(), itemStack(Items.STONE, 1)));
 
         assertTrue(MultiblockAssemblyService.extractAvailablePlacements(placements, source).isEmpty());
+    }
+
+    @Test
+    void usesNonInterfaceMaterialsInLevelOrderBeforeFallingBackToAnInterface() {
+        var coupler = ModBlocks.MODULE_BRIDGE.get();
+        var type = new LevelType(MMCR.id("assembly_test"), Component.literal("Assembly test"));
+        var previousTypes = MachineLevelRegistry.types();
+        var previousLevels = previousTypes.stream()
+                .flatMap(t -> MachineLevelRegistry.levelsForType(t.id()).stream()).toList();
+        try {
+            MachineLevelRegistry.installSnapshot(List.of(type), List.of(
+                    new MachineLevel(MMCR.id("coupler"), type.id(), 2, new BlockPredicate.OfBlockState(coupler.defaultBlockState()),
+                            ItemStack.EMPTY, ModifierDefinition.EMPTY),
+                    new MachineLevel(MMCR.id("iron"), type.id(), 1, new BlockPredicate.OfBlockState(Blocks.IRON_BLOCK.defaultBlockState()),
+                            ItemStack.EMPTY, ModifierDefinition.EMPTY)));
+            var predicate = new BlockPredicate.AnyOf(List.of(new BlockPredicate.OfBlock(coupler),
+                    new BlockPredicate.OfBlock(Blocks.STONE), new BlockPredicate.OfBlock(Blocks.IRON_BLOCK)));
+            var placements = IntStream.range(0, 3).mapToObj(i -> new MultiblockAssemblyService.Placement(
+                    BlockPos.ZERO.above(i), Blocks.STONE.defaultBlockState(), new ItemStack(Items.STONE), predicate)).toList();
+            var source = PlayerInventoryStructureItemSource.forStacks(List.of(
+                    new ItemStack(coupler), new ItemStack(Items.STONE), new ItemStack(Items.IRON_BLOCK)));
+
+            var selected = MultiblockAssemblyService.extractAvailablePlacements(placements, source);
+
+            assertEquals(List.of(Blocks.IRON_BLOCK, Blocks.STONE, coupler),
+                    selected.stream().map(placement -> placement.state().getBlock()).toList());
+        } finally {
+            MachineLevelRegistry.installSnapshot(previousTypes, previousLevels);
+        }
     }
 
     @Test

@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.config.ServerConfig;
+import cn.howxu.mmcr.internal.block.StructureInterfaceBlocks;
 import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.core.BlockPos;
@@ -39,6 +40,10 @@ import java.util.function.Predicate;
 public final class MultiblockAssemblyService {
 
     public static final int MAX_BLOCKS_PER_OPERATION = 163_840;
+
+    private static final Comparator<BlockState> MATERIAL_PRIORITY = Comparator
+            .comparing((BlockState state) -> StructureInterfaceBlocks.isInterfaceBlock(state.getBlock()))
+            .thenComparing(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed());
 
     private MultiblockAssemblyService() {}
 
@@ -361,7 +366,7 @@ public final class MultiblockAssemblyService {
         List<Placement> selected = new ArrayList<>();
         for (Placement placement : placements) {
             candidateStates(placement.predicate()).stream()
-                    .sorted(Comparator.comparingInt(MultiblockAssemblyService::levelPriority).reversed())
+                    .sorted(MATERIAL_PRIORITY)
                     .filter(MultiblockAssemblyService::isBuildableState)
                     .map(state -> new Placement(placement.pos(), state, isFluidSource(state) ? ItemStack.EMPTY
                             : requirementFor(state).copyWithCount(Math.max(1, placement.requirement().getCount())), placement.predicate()))
