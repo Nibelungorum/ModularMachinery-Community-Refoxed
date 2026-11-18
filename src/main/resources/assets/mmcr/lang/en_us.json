@@ -529,7 +529,7 @@
   "jade.mmcr.machine_controller.progress.tick": "%s/%s tick",
   "jade.mmcr.machine_controller.recipe_pool": "Recipe Pool",
   "jade.mmcr.machine_controller.recipe_output": "Recipe Output:",
-  "jade.mmcr.machine_controller.recipe_output.generic": "%s × %s",
+  "jade.mmcr.machine_controller.recipe_output.generic": "%s x %s",
   "jade.mmcr.machine_controller.recipe_output.item": "%s%s",
   "jade.mmcr.machine_controller.recipe_output.fluid": "%s %s",
   "jade.mmcr.machine_controller.state": "State",
