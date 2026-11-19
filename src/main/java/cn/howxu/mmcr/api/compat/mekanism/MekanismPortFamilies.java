@@ -12,7 +12,7 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class MekanismPortFamilies {
     public static final ResourceLocation CHEMICAL = InputScopeFamilies.isolated(ResourceLocation.fromNamespaceAndPath("mekanism", "chemical"));
-    public static final ResourceLocation RADIOACTIVE_CHEMICAL = MMCR.id("mekanism_radioactive_chemical");
+    public static final ResourceLocation RADIOACTIVE_CHEMICAL = InputScopeFamilies.isolated(MMCR.id("mekanism_radioactive_chemical"));
     public static final ResourceLocation HEAT_TEMPERATURE = ResourceLocation.fromNamespaceAndPath("mekanism", "temperature");
     public static final ResourceLocation HEAT = ResourceLocation.fromNamespaceAndPath("mekanism", "heat");
 

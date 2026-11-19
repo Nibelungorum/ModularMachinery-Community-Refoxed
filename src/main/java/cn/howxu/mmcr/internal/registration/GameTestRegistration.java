@@ -62,7 +62,7 @@ public final class GameTestRegistration {
     static void registerTests(String sourceClass, RegisterGameTestsEvent event) {
         invokeOptionalSource(sourceClass, "registerAll",
                 new Class<?>[]{RegisterGameTestsEvent.class}, event);
-        // Historical network/Create suites are temporarily not registered; their test sources remain intact.
+        // Historical network tests are still not registered.
     }
 
     public static void invokeOptionalSourceForTesting(String className, String methodName,

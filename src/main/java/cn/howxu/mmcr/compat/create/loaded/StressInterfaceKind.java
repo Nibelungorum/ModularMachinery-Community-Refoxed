@@ -5,6 +5,7 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.util.IOType;
@@ -34,6 +35,8 @@ public enum StressInterfaceKind implements IOPortKind {
     }
 
     @Override public List<ResourceLocation> overlayTextures() { return List.of(MMCR.id("block/create/" + ioType.getSerializedName())); }
+
+    @Override public boolean availableForStructure() { return CreateBridge.get().available(); }
 
     @Override public String id() { return id; }
     @Override public IOType ioType() { return ioType; }

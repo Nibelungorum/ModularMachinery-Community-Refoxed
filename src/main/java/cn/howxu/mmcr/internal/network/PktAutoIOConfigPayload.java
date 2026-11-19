@@ -2,16 +2,9 @@ package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
-import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
-import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
-import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
-import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
-import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.menu.MenuSupport;
+import cn.howxu.mmcr.internal.menu.PortMenuBinding;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
@@ -53,50 +46,40 @@ public record PktAutoIOConfigPayload(BlockPos pos, ResourceLocation capabilityId
 
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (!(context.player() instanceof ServerPlayer player)) return;
-            if (!canUpdate(player, pos, capabilityId, action, side)) return;
-            if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return;
-            if (!ownsMenu(player.containerMenu, port)) return;
-            CapabilityType type = new CapabilityType(capabilityId);
-            action.apply(port, type, side, enabled);
+            if (context.player() instanceof ServerPlayer player) applyOnServer(player);
         });
     }
 
+    public boolean applyOnServer(ServerPlayer player) {
+        IOPortBlockEntity target = target(player, pos, capabilityId, action, side);
+        if (target == null) return false;
+        action.apply(target, new CapabilityType(capabilityId), side, enabled);
+        return true;
+    }
+
+    /** Menu precheck only; mutations also require the live owner, range and transfer capability below. */
     public static boolean canUpdate(ServerPlayer player, BlockPos pos, AutoIOAction action, @Nullable Direction side) {
-        if (player == null || pos == null || action == null) return false;
-        AbstractContainerMenu menu = player.containerMenu;
-        boolean portMenu = menu instanceof ItemBusMenu itemBus && itemBus.pos().equals(pos)
-                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.pos().equals(pos)
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.pos().equals(pos)
-                || menu instanceof ExtendedItemMenu extendedItem && extendedItem.pos().equals(pos)
-                || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.pos().equals(pos)
-                || menu instanceof CombinedPortMenu combined && combined.pos().equals(pos)
-                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.pos().equals(pos)
-                || MekanismBridge.get().isPortMenuAt(menu, pos, null);
-        if (!portMenu) return false;
-        return menu.stillValid(player) && (!action.requiresSide() || side != null);
+        return player != null && pos != null && action != null && (!action.requiresSide() || side != null)
+                && player.containerMenu instanceof PortMenuBinding binding && pos.equals(binding.pos())
+                && player.containerMenu.stillValid(player);
     }
 
     public static boolean canUpdate(ServerPlayer player, BlockPos pos, ResourceLocation capabilityId,
                                     AutoIOAction action, @Nullable Direction side) {
-        if (!canUpdate(player, pos, action, side) || capabilityId == null || player.level() == null) return false;
-        if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return false;
-        CapabilityType type = new CapabilityType(capabilityId);
-        var capability = port.capability(type);
-        CapabilityTransferPolicies.ensureRegistered();
-        return capability != null && capability.directions().supports(port.ioType())
-                && CapabilityTransferPolicies.handlerFor(capability).isPresent();
+        return target(player, pos, capabilityId, action, side) != null;
+    }
+
+    private static @Nullable IOPortBlockEntity target(ServerPlayer player, BlockPos pos, ResourceLocation capabilityId,
+                                                       AutoIOAction action, @Nullable Direction side) {
+        if (capabilityId == null || !canUpdate(player, pos, action, side) || player.level() == null
+                || player.isSpectator() || !MenuSupport.stillValidWithin(player, pos)) return null;
+        if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port) || port.isRemoved()
+                || !ownsMenu(player.containerMenu, port)) return null;
+        return port.configurableAutoIOCapability(new CapabilityType(capabilityId)) == null ? null : port;
     }
 
     static boolean ownsMenu(AbstractContainerMenu menu, IOPortBlockEntity port) {
-        return menu instanceof ItemBusMenu itemBus && itemBus.owner() == port
-                || menu instanceof FluidHatchMenu fluidHatch && fluidHatch.owner() == port
-                || menu instanceof EnergyHatchMenu energyHatch && energyHatch.owner() == port
-                || menu instanceof ExtendedItemMenu extendedItem && extendedItem.owner() == port
-                || menu instanceof ExtendedFluidMenu extendedFluid && extendedFluid.owner() == port
-                || menu instanceof CombinedPortMenu combined && combined.owner() == port
-                || menu instanceof ExtendedCombinedMenu extendedCombined && extendedCombined.owner() == port
-                || MekanismBridge.get().isPortMenuAt(menu, port == null ? null : port.getBlockPos(), port);
+        return port != null && menu instanceof PortMenuBinding binding && binding.owner() == port;
     }
 
     private static <T> T readEnum(T[] values, int index) {

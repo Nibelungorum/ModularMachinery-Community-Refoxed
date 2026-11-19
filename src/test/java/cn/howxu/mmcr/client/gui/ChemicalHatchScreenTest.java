@@ -3,12 +3,10 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.client.render.ChemicalGuiRenderer;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
-import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -16,12 +14,10 @@ import cn.howxu.mmcr.registry.ModUIs;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Inventory;
@@ -55,8 +51,8 @@ class ChemicalHatchScreenTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
-        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
+        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         bind(ModUIs.CHEMICAL_PORT, new MenuType<>((containerId, inventory) ->
                 new ChemicalPortMenu(containerId, inventory, BlockPos.ZERO), FeatureFlags.VANILLA_SET));
         bind(ModUIs.HEAT_PORT, new MenuType<>((containerId, inventory) ->
@@ -127,16 +123,9 @@ class ChemicalHatchScreenTest {
     }
 
     @Test
-    void chemical_and_heat_screens_select_their_loaded_capability_ids() throws Exception {
-        CapabilityProbeScreen chemicalScreen = CapabilityProbeScreen.create(
-                new ChemicalPortMenu(1, testInventory(), BlockPos.ZERO));
-        CapabilityProbeScreen heatScreen = CapabilityProbeScreen.create(
-                new HeatPortMenu(1, testInventory(), BlockPos.ZERO));
-
-        assertThat(chemicalScreen.supportedCapabilityIds())
-                .containsExactly(MekanismRecipeTypes.CHEMICAL);
-        assertThat(heatScreen.supportedCapabilityIds())
-                .containsExactly(MekanismRecipeTypes.HEAT);
+    void heat_screen_keeps_its_dedicated_controls_instead_of_an_auto_io_page() throws Exception {
+        var heatScreen = (HeatHatchScreen) unsafe().allocateInstance(HeatHatchScreen.class);
+        assertThat(heatScreen.supportsAutoIOControlPage()).isFalse();
     }
 
     private static Inventory testInventory() throws Exception {
@@ -163,58 +152,6 @@ class ChemicalHatchScreenTest {
         if (holder == null) throw new NoSuchFieldException("holder");
         holder.setAccessible(true);
         holder.set(deferredHolder, Holder.direct(menuType));
-    }
-
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Class<?> type = target.getClass();
-        Field field = null;
-        while (type != null && field == null) {
-            try {
-                field = type.getDeclaredField(name);
-            } catch (NoSuchFieldException ignored) {
-                type = type.getSuperclass();
-            }
-        }
-        if (field == null) throw new NoSuchFieldException(name);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
-
-    private static final class CapabilityProbeScreen extends AbstractPortScreen<AbstractMachineMenu> {
-        private CapabilityProbeScreen() {
-            super(null, null, Component.empty(), 166);
-        }
-
-        private static CapabilityProbeScreen create(AbstractMachineMenu menu) throws Exception {
-            CapabilityProbeScreen screen = (CapabilityProbeScreen) unsafe()
-                    .allocateInstance(CapabilityProbeScreen.class);
-            setField(screen, "menu", menu);
-            return screen;
-        }
-
-        @Override
-        protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        }
-
-        @Override
-        protected BlockPos portPos() {
-            return BlockPos.ZERO;
-        }
-
-        @Override
-        protected IOType ownerIOType() {
-            return IOType.INPUT;
-        }
-
-        @Override
-        protected int portSlotCount() {
-            return 0;
-        }
-
-        @Override
-        protected ResourceLocation texture(boolean autoIOPage) {
-            return ResourceLocation.parse("mmcr:test");
-        }
     }
 
     private static final class ChemicalProbePort extends ChemicalPortBlockEntity {

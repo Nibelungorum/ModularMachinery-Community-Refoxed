@@ -621,6 +621,8 @@ public class MekanismPortGameTest {
         ChemicalPortBlockEntity north = helper.getBlockEntity(northReceiver);
         ChemicalPortBlockEntity south = helper.getBlockEntity(southReceiver);
 
+        helper.assertValueEqual(List.of(MekanismRecipeTypes.CHEMICAL), source.configurableAutoIOIds(),
+                "A loaded chemical port advertises its registered transfer handler even when empty");
         ChemicalStack oxygen = registerOxygenLikeChemical("oxygen_eject");
         insert(source, oxygen, 2_000L);
 

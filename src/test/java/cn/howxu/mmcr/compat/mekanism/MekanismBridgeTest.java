@@ -5,7 +5,6 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.capability.wrappers.FluidBucketWrapper;
 import java.util.Arrays;
 import java.util.stream.Stream;
-import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -25,8 +24,7 @@ class MekanismBridgeTest {
         assertThat(bridge.available()).isFalse();
         assertThat(bridge.supportsPortFamily(MMCR.id("mekanism_chemical"))).isFalse();
         assertThat(bridge.unavailableReason()).isEqualTo(MMCR.id("mekanism_unavailable"));
-        assertThat(bridge.capabilityIdForMenu(null)).isNull();
-        assertThat(bridge.isPortMenuAt(null, BlockPos.ZERO, null)).isFalse();
+        assertThat(bridge.portKinds()).isEmpty();
         var storage = new FluidBucketWrapper(ItemStack.EMPTY);
         assertThat(bridge.manualFluidContainerHandler(storage)).isSameAs(storage);
         assertThat(bridge.transferChemicalContainer(null, null, 0, true)).isZero();

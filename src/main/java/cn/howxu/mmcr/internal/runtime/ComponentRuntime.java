@@ -36,7 +36,7 @@ import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.api.port.InputIsolationHost;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.MMCR;
@@ -93,7 +93,7 @@ public final class ComponentRuntime {
     private @Nullable InputRoutingFacet indexedInputRouting;
     private Set<BlockPos> inputSourcePositions = Set.of();
     private Map<BlockPos, Boolean> inputIsolationSettings = Map.of();
-    private Map<BlockPos, IOPortBlockEntity> inputPortHosts = Map.of();
+    private Map<BlockPos, InputIsolationHost> inputPortHosts = Map.of();
     private Set<BlockPos> legacyCapabilitySources = Set.of();
     private boolean fullyInputIsolated;
     private long componentPresentationEpoch;
@@ -127,11 +127,11 @@ public final class ComponentRuntime {
         List<CapabilityIdentity> nextIdentity = capabilityState.identity();
         boolean componentsChanged = !this.components.equals(nextComponents);
         boolean capabilitiesChanged = !capabilityIdentity.equals(nextIdentity);
-        Map<BlockPos, IOPortBlockEntity> nextInputPorts = new LinkedHashMap<>();
+        Map<BlockPos, InputIsolationHost> nextInputPorts = new LinkedHashMap<>();
         Set<BlockPos> nextLegacySources = new LinkedHashSet<>();
         for (ProcessingComponent component : nextComponents) {
             BlockPos position = component.getPos().immutable();
-            if (component.getContainer() instanceof IOPortBlockEntity port) {
+            if (component.getContainer() instanceof InputIsolationHost port) {
                 if (port.supportsInputIsolation()) nextInputPorts.put(position, port);
             } else {
                 nextLegacySources.add(position);

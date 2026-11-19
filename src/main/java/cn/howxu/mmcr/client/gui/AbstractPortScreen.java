@@ -2,17 +2,13 @@ package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
-import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.autoio.AutoIOConfig;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
-import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
 import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
-import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
@@ -36,11 +32,13 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -74,6 +72,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     protected boolean autoIOPage;
     private boolean containerTankClickConsumed;
     private ResourceLocation selectedCapabilityId;
+    private IOPortBlockEntity controlOwner;
     private StyledButton autoIOPageButton;
     private StyledButton secondaryAutoIOPageButton;
     private Button autoIOToggleButton;
@@ -117,8 +116,8 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     @Override
     protected final void init() {
         super.init();
-        initAutoIOButtons();
         if (!supportsAutoIOControlPage()) return;
+        initAutoIOButtons();
         isolationButton = addRenderableWidget(new IsolationToggleButton(leftPos - 18, topPos + 1,
                 Component.translatable("mmcr.input_isolation.button"), menu.inputIsolation()::enabled, button -> {
             if (minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId,
@@ -132,7 +131,7 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     @Override
     protected final void containerTick() {
         super.containerTick();
-        updateAutoIOWidgets();
+        if (supportsAutoIOControlPage()) updateAutoIOWidgets();
     }
 
     @Override
@@ -223,29 +222,22 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     private void initAutoIOButtons() {
-        if (!supportsAutoIOControlPage()) return;
         int autoIOPageButtonX = leftPos - AUTO_IO_PAGE_BUTTON_SIZE - AUTO_IO_PAGE_BUTTON_GAP;
         int autoIOPageButtonY = topPos + 1;
-        List<ResourceLocation> capabilityIds = supportedCapabilityIds();
-        autoIOPageButton = createAutoIOPageButton(autoIOPageButtonX, autoIOPageButtonY, capabilityIds.getFirst());
-        if (capabilityIds.size() > 1) {
-            secondaryAutoIOPageButton = createAutoIOPageButton(autoIOPageButtonX,
-                    autoIOPageButtonY + AUTO_IO_PAGE_BUTTON_STEP, capabilityIds.get(1));
-        }
+        autoIOPageButton = createAutoIOPageButton(autoIOPageButtonX, autoIOPageButtonY, false);
+        secondaryAutoIOPageButton = createAutoIOPageButton(autoIOPageButtonX, autoIOPageButtonY + AUTO_IO_PAGE_BUTTON_STEP, true);
 
         autoIOToggleButton = addRenderableWidget(new AutoIOToggleButton(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
                 topPos + autoIOSideButtonY(2), autoIOToggleLabel(), button -> {
-            IOPortBlockEntity port = portEntity();
-            boolean enabled = port == null || !selectedAutoIOConfig().enabled();
-            PacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
-                    AutoIOAction.SET_ENABLED, null, enabled));
+            configRequest(AutoIOAction.SET_ENABLED, null, !selectedAutoIOConfig().enabled()).ifPresent(PacketDistributor::sendToServer);
             button.setFocused(false);
         }));
 
         ejectButton = addRenderableWidget(new EjectButton(leftPos + autoIOSideButtonX(2) + AUTO_IO_SIDE_BUTTON_SIZE + 6,
                 Component.translatable("mmcr.auto_io.eject_contents"), button -> {
-            PacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos(), selectedCapabilityId(),
-                    Screen.hasShiftDown()));
+                if (!canOperateSelection()) return;
+                PacketDistributor.sendToServer(new PktEjectPortContentsPayload(portPos(), selectedCapabilityId,
+                        Screen.hasShiftDown()));
                 button.setFocused(false);
         }, topPos + autoIOSideButtonY(1)));
 
@@ -257,31 +249,24 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
                 Button button = addRenderableWidget(new AutoIOSideButton(leftPos + autoIOSideButtonX(x), topPos + autoIOSideButtonY(y), side,
                         clicked -> {
                             clicked.setFocused(false);
-                            IOPortBlockEntity port = portEntity();
                             if (shiftAllSidesCell && Screen.hasShiftDown()) {
-                                PacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
-                                        AutoIOAction.SET_ALL_SIDES, null, false));
+                                configRequest(AutoIOAction.SET_ALL_SIDES, null, false).ifPresent(PacketDistributor::sendToServer);
                                 return;
                             }
-                            boolean enabled = port == null || !selectedAutoIOConfig().isSideEnabled(side);
-                            PacketDistributor.sendToServer(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId(),
-                                    AutoIOAction.SET_SIDE, side, enabled));
+                            boolean enabled = !selectedAutoIOConfig().isSideEnabled(side);
+                            configRequest(AutoIOAction.SET_SIDE, side, enabled).ifPresent(PacketDistributor::sendToServer);
                         }, () -> portEntity() != null && selectedAutoIOConfig().isSideEnabled(side), this::portEntity));
                 autoIOSideButtons.put(side, button);
             }
         }
-        updateAutoIOWidgets();
     }
 
-    private StyledButton createAutoIOPageButton(int x, int y, ResourceLocation capabilityId) {
+    private StyledButton createAutoIOPageButton(int x, int y, boolean secondary) {
         StyledButton pageButton = addRenderableWidget(new StyledButton(x, y, AUTO_IO_PAGE_BUTTON_SIZE, AUTO_IO_PAGE_BUTTON_SIZE,
                 Component.translatable("mmcr.auto_io.page"), button -> {
-            if (autoIOPage) {
-                autoIOPage = false;
-            } else {
-                selectCapability(capabilityId);
-                autoIOPage = true;
-            }
+            var port = portEntity();
+            if (port == null || port != controlOwner) return;
+            pressPageButton(port.configurableAutoIOIds(), secondary);
             resetTextScrollOffset();
             updateAutoIOWidgets();
             button.setFocused(false);
@@ -290,32 +275,53 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         return pageButton;
     }
 
+    void pressPageButton(List<ResourceLocation> ids, boolean secondary) {
+        if (autoIOPage || ids.isEmpty()) {
+            autoIOPage = false;
+        } else if (secondary && ids.size() > 2) {
+            selectCapability(nextCapability(ids));
+        } else {
+            if (secondary && ids.size() < 2) return;
+            selectCapability(secondary ? ids.get(1) : ids.size() <= 2 ? ids.getFirst() : selectedCapabilityId(ids));
+            autoIOPage = true;
+        }
+    }
+
+    private ResourceLocation nextCapability(List<ResourceLocation> ids) {
+        return ids.get((ids.indexOf(selectedCapabilityId(ids)) + 1) % ids.size());
+    }
+
     private void updateAutoIOWidgets() {
+        var port = portEntity();
+        List<ResourceLocation> ids = port == null ? List.of() : port.configurableAutoIOIds();
+        if (port != controlOwner || selectedCapabilityId == null || !ids.contains(selectedCapabilityId)) autoIOPage = false;
+        controlOwner = port;
+        selectedCapabilityId = selectedCapabilityId(ids);
         updateAutoIOSlotVisibility();
         if (isolationButton != null) {
             isolationButton.updateState(menu.inputIsolation(), false);
             isolationButton.visible = isolationButton.visible && !autoIOPage;
             isolationButton.active = isolationButton.visible;
-            int preceding = autoIOPageButton == null ? 0 : 1;
-            if (secondaryAutoIOPageButton != null && !autoIOPage) preceding++;
+            int preceding = Math.min(ids.size(), 2);
             isolationButton.setPosition(leftPos - 18, topPos + 1 + preceding * 18);
         }
-        if (autoIOPageButton != null) {
+        if (autoIOPageButton != null) autoIOPageButton.active = autoIOPageButton.visible = !ids.isEmpty();
+        if (autoIOPageButton != null && autoIOPageButton.visible) {
             autoIOPageButton.setIcon(MMCR.id(autoIOPage
                     ? "textures/gui/button/back.png" : "textures/gui/button/io.png"));
             autoIOPageButton.setMessage(Component.translatable(
                     autoIOPage ? "mmcr.auto_io.page_back" : "mmcr.auto_io.page"));
             autoIOPageButton.setTooltip(Tooltip.create(autoIOPage
                     ? Component.translatable("mmcr.auto_io.back")
-                    : Component.translatable(autoIOControlTooltipKey(supportedCapabilityIds().getFirst(), isOutputPort()))));
+                    : controlLabel(ids.size() <= 2 ? ids.getFirst() : selectedCapabilityId, isOutputPort())));
         }
         if (secondaryAutoIOPageButton != null) {
-            List<ResourceLocation> capabilityIds = supportedCapabilityIds();
-            secondaryAutoIOPageButton.visible = !autoIOPage && capabilityIds.size() > 1;
+            secondaryAutoIOPageButton.visible = !autoIOPage && ids.size() > 1;
             secondaryAutoIOPageButton.active = secondaryAutoIOPageButton.visible;
-            if (capabilityIds.size() > 1) {
-                secondaryAutoIOPageButton.setTooltip(Tooltip.create(Component.translatable(
-                        autoIOControlTooltipKey(capabilityIds.get(1), isOutputPort()))));
+            if (secondaryAutoIOPageButton.visible) {
+                Component label = ids.size() == 2 ? controlLabel(ids.get(1), isOutputPort())
+                        : Component.translatable("mmcr.auto_io.next_resource", controlLabel(nextCapability(ids), isOutputPort()));
+                secondaryAutoIOPageButton.setTooltip(Tooltip.create(label));
             }
         }
         if (autoIOToggleButton != null) {
@@ -384,9 +390,9 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
         relocatedPlayerSlotPositions.clear();
     }
 
-    private IOPortBlockEntity portEntity() {
+    IOPortBlockEntity portEntity() {
         if (Minecraft.getInstance().level == null) return null;
-        return Minecraft.getInstance().level.getBlockEntity(portPos()) instanceof IOPortBlockEntity port ? port : null;
+        return Minecraft.getInstance().level.getBlockEntity(portPos()) instanceof IOPortBlockEntity port && !port.isRemoved() ? port : null;
     }
 
     private boolean isAutoIOEnabled() {
@@ -427,47 +433,32 @@ abstract class AbstractPortScreen<M extends AbstractMachineMenu> extends Abstrac
     }
 
     private AutoIOConfig selectedAutoIOConfig() {
-        IOPortBlockEntity port = portEntity();
-        if (port == null) return new AutoIOConfig();
-        return port.autoIOConfig(new CapabilityType(selectedCapabilityId()));
+        return controlOwner == null || selectedCapabilityId == null ? new AutoIOConfig()
+                : controlOwner.autoIOConfig(new CapabilityType(selectedCapabilityId));
     }
 
-    private ResourceLocation selectedCapabilityId() {
-        List<ResourceLocation> capabilityIds = supportedCapabilityIds();
-        IOPortBlockEntity port = portEntity();
-        if (port != null) {
-            List<ResourceLocation> available = port.capabilitySnapshot().capabilities().stream()
-                    .map(capability -> capability.type().id())
-                    .toList();
-            capabilityIds = capabilityIds.stream().filter(available::contains).toList();
-        }
-        return selectedCapabilityId(capabilityIds);
+    Optional<PktAutoIOConfigPayload> configRequest(AutoIOAction action, @Nullable Direction side, boolean enabled) {
+        return canOperateSelection() ? Optional.of(new PktAutoIOConfigPayload(portPos(), selectedCapabilityId, action, side, enabled))
+                : Optional.empty();
     }
 
-    protected List<ResourceLocation> supportedCapabilityIds() {
-        if (menu instanceof CombinedPortMenu || menu instanceof ExtendedCombinedMenu) {
-            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), BuiltinCapabilityDefinitions.FLUID_TYPE.id());
-        }
-        if (menu instanceof FluidHatchMenu || menu instanceof ExtendedFluidMenu) {
-            return List.of(BuiltinCapabilityDefinitions.FLUID_TYPE.id());
-        }
-        if (menu instanceof EnergyHatchMenu) return List.of(BuiltinCapabilityDefinitions.ENERGY_TYPE.id());
-        ResourceLocation mekanismCapabilityId = MekanismBridge.get().capabilityIdForMenu(menu);
-        if (mekanismCapabilityId != null) return List.of(mekanismCapabilityId);
-        return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
+    private boolean canOperateSelection() {
+        return autoIOPage && selectedCapabilityId != null && controlOwner != null && portEntity() == controlOwner
+                && controlOwner.configurableAutoIOCapability(new CapabilityType(selectedCapabilityId)) != null;
+    }
+
+    static Component controlLabel(ResourceLocation id, boolean output) {
+        Component resource = Component.translatableWithFallback(id.toLanguageKey("mmcr.auto_io.resource"), id.toString());
+        return Component.translatable(output ? "mmcr.auto_io.resource_output" : "mmcr.auto_io.resource_input", resource);
     }
 
     protected boolean supportsAutoIOControlPage() {
         return true;
     }
 
-    static String autoIOControlTooltipKey(ResourceLocation capabilityId, boolean outputPort) {
-        return "mmcr.auto_io." + capabilityId.getPath() + (outputPort ? "_output" : "_input") + "_control";
-    }
-
     protected final ResourceLocation selectedCapabilityId(List<ResourceLocation> capabilityIds) {
         if (selectedCapabilityId != null && capabilityIds.contains(selectedCapabilityId)) return selectedCapabilityId;
-        return capabilityIds.stream().findFirst().orElse(BuiltinCapabilityDefinitions.ITEM_TYPE.id());
+        return capabilityIds.isEmpty() ? null : capabilityIds.getFirst();
     }
 
     private static Direction autoIODirectionAt(int x, int y) {

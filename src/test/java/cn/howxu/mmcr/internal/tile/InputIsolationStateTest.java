@@ -3,6 +3,21 @@ package cn.howxu.mmcr.internal.tile;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.CapabilityRequest;
+import cn.howxu.mmcr.api.capability.CapabilityView;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.api.capability.plan.RequirementPlan;
+import cn.howxu.mmcr.api.recipe.CraftingContext;
+import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
+import cn.howxu.mmcr.api.recipe.requirement.RequirementType;
+import cn.howxu.mmcr.internal.capability.CapabilityFactories;
+import com.mojang.serialization.MapCodec;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.api.recipe.InputScopeFamilies;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.facet.InputRoutingFacet;
@@ -36,6 +51,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -280,6 +296,72 @@ class InputIsolationStateTest {
         assertThat(restoredPort.isInputIsolated()).isFalse();
     }
 
+    @Test
+    void material_binding_not_family_name_or_live_contents_controls_isolation() {
+        var shard = new CapabilityType(InputScopeFamilies.isolated(ResourceLocation.parse("example:shard")));
+        var family = new PortFamilyDescriptor(MMCR.id("gem_hatch"), IOType.INPUT, 0, List.of(), shard.id());
+        var inputs = List.of(IOPortKind.binding(shard, IOType.INPUT, List.of(family)));
+        var kind = new DeclaredKind(IOType.INPUT, List.of(family), inputs);
+        var port = new DeclaredPort(BlockPos.ZERO.east(), kind, List.of());
+        var controller = controller(BlockPos.ZERO);
+        attach(port, controller);
+        port.setInputIsolated(true);
+        assertThat(routing(controller.componentRuntime().capabilitySnapshot()).inputPorts())
+                .containsExactly(new InputRoutingFacet.Port(port.getBlockPos(), true));
+        var tag = new CompoundTag();
+        port.saveAdditional(tag, LOOKUP);
+        var restored = new DeclaredPort(port.getBlockPos(), kind, List.of());
+        restored.loadAdditional(tag, LOOKUP);
+        assertThat(restored.isInputIsolated()).isTrue();
+        port.setInputIsolated(false);
+        controller.setFullyInputIsolated(true);
+        assertThat(port.isInputIsolated()).isFalse();
+        assertThat(routing(controller.componentRuntime().capabilitySnapshot()).inputPorts())
+                .containsExactly(new InputRoutingFacet.Port(port.getBlockPos(), true));
+        var outputBinding = IOPortKind.binding(shard, IOType.OUTPUT, List.of(family));
+        assertThat(new DeclaredPort(BlockPos.ZERO, new DeclaredKind(IOType.INPUT, List.of(family),
+                List.of(outputBinding)), List.of()).supportsInputIsolation()).isFalse();
+    }
+
+    @Test
+    void two_shard_ports_can_only_fund_one_recipe_when_their_inputs_are_pooled() {
+        var shard = SingleShard.TYPE;
+        var kind = new DeclaredKind(IOType.INPUT, List.of(), List.of(IOPortKind.binding(shard, IOType.INPUT, List.of())));
+        var first = new DeclaredPort(BlockPos.ZERO.east(), kind, List.of(new SingleShard()));
+        var second = new DeclaredPort(BlockPos.ZERO.west(), kind, List.of(new SingleShard()));
+        var runtime = new ComponentRuntime();
+        runtime.replaceComponents(List.of(component(first), component(second)));
+        try (var ignored = RequirementHandlerRegistry.openTestScope()) {
+            RequirementHandlerRegistry.register(ShardPair.TYPE);
+            List<MachineRequirement> demand = List.of(new ShardPair());
+            assertThat(new CraftingContext(runtime.capabilitySnapshot()).planRequirements(demand, 1, Map.of()).successful()).isTrue();
+            first.setInputIsolated(true);
+            second.setInputIsolated(true);
+            runtime.refreshInputRouting();
+            assertThat(new CraftingContext(runtime.capabilitySnapshot()).planRequirements(demand, 1, Map.of()).successful()).isFalse();
+        }
+    }
+
+    /** One unit of a scoped add-on material; no item or fluid facet.
+     * @author howxu <dev@howxu.cn>
+     */
+    private static final class SingleShard implements MachineCapability {
+        static final CapabilityType TYPE = new CapabilityType(InputScopeFamilies.isolated(ResourceLocation.parse("example:shard")));
+        @Override public CapabilityType type() { return TYPE; }
+        @Override public CapabilityDirections directions() { return CapabilityDirections.input(); }
+        @Override public CapabilityView view() { return CapabilityFactories.view(TYPE, directions()); }
+        @Override public CapabilityOperation prepare(CapabilityRequest request) { return null; }
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private record ShardPair() implements MachineRequirement {
+        static final RequirementType<ShardPair> TYPE = new RequirementType.Definition<>(SingleShard.TYPE.id(),
+                MapCodec.unit(ShardPair::new), (value, stocks, ctx) ->
+                        new RequirementPlan(ctx.requirementIndex(), stocks.size() / 2, List.of(), null));
+        @Override public RequirementType<ShardPair> type() { return TYPE; }
+        @Override public RecipeModifier.IOType io() { return RecipeModifier.IOType.INPUT; }
+    }
+
     private static MachineControllerBlockEntity controller(BlockPos pos) {
         return RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), pos);
     }
@@ -314,9 +396,11 @@ class InputIsolationStateTest {
     }
 
     /** @author howxu <dev@howxu.cn> */
-    private record DeclaredKind(IOType ioType, List<PortFamilyDescriptor> families) implements IOPortKind {
+    private record DeclaredKind(IOType ioType, List<PortFamilyDescriptor> families,
+                                List<CapabilityBinding> bindings) implements IOPortKind {
+        DeclaredKind(IOType ioType, List<PortFamilyDescriptor> families) { this(ioType, families, List.of()); }
         @Override public String id() { return "isolation_state_test"; }
-        @Override public PortDefinition definition() { return PortDefinition.of(MMCR.id(id()), List.of()); }
+        @Override public PortDefinition definition() { return PortDefinition.of(MMCR.id(id()), bindings); }
         @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
             return (pos, state) -> new DeclaredPort(pos, this, List.of());
         }

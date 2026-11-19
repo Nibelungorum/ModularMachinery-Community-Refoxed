@@ -86,19 +86,6 @@ public interface MekanismBridge {
     default void registerMenus(MenuRegistrar registrar) {
     }
 
-    /** Returns the optional capability identity represented by a menu, or {@code null}. */
-    default ResourceLocation capabilityIdForMenu(AbstractContainerMenu menu) {
-        return null;
-    }
-
-    /**
-     * Checks an optional port menu without exposing its implementation type to common code.
-     * A {@code null} position is treated as a failure; a {@code null port} skips owner matching.
-     */
-    default boolean isPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
-        return false;
-    }
-
     default IFluidHandlerItem manualFluidContainerHandler(IFluidHandlerItem handler) {
         return handler;
     }

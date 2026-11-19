@@ -3,24 +3,12 @@ package cn.howxu.mmcr.internal.block;
 import cn.howxu.mmcr.internal.menu.PortMenuBinding;
 
 import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
-import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
-import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
-import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
-import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.MachinePort;
-import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
-import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
-import cn.howxu.mmcr.internal.tile.ExtendedFluidHatchBlockEntity;
-import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
-import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.util.ItemSpecialOperationUtil;
 import net.minecraft.core.BlockPos;
@@ -60,13 +48,6 @@ import java.util.function.Supplier;
 
 public class IOPortBlock extends Block implements EntityBlock, MachinePort {
 
-    enum PortMenuKind {
-        ITEM, FLUID, ENERGY,
-        EXTENDED_ITEM, EXTENDED_FLUID, EXTENDED_ENERGY,
-        COMBINED, EXTENDED_COMBINED,
-        NONE
-    }
-
     private final IOPortKind kind;
     private final Supplier<? extends BlockEntityType<?>> beType;
 
@@ -93,13 +74,19 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
 
     @Override
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
+        return providerFor(kind, level, pos);
+    }
+
+    static MenuProvider providerFor(IOPortKind kind, Level level, BlockPos pos) {
         return new MenuProvider() {
             @Override
             public Component getDisplayName() { return titleFor(kind.id()); }
 
             @Override
             public @Nullable AbstractContainerMenu createMenu(int containerId, Inventory playerInv, Player player) {
-                return openServerMenu(kind.id(), containerId, playerInv, level, pos);
+                BlockEntity target = level.getBlockEntity(pos);
+                if (!(target instanceof MachinePort port) || target.isRemoved() || !port.kind().id().equals(kind.id())) return null;
+                return kind.createPortMenu(containerId, playerInv, level, pos);
             }
 
             @Override
@@ -204,60 +191,6 @@ public class IOPortBlock extends Block implements EntityBlock, MachinePort {
         if (level.isClientSide()) return null;
         return (lvl, pos, st, be) -> {
             if (be instanceof IOPortBlockEntity port) port.serverTick();
-        };
-    }
-
-    static PortMenuKind menuKindFor(String id) {
-        if (matchesPortId(id, "item_input_bus") || matchesPortId(id, "item_output_bus")) {
-            return PortMenuKind.ITEM;
-        }
-        if (matchesPortId(id, "fluid_input_hatch") || matchesPortId(id, "fluid_output_hatch")) {
-            return PortMenuKind.FLUID;
-        }
-        if (matchesPortId(id, "energy_input_hatch") || matchesPortId(id, "energy_output_hatch")) {
-            return PortMenuKind.ENERGY;
-        }
-        if (matchesPortId(id, "extended_item_input_bus") || matchesPortId(id, "extended_item_output_bus")) {
-            return PortMenuKind.EXTENDED_ITEM;
-        }
-        if (matchesPortId(id, "extended_fluid_input_hatch") || matchesPortId(id, "extended_fluid_output_hatch")) {
-            return PortMenuKind.EXTENDED_FLUID;
-        }
-        if (matchesPortId(id, "extended_energy_input_hatch") || matchesPortId(id, "extended_energy_output_hatch")) {
-            return PortMenuKind.EXTENDED_ENERGY;
-        }
-        if (matchesPortId(id, "combined_input") || matchesPortId(id, "combined_output")) {
-            return PortMenuKind.COMBINED;
-        }
-        if (matchesPortId(id, "extended_combined_input") || matchesPortId(id, "extended_combined_output")) {
-            return PortMenuKind.EXTENDED_COMBINED;
-        }
-        return PortMenuKind.NONE;
-    }
-
-    private static boolean matchesPortId(String id, String baseId) {
-        return id.equals(baseId) || id.startsWith(baseId + "_");
-    }
-
-    private static @Nullable AbstractContainerMenu openServerMenu(String kind, int containerId,
-                                                        Inventory playerInv,
-                                                        Level level, BlockPos pos) {
-        if (!(level.getBlockEntity(pos) instanceof IOPortBlockEntity port)
-                || port.isRemoved() || !port.kind().id().equals(kind)) return null;
-        return switch (menuKindFor(kind)) {
-            case ITEM -> port instanceof ItemBusBlockEntity bus ? new ItemBusMenu(containerId, playerInv, bus) : null;
-            case FLUID -> port instanceof FluidHatchBlockEntity hatch ? new FluidHatchMenu(containerId, playerInv, hatch) : null;
-            case ENERGY, EXTENDED_ENERGY -> port instanceof EnergyHatchBlockEntity hatch
-                    ? new EnergyHatchMenu(containerId, playerInv, hatch) : null;
-            case EXTENDED_ITEM -> port instanceof ExtendedItemBusBlockEntity bus
-                    ? new ExtendedItemMenu(containerId, playerInv, bus) : null;
-            case EXTENDED_FLUID -> port instanceof ExtendedFluidHatchBlockEntity hatch
-                    ? new ExtendedFluidMenu(containerId, playerInv, hatch) : null;
-            case COMBINED -> port instanceof CombinedPortBlockEntity combined
-                    ? new CombinedPortMenu(containerId, playerInv, combined) : null;
-            case EXTENDED_COMBINED -> port instanceof ExtendedCombinedPortBlockEntity combined
-                    ? new ExtendedCombinedMenu(containerId, playerInv, combined) : null;
-            case NONE -> port.kind().createPortMenu(containerId, playerInv, level, pos);
         };
     }
 

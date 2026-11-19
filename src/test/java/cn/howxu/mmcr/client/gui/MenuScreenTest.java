@@ -72,14 +72,12 @@ class MenuScreenTest {
 
     @Test
     void auto_io_control_tooltip_uses_capability_and_direction() {
-        assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), false))
-                .isEqualTo("mmcr.auto_io.item_input_control");
-        assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), true))
-                .isEqualTo("mmcr.auto_io.item_output_control");
-        assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), false))
-                .isEqualTo("mmcr.auto_io.fluid_input_control");
-        assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), true))
-                .isEqualTo("mmcr.auto_io.fluid_output_control");
+        assertThat(AbstractPortScreen.controlLabel(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), false).getString())
+                .isEqualTo("Item Input Control");
+        assertThat(AbstractPortScreen.controlLabel(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), true).getString())
+                .isEqualTo("Fluid Output Control");
+        assertThat(AbstractPortScreen.controlLabel(ResourceLocation.parse("example:item"), false).getString())
+                .isEqualTo("example:item Input Control");
     }
 
     @Test
@@ -136,6 +134,23 @@ class MenuScreenTest {
         screen.choose(fluid);
 
         assertThat(screen.resolve(List.of(item, fluid))).isEqualTo(fluid);
+        assertThat(screen.resolve(List.of())).isNull();
+        screen.pressPageButton(List.of(), false);
+        assertThat(screen.autoIOPage).isFalse();
+        screen.pressPageButton(List.of(item), false);
+        assertThat(screen.autoIOPage).isTrue();
+        screen.pressPageButton(List.of(item), false);
+        screen.pressPageButton(List.of(item, fluid), true);
+        assertThat(screen.resolve(List.of(item, fluid))).isEqualTo(fluid);
+        screen.pressPageButton(List.of(item, fluid), false);
+        var shard = ResourceLocation.parse("example:shard");
+        var ids = List.of(item, fluid, shard);
+        screen.pressPageButton(ids, true);
+        assertThat(screen.autoIOPage).isFalse();
+        screen.pressPageButton(ids, false);
+        assertThat(screen.autoIOPage).isTrue();
+        assertThat(screen.resolve(ids)).isEqualTo(shard);
+        assertThat(screen.resolve(List.of(item))).isEqualTo(item);
     }
 
     @Test
@@ -219,6 +234,10 @@ class MenuScreenTest {
         var constructor = ClientLanguage.class.getDeclaredConstructor(Map.class, boolean.class);
         constructor.setAccessible(true);
         Language.inject(constructor.newInstance(Map.of(
+                "mmcr.auto_io.resource.minecraft.item", "Item",
+                "mmcr.auto_io.resource.minecraft.fluid", "Fluid",
+                "mmcr.auto_io.resource_input", "%s Input Control",
+                "mmcr.auto_io.resource_output", "%s Output Control",
                 "gui.mmcr.fluid", "Fluid: %s",
                 "block.minecraft.water", "Water"), false));
     }

@@ -26,6 +26,13 @@ import cn.howxu.mmcr.compat.botania.BotaniaBridge;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
+import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
+import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
+import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
 import cn.howxu.mmcr.internal.port.EnergyHatchSize;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
 import cn.howxu.mmcr.internal.port.ExtendedEnergyHatchSize;
@@ -40,6 +47,9 @@ import cn.howxu.mmcr.internal.port.CombinedPortSize;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyOutputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedCombinedPortBlockEntity;
@@ -82,6 +92,11 @@ public final class PortKinds {
             ItemBusSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof ItemBusBlockEntity port
+                    ? new ItemBusMenu(containerId, player, port) : null;
+        }
 
         @Override
         public Optional<ItemBusSize> itemBusSize() {
@@ -106,6 +121,11 @@ public final class PortKinds {
             FluidHatchSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof FluidHatchBlockEntity port
+                    ? new FluidHatchMenu(containerId, player, port) : null;
+        }
 
         @Override
         public Optional<FluidHatchSize> fluidHatchSize() {
@@ -130,6 +150,11 @@ public final class PortKinds {
             EnergyHatchSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity port
+                    ? new EnergyHatchMenu(containerId, player, port) : null;
+        }
 
         @Override
         public Optional<EnergyHatchSize> energyHatchSize() {
@@ -154,6 +179,11 @@ public final class PortKinds {
             ExtendedItemBusSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof ExtendedItemBusBlockEntity port
+                    ? new ExtendedItemMenu(containerId, player, port) : null;
+        }
 
         @Override
         public Optional<ExtendedItemBusSize> extendedItemBusSize() {
@@ -178,6 +208,11 @@ public final class PortKinds {
             ExtendedFluidHatchSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof ExtendedFluidHatchBlockEntity port
+                    ? new ExtendedFluidMenu(containerId, player, port) : null;
+        }
 
         @Override
         public Optional<ExtendedFluidHatchSize> extendedFluidHatchSize() {
@@ -202,6 +237,11 @@ public final class PortKinds {
             ExtendedEnergyHatchSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity port
+                    ? new EnergyHatchMenu(containerId, player, port) : null;
+        }
 
         @Override
         public Optional<ExtendedEnergyHatchSize> extendedEnergyHatchSize() {
@@ -226,6 +266,11 @@ public final class PortKinds {
             CombinedPortSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof CombinedPortBlockEntity port
+                    ? new CombinedPortMenu(containerId, player, port) : null;
+        }
 
         @Override
         public Optional<CombinedPortSize> combinedPortSize() {
@@ -252,6 +297,11 @@ public final class PortKinds {
             ExtendedCombinedPortSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+        @Override
+        public AbstractContainerMenu createPortMenu(int containerId, Inventory player, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity port
+                    ? new ExtendedCombinedMenu(containerId, player, port) : null;
+        }
 
         @Override
         public Optional<ExtendedCombinedPortSize> extendedCombinedPortSize() {
@@ -276,6 +326,8 @@ public final class PortKinds {
 
     public record ChemicalKind(String id, IOType ioType, int tier, long capacity, boolean radioactive)
             implements IOPortKind {
+        @Override public boolean availableForStructure() { return MekanismBridge.get().available(); }
+
         @Override public ItemInteractionResult useContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
             return MekanismBridge.get().interactWithChemicalContainer(player, hand, port) > 0
                     ? ItemInteractionResult.SUCCESS : ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
@@ -321,6 +373,8 @@ public final class PortKinds {
 
     public record HeatKind(String id, IOType ioType, int tier, double capacity)
             implements IOPortKind {
+        @Override public boolean availableForStructure() { return MekanismBridge.get().available(); }
+
         @Override public ItemInteractionResult useContainer(Player player, InteractionHand hand, IOPortBlockEntity port) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }

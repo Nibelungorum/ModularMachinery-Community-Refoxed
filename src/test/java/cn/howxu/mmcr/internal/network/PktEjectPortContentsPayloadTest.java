@@ -61,8 +61,8 @@ class PktEjectPortContentsPayloadTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
-        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
+        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, inventory) -> new ItemBusMenu(containerId, inventory), FeatureFlags.VANILLA_SET));
         bind(ModUIs.CHEMICAL_PORT, new MenuType<>((containerId, inventory) ->
                 new ChemicalPortMenu(containerId, inventory, PORT_POS), FeatureFlags.VANILLA_SET));

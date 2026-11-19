@@ -1,6 +1,15 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
+import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -66,13 +75,13 @@ class InputIsolationPortLayoutTest {
                 screen.autoIOPage = ioPage;
                 update.invoke(screen);
                 IsolationToggleButton isolation = (IsolationToggleButton) getField(screen, "isolationButton");
-                assertThat(isolation.visible).isEqualTo(!ioPage);
-                assertThat(isolation.active).isEqualTo(!ioPage);
+                boolean activePage = navigationCount > 0 && ioPage;
+                assertThat(isolation.visible).isEqualTo(!activePage);
+                assertThat(isolation.active).isEqualTo(!activePage);
                 assertThat(isolation.getX()).isEqualTo(32);
-                int preceding = ioPage ? Math.min(1, navigationCount) : navigationCount;
-                assertThat(isolation.getY()).isEqualTo(41 + preceding * 18);
+                assertThat(isolation.getY()).isEqualTo(41 + navigationCount * 18);
                 Button secondary = (Button) getField(screen, "secondaryAutoIOPageButton");
-                if (secondary != null) assertThat(secondary.visible).isEqualTo(!ioPage);
+                assertThat(secondary.visible).isEqualTo(navigationCount > 1 && !activePage);
                 assertThat(screen.getMenu().inputIsolation().enabled()).isFalse();
             }
             screen.getMenu().inputIsolation().dataSlot().set(3);
@@ -82,6 +91,48 @@ class InputIsolationPortLayoutTest {
             update.invoke(screen);
             assertThat(((IsolationToggleButton) getField(screen, "isolationButton")).visible).isFalse();
         }
+    }
+
+    @Test
+    void late_owner_enables_navigation_and_replacement_closes_the_old_page() throws Exception {
+        var screen = screen(0);
+        var update = AbstractPortScreen.class.getDeclaredMethod("updateAutoIOWidgets");
+        update.setAccessible(true);
+        var page = (Button) getField(screen, "autoIOPageButton");
+        update.invoke(screen);
+        assertThat(page.visible).isFalse();
+        screen.port = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+        update.invoke(screen);
+        assertThat(page.visible).isTrue();
+        screen.autoIOPage = true;
+        screen.port = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+        update.invoke(screen);
+        assertThat(screen.autoIOPage).isFalse();
+    }
+
+    @Test
+    void third_live_capability_is_addressable_and_its_removal_prevents_stale_requests() throws Exception {
+        var screen = screen(1);
+        var capabilities = new ArrayList<MachineCapability>(screen.port.capabilities());
+        capabilities.addAll(RuntimeTestFixtures.fluidInput(BlockPos.ZERO).capabilities());
+        capabilities.addAll(RuntimeTestFixtures.energyInput(BlockPos.ZERO).capabilities());
+        screen.port = new ItemInputBusBlockEntity(BlockPos.ZERO, screen.port.getBlockState()) {
+            @Override public CapabilitySnapshot capabilitySnapshot() { return new CapabilitySnapshot(capabilities); }
+        };
+        var update = AbstractPortScreen.class.getDeclaredMethod("updateAutoIOWidgets");
+        update.setAccessible(true);
+        update.invoke(screen);
+        var ids = screen.port.configurableAutoIOIds();
+        screen.pressPageButton(ids, true);
+        screen.pressPageButton(ids, true);
+        screen.pressPageButton(ids, false);
+        assertThat(screen.configRequest(AutoIOAction.SET_SIDE, Direction.NORTH, false)).contains(
+                new PktAutoIOConfigPayload(BlockPos.ZERO, BuiltinCapabilityDefinitions.ENERGY_TYPE.id(),
+                        AutoIOAction.SET_SIDE, Direction.NORTH, false));
+        capabilities.removeLast();
+        assertThat(screen.configRequest(AutoIOAction.SET_ENABLED, null, true)).isEmpty();
+        update.invoke(screen);
+        assertThat(screen.autoIOPage).isFalse();
     }
 
     private FixtureScreen screen(int navigationCount) throws Exception {
@@ -95,8 +146,10 @@ class InputIsolationPortLayoutTest {
         setField(screen, "hiddenSlotPositions", new ArrayList<>());
         setField(screen, "relocatedPlayerSlotPositions", new ArrayList<>());
         setField(screen, "isolationButton", new IsolationToggleButton(0, 0, Component.empty(), state::enabled, ignored -> {}));
-        if (navigationCount > 0) setField(screen, "autoIOPageButton", button());
-        if (navigationCount > 1) setField(screen, "secondaryAutoIOPageButton", button());
+        setField(screen, "autoIOPageButton", button());
+        setField(screen, "secondaryAutoIOPageButton", button());
+        screen.port = navigationCount == 0 ? null : navigationCount == 1 ? RuntimeTestFixtures.itemInput(BlockPos.ZERO)
+                : new CombinedPortBlockEntity(BlockPos.ZERO, ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState());
         return screen;
     }
 
@@ -127,9 +180,8 @@ class InputIsolationPortLayoutTest {
         @Override protected int portSlotCount() { return 0; }
         @Override protected ResourceLocation texture(boolean autoIOPage) { return null; }
         @Override protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) { }
-        @Override protected List<ResourceLocation> supportedCapabilityIds() {
-            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), BuiltinCapabilityDefinitions.FLUID_TYPE.id());
-        }
+        private IOPortBlockEntity port;
+        @Override IOPortBlockEntity portEntity() { return port; }
     }
 
     /** @author howxu <dev@howxu.cn> */

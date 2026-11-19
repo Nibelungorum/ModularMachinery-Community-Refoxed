@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.internal.capability.ItemBusCapability;
+import cn.howxu.mmcr.internal.storage.LongItemStorage;
+import cn.howxu.mmcr.util.IOType;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -39,6 +43,21 @@ class AutoIOPortTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
+    }
+
+    @Test
+    void configuration_selects_the_eligible_occurrence_not_the_first_matching_id() {
+        var storage = new LongItemStorage(1, 64, () -> {});
+        var input = new ItemBusCapability(storage, IOType.INPUT);
+        var snapshot = new CapabilitySnapshot(List.of(new ItemBusCapability(storage, IOType.OUTPUT),
+                new ItemBusCapability(null, storage, IOType.INPUT, false), input, input));
+        var port = new ItemInputBusBlockEntity(BlockPos.ZERO, ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState()) {
+            @Override public CapabilitySnapshot capabilitySnapshot() { return snapshot; }
+        };
+        assertThat(port.configurableAutoIOIds()).containsExactly(input.type().id());
+        assertThat(port.configurableAutoIOCapability(input.type())).isSameAs(input);
+        port.setAutoIOEnabled(input.type(), true);
+        assertThat(port.autoIOConfig(input.type()).enabled()).isTrue();
     }
 
     @Test

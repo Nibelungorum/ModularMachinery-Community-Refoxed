@@ -54,8 +54,7 @@ public record PktEjectPortContentsPayload(BlockPos pos, ResourceLocation capabil
                 || !player.containerMenu.stillValid(player)
                 || !MenuSupport.stillValidWithin(player, payload.pos)) return false;
         CapabilityType type = new CapabilityType(payload.capabilityId);
-        var capability = port.capability(type);
-        return capability != null && capability.directions().supports(IOType.INPUT)
+        return port.capabilities().stream().anyMatch(cap -> type.equals(cap.type()) && cap.directions().supports(IOType.INPUT))
                 && (payload.allResources ? port.ejectContents(type, true) : port.ejectContents(type));
     }
 

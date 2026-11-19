@@ -1,7 +1,8 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
@@ -236,11 +237,20 @@ class ExtendedPortScreenTest {
             return screen;
         }
 
+        private IOPortBlockEntity port;
+
+        @Override IOPortBlockEntity portEntity() { return port; }
+
         private Button createPageButton() throws Exception {
-            Method method = AbstractPortScreen.class.getDeclaredMethod("createAutoIOPageButton",
-                    int.class, int.class, ResourceLocation.class);
+            port = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+            Method method = AbstractPortScreen.class.getDeclaredMethod("createAutoIOPageButton", int.class, int.class, boolean.class);
             method.setAccessible(true);
-            return (Button) method.invoke(this, 0, 0, BuiltinCapabilityDefinitions.ITEM_TYPE.id());
+            Button button = (Button) method.invoke(this, 0, 0, false);
+            setField(this, "autoIOPageButton", button);
+            Method update = AbstractPortScreen.class.getDeclaredMethod("updateAutoIOWidgets");
+            update.setAccessible(true);
+            update.invoke(this);
+            return button;
         }
 
         @Override

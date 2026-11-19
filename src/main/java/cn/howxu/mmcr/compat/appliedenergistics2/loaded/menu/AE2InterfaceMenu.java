@@ -5,7 +5,7 @@ import appeng.helpers.InventoryAction;
 import appeng.menu.SlotSemantic;
 import appeng.menu.implementations.InterfaceMenu;
 import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -22,7 +22,7 @@ public final class AE2InterfaceMenu extends InterfaceMenu {
     public AE2InterfaceMenu(MenuType<? extends AE2InterfaceMenu> type, int id,
                             Inventory inventory, InterfaceLogicHost host) {
         super(type, id, inventory, host);
-        inputIsolation = InputIsolationMenuState.forPort(host instanceof IOPortBlockEntity port ? port : null);
+        inputIsolation = InputIsolationMenuState.forPort(host instanceof BlockEntity port ? port : null);
         addDataSlot(inputIsolation.dataSlot());
     }
 

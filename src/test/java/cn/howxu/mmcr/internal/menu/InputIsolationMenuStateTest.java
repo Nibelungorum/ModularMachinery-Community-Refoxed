@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.internal.menu;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.port.InputIsolationHost;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -134,6 +138,29 @@ class InputIsolationMenuStateTest {
         assertThat(menu.clickMenuButton(player, InputIsolationMenuState.DISABLE)).isTrue();
         assertThat(controller.isFullyInputIsolated()).isFalse();
         assertThat(port.isInputIsolated()).isTrue();
+    }
+
+    @Test
+    void independently_implemented_isolation_owner_uses_the_same_menu_commands() throws Exception {
+        var owner = new IsolatingChest();
+        var level = LevelStub.createWithBlockEntities(List.of(owner));
+        owner.setLevel(level);
+        var menu = new FixtureMenu(InputIsolationMenuState.forPort(owner));
+        var player = player(level, menu);
+        assertThat(menu.clickMenuButton(player, InputIsolationMenuState.ENABLE)).isTrue();
+        assertThat(menu.inputIsolation().enabled()).isTrue();
+        LevelStub.putBlockEntity(level, new IsolatingChest());
+        assertThat(menu.clickMenuButton(player, InputIsolationMenuState.DISABLE)).isFalse();
+        assertThat(owner.isInputIsolated()).isTrue();
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class IsolatingChest extends BlockEntity implements InputIsolationHost {
+        private boolean isolated;
+        IsolatingChest() { super(BlockEntityType.CHEST, BlockPos.ZERO, Blocks.CHEST.defaultBlockState()); }
+        @Override public boolean supportsInputIsolation() { return true; }
+        @Override public boolean isInputIsolated() { return isolated; }
+        @Override public void setInputIsolated(boolean enabled) { isolated = enabled; }
     }
 
     private static ItemInputBusBlockEntity input() {

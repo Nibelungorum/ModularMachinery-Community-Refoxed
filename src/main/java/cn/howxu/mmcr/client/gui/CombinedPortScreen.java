@@ -1,7 +1,6 @@
 package cn.howxu.mmcr.client.gui;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
@@ -41,10 +40,6 @@ public final class CombinedPortScreen extends AbstractPortScreen<CombinedPortMen
 
     public CombinedPortScreen(CombinedPortMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, IMAGE_HEIGHT);
-    }
-
-    static List<ResourceLocation> capabilityIds() {
-        return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), BuiltinCapabilityDefinitions.FLUID_TYPE.id());
     }
 
     static Layout layout() {

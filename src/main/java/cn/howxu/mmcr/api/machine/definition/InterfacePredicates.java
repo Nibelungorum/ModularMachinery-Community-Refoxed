@@ -6,13 +6,11 @@ import cn.howxu.mmcr.internal.registration.BuiltinRegistration;
 import cn.howxu.mmcr.api.compat.mekanism.MekanismPortFamilies;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsSourceIds;
 import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
-import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
-import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
-import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyIds;
+import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
@@ -20,6 +18,7 @@ import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /** Reusable predicates for built-in machine interfaces and controllers.
  * @author howxu <dev@howxu.cn>
@@ -205,13 +204,13 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfAirInput() {
-        return PneumaticCraftBridge.get().available() ? anyOfPorts(PneumaticIds.AIR, IOType.INPUT) : BlockPredicate.none();
+        return anyOfPorts(PneumaticIds.AIR, IOType.INPUT);
     }
 
     public static BlockPredicate anyAirInput() { return anyOfAirInput(); }
 
     public static BlockPredicate anyOfAirOutput() {
-        return PneumaticCraftBridge.get().available() ? anyOfPorts(PneumaticIds.AIR, IOType.OUTPUT) : BlockPredicate.none();
+        return anyOfPorts(PneumaticIds.AIR, IOType.OUTPUT);
     }
 
     public static BlockPredicate anyAirOutput() { return anyOfAirOutput(); }
@@ -221,13 +220,13 @@ public final class InterfacePredicates {
     public static BlockPredicate anyAirPorts() { return anyOfAirPorts(); }
 
     public static BlockPredicate anyOfStressInput() {
-        return CreateBridge.get().available() ? anyOfPorts(CreateRecipeTypes.STRESS, IOType.INPUT) : BlockPredicate.none();
+        return anyOfPorts(CreateRecipeTypes.STRESS, IOType.INPUT);
     }
 
     public static BlockPredicate anyStressInput() { return anyOfStressInput(); }
 
     public static BlockPredicate anyOfStressOutput() {
-        return CreateBridge.get().available() ? anyOfPorts(CreateRecipeTypes.STRESS, IOType.OUTPUT) : BlockPredicate.none();
+        return anyOfPorts(CreateRecipeTypes.STRESS, IOType.OUTPUT);
     }
 
     public static BlockPredicate anyStressOutput() { return anyOfStressOutput(); }
@@ -241,24 +240,7 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate ports() {
-        List<BlockPredicate> predicates = new ArrayList<>(List.of(
-                anyItemInput(), anyItemOutput(), anyFluidInput(), anyFluidOutput(),
-                anyEnergyInput(), anyEnergyOutput()));
-        addIfPresent(predicates, anyOfChemicalInput());
-        addIfPresent(predicates, anyOfChemicalOutput());
-        addIfPresent(predicates, anyOfRadioactiveChemicalInput());
-        addIfPresent(predicates, anyOfRadioactiveChemicalOutput());
-        addIfPresent(predicates, anyOfHeatInput());
-        addIfPresent(predicates, anyOfHeatOutput());
-        addIfPresent(predicates, anyOfStressInput());
-        addIfPresent(predicates, anyOfStressOutput());
-        addIfPresent(predicates, anyOfAirInput());
-        addIfPresent(predicates, anyOfAirOutput());
-        addIfPresent(predicates, anyOfSourceInput());
-        addIfPresent(predicates, anyOfSourceOutput());
-        addIfPresent(predicates, anyOfManaInput());
-        addIfPresent(predicates, anyOfManaOutput());
-        return BlockPredicate.any(predicates.toArray(BlockPredicate[]::new));
+        return registeredPorts(family -> true);
     }
 
     public static BlockPredicate anyOfPort() {
@@ -319,19 +301,18 @@ public final class InterfacePredicates {
     }
 
     public static BlockPredicate anyOfPorts(ResourceLocation familyId, IOType ioType) {
-        if (isUnavailableMekanismFamily(familyId)) return BlockPredicate.none();
-        List<BlockPredicate> predicates = new ArrayList<>();
-        for (IOPortKind kind : PortKinds.all()) {
-            boolean exposesFamily = kind.families().stream()
-                    .anyMatch(family -> family.familyId().equals(familyId) && family.ioType() == ioType
-                            && kind.bindings().stream().anyMatch(family::matches));
-            if (exposesFamily) predicates.add(port(kind.id()));
-        }
+        return registeredPorts(family -> family.familyId().equals(familyId) && family.ioType() == ioType);
+    }
+
+    private static BlockPredicate registeredPorts(Predicate<PortFamilyDescriptor> matches) {
+        var predicates = PortKinds.all().stream().filter(IOPortKind::availableForStructure)
+                .filter(kind -> kind.families().stream().filter(matches)
+                        .anyMatch(family -> kind.bindings().stream().anyMatch(family::matches)))
+                .map(kind -> port(kind.id())).toList();
         return predicates.isEmpty() ? BlockPredicate.none() : BlockPredicate.anyOf(predicates);
     }
 
     private static BlockPredicate anyOfChemicalPorts(IOType ioType, boolean radioactive) {
-        if (!MekanismBridge.get().available()) return BlockPredicate.none();
         return anyOfPorts(radioactive ? MekanismPortFamilies.RADIOACTIVE_CHEMICAL
                 : MekanismPortFamilies.CHEMICAL, ioType);
     }
@@ -344,13 +325,6 @@ public final class InterfacePredicates {
         List<BlockPredicate> alternatives = new ArrayList<>();
         for (BlockPredicate predicate : predicates) addIfPresent(alternatives, predicate);
         return alternatives.isEmpty() ? BlockPredicate.none() : BlockPredicate.anyOf(alternatives);
-    }
-
-    private static boolean isUnavailableMekanismFamily(ResourceLocation familyId) {
-        return (familyId.equals(MekanismPortFamilies.HEAT)
-                || familyId.equals(MekanismPortFamilies.CHEMICAL)
-                || familyId.equals(MekanismPortFamilies.RADIOACTIVE_CHEMICAL))
-                && !MekanismBridge.get().available();
     }
 
 }

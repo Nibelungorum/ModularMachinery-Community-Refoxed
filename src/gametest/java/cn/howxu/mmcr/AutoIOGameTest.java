@@ -1,6 +1,9 @@
 package cn.howxu.mmcr;
 
 import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.internal.autoio.AutoIOAction;
+import cn.howxu.mmcr.internal.menu.PortMenuBinding;
+import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
@@ -9,9 +12,14 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.storage.LongItemStorage;
 import cn.howxu.mmcr.registry.ModBlocks;
+import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -20,10 +28,50 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.neoforged.neoforge.fluids.FluidStack;
 
+import java.util.UUID;
+
 /**
  * @author howxu <dev@howxu.cn>
  */
 public class AutoIOGameTest {
+
+    public static void independentMenuOwner(GameTestHelper helper) {
+        var relative = new BlockPos(1, 1, 1);
+        var state = ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState();
+        helper.setBlock(relative, state);
+        IOPortBlockEntity owner = helper.getBlockEntity(relative);
+        var pos = owner.getBlockPos();
+        var player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
+                new GameProfile(UUID.randomUUID(), "port_owner"), ClientInformation.createDefault());
+        player.setPos(pos.getCenter());
+        player.containerMenu = new IndependentPortMenu(owner);
+        var fluid = BuiltinCapabilityDefinitions.FLUID_TYPE;
+        var packet = new PktAutoIOConfigPayload(pos, fluid.id(), AutoIOAction.SET_ENABLED, null, true);
+        helper.assertTrue(packet.applyOnServer(player) && owner.autoIOConfig(fluid).enabled()
+                && !owner.autoIOConfig(BuiltinCapabilityDefinitions.ITEM_TYPE).enabled(), "Only the requested capability changed");
+        player.setPos(pos.east(20).getCenter());
+        helper.assertTrue(!packet.applyOnServer(player), "Menu validity does not bypass distance");
+        player.setPos(pos.getCenter());
+        helper.assertTrue(!new PktAutoIOConfigPayload(pos, fluid.id(), AutoIOAction.SET_SIDE, null, false).applyOnServer(player)
+                && !new PktAutoIOConfigPayload(pos, BuiltinCapabilityDefinitions.ENERGY_TYPE.id(),
+                        AutoIOAction.SET_ENABLED, null, true).applyOnServer(player), "Side and capability must be valid");
+        helper.setBlock(relative, Blocks.AIR.defaultBlockState());
+        helper.setBlock(relative, state);
+        IOPortBlockEntity replacement = helper.getBlockEntity(relative);
+        helper.assertTrue(replacement != owner && !packet.applyOnServer(player) && !replacement.autoIOConfig(fluid).enabled(),
+                "Same coordinates never authorize the old menu against a replacement");
+        helper.succeed();
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    private static final class IndependentPortMenu extends AbstractContainerMenu implements PortMenuBinding {
+        private final IOPortBlockEntity owner;
+        IndependentPortMenu(IOPortBlockEntity owner) { super(null, 1); this.owner = owner; }
+        public IOPortBlockEntity owner() { return owner; }
+        public BlockPos pos() { return owner.getBlockPos(); }
+        public boolean stillValid(Player player) { return true; }
+        public ItemStack quickMoveStack(Player player, int index) { return ItemStack.EMPTY; }
+    }
 
     public void adjacentIconsUsePickedItems(GameTestHelper helper) {
         BlockPos portPos = new BlockPos(1, 1, 1);

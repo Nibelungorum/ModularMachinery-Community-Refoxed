@@ -3,7 +3,6 @@ package cn.howxu.mmcr.internal.network;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
@@ -42,8 +41,8 @@ class PktAutoIOConfigPayloadTest {
 
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
-        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
+        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         bind(ModUIs.ITEM_BUS, new MenuType<>((containerId, inventory) -> new ItemBusMenu(containerId, inventory, BlockPos.ZERO), FeatureFlags.VANILLA_SET));
         bind(ModUIs.CHEMICAL_PORT, new MenuType<>((containerId, inventory) ->
                 new ChemicalPortMenu(containerId, inventory, BlockPos.ZERO), FeatureFlags.VANILLA_SET));
@@ -69,12 +68,8 @@ class PktAutoIOConfigPayloadTest {
         ChemicalPortMenu chemicalMenu = new ChemicalPortMenu(1, testInventory(), BlockPos.ZERO);
         HeatPortMenu heatMenu = new HeatPortMenu(1, testInventory(), BlockPos.ZERO);
 
-        assertThat(MekanismBridge.get().isPortMenuAt(chemicalMenu, BlockPos.ZERO, null)).isTrue();
-        assertThat(MekanismBridge.get().isPortMenuAt(heatMenu, BlockPos.ZERO, null)).isTrue();
-        assertThat(MekanismBridge.get().capabilityIdForMenu(chemicalMenu))
-                .isEqualTo(MekanismRecipeTypes.CHEMICAL);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(heatMenu))
-                .isEqualTo(MekanismRecipeTypes.HEAT);
+        assertThat(PktAutoIOConfigPayload.canUpdate(playerWith(chemicalMenu), BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
+        assertThat(PktAutoIOConfigPayload.canUpdate(playerWith(heatMenu), BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
     }
 
     @Test
@@ -92,7 +87,6 @@ class PktAutoIOConfigPayloadTest {
 
             assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO,
                     AutoIOAction.SET_ENABLED, null)).isFalse();
-            assertThat(MekanismBridge.get().isPortMenuAt(nonPortMenu, BlockPos.ZERO, null)).isFalse();
             assertThat(PktAutoIOConfigPayload.ownsMenu(nonPortMenu, null)).isFalse();
         } catch (Throwable failure) {
             throw failure;

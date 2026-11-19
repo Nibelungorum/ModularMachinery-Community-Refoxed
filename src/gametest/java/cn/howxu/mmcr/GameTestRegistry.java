@@ -65,6 +65,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
+import cn.howxu.mmcr.compat.create.loaded.StressInterfaceGameTest;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.fml.ModList;
 
@@ -81,6 +82,7 @@ public final class GameTestRegistry {
 
     public static void registerAll(RegisterGameTestsEvent event) {
         event.register(GameTestRegistry.class);
+        if (ModList.get().isLoaded("create")) StressInterfaceGameTest.registerAll(event);
     }
 
     @GameTestGenerator
@@ -330,6 +332,7 @@ public final class GameTestRegistry {
         register(event, "wrench_dismantling_sound", 20,
                 helper -> new WrenchDismantleGameTest().wrenchDismantlingPlaysSoundOnlyOnSuccess(helper));
         register(event, "dynamic_controller_drops_self", 100, ItemBusCapabilityGameTest::dynamicControllerDropsItself);
+        register(event, "auto_io_independent_menu_owner", 20, AutoIOGameTest::independentMenuOwner);
         register(event, "auto_io_adjacent_picked_icons", 20,
                 helper -> new AutoIOGameTest().adjacentIconsUsePickedItems(helper));
         // Disabled: CPU scheduling delays can cause this otherwise-correct test to fail intermittently.
@@ -929,6 +932,11 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:input_isolation_")
                     || name.equals("mmcr:structure_protocol_negotiation")
                     || name.startsWith("mmcr:port_container_")
+                    || name.startsWith("mmcr:auto_io_")
+                    || name.equals("mmcr:port_menu_direction")
+                    || name.equals("mmcr:item_bus_capability_cache_auto_io_side")
+                    || name.equals("mmcr:extended_standalone_capabilities")
+                    || name.equals("mmcr:mekanism_chemical_input_ejects_to_first_target")
                     || name.startsWith("mmcr:pneumatic_air_")
                     || name.equals("mmcr:pneumatic_native_signed_wakeups")
                     || name.equals("mmcr:ars_source_recipe_restore_wakeups")

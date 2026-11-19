@@ -2,7 +2,8 @@ package cn.howxu.mmcr.test;
 
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
-import cn.howxu.mmcr.compat.mekanism.MekanismRecipeTypes;
+import cn.howxu.mmcr.internal.autoio.AutoIOAction;
+import cn.howxu.mmcr.internal.network.PktAutoIOConfigPayload;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
 import cn.howxu.mmcr.internal.menu.FactoryControllerMenu;
@@ -60,21 +61,20 @@ public final class TestBootstrapMenuFixture {
         Inventory inventory = new Inventory(player);
         ChemicalPortMenu chemical = new ChemicalPortMenu(3, inventory, BlockPos.ZERO);
         HeatPortMenu heat = new HeatPortMenu(4, inventory, BlockPos.ZERO);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(chemical)).isEqualTo(MekanismRecipeTypes.CHEMICAL);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(heat)).isEqualTo(MekanismRecipeTypes.HEAT);
-        assertThat(MekanismBridge.get().isPortMenuAt(chemical, BlockPos.ZERO, null)).isTrue();
-        assertThat(MekanismBridge.get().isPortMenuAt(heat, BlockPos.ZERO, null)).isTrue();
+        player.containerMenu = chemical;
+        assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
+        player.containerMenu = heat;
+        assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
 
         MekanismBridge unavailable = MekanismBridgeBootstrap.selectForTesting(false);
         MekanismBridgeBootstrap.installForTesting(unavailable);
         TestBootstrap.bootstrap();
         assertThat(MekanismBridge.get()).isSameAs(unavailable);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(chemical)).isNull();
-        assertThat(MekanismBridge.get().isPortMenuAt(heat, BlockPos.ZERO, null)).isFalse();
+        assertThat(MekanismBridge.get().portDeclarations()).isEmpty();
         MekanismBridgeBootstrap.installForTesting(loaded);
         TestBootstrap.bootstrap();
         assertThat(MekanismBridge.get()).isSameAs(loaded);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(chemical)).isEqualTo(MekanismRecipeTypes.CHEMICAL);
+        assertThat(MekanismBridge.get().portDeclarations()).isNotEmpty();
     }
 
     private static void bind(Object holder, MenuType<?> value) throws Exception {

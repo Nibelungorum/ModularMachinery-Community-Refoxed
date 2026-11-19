@@ -10,6 +10,7 @@ import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.config.ServerConfig;
+import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
 import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSource;
@@ -75,6 +76,11 @@ public class TerminalAssemblyGameTest {
     private static final ResourceLocation COIL = MMCR.id("terminal_test_coil");
     private static final ResourceLocation FRAME = MMCR.id("terminal_test_frame");
     private static final ResourceLocation POLISHED = MMCR.id("terminal_test_polished");
+    private static final ResourceLocation PORT_LEVEL = MMCR.id("terminal_test_interface");
+
+    private static String exchangePort() {
+        return CreateBridge.get().available() ? "create_stress_input_interface" : "item_input_bus";
+    }
 
     static void registerLevelExchange(StructureRegistration event) {
         event.registerLevelType(new LevelType(COIL, Component.translatable("block.minecraft.diorite")));
@@ -85,6 +91,9 @@ public class TerminalAssemblyGameTest {
         event.registerLevel(new MachineLevel(POLISHED, COIL, 1,
                 BlockPredicate.blockState(Blocks.POLISHED_DIORITE.defaultBlockState()), DisplayStack.of(new ItemStack(Items.DIAMOND)),
                 ModifierDefinition.EMPTY));
+        event.registerLevel(new MachineLevel(PORT_LEVEL, COIL, 2,
+                BlockPredicate.state(MMCR.id(exchangePort())),
+                DisplayStack.of(new ItemStack(Items.IRON_INGOT)), ModifierDefinition.EMPTY));
         event.registerLevel(new MachineLevel(FRAME, FRAME, 0,
                 BlockPredicate.blockState(Blocks.GRANITE.defaultBlockState()), DisplayStack.of(new ItemStack(Items.GRANITE)),
                 ModifierDefinition.EMPTY));
@@ -133,7 +142,12 @@ public class TerminalAssemblyGameTest {
         old.forEach(pos -> player.level().setBlock(pos, Blocks.DIORITE.defaultBlockState(), 3));
         player.level().setBlock(slots.get(8), Blocks.POLISHED_DIORITE.defaultBlockState(), 3);
         player.level().setBlock(slots.get(9), Blocks.GLASS.defaultBlockState(), 3);
-        player.level().removeBlock(slots.get(10), false);
+        var port = ModBlocks.BLOCKS.get(exchangePort()).get();
+        player.level().setBlock(slots.get(10), port.defaultBlockState(), 3);
+        var protectedTarget = MultiblockAssemblyService.replaceLevel(player, controller, 1, COIL, PORT_LEVEL,
+                new PlayerInventoryStructureItemStorage(player), false);
+        helper.assertTrue(protectedTarget.message().key().equals("message.mmcr.terminal.replace.unsafe"),
+                "An interface is not a bulk level replacement material");
         player.getInventory().setItem(1, new ItemStack(Items.POLISHED_DIORITE, 5));
         var missing = TerminalService.execute(player, terminal, TerminalAction.REPLACE_LEVEL, 0, null, null);
         helper.assertTrue(!missing.accepted() && missing.messageKey().equals("message.mmcr.terminal.replace.missing"),
@@ -152,8 +166,8 @@ public class TerminalAssemblyGameTest {
         helper.assertTrue(player.level().getBlockState(stageTwoSlot).is(Blocks.DIORITE),
                 "A later stage's coil is not exchanged while stage one is selected");
         helper.assertTrue(protectedBlocks.stream().allMatch(pos -> player.level().getBlockState(pos).is(Blocks.DIORITE))
-                        && player.level().getBlockState(slots.get(9)).is(Blocks.GLASS) && player.level().getBlockState(slots.get(10)).isAir(),
-                "Other types, casings, unrelated blocks and empty slots are untouched");
+                        && player.level().getBlockState(slots.get(9)).is(Blocks.GLASS) && player.level().getBlockState(slots.get(10)).is(port),
+                "Other types, casings, unrelated blocks and installed interfaces are untouched");
         var again = TerminalService.execute(player, player.getMainHandItem(), TerminalAction.REPLACE_LEVEL, 0, null, null);
         helper.assertTrue(again.messageKey().equals("message.mmcr.terminal.replace.none")
                         && player.getInventory().countItem(Items.DIORITE) == 8, "Repeated replacement is a no-op");

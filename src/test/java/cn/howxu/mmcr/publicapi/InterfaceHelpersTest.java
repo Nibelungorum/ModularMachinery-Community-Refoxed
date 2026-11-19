@@ -7,6 +7,7 @@ import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.compat.create.CreateBridgeBootstrap;
+import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
 import cn.howxu.mmcr.internal.api.facade.structure.StructureAdapters;
 import cn.howxu.mmcr.internal.port.IOPortKind;
@@ -15,6 +16,7 @@ import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortDeclaration;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge.PortType;
 import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
+import cn.howxu.mmcr.compat.kubejs.KubeJSApi;
 import cn.howxu.mmcr.compat.kubejs.MachineBuilderJS;
 import cn.howxu.mmcr.compat.kubejs.MachineRecipeFactory;
 import cn.howxu.mmcr.compat.kubejs.MachineStructureBuilderJS;
@@ -176,6 +178,7 @@ class InterfaceHelpersTest {
      * @author howxu <dev@howxu.cn>
      */
     private record StressPortKind(String id, IOType ioType, IOType bindingDirection) implements IOPortKind {
+        @Override public boolean availableForStructure() { return CreateBridge.get().available(); }
         public BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory() { return (position, state) -> null; }
         public List<PortFamilyDescriptor> families() {
             return List.of(new PortFamilyDescriptor(CreateRecipeTypes.STRESS, ioType, 0, List.of()));
@@ -183,6 +186,40 @@ class InterfaceHelpersTest {
         public PortDefinition definition() {
             return PortDefinition.of(ResourceLocation.parse(id),
                     IOPortKind.binding(new CapabilityType(CreateRecipeTypes.STRESS), bindingDirection, families()));
+        }
+    }
+
+    @Test
+    void unknown_bound_family_is_discovered_once_through_every_total_predicate() {
+        var type = new CapabilityType(ResourceLocation.parse("example:shard"));
+        var family = new PortFamilyDescriptor(type.id(), IOType.INPUT, 0, List.of());
+        var alias = new PortFamilyDescriptor(ResourceLocation.parse("example:refined"), IOType.INPUT, 0, List.of(), type.id());
+        try {
+            PortKinds.clearForTesting();
+            for (var block : List.of("stone", "dirt", "cobblestone", "sand")) {
+                PortKinds.register(new IOPortKind() {
+                    public String id() { return "minecraft:" + block; }
+                    public IOType ioType() { return IOType.INPUT; }
+                    public List<PortFamilyDescriptor> families() {
+                        return block.equals("sand") ? List.of(new PortFamilyDescriptor(type.id(), IOType.OUTPUT, 0, List.of()))
+                                : List.of(family, alias);
+                    }
+                    public PortDefinition definition() {
+                        var id = ResourceLocation.parse(id());
+                        return block.equals("dirt") ? PortDefinition.of(id) : PortDefinition.of(id,
+                                IOPortKind.binding(type, block.equals("stone") ? IOType.INPUT : IOType.OUTPUT, families()));
+                    }
+                    public BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory() { return (p, s) -> null; }
+                });
+            }
+            assertThat(predicateBlocks(InterfacePredicates.anyOfPorts(type.id(), IOType.INPUT))).containsExactly(Blocks.STONE);
+            // The return-output family belongs to a logical input port.
+            assertThat(predicateBlocks(InterfacePredicates.anyOfPorts(type.id(), IOType.OUTPUT))).containsExactly(Blocks.SAND);
+            assertThat(predicateBlocks(StructureAdapters.unwrap(BlockConditions.ports())))
+                    .containsOnlyOnce(Blocks.STONE, Blocks.SAND).doesNotContain(Blocks.DIRT, Blocks.COBBLESTONE);
+            assertThat(new KubeJSApi().ports().matches(Blocks.STONE.defaultBlockState())).isTrue();
+        } finally {
+            PortKinds.clearForTesting();
         }
     }
 

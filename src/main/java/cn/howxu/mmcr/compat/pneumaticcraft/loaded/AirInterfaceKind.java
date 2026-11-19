@@ -8,6 +8,7 @@ import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.port.PortDefinition;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.PortFamilyDescriptor;
@@ -41,6 +42,8 @@ public enum AirInterfaceKind implements IOPortKind {
                 Component.translatable("tooltip.mmcr.pneumaticcraft.safe_pressure", 20),
                 Component.translatable("tooltip.mmcr.pneumaticcraft.equalization"));
     }
+
+    @Override public boolean availableForStructure() { return PneumaticCraftBridge.get().available(); }
 
     @Override public String id() { return id; }
     @Override public IOType ioType() { return io; }

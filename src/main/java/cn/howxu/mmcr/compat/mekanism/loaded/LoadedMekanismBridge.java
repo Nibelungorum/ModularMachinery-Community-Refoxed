@@ -256,24 +256,6 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
-    public ResourceLocation capabilityIdForMenu(AbstractContainerMenu menu) {
-        if (menu instanceof ChemicalPortMenu) return MekanismRecipeTypes.CHEMICAL;
-        if (menu instanceof HeatPortMenu) return MekanismRecipeTypes.HEAT;
-        return null;
-    }
-
-    @Override
-    public boolean isPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
-        if (menu instanceof ChemicalPortMenu chemical) {
-            return matches(chemical.pos(), chemical.owner(), pos, port);
-        }
-        if (menu instanceof HeatPortMenu heat) {
-            return matches(heat.pos(), heat.owner(), pos, port);
-        }
-        return false;
-    }
-
-    @Override
     public IFluidHandlerItem manualFluidContainerHandler(IFluidHandlerItem handler) {
         if (!(handler instanceof IMekanismFluidHandler mekanism)) return handler;
         return new IFluidHandlerItem() {
@@ -390,12 +372,6 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return handler instanceof IMekanismChemicalHandler mekanism
                 ? ChemicalUtils.insert(stack, null, mekanism::getChemicalTanks, action, AutomationType.MANUAL)
                 : handler.insertChemical(stack, action);
-    }
-
-    private static boolean matches(BlockPos menuPos, IOPortBlockEntity menuOwner,
-                                   BlockPos pos, IOPortBlockEntity port) {
-        if (pos == null) return false;
-        return menuPos.equals(pos) && (port == null || menuOwner == port);
     }
 
     @Override

@@ -112,6 +112,8 @@ public interface IOPortKind {
 
     default Optional<ExtendedCombinedPortSize> extendedCombinedPortSize() { return Optional.empty(); }
 
+    default boolean availableForStructure() { return true; }
+
     default List<PortFamilyDescriptor> families() { return List.of(); }
 
     default int outputPriority() {

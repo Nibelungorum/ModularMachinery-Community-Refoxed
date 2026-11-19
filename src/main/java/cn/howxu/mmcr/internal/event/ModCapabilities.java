@@ -1,10 +1,11 @@
 package cn.howxu.mmcr.internal.event;
 
-import cn.howxu.mmcr.compat.appmek.AppMekBridge;
-
+import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
+import cn.howxu.mmcr.api.capability.external.ExternalPortHost;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.compat.appmek.AppMekBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
@@ -14,7 +15,6 @@ import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.util.IOType;
@@ -23,9 +23,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Function;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -117,55 +119,52 @@ public final class ModCapabilities {
                                                   CapabilityBinding binding,
                                                   CapabilityBinding.ExternalExposure<T> exposure) {
         BlockCapability<T, Direction> capability = BlockCapability.createSided(exposure.id(), exposure.valueType());
-        event.registerBlockEntity(capability, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
-            if (!(be instanceof IOPortBlockEntity port) || !port.isNativeSideExposed(binding, side)) return null;
-            return exposure.resolver().resolve(port, port.ioType(), side);
-        });
+        event.registerBlockEntity(capability, ModBlockEntities.BES.get(kind.id()).get(),
+                (be, side) -> resolveExternal(be, kind.ioType(), binding, exposure, side));
     }
 
     private static void registerFacetProviders(RegisterCapabilitiesEvent event, IOPortKind kind,
                                                List<CapabilityBinding> bindings, Set<ResourceLocation> explicit) {
         boolean canInsert = kind.ioType() == IOType.INPUT;
         if (!explicit.contains(ITEM_BLOCK.name())) event.registerBlockEntity(ITEM_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
-            if (!(be instanceof IOPortBlockEntity port)) return null;
-            IItemHandler handler = itemHandler(port, bindings, side);
+            IItemHandler handler = facetHandler(be, kind.ioType(), bindings, side, CapabilityFactories::itemHandler);
             return handler == null ? null : new DirectionalItemHandler(handler, canInsert, !canInsert);
         });
         if (!explicit.contains(FLUID_BLOCK.name())) event.registerBlockEntity(FLUID_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
-            if (!(be instanceof IOPortBlockEntity port)) return null;
-            IFluidHandler handler = fluidHandler(port, bindings, side);
+            IFluidHandler handler = facetHandler(be, kind.ioType(), bindings, side, CapabilityFactories::fluidHandler);
             return handler == null ? null : new DirectionalFluidHandler(handler, canInsert, !canInsert);
         });
         if (!explicit.contains(ENERGY_BLOCK.name())) event.registerBlockEntity(ENERGY_BLOCK, ModBlockEntities.BES.get(kind.id()).get(), (be, side) -> {
-            if (!(be instanceof IOPortBlockEntity port)) return null;
-            IEnergyStorage storage = energyStorage(port, bindings, side);
+            IEnergyStorage storage = facetHandler(be, kind.ioType(), bindings, side, CapabilityFactories::energyStorage);
             return storage == null ? null : new DirectionalEnergyStorage(storage, canInsert, !canInsert);
         });
     }
 
-    static IItemHandler itemHandler(IOPortBlockEntity port, List<CapabilityBinding> bindings, Direction side) {
+    static <T> T resolveExternal(BlockEntity be, IOType io, CapabilityBinding binding,
+                                 CapabilityBinding.ExternalExposure<T> exposure, Direction side) {
+        if (!(be instanceof ExternalPortHost host) || exposedHandler(host, io, binding, side, Function.identity()) == null) return null;
+        return exposure.resolver().resolve(host, io, side);
+    }
+
+    static <T> T facetHandler(BlockEntity be, IOType io, List<CapabilityBinding> bindings, Direction side,
+                              Function<MachineCapability, T> handler) {
+        if (!(be instanceof ExternalPortHost host)) return null;
         for (CapabilityBinding binding : bindings) {
-            if (!port.isNativeSideExposed(binding, side)) continue;
-            IItemHandler handler = CapabilityFactories.itemHandler(port.capability(binding.type()));
-            if (handler != null) return handler;
+            T result = exposedHandler(host, io, binding, side, handler);
+            if (result != null) return result;
         }
         return null;
     }
 
-    static IFluidHandler fluidHandler(IOPortBlockEntity port, List<CapabilityBinding> bindings, Direction side) {
-        for (CapabilityBinding binding : bindings) {
-            if (!port.isNativeSideExposed(binding, side)) continue;
-            IFluidHandler handler = CapabilityFactories.fluidHandler(port.capability(binding.type()));
-            if (handler != null) return handler;
-        }
-        return null;
-    }
-
-    static IEnergyStorage energyStorage(IOPortBlockEntity port, List<CapabilityBinding> bindings, Direction side) {
-        for (CapabilityBinding binding : bindings) {
-            if (!port.isNativeSideExposed(binding, side)) continue;
-            IEnergyStorage storage = CapabilityFactories.energyStorage(port.capability(binding.type()));
-            if (storage != null) return storage;
+    private static <T> T exposedHandler(ExternalPortHost host, IOType io, CapabilityBinding binding, Direction side,
+                                        Function<MachineCapability, T> handler) {
+        if (host.ioType() != io || !binding.nativeTransferExposure() || !binding.directions().supports(io)) return null;
+        for (MachineCapability capability : host.capabilities()) {
+            if (binding.type().equals(capability.type()) && capability.directions().supports(io)) {
+                if (!host.isNativeSideExposed(binding, side)) return null;
+                T result = handler.apply(capability);
+                if (result != null) return result;
+            }
         }
         return null;
     }

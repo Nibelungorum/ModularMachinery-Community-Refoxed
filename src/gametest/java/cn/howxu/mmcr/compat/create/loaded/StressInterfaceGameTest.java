@@ -14,6 +14,10 @@ import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.compat.create.StressSession;
+import cn.howxu.mmcr.internal.assembly.MultiblockAssemblyService;
+import cn.howxu.mmcr.internal.assembly.PlayerInventoryStructureItemSource;
+import cn.howxu.mmcr.internal.block.StructureInterfaceBlocks;
+import cn.howxu.mmcr.internal.preview.MultiblockPreviewBuilder;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.runtime.MachineWorkMode;
@@ -78,6 +82,7 @@ public final class StressInterfaceGameTest {
     @GameTestGenerator
     public static Collection<TestFunction> generateTests() {
         return List.of(
+                test("create_stress_structure_selection", 20, StressInterfaceGameTest::structureSelection),
                 test("create_stress_propagation_sessions", 300, StressInterfaceGameTest::propagationAndSessions),
                 test("create_stress_controller_recovery", 600, StressInterfaceGameTest::controllerRecovery),
                 test("create_stress_output_takeover", 400, StressInterfaceGameTest::outputTakeover),
@@ -88,7 +93,28 @@ public final class StressInterfaceGameTest {
     }
 
     private static TestFunction test(String name, int timeout, Consumer<GameTestHelper> scenario) {
-        return new TestFunction(MMCR.MODID, MMCR.id(name).toString(), "mmcr:empty", timeout, 0, true, scenario);
+        return new TestFunction("mmcr:create_stress", MMCR.id(name).toString(), "mmcr:empty", timeout, 0, true, scenario);
+    }
+
+    private static void structureSelection(GameTestHelper helper) {
+        var casing = ModBlocks.BASIC_CASING.get();
+        for (var kind : StressInterfaceKind.values()) {
+            var port = portState(kind).getBlock();
+            helper.assertTrue(StructureInterfaceBlocks.isInterfaceBlock(port), "Terminal protects " + kind.id());
+            for (var alternatives : List.of(List.of(port, casing), List.of(casing, port))) {
+                var predicate = new BlockPredicate.AnyOf(alternatives.stream().<BlockPredicate>map(BlockPredicate.OfBlock::new).toList());
+                helper.assertTrue(MultiblockPreviewBuilder.previewState(predicate).orElseThrow().is(casing),
+                        "Preview prefers the casing over " + kind.id());
+                var placement = new MultiblockAssemblyService.Placement(PORT, casing.defaultBlockState(), new ItemStack(casing), predicate);
+                for (var stock : List.of(List.of(new ItemStack(port), new ItemStack(casing)), List.of(new ItemStack(port)))) {
+                    var selected = MultiblockAssemblyService.extractAvailablePlacements(List.of(placement),
+                            PlayerInventoryStructureItemSource.forStacks(stock));
+                    helper.assertTrue(selected.getFirst().state().is(stock.size() == 2 ? casing : port),
+                            "Assembly reserves the casing first and can fall back to " + kind.id());
+                }
+            }
+        }
+        helper.succeed();
     }
 
     private static void propagationAndSessions(GameTestHelper helper) {

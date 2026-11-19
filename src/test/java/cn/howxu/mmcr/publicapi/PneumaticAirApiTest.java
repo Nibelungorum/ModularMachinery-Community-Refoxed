@@ -19,6 +19,7 @@ import cn.howxu.mmcr.compat.kubejs.KubeJSApi;
 import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
 import cn.howxu.mmcr.compat.pneumaticcraft.AirRequirement;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridgeBootstrap;
+import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticIds;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticRecipeTypes;
 import cn.howxu.mmcr.internal.api.facade.recipe.RecipeAdapters;
@@ -211,6 +212,7 @@ class PneumaticAirApiTest {
      * @author howxu <dev@howxu.cn>
      */
     private record AirPortKind(String id, IOType ioType, IOType bindingDirection) implements IOPortKind {
+        @Override public boolean availableForStructure() { return PneumaticCraftBridge.get().available(); }
         public BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory() { return (position, state) -> null; }
         public List<PortFamilyDescriptor> families() {
             return List.of(new PortFamilyDescriptor(PneumaticIds.AIR, ioType, 0, List.of()));
