@@ -720,7 +720,7 @@
   "mekanism.auto_io.heat_input_control": "热量输入控制",
   "mekanism.auto_io.heat_output_control": "热量输出控制",
   "mmcr.auto_io.capability_control": "配置 %s",
-  "mmcr.auto_io.next_capability": "切换到：%s",
+  "mmcr.auto_io.next_capability": "切换到: %s",
   "neoforge.auto_io.energy_input_control": "能量输入控制",
   "neoforge.auto_io.energy_output_control": "能量输出控制",
   "minecraft.auto_io.fluid_input_control": "流体输入控制",
