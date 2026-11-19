@@ -159,7 +159,7 @@ class RecipeSearchPlannerTest {
     }
 
     @Test
-    void expected_outputs_use_reduced_capacity_and_reuse_both_samples_for_every_resource_family() {
+    void expected_outputs_use_reduced_capacity_and_reuse_the_rounding_sample_for_every_resource_family() {
         for (var family : List.of(ITEM, BuiltinCapabilityDefinitions.FLUID_TYPE.id(), MekanismPortFamilies.CHEMICAL,
                 LightningTier.HIGH_VOLTAGE.requirementId())) {
             var template = output(0, 2L, false, 0.7F, List.of(new Port(0, 0, 50L, Long.MAX_VALUE)));
@@ -175,9 +175,9 @@ class RecipeSearchPlannerTest {
             });
             assertThat(planner.advance()).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
                     match -> assertThat(match.parallelism()).isEqualTo(36L));
-            assertThat(draws).hasValue(2);
+            assertThat(draws).hasValue(1);
             planner.advance();
-            assertThat(draws).hasValue(2);
+            assertThat(draws).hasValue(1);
         }
     }
 
@@ -197,7 +197,7 @@ class RecipeSearchPlannerTest {
             assertThat(match.parallelism()).isEqualTo(80L);
             assertThat(match.scope()).isEqualTo(original.scopes().get(1).input());
         });
-        assertThat(draws).hasValue(2);
+        assertThat(draws).hasValue(1);
     }
 
     @Test
@@ -212,7 +212,7 @@ class RecipeSearchPlannerTest {
         }).advance();
         assertThat(result).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
                 match -> assertThat(match.parallelism()).isEqualTo(18L));
-        assertThat(draws).hasValue(4);
+        assertThat(draws).hasValue(2);
     }
 
     @Test

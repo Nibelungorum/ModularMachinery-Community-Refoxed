@@ -1190,24 +1190,21 @@ class RequirementPlannerTest {
     void probabilistic_item_and_fluid_outputs_commit_expected_amounts_instead_of_whole_batches() {
         BulkItemStorage items = new BulkItemStorage(1_000L, null);
         LongFluidStorage fluids = new LongFluidStorage(100_000L, null);
-        RequirementHandlerSupport.Sampling sampling = new RequirementHandlerSupport.Sampling();
         var result = new RequirementPlanner().plan(
                 List.of(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0, ironStack(2), 0.7F, List.of()),
                         new FluidRequirement(RecipeModifier.IOType.OUTPUT, null, 0,
                                 new FluidStack(Fluids.WATER, 100), 0.7F, List.of())),
                 List.of(new StorageCapability(ItemRequirement.TYPE.id(), CapabilityDirections.output(), items),
                         new StorageCapability(FluidRequirement.TYPE.id(), CapabilityDirections.output(), fluids)),
-                new PlanningContext(25L, 0, false, new PlanningReservations(), Map.of(), null, null, sampling));
+                new PlanningContext(25L, 0));
 
         assertThat(result.successful()).isTrue();
         assertThat(result.plan().parallelism()).isEqualTo(25L);
-        var itemOutput = (OutputExpectation) cachedDecision(sampling, "outputs", 0);
-        var fluidOutput = (OutputExpectation) cachedDecision(sampling, "outputs", 1);
         assertThat(result.outputSimulations()).extracting(simulation -> simulation.requested())
-                .containsExactly(itemOutput.amount(2L, 25L), fluidOutput.amount(100L, 25L));
+                .containsExactly(35L, 1_750L);
         assertThat(result.plan().commit()).isTrue();
-        assertThat(items.amount(0)).isEqualTo(itemOutput.amount(2L, 25L)).isBetween(30L, 40L);
-        assertThat(fluids.amount(0)).isEqualTo(fluidOutput.amount(100L, 25L)).isBetween(1_500L, 2_000L);
+        assertThat(items.amount(0)).isEqualTo(35L);
+        assertThat(fluids.amount(0)).isEqualTo(1_750L);
     }
 
     @Test

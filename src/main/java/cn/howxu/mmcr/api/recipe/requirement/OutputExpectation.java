@@ -7,7 +7,7 @@ import java.math.RoundingMode;
 import java.util.function.DoubleSupplier;
 
 /**
- * One sampled probability shared by output sizing, capacity checks and reservations.
+ * Declared output probability and one rounding threshold shared by sizing, capacity checks and reservations.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -15,8 +15,8 @@ public record OutputExpectation(double probability, double roundingSample) {
     public static OutputExpectation sample(float chance, DoubleSupplier random) {
         if (chance <= 0F) return new OutputExpectation(0D, 0D);
         if (chance >= 1F) return new OutputExpectation(1D, 0D);
-        double base = Double.parseDouble(Float.toString(chance));
-        double probability = Math.clamp(base + (random.getAsDouble() * 2D - 1D) * 0.1D, 0D, 1D);
+        // Preserve the decimal form so 0.001F times 1,000 units has no fractional tail.
+        double probability = Double.parseDouble(Float.toString(chance));
         return new OutputExpectation(probability, random.getAsDouble());
     }
 

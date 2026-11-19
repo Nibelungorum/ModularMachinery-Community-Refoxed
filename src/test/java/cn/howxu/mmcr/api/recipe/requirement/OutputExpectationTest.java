@@ -9,41 +9,42 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** @author howxu <dev@howxu.cn> */
 class OutputExpectationTest {
     @Test
-    void perturbs_probability_in_both_directions_before_scaling() {
-        assertThat(OutputExpectation.sample(0.7F, () -> 0.65D).amount(2L, 100L)).isEqualTo(146L);
-        assertThat(OutputExpectation.sample(0.7F, () -> 0.35D).amount(2L, 100L)).isEqualTo(134L);
+    void scales_units_and_parallelism_before_rounding_the_expected_yield() {
+        var output = OutputExpectation.sample(0.001F, () -> 0D);
+        assertThat(output.amount(1L, 1_000L)).isEqualTo(1L);
+        assertThat(output.amount(1_000L, 1L)).isEqualTo(1L);
     }
 
     @Test
     void samples_only_the_fraction_instead_of_gambling_the_whole_batch() {
-        assertThat(new OutputExpectation(0.73D, 0.2D).amount(1L, 1L)).isEqualTo(1L);
-        assertThat(new OutputExpectation(0.73D, 0.8D).amount(1L, 1L)).isZero();
-        assertThat(new OutputExpectation(0.27D, 0.2D).amount(1L, 1L)).isEqualTo(1L);
-        assertThat(new OutputExpectation(0.27D, 0.3D).amount(1L, 1L)).isZero();
+        assertThat(OutputExpectation.sample(0.001F, () -> Math.nextDown(0.001D)).amount(1L, 1L)).isEqualTo(1L);
+        assertThat(OutputExpectation.sample(0.001F, () -> 0.001D).amount(1L, 1L)).isZero();
         assertThat(new OutputExpectation(0.7315D, 0.2D).amount(2L, 100L)).isEqualTo(147L);
         assertThat(new OutputExpectation(0.7315D, 0.4D).amount(2L, 100L)).isEqualTo(146L);
         assertThat(new OutputExpectation(0.5D, 0D).amount(2L, 1L)).isEqualTo(1L);
     }
 
     @Test
-    void fraction_sampling_preserves_expected_yield_even_for_low_probability_single_outputs() {
-        long total = 0L;
+    void single_outputs_follow_the_declared_chance_near_zero_and_one() {
+        long rare = 0L;
+        long common = 0L;
         for (int index = 0; index < 1_000; index++) {
-            total += new OutputExpectation(0.273D, index / 1_000D).amount(1L, 1L);
+            double threshold = (index + 0.5D) / 1_000D;
+            rare += OutputExpectation.sample(0.001F, () -> threshold).amount(1L, 1L);
+            common += OutputExpectation.sample(0.999F, () -> threshold).amount(1L, 1L);
         }
-        assertThat(total).isEqualTo(273L);
+        assertThat(rare).isEqualTo(1L);
+        assertThat(common).isEqualTo(999L);
     }
 
     @Test
-    void clamps_perturbations_and_keeps_certain_outputs_deterministic() {
+    void skips_random_draws_for_impossible_and_certain_outputs() {
         AtomicInteger draws = new AtomicInteger();
         assertThat(OutputExpectation.sample(0F, () -> { draws.incrementAndGet(); return 1D; })
                 .amount(10L, 100L)).isZero();
         assertThat(OutputExpectation.sample(1F, () -> { draws.incrementAndGet(); return 0D; })
                 .amount(10L, 100L)).isEqualTo(1_000L);
         assertThat(draws).hasValue(0);
-        assertThat(OutputExpectation.sample(0.05F, () -> 0D).amount(10L, 100L)).isZero();
-        assertThat(OutputExpectation.sample(0.95F, () -> 0.999D).amount(10L, 100L)).isEqualTo(1_000L);
     }
 
     @Test
