@@ -140,9 +140,9 @@ class CompatSearchValuesTest {
             var result = CompletableFuture.supplyAsync(planner::advance).join();
             assertThat(result).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
                     match -> assertThat(match.parallelism()).isEqualTo(count == 1 ? 35L : 17L));
-            assertThat(draws).hasValue(2 * count);
+            assertThat(draws).hasValue(count);
             assertThat(planner.advance()).isSameAs(result);
-            assertThat(draws).hasValue(2 * count);
+            assertThat(draws).hasValue(count);
         }
     }
 

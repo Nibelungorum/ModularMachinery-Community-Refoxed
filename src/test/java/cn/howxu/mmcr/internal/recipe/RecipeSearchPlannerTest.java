@@ -158,7 +158,7 @@ class RecipeSearchPlannerTest {
     }
 
     @Test
-    void expected_outputs_use_reduced_capacity_and_reuse_both_samples_for_every_resource_family() {
+    void expected_outputs_use_reduced_capacity_and_reuse_the_rounding_sample_for_every_resource_family() {
         for (var family : List.of(ITEM, BuiltinCapabilityDefinitions.FLUID_TYPE.id(), MekanismPortFamilies.CHEMICAL,
                 LightningTier.HIGH_VOLTAGE.requirementId())) {
             var template = output(0, 2L, false, 0.7F, List.of(new Port(0, 0, 50L, Long.MAX_VALUE)));
@@ -174,9 +174,9 @@ class RecipeSearchPlannerTest {
             });
             assertThat(planner.advance()).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
                     match -> assertThat(match.parallelism()).isEqualTo(36L));
-            assertThat(draws).hasValue(2);
+            assertThat(draws).hasValue(1);
             planner.advance();
-            assertThat(draws).hasValue(2);
+            assertThat(draws).hasValue(1);
         }
     }
 
@@ -196,7 +196,7 @@ class RecipeSearchPlannerTest {
             assertThat(match.parallelism()).isEqualTo(80L);
             assertThat(match.scope()).isEqualTo(original.scopes().get(1).input());
         });
-        assertThat(draws).hasValue(2);
+        assertThat(draws).hasValue(1);
     }
 
     @Test
@@ -211,19 +211,18 @@ class RecipeSearchPlannerTest {
         }).advance();
         assertThat(result).isInstanceOfSatisfying(RecipeSearchPlanner.Match.class,
                 match -> assertThat(match.parallelism()).isEqualTo(18L));
-        assertThat(draws).hasValue(4);
+        assertThat(draws).hasValue(2);
     }
 
     @Test
-    void candidate_order_uses_perturbation_then_fraction_samples_for_each_output() {
+    void candidate_order_uses_one_rounding_sample_for_each_probabilistic_output() {
         var probabilistic = output(0, 1L, false, 0.7F, List.of(new Port(0, 0, 0L, Long.MAX_VALUE)));
         var certain = output(0, 5L, false, 1F, probabilistic.ports());
         var request = snapshot(List.of(pool(0L)), List.of(
                 candidate("clear", 1L, List.of(probabilistic), List.of(LEGACY)),
                 candidate("rain", 1L, List.of(probabilistic), List.of(LEGACY)),
                 candidate("thunder", 1L, List.of(certain), List.of(LEGACY))));
-        var samples = List.of(List.of(0.5D, 0.9D), List.of(0.5D, 0.1D, 0.5D, 0.9D),
-                List.of(0.5D, 0.1D, 0.5D, 0.1D));
+        var samples = List.of(List.of(0.9D), List.of(0.1D, 0.9D), List.of(0.1D, 0.1D));
         for (int index = 0; index < samples.size(); index++) {
             var draws = samples.get(index).iterator();
             var outcome = new RecipeSearchPlanner(request, draws::next).advance();
