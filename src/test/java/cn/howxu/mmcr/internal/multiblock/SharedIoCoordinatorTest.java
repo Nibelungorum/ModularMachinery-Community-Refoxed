@@ -545,6 +545,40 @@ class SharedIoCoordinatorTest {
     }
 
     @Test
+    void last_slot_payment_can_revive_its_domain_even_across_a_nested_request_drain() throws Exception {
+        InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
+        CraftingRuntime later = new CraftingRuntime(fixture.controller(), fixture.controller().componentRuntime());
+        later.bindRecipeLane("later", () -> { });
+        assertThat(fixture.shared().reserveExecution(later, "later")).isTrue();
+        assertThat(later.start(fixture.recipe(), 1L).isCrafting()).isTrue();
+        InstalledRecipeProgram program = later.ensureInstalledProgram();
+        RuntimeTestFixtures.advanceGameTime(fixture.level());
+        RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+        fixture.shared().markControllerEligible(fixture.controller(), fixture.level().getGameTime());
+        assertThat(fixture.runtime().prepareInstalledTick(fixture.shared().executionRoundId())).isTrue();
+
+        LongValueStorage storage = fixture.input().getEnergyStorage();
+        Field notification = LongValueStorage.class.getDeclaredField("onChange");
+        notification.setAccessible(true);
+        Runnable original = (Runnable) notification.get(storage);
+        AtomicBoolean first = new AtomicBoolean(true);
+        notification.set(storage, (Runnable) () -> {
+            original.run();
+            if (!first.getAndSet(false)) return;
+            assertThat(fixture.shared().install(program,
+                    fixture.shared().controllerPermit(fixture.controller().getBlockPos()))).isTrue();
+            assertThat(later.prepareInstalledTick(fixture.shared().executionRoundId())).isTrue();
+            assertThat(fixture.shared().resolve(fixture.controller().resourceDomain())).isZero();
+        });
+        long before = storage.amount();
+        assertThat(fixture.shared().resolvePost(fixture.level())).isEqualTo(2);
+        assertThat(fixture.runtime().tickCount()).isOne();
+        assertThat(later.tickCount()).isOne();
+        assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
+        assertThat(storage.amount()).isEqualTo(before - 14L);
+    }
+
+    @Test
     void post_reconciles_a_topology_change_even_after_all_candidates_were_consumed() {
         InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40);
         RuntimeTestFixtures.advanceGameTime(fixture.level());
@@ -1234,7 +1268,8 @@ class SharedIoCoordinatorTest {
             assertThat(runtimes.get(index).tickCount()).isEqualTo(1);
             assertThat(inputs.get(index).getEnergyStorage().amount()).isEqualTo(before.get(index) - 7L);
         }
-        assertThat(reads.get()).isLessThanOrEqualTo(4 * runtimes.size());
+        // Selection and attempt read each live bucket; only the domain with ordinary backlog needs an empty probe.
+        assertThat(reads.get()).isLessThanOrEqualTo(2 * runtimes.size() + 1);
         assertThat(unexpectedCommits).hasValue(0);
         assertThat(fixture.shared().pendingRequestCountForTesting()).isEqualTo(32);
     }
