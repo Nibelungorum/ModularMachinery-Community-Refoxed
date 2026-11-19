@@ -849,6 +849,26 @@ class SharedIoCoordinatorTest {
                 .isEqualTo(1);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = MachineWorkMode.class, names = {"SEMI_SYNC", "ASYNC"})
+    void single_controller_post_rotates_lanes_with_one_payment_per_budget(MachineWorkMode mode) {
+        InstalledFixture fixture = installedFixture(mode, 40, 7L, 1);
+        CraftingRuntime last = installSchedulingLane(fixture, "lane-2");
+        CraftingRuntime middle = installSchedulingLane(fixture, "lane-10");
+        List<CraftingRuntime> order = List.of(fixture.runtime(), middle, last);
+        long initialEnergy = fixture.input().energyStorage().getAmountAsLong();
+        for (int turn = 0; turn < 6; turn++) {
+            RuntimeTestFixtures.advanceGameTime(fixture.level());
+            RuntimeTestFixtures.beginLevelTick(fixture.level(), true);
+            for (CraftingRuntime lane : order.reversed()) tickInstalledController(lane, fixture);
+            int before = order.get(turn % order.size()).tickCount();
+            assertThat(fixture.shared().resolvePost(fixture.level())).isEqualTo(1);
+            assertThat(order.get(turn % order.size()).tickCount()).isEqualTo(before + 1);
+            assertThat(fixture.shared().resolvePost(fixture.level())).isZero();
+            assertThat(fixture.input().energyStorage().getAmountAsLong()).isEqualTo(initialEnergy - 7L * (turn + 1));
+        }
+    }
+
     @Test
     void retained_live_request_then_empty_queue_preserve_installed_payment_and_progress() throws Exception {
         InstalledFixture fixture = installedFixture(MachineWorkMode.SEMI_SYNC, 40, 7L, 2);

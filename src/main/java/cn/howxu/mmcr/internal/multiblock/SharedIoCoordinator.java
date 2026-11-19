@@ -1568,12 +1568,16 @@ public final class SharedIoCoordinator {
         private ExecutionSlot nextInstalled(ServerLevel level, SharedIoCoordinator coordinator) {
             preparePending(coordinator.executionRoundId, level.getGameTime());
             if (pendingControllers.isEmpty()) return null;
-            LaneKey cursor = cursors.get(RequestType.TICK);
-            int index = pendingControllers.nextSetBit(afterController(cursor));
-            if (index < 0) index = pendingControllers.nextSetBit(0);
+            // With one installed controller, every controller cursor wraps to index zero.
+            int index = 0;
+            if (pendingInstalled.size() != 1) {
+                index = pendingControllers.nextSetBit(afterController(cursors.get(RequestType.TICK)));
+                if (index < 0) index = pendingControllers.nextSetBit(0);
+            }
             while (index >= 0) {
                 ControllerCandidates controller = pendingInstalled.get(index);
-                int laneStart = controller.after(controllerLaneCursors.get(RequestType.TICK).get(controller.position.asLong()));
+                int laneStart = controller.ordered.size() == 1 ? 0
+                        : controller.after(controllerLaneCursors.get(RequestType.TICK).get(controller.position.asLong()));
                 int laneIndex = controller.pending.nextSetBit(laneStart);
                 if (laneIndex < 0) laneIndex = controller.pending.nextSetBit(0);
                 while (laneIndex >= 0) {
