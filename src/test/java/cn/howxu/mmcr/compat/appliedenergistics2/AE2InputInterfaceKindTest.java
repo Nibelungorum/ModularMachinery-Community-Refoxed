@@ -380,32 +380,17 @@ class AE2InputInterfaceKindTest {
     }
 
     @Test
-    void configMarkersAlwaysUseOneResource() {
-        StockingInterfaceBlockEntity entity = newStockingEntity();
-
-        entity.getInterfaceLogic().getConfig().setStack(0,
-                new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
-
-        assertThat(entity.getInterfaceLogic().getConfig().getAmount(0)).isEqualTo(1L);
-    }
-
-    @Test
-    void fluidMarkersDefaultToOneBucket() {
-        StockingInterfaceBlockEntity entity = newStockingEntity();
-
-        entity.getInterfaceLogic().getConfig().setStack(1,
-                new GenericStack(AEFluidKey.of(Fluids.WATER), 1L));
-
-        assertThat(entity.getInterfaceLogic().getConfig().getAmount(1)).isEqualTo(1_000L);
-    }
-
-    @Test
-    void normalizedConfigMarkerCanStillBeCleared() {
+    void stockingConfigurationPreservesMarkersUntilCleared() {
         StockingInterfaceBlockEntity entity = newStockingEntity();
         var config = entity.getInterfaceLogic().getConfig();
 
-        config.setStack(0, new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
-        assertThat(config.getAmount(0)).isEqualTo(1L);
+        var item = new GenericStack(AEItemKey.of(Items.IRON_INGOT), 32L);
+        var fluid = new GenericStack(AEFluidKey.of(Fluids.WATER), 250L);
+        config.setStack(0, item);
+        config.setStack(1, fluid);
+
+        assertThat(config.getStack(0)).isEqualTo(item);
+        assertThat(config.getStack(1)).isEqualTo(fluid);
 
         config.setStack(0, null);
 

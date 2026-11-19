@@ -174,7 +174,6 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
     @Override
     public void saveChanges() {
         if (Transaction.getCurrentOpenedTransaction() != null) return;
-        normalizeConfigAmounts();
         refreshNetworkStorage();
         configureWatcher();
         notifyStorageChanged();
@@ -232,7 +231,6 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
             super.loadAdditional(input);
             mainNode.deserialize(input);
             logic.readFromNBT(input);
-            normalizeConfigAmounts();
             refreshNetworkStorage();
             configureWatcher();
         } finally {
@@ -371,23 +369,6 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
 
     public long storageMirrorRefreshes() {
         return storageMirrorRefreshes;
-    }
-
-    private void normalizeConfigAmounts() {
-        var config = logic.getConfig();
-        config.beginBatch();
-        try {
-            for (int slot = 0; slot < config.size(); slot++) {
-                GenericStack stack = config.getStack(slot);
-                if (stack == null) continue;
-                long defaultAmount = AE2ResourceFamilies.forKey(stack.what()).map(family -> family.adapter().stockingAmount()).orElse(1L);
-                if (stack.amount() != defaultAmount) {
-                    config.setStack(slot, new GenericStack(stack.what(), defaultAmount));
-                }
-            }
-        } finally {
-            config.endBatchSuppressed();
-        }
     }
 
     private static final class LiveResourceStorage<R> implements ResourceStorage<R> {

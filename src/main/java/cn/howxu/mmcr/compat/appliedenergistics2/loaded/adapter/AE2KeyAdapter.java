@@ -36,7 +36,6 @@ public interface AE2KeyAdapter<R> {
     default @Nullable GenericStack exactJeiStack(MachineRequirement requirement) { return null; }
 
     default long maxPatternTotal() { return Long.MAX_VALUE; }
-    default long stockingAmount() { return 1L; }
 
     /** Adjacent transfer is opt-in, independent of internal ME storage access. */
     default @Nullable CapabilityBinding.ExternalExposure<?> outputExposure() { return null; }

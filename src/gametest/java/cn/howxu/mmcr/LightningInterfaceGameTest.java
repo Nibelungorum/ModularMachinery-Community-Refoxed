@@ -59,7 +59,7 @@ public class LightningInterfaceGameTest {
         IStorageProvider provider = mounts -> mounts.mount(backing, 0);
         energy.getMainNode().addService(IStorageProvider.class, provider);
         IGridConnection[] connection = new IGridConnection[1];
-        port.getInterfaceLogic().getConfig().setStack(0, new GenericStack(high, 1L));
+        port.getInterfaceLogic().getConfig().setStack(0, new GenericStack(high, 7L));
         port.getInterfaceLogic().getConfig().setStack(1, new GenericStack(extreme, 1L));
         helper.startSequence().thenWaitUntil(() -> helper.assertTrue(port.getMainNode().getNode() != null
                         && energy.getMainNode().getNode() != null, "AE2 nodes initialize"))

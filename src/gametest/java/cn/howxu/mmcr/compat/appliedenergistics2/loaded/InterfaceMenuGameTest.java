@@ -158,7 +158,7 @@ public class InterfaceMenuGameTest {
                 else ((AE2InterfaceMenu) returned).openSetAmountMenu(slot);
                 if (host instanceof StockingInterfaceBlockEntity) {
                     helper.assertTrue(player.containerMenu == returned && filter.equals(logicHost.getConfig().getStack(slot)),
-                            "Stocking input rejects quantity editing and preserves its normalized filter: " + route.blockId());
+                            "Stocking input rejects quantity editing and preserves its filter: " + route.blockId());
                     assertIsolation(helper, client, true, true, "Rejected stocking quantity edit preserves the synchronized isolation cache");
                 } else {
                     helper.assertTrue(player.containerMenu instanceof SetStockAmountMenu,

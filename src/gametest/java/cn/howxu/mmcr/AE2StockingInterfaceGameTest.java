@@ -98,7 +98,7 @@ public class AE2StockingInterfaceGameTest {
         port.getInterfaceLogic().getConfig().setStack(0,
                 new GenericStack(AEItemKey.of(Items.IRON_INGOT), 64L));
         port.getInterfaceLogic().getConfig().setStack(1,
-                new GenericStack(AEFluidKey.of(Fluids.WATER), 1_000L));
+                new GenericStack(AEFluidKey.of(Fluids.WATER), 25L));
         List<IGridConnection> connections = new ArrayList<>();
         AtomicLong refreshesAfterCommittedExtraction = new AtomicLong();
 
@@ -216,10 +216,6 @@ public class AE2StockingInterfaceGameTest {
                     "Stocking item capability is explicitly bound to the item family");
             helper.assertTrue(fluidCapability.type().id().equals(PortFamilyIds.FLUID),
                     "Stocking fluid capability is explicitly bound to the fluid family");
-            helper.assertTrue(port.getInterfaceLogic().getConfig().getAmount(0) == 1L,
-                    "Stocking item marker is normalized to one resource");
-            helper.assertTrue(port.getInterfaceLogic().getConfig().getAmount(1) == 1_000L,
-                    "Stocking fluid marker is normalized to one bucket");
             helper.assertTrue(Objects.equals(port.getInterfaceLogic().getConfig().getKey(0), AEItemKey.of(Items.IRON_INGOT)),
                     "Stocking item marker key is iron ingot");
             helper.assertTrue(Objects.equals(port.getInterfaceLogic().getConfig().getKey(1), AEFluidKey.of(Fluids.WATER)),

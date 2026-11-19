@@ -2,7 +2,6 @@ package cn.howxu.mmcr.compat.extendedae.loaded.client;
 
 import appeng.api.config.FuzzyMode;
 import appeng.api.config.Settings;
-import appeng.client.gui.implementations.UpgradeableScreen;
 import appeng.client.gui.style.PaletteColor;
 import appeng.client.gui.style.ScreenStyle;
 import appeng.client.gui.widgets.ServerSettingToggleButton;
@@ -13,6 +12,7 @@ import cn.howxu.mmcr.compat.appliedenergistics2.InterfaceScreenTitles;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.client.InputIsolationButton;
 import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.client.InterfaceAmountButton;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.client.InterfaceMarkerScreen;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.InterfaceMenuSlots;
 import cn.howxu.mmcr.compat.extendedae.loaded.menu.ExtendedInterfaceMenu;
 import com.glodblock.github.extendedae.client.button.ActionEPPButton;
@@ -32,7 +32,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ExtendedInterfaceScreen extends UpgradeableScreen<ExtendedInterfaceMenu> {
+public final class ExtendedInterfaceScreen extends InterfaceMarkerScreen<ExtendedInterfaceMenu> {
     private final SettingToggleButton<FuzzyMode> fuzzyMode;
     private final List<InterfaceAmountButton> amountButtons = new ArrayList<>();
     private final ActionEPPButton nextPage;
@@ -41,7 +41,7 @@ public final class ExtendedInterfaceScreen extends UpgradeableScreen<ExtendedInt
     private int isolationGestureButton = -1;
 
     public ExtendedInterfaceScreen(ExtendedInterfaceMenu menu, Inventory inventory, Component title, ScreenStyle style) {
-        super(menu, inventory, title, style);
+        super(menu, inventory, title, style, menu.getConfigSlots());
         fuzzyMode = new ServerSettingToggleButton<>(Settings.FUZZY_MODE, FuzzyMode.IGNORE_ALL);
         nextPage = new ActionEPPButton(ignored ->
                 EAENetworkHandler.INSTANCE.sendToServer(new CUpdatePage(1)), Icon.ARROW_RIGHT);

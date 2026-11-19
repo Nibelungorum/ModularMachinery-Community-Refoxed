@@ -121,7 +121,6 @@ public final class AE2ResourceFamilies {
                     return new CapabilityBinding.ExternalExposure<>(Capabilities.Fluid.BLOCK.name(), ResourceHandler.asClass(),
                             (host, _, _) -> ModCapabilities.resourceStorageHandler(((OutputInterfaceBlockEntity) host).fluidStorage(), false, true));
                 }
-                @Override public long stockingAmount() { return 1_000L; }
 
                 @Override
                 public Class<FluidResource> resourceType() {
