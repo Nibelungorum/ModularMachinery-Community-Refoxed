@@ -279,6 +279,49 @@ class FactoryRuntimeTest {
     }
 
     @Test
+    void warm_installed_lanes_recheck_the_binding_after_an_earlier_lane_callback() throws Exception {
+        ConfigTestSupport.setMachineWorkMode(MachineWorkMode.ASYNC);
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<Runnable> invalidate = new AtomicReference<>();
+        MachineControllerBlockEntity controller = attachedFactoryController(
+                RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)), RecipeBehavior.builder().recipeTick(context -> {
+                    calls.incrementAndGet();
+                    Runnable change = invalidate.getAndSet(null);
+                    if (change != null) change.run();
+                }).build());
+        ServerLevel level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        try {
+            MachineRecipe recipe = RecipeTestSupport.create(MMCR.id("factory_callback_preflight"),
+                    controller.currentRecipePoolId(), 100, List.of(), List.of(), List.of(), 0, 2);
+            RecipeRegistry.registerStatic(recipe);
+            tickAttachedFactory(controller);
+            setItem(controller.getFactoryController().itemStorage(), 0, new ItemStack(ModItems.THREAD_DISPERSER.get()));
+            tickAttachedFactory(controller);
+            assertThat(controllerFactoryRuntime(controller).activeRuntimes()).hasSize(2);
+            tickAttachedFactory(controller);
+            calls.set(0);
+            tickAttachedFactory(controller);
+            assertThat(calls).hasValue(2);
+            List<CraftingRuntime> lanes = controllerFactoryRuntime(controller).activeRuntimes();
+            assertThat(lanes).hasSize(2);
+            InstalledRecipeProgram later = lanes.getLast().installedProgram();
+            assertThat(later.current()).isTrue();
+            long paid = later.ledger().state().paidAttempts();
+
+            calls.set(0);
+            invalidate.set(() -> controller.componentRuntime().replaceComponents(List.of()));
+            tickAttachedFactory(controller);
+
+            assertThat(calls).hasValue(1);
+            assertThat(later.current()).isFalse();
+            assertThat(later.ledger().state().paidAttempts()).isEqualTo(paid);
+        } finally {
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
+    }
+
+    @Test
     void nested_tick_observation_leases_do_not_share_an_in_use_baseline() throws Exception {
         FactoryRuntime factory = new FactoryRuntime();
         var acquire = FactoryRuntime.class.getDeclaredMethod("acquireLaneTickObservation");
