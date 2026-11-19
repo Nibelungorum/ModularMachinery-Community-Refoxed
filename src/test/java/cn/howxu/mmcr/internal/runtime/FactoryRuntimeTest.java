@@ -260,11 +260,14 @@ class FactoryRuntimeTest {
             tickAttachedFactory(controller);
             CraftingRuntime lane = factoryBaseRuntime(factory);
             int builds = factory.tickObservationBuildCountForTesting();
+            tickAttachedFactory(controller); // Consume the transition into the ticking set.
+            long checks = factory.schedulingChecksForTesting();
             int tick = lane.tickCount();
             FactorySnapshot before = factory.snapshot();
             assertThat(builds).isPositive();
             for (int step = 0; step < 4; step++) tickAttachedFactory(controller);
             assertThat(factory.tickObservationBuildCountForTesting()).isEqualTo(builds);
+            assertThat(factory.schedulingChecksForTesting()).isEqualTo(checks);
             assertThat(lane.tickCount()).isGreaterThan(tick);
             assertThat(factory.snapshot().lanes().getFirst().tick()).isEqualTo(lane.tickCount());
             assertThat(before.lanes().getFirst().tick()).isEqualTo(tick);
@@ -580,6 +583,9 @@ class FactoryRuntimeTest {
             long searches = factory.searchAttemptsForTesting();
             long scans = factory.asyncSearchScansForTesting();
             long checks = factory.schedulingChecksForTesting();
+            var scheduled = FactoryRuntime.class.getDeclaredMethod("scheduledLaneSnapshot", Set.class);
+            scheduled.setAccessible(true);
+            List<?> ticking = (List<?>) scheduled.invoke(factory, Set.of());
             CraftingRuntime active = factory.activeRuntimes().getFirst();
             int progress = active.tickCount();
             for (int tick = 0; tick < 4; tick++) tickAttachedFactory(controller);
@@ -588,6 +594,7 @@ class FactoryRuntimeTest {
             assertThat(factory.asyncSearchScansForTesting()).isEqualTo(scans);
             assertThat(factory.schedulingChecksForTesting()).isEqualTo(checks);
             assertThat(active.tickCount()).isGreaterThan(progress);
+            assertThat(scheduled.invoke(factory, Set.of())).isSameAs(ticking);
 
             factory.snapshot();
             FactoryRecipeThread owner = laneThreadSnapshots(factory).keySet().stream()
@@ -595,6 +602,8 @@ class FactoryRuntimeTest {
             var removeLane = FactoryRuntime.class.getDeclaredMethod("removeLane", FactoryRecipeThread.class);
             removeLane.setAccessible(true);
             removeLane.invoke(factory, owner);
+            assertThat(ticking).singleElement().isSameAs(owner);
+            assertThat((List<?>) scheduled.invoke(factory, Set.of())).isEmpty();
             tickAttachedFactory(controller);
             assertThat(factory.activeRuntimes()).singleElement()
                     .satisfies(replacement -> assertThat(replacement).isNotSameAs(active));
