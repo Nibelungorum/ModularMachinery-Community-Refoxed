@@ -80,6 +80,7 @@ public final class FactoryRuntime {
     private final Map<FactoryRecipeThread, ExecutionStatus> laneFailures = new IdentityHashMap<>();
     private final Set<FactoryRecipeThread> searchWaitingLanes = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<FactoryRecipeThread> tickingLanes = Collections.newSetFromMap(new IdentityHashMap<>());
+    private @Nullable List<FactoryRecipeThread> orderedTickingLanes;
     private final Set<FactoryRecipeThread> activeLanes = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<FactoryRecipeThread> dirtyLaneSchedules = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Map<FactoryRecipeThread, LaneDeadline> scheduledDeadlines = new IdentityHashMap<>();
@@ -1475,6 +1476,7 @@ public final class FactoryRuntime {
             schedulingCandidates = new ArrayList<>(candidates);
             schedulingCandidateSource = candidates;
         }
+        if (dirtyLaneSchedules.isEmpty()) return;
         for (FactoryRecipeThread lane : List.copyOf(dirtyLaneSchedules)) {
             if (laneIndices.containsKey(lane)) refreshLaneSchedule(lane, snapshot, gameTime);
             dirtyLaneSchedules.remove(lane);
@@ -1482,20 +1484,19 @@ public final class FactoryRuntime {
     }
 
     private void refreshLaneSchedule(FactoryRecipeThread lane, ControllerRuntimeSnapshot snapshot, long gameTime) {
-        if (lane.isIdle()) schedulingChecksForTesting++;
+        schedulingChecksForTesting++;
         removeLaneDeadline(lane);
         searchWaitingLanes.remove(lane);
-        tickingLanes.remove(lane);
-        if (!laneIndices.containsKey(lane)) return;
         AsyncSearchRequest pending = pendingAsyncSearches.get(lane);
         if (pending != null && pending.coreRecipeSetVersion() != lane.coreRecipeSetVersion()) {
             pendingAsyncSearches.remove(lane, pending);
             cancelSharedSearch(pending.sharedKey(), lane);
         }
         if (!lane.isIdle() || lane.isStartPending() || lane.runtime().active() || readyLanes.contains(lane)) {
-            tickingLanes.add(lane);
+            if (tickingLanes.add(lane)) orderedTickingLanes = null;
             return;
         }
+        if (tickingLanes.remove(lane)) orderedTickingLanes = null;
         long idleDeadline = lane.idleTimeoutTick(gameTime);
         SharedSearchKey key = sharedSearchKey(currentSearchContextKey(snapshot, lane), lane);
         SharedSearchState shared = sharedSearches.get(key);
@@ -1551,11 +1552,18 @@ public final class FactoryRuntime {
     }
 
     private void rebuildLaneIndices() {
+        orderedTickingLanes = null;
         laneIndices.clear();
         for (int index = 0; index < lanes.size(); index++) laneIndices.put(lanes.get(index), index);
     }
 
     private List<FactoryRecipeThread> scheduledLaneSnapshot(Set<FactoryRecipeThread> dueLanes) {
+        if (dueLanes.isEmpty() && readyLanes.isEmpty()) {
+            if (orderedTickingLanes == null) {
+                orderedTickingLanes = tickingLanes.stream().sorted(Comparator.comparingInt(laneIndices::get)).toList();
+            }
+            return orderedTickingLanes;
+        }
         Set<FactoryRecipeThread> selected = Collections.newSetFromMap(new IdentityHashMap<>());
         selected.addAll(tickingLanes);
         selected.addAll(dueLanes);
@@ -1679,18 +1687,21 @@ public final class FactoryRuntime {
             markLaneStateChanged();
         }
         boolean active = lane.runtime().active();
-        if (active) activeLanes.add(lane);
-        else activeLanes.remove(lane);
-        markLaneScheduleChanged(lane);
-        if (lane.isIdle()) searchWaitingLanes.add(lane);
-        else searchWaitingLanes.remove(lane);
+        LaneAccounting previous = laneAccounting.get(lane);
+        // Stable execution stays in the ticking set. Idle and pending starts can still need a new deadline.
+        if (!active || previous == null || !previous.active()) {
+            if (active) activeLanes.add(lane);
+            else activeLanes.remove(lane);
+            markLaneScheduleChanged(lane);
+            if (lane.isIdle()) searchWaitingLanes.add(lane);
+            else searchWaitingLanes.remove(lane);
+        }
         MachineRecipe pending = lane.getPendingStartRecipe();
         if (!lane.isStartPending() || active) startReservations.remove(lane);
         Identifier recipeId = active && lane.runtime().recipe() != null ? lane.runtime().recipe().id()
                 : pending != null ? pending.id()
                 : lane.getStatus() == RecipeThread.Status.FAILED ? null : startReservations.get(lane);
         Identifier patternId = patternStartReservations.contains(lane) ? lane.runtime().pendingPatternRecipeId() : null;
-        LaneAccounting previous = laneAccounting.get(lane);
         dirtySnapshotLanes.add(lane);
         if (previous != null && !Objects.equals(previous.recipeId(), recipeId)) dirtyLaneSchedules.addAll(lanes);
         if (previous != null && previous.active() == active && Objects.equals(previous.recipeId(), recipeId)
