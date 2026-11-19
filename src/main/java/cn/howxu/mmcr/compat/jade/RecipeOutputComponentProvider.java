@@ -3,6 +3,9 @@ package cn.howxu.mmcr.compat.jade;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.client.gui.ControllerRecipeTextLines;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
+import cn.howxu.mmcr.compat.ae2lt.client.LightningSprites;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceJadeElement;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
@@ -73,7 +76,11 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
             else if (owned instanceof MachineOutput.FluidOutput fluid) renderFluid(tooltip, fluid, amount);
             else if (owned instanceof LoadedChemicalOutput chemical) renderChemical(tooltip, chemical, amount);
             else if (owned instanceof SourceOutput) renderSource(tooltip, amount);
-            else tooltip.add(ControllerRecipeTextLines.genericOutputLabel(owned, amount));
+            else if (owned instanceof LightningOutput lightning && LightningBridge.get().available()) {
+                tooltip.add(new JadeChemicalElement(LightningSprites.forTier(lightning.tier()), -1, 9));
+                tooltip.append(IElementHelper.get().spacer(2, 0));
+                tooltip.append(ControllerRecipeTextLines.genericOutputLabel(owned, amount));
+            } else tooltip.add(ControllerRecipeTextLines.genericOutputLabel(owned, amount));
         }
     }
 

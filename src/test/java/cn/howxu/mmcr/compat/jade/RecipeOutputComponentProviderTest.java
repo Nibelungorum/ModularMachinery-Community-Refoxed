@@ -1,11 +1,15 @@
 package cn.howxu.mmcr.compat.jade;
 
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
+import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
@@ -42,6 +46,8 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.TooltipPosition;
@@ -57,24 +63,30 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class RecipeOutputComponentProviderTest {
+    private static OutputRegistry.TestScope outputs;
 
     @BeforeAll
     static void bootstrap() throws Exception {
-        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
         TestBootstrap.bootstrap();
+        MekanismBridgeBootstrap.installForTesting(new LoadedMekanismBridge());
+        outputs = OutputRegistry.openTestScope();
         OutputRegistry.register(LoadedChemicalOutput.TYPE);
         OutputRegistry.register(CountingOutput.TYPE);
+        for (LightningTier tier : LightningTier.values()) OutputRegistry.register(LightningRecipeTypes.outputType(tier));
         // Unit tests don't load resource packs, so seed the translation we assert against.
         var ctor = ClientLanguage.class.getDeclaredConstructor(Map.class, boolean.class);
         ctor.setAccessible(true);
         Language.inject(ctor.newInstance(Map.of(
                 "jade.mmcr.machine_controller.recipe_output", "Recipe Output",
                 "jade.mmcr.machine_controller.recipe_output.fluid", "%s %s",
+                "output.ae2lt:high_voltage", "High Voltage Lightning",
+                "output.ae2lt:extreme_high_voltage", "Extreme High Voltage Lightning",
                 "chat.square_brackets", "[%s]"), false));
     }
 
     @AfterAll
-    static void resetMek() {
+    static void reset() {
+        outputs.close();
         MekanismBridgeBootstrap.resetForTesting();
     }
 
@@ -148,6 +160,32 @@ class RecipeOutputComponentProviderTest {
     @Test
     void priorityIsTooltipTail() {
         assertThat(RecipeOutputComponentProvider.INSTANCE.getDefaultPriority()).isEqualTo(TooltipPosition.TAIL - 9);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"HIGH_VOLTAGE,ae2lt:item/high_voltage_lightning,High Voltage Lightning",
+            "EXTREME_HIGH_VOLTAGE,ae2lt:item/extreme_high_voltage_lightning,Extreme High Voltage Lightning"})
+    void lightningRowPairsItsTierSpriteWithTheTransportedAmount(LightningTier tier, String sprite, String name) {
+        var output = new LightningOutput(tier, 2L, 1F);
+        try {
+            CompoundTag data = new CompoundTag();
+            RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(output, 4_294_967_297L)));
+
+            LightningBridgeBootstrap.installForTesting(LightningBridgeBootstrap.selectForTesting(false));
+            var fallback = collectCalls(data);
+            assertThat(fallback).extracting(TooltipCall::method).containsExactly("add", "add");
+            var label = (Component) fallback.getLast().value();
+            assertThat(label.getString()).isEqualTo(name + " × 4,294,967,297");
+
+            LightningBridgeBootstrap.installForTesting(LightningBridgeBootstrap.selectForTesting(true));
+            var calls = collectCalls(data);
+            assertThat(calls).extracting(TooltipCall::method).containsExactly("add", "add", "append", "append");
+            assertThat(calls.get(1).value()).isInstanceOf(JadeChemicalElement.class)
+                    .extracting("spriteLocation").isEqualTo(ResourceLocation.parse(sprite));
+            assertThat(calls.getLast().value()).isEqualTo(label);
+        } finally {
+            LightningBridgeBootstrap.resetForTesting();
+        }
     }
 
     @Test

@@ -4,7 +4,9 @@ import cn.howxu.mmcr.client.render.ChemicalGuiRenderer;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.ars_nouveau.client.SourceGuiRenderer;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -251,6 +253,8 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
             }
             case ControllerTextLine.FluidIcon fluid ->
                     FluidGuiRenderer.drawFluid(graphics, fluid.stack(), x, y, size, size);
+            case ControllerTextLine.SpriteIcon sprite -> graphics.blit(x, y, 0, size, size,
+                    Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(sprite.sprite()));
             case ControllerTextLine.SourceIcon source ->
                     SourceGuiRenderer.drawSource(graphics, x, y, size, size);
             case ControllerTextLine.ChemicalIcon chemical -> {

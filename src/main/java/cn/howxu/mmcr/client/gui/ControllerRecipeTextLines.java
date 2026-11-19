@@ -3,6 +3,9 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
+import cn.howxu.mmcr.compat.ae2lt.client.LightningSprites;
 import cn.howxu.mmcr.compat.ars_nouveau.SourceOutput;
 import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
@@ -171,7 +174,7 @@ public final class ControllerRecipeTextLines {
                     OUTPUT_INDENT);
         }
         return new ControllerTextLine(genericOutputLabel(output, amount), MachineControllerScreen.STATUS_LABEL_COLOR,
-                null, List.of(), OUTPUT_INDENT);
+                icon, List.of(), OUTPUT_INDENT);
     }
 
     public static Component genericOutputLabel(MachineOutput output, long amount) {
@@ -196,6 +199,9 @@ public final class ControllerRecipeTextLines {
         }
         if (output instanceof LoadedChemicalOutput chemical) {
             return new ControllerTextLine.ChemicalIcon(chemical.id(), amount);
+        }
+        if (output instanceof LightningOutput lightning && LightningBridge.get().available()) {
+            return new ControllerTextLine.SpriteIcon(LightningSprites.forTier(lightning.tier()));
         }
         return null;
     }

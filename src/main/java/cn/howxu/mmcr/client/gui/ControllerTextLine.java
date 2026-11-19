@@ -37,8 +37,16 @@ public record ControllerTextLine(Component text, int color, Icon icon, List<Comp
         return leftIndent + (icon == null ? 0 : icon.width() + 2);
     }
 
-    public sealed interface Icon permits ItemIcon, FluidIcon, ChemicalIcon, SourceIcon {
+    public sealed interface Icon permits ItemIcon, FluidIcon, ChemicalIcon, SourceIcon, SpriteIcon {
         int width();
+    }
+
+    /** A sprite on the block atlas. @author howxu <dev@howxu.cn> */
+    public record SpriteIcon(ResourceLocation sprite) implements Icon {
+        @Override
+        public int width() {
+            return 9;
+        }
     }
 
     public record ItemIcon(ItemStack stack) implements Icon {
