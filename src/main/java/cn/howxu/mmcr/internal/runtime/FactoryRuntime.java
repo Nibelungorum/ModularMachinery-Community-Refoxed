@@ -1482,8 +1482,8 @@ public final class FactoryRuntime {
         if (laneAdmissionPending || lanes.isEmpty() || cachedActiveLaneCount == 0 || perThreadParallelLimit != maxParallelism
                 || !startReservations.isEmpty() || !readyLanes.isEmpty()) return false;
         if (nextLaneDeadline(gameTime)) return false;
-        for (FactoryRecipeThread lane : tickingLanes) {
-            if (!lane.runtime().active()) return false;
+        // Reuse the warm lane order, not its eligibility: an earlier lane's callback can invalidate the next.
+        for (FactoryRecipeThread lane : orderedTickingLanes != null ? orderedTickingLanes : tickingLanes) {
             InstalledRecipeProgram execution = lane.runtime().installedProgram();
             if (execution == null || !execution.current()) return false;
         }
