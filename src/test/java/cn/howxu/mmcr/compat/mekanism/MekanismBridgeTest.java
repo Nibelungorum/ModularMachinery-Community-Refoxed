@@ -4,7 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.storage.LongFluidStorage;
 import java.util.Arrays;
 import java.util.stream.Stream;
-import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 import org.junit.jupiter.api.AfterEach;
@@ -25,8 +24,7 @@ class MekanismBridgeTest {
         assertThat(bridge.available()).isFalse();
         assertThat(bridge.supportsPortFamily(MMCR.id("mekanism_chemical"))).isFalse();
         assertThat(bridge.unavailableReason()).isEqualTo(MMCR.id("mekanism_unavailable"));
-        assertThat(bridge.capabilityIdForMenu(null)).isNull();
-        assertThat(bridge.isPortMenuAt(null, BlockPos.ZERO, null)).isFalse();
+        assertThat(bridge.portDeclarations()).isEmpty();
         var storage = new LongFluidStorage(4_000, () -> {});
         assertThat(bridge.manualFluidContainerHandler(storage)).isSameAs(storage);
         try (Transaction transaction = Transaction.openRoot()) {

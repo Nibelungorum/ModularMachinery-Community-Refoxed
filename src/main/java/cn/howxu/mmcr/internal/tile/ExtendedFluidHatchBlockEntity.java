@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.PortKinds;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.api.port.MachinePort;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -35,7 +35,7 @@ public class ExtendedFluidHatchBlockEntity extends FluidHatchBlockEntity {
     }
 
     private static IOPortKind fallback(BlockState state) {
-        if (state.getBlock() instanceof IOPortBlock port && port.kind().ioType() == IOType.OUTPUT) {
+        if (state.getBlock() instanceof MachinePort port && port.kind().ioType() == IOType.OUTPUT) {
             return PortKinds.EXTENDED_FLUID_OUTPUT;
         }
         return PortKinds.EXTENDED_FLUID_INPUT;

@@ -11,6 +11,8 @@ import cn.howxu.mmcr.api.capability.facet.SyncFacet;
 import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
 import cn.howxu.mmcr.api.capability.sync.CapabilitySyncRegistry;
 import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
+import cn.howxu.mmcr.internal.menu.ItemBusMenu;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -108,6 +110,20 @@ public final class PortStorageSyncGameTest {
                     "Late reopen encodes a fresh baseline after viewerless publication");
             assertContents(helper, packets(first).getLast(), port, replica, iron, 37L);
             assertContents(helper, shared, port, replica, iron, 27L);
+            var replacement = new CountingPort(port.getBlockPos(), state);
+            helper.getLevel().setBlockEntity(replacement);
+            PktPortStorageSyncPayload.sendToViewers(port);
+            PktPortStorageSyncPayload.sendToViewers(replacement);
+            helper.assertTrue(packets(first).size() == 3 && packets(second).size() == 2,
+                    "An open menu for the old instance subscribes to neither detached nor replacement storage");
+
+            var ordinary = ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState();
+            helper.setBlock(relative, ordinary);
+            var pos = helper.absolutePos(relative);
+            ordinary.useWithoutItem(helper.getLevel(), second, new BlockHitResult(pos.getCenter(), Direction.UP, pos, false));
+            helper.assertTrue(second.containerMenu instanceof ItemBusMenu, "Ordinary item bus opens its own menu");
+            PktPortStorageSyncPayload.sendToViewers(helper.getBlockEntity(relative, ItemBusBlockEntity.class));
+            helper.assertTrue(packets(second).size() == 2, "An ordinary port menu receives no long-storage packets");
         } finally {
             first.closeContainer();
             second.closeContainer();

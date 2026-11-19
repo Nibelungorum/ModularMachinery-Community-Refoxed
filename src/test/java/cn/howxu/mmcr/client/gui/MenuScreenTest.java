@@ -72,13 +72,13 @@ class MenuScreenTest {
     @Test
     void auto_io_control_tooltip_uses_capability_and_direction() {
         assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), false))
-                .isEqualTo("mmcr.auto_io.item_input_control");
+                .isEqualTo("minecraft.auto_io.item_input_control");
         assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), true))
-                .isEqualTo("mmcr.auto_io.item_output_control");
+                .isEqualTo("minecraft.auto_io.item_output_control");
         assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), false))
-                .isEqualTo("mmcr.auto_io.fluid_input_control");
+                .isEqualTo("minecraft.auto_io.fluid_input_control");
         assertThat(AbstractPortScreen.autoIOControlTooltipKey(BuiltinCapabilityDefinitions.FLUID_TYPE.id(), true))
-                .isEqualTo("mmcr.auto_io.fluid_output_control");
+                .isEqualTo("minecraft.auto_io.fluid_output_control");
     }
 
     @Test
@@ -135,6 +135,23 @@ class MenuScreenTest {
         screen.choose(fluid);
 
         assertThat(screen.resolve(List.of(item, fluid))).isEqualTo(fluid);
+        assertThat(screen.resolve(List.of())).isNull();
+        screen.pressPageButton(false, List.of());
+        assertThat(screen.autoIOPage).isFalse();
+        screen.pressPageButton(false, List.of(item));
+        assertThat(screen.autoIOPage).isTrue();
+        screen.pressPageButton(false, List.of(item));
+        screen.pressPageButton(true, List.of(item, fluid));
+        assertThat(screen.autoIOPage).isTrue();
+        screen.pressPageButton(false, List.of(item, fluid));
+        var third = MMCR.id("third");
+        var ids = List.of(item, fluid, third);
+        screen.pressPageButton(true, ids);
+        assertThat(screen.autoIOPage).isFalse();
+        screen.pressPageButton(false, ids);
+        assertThat(screen.autoIOPage).isTrue();
+        assertThat(screen.resolve(ids)).isEqualTo(third);
+        assertThat(screen.resolve(List.of(item, fluid))).isEqualTo(item);
     }
 
     @Test

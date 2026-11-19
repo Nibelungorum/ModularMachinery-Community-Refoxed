@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.internal.port.FluidContainerInteraction;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
@@ -9,6 +10,8 @@ import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry
 import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.Identifier;
@@ -25,7 +28,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class CombinedPortMenu extends AbstractMachineMenu implements PortMenu {
+public final class CombinedPortMenu extends AbstractMachineMenu implements StorageSnapshotMenu {
     public static final int FIRST_TANK_X = 15;
     public static final int FIRST_TANK_Y = 10;
     public static final int SECOND_TANK_X = 42;
@@ -115,6 +118,13 @@ public final class CombinedPortMenu extends AbstractMachineMenu implements PortM
 
     public CombinedPortBlockEntity owner() { return owner; }
 
+    @Override
+    public int transferContainer(ServerPlayer player, int slot, boolean extract, TransactionContext tx) {
+        if (owner == null || slot < 0 || slot >= fluidTankCount || slot >= owner.fluidStorage().size()
+                || owner.kind().combinedPortSize().isEmpty()) return 0;
+        return FluidContainerInteraction.transfer(player, this, owner.ioType(), owner.getResourceHandler(null), slot, extract, tx);
+    }
+
     public BlockPos pos() { return pos; }
 
     public String kind() { return kind; }
@@ -137,10 +147,12 @@ public final class CombinedPortMenu extends AbstractMachineMenu implements PortM
 
     public Identifier selectedCapabilityId() { return BuiltinCapabilityDefinitions.ITEM_TYPE.id(); }
 
+    @Override
     public boolean matches(BlockPos targetPos, String targetKind) {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
+    @Override
     public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
         List<ItemStorageEntry> nextItems = PktPortStorageSyncPayload.itemEntries(port.itemStorage());

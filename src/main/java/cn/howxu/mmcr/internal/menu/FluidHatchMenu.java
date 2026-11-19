@@ -1,9 +1,12 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.internal.port.FluidContainerInteraction;
 import cn.howxu.mmcr.api.capability.presentation.CapabilityDisplay;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.registry.ModUIs;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
@@ -54,6 +57,13 @@ public class FluidHatchMenu extends AbstractMachineMenu implements PortMenu {
 
     public FluidHatchBlockEntity owner() {
         return owner;
+    }
+
+    @Override
+    public int transferContainer(ServerPlayer player, int slot, boolean extract, TransactionContext tx) {
+        if (owner == null || slot != 0 || owner.kind().fluidHatchSize().isEmpty()
+                || owner.kind().extendedFluidHatchSize().isPresent()) return 0;
+        return FluidContainerInteraction.transfer(player, this, owner.ioType(), owner.getResourceHandler(null), slot, extract, tx);
     }
 
     public BlockPos pos() { return pos; }

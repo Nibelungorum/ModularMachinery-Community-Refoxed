@@ -88,19 +88,6 @@ public interface MekanismBridge {
     default void registerMenus(MenuRegistrar registrar) {
     }
 
-    /** Returns the optional capability identity represented by a menu, or {@code null}. */
-    default Identifier capabilityIdForMenu(AbstractContainerMenu menu) {
-        return null;
-    }
-
-    /**
-     * Checks an optional port menu without exposing its implementation type to common code.
-     * A {@code null} position is treated as a failure; a {@code null port} skips owner matching.
-     */
-    default boolean isPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
-        return false;
-    }
-
     default ResourceHandler<FluidResource> manualFluidContainerHandler(ResourceHandler<FluidResource> handler) {
         return handler;
     }
@@ -119,7 +106,7 @@ public interface MekanismBridge {
         return portDeclarations().stream().anyMatch(declaration -> declaration.id().equals(id));
     }
 
-    default AbstractContainerMenu createMenu(String id, int containerId, Inventory playerInventory,
+    default AbstractContainerMenu createMenu(PortType type, int containerId, Inventory playerInventory,
                                               Level level, BlockPos pos) {
         return null;
     }
@@ -137,7 +124,7 @@ public interface MekanismBridge {
     record PortDeclaration(String id, PortType type, IOType ioType, int tier, long capacity,
                            boolean radioactive) implements IOPortKind {
         @Override public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
-            return get().createMenu(id, containerId, inventory, level, pos);
+            return get().createMenu(type, containerId, inventory, level, pos);
         }
         @Override public void writeOpenData(FriendlyByteBuf buffer, BlockPos pos) { get().writeClientOpenData(buffer, id, pos); }
         @Override public boolean handlesContainerInteraction() { return true; }

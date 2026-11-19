@@ -1,14 +1,9 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.internal.block.StructureInterfaceBlocks;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
-import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.internal.block.ModuleCouplerBlock;
-import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
-import cn.howxu.mmcr.internal.block.ParallelControllerBlock;
-import cn.howxu.mmcr.internal.block.SmartInterfaceBlock;
-import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import java.util.function.Supplier;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
@@ -91,17 +86,9 @@ public sealed interface BlockPredicate {
         return MachineLevelRegistry.findLevel(state).map(level -> level.priority()).orElse(Integer.MIN_VALUE);
     }
 
-    private static int blockPriority(Block block) {
-        if (block instanceof FactorySchedulerBlock) return 4;
-        if (block instanceof ParallelControllerBlock) return 3;
-        if (block instanceof SmartInterfaceBlock) return 2;
-        if (block instanceof DataStorageBlock || block instanceof NetworkInterfaceBlock || block instanceof UpgradeBusBlock) return 1;
-        if (block instanceof IOPortBlock) return 1;
-        return 0;
-    }
-
     private static int compareCandidates(Candidate left, Candidate right) {
-        int priority = Integer.compare(blockPriority(left.state().getBlock()), blockPriority(right.state().getBlock()));
+        int priority = Integer.compare(StructureInterfaceBlocks.blockPriority(left.state().getBlock()),
+                StructureInterfaceBlocks.blockPriority(right.state().getBlock()));
         if (priority != 0) return priority;
         int exactState = Integer.compare(right.exactState(), left.exactState());
         if (exactState != 0) return exactState;

@@ -24,8 +24,8 @@ class StartupContentConcurrencyTest {
     Path temporaryDirectory;
 
     @ParameterizedTest
-    @ValueSource(strings = {"items-first", "scripts-first", "concurrent"})
-    void startup_registration_is_serialized_without_class_initialization_deadlocks(String scenario) throws Exception {
+    @ValueSource(strings = {"items-first", "scripts-first", "concurrent", "independent-port"})
+    void startup_registrations_work_in_a_cold_process(String scenario) throws Exception {
         Path output = temporaryDirectory.resolve(scenario + ".log");
         Process process = new ProcessBuilder(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),

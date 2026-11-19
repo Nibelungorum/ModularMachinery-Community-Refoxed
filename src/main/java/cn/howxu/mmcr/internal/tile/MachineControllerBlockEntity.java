@@ -34,6 +34,7 @@ import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.internal.menu.ControllerUiMenu;
+import cn.howxu.mmcr.api.port.MachinePort;
 import cn.howxu.mmcr.api.recipe.MachineComponentTile;
 import cn.howxu.mmcr.api.recipe.EffectiveRecipe;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -3368,39 +3369,39 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
         for (BlockPos relativePos : componentPositions(matchedPattern, compiledPattern, facing)) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
-            if (level.getBlockEntity(worldPos) instanceof UpgradeBusBlockEntity bus) {
+            BlockEntity container = level.getBlockEntity(worldPos);
+            if (container instanceof UpgradeBusBlockEntity bus) {
                 bus.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
                 continue;
             }
-            if (level.getBlockEntity(worldPos) instanceof SmartInterfaceBlockEntity smartInterface) {
+            if (container instanceof SmartInterfaceBlockEntity smartInterface) {
                 if (smartInterface.hasController(getBlockPos())) {
                     nextLinkedPortPositions.add(worldPos.immutable());
                 }
                 nextComponents.add(new ProcessingComponent(null, smartInterface, worldPos, relativePos, matchedPattern.tagsAt(relativePos), null));
                 continue;
             }
-            if (level.getBlockEntity(worldPos) instanceof ParallelControllerBlockEntity parallel) {
+            if (container instanceof ParallelControllerBlockEntity parallel) {
                 parallel.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
                 nextComponents.add(new ProcessingComponent(null, parallel, worldPos, relativePos, matchedPattern.tagsAt(relativePos), null));
                 continue;
             }
-            if (level.getBlockEntity(worldPos) instanceof FactorySchedulerBlockEntity scheduler) {
+            if (container instanceof FactorySchedulerBlockEntity scheduler) {
                 scheduler.bindOwner(this);
                 scheduler.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
                 nextComponents.add(new ProcessingComponent(null, scheduler, worldPos, relativePos, matchedPattern.tagsAt(relativePos), null));
                 continue;
             }
-            if (!(level.getBlockEntity(worldPos) instanceof MachineComponentTile tile)) continue;
+            if (!(container instanceof MachineComponentTile tile)) continue;
 
-            if (tile instanceof IOPortBlockEntity port) {
+            if (container instanceof MachinePort && container instanceof LinkedAppearanceBlockEntity port) {
                 port.linkControllerAppearanceSource(getBlockPos(), formedTexture);
                 nextLinkedPortPositions.add(worldPos.immutable());
             }
             var component = tile.provideComponent();
-            if (!(tile instanceof BlockEntity container)) continue;
             nextComponents.add(new ProcessingComponent(component, container, worldPos, relativePos, matchedPattern.tagsAt(relativePos)));
         }
         runtime.publishComponentState(nextComponents, foundModifiers, foundLevels, nextLinkedPortPositions);
@@ -3589,7 +3590,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 : MachinePatternCompiler.positionsExcludingNetworkInterfaces(rotatedPattern);
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
-            if (!(level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port)) continue;
+            if (!(level.getBlockEntity(worldPos) instanceof MachinePort port)) continue;
             IOPortKind kind = port.kind();
             counts.merge(kind.id(), 1, Integer::sum);
             Set<String> countedAliases = new HashSet<>();
@@ -3615,7 +3616,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         List<IOPortKind> kinds = new ArrayList<>();
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
-            if (level.getBlockEntity(worldPos) instanceof IOPortBlockEntity port) {
+            if (level.getBlockEntity(worldPos) instanceof MachinePort port) {
                 kinds.add(port.kind());
             }
         }

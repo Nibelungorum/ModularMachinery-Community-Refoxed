@@ -20,7 +20,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ExtendedItemMenu extends AbstractMachineMenu implements PortMenu {
+public final class ExtendedItemMenu extends AbstractMachineMenu implements StorageSnapshotMenu {
     private final ExtendedItemBusBlockEntity owner;
     private final BlockPos pos;
     private final String kind;
@@ -85,10 +85,12 @@ public final class ExtendedItemMenu extends AbstractMachineMenu implements PortM
 
     public Identifier selectedCapabilityId() { return BuiltinCapabilityDefinitions.ITEM_TYPE.id(); }
 
+    @Override
     public boolean matches(BlockPos targetPos, String targetKind) {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
+    @Override
     public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
         List<ItemStorageEntry> nextEntries = PktPortStorageSyncPayload.itemEntries(port.itemStorage());

@@ -11,6 +11,9 @@ import cn.howxu.mmcr.api.port.PortTierPolicy;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -41,7 +44,7 @@ public interface IOPortKind {
     IOType ioType();
 
     /** 该 kind 对应的 BlockEntity 工厂。Block 注册时由这里创建对应实体。 */
-    BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory();
+    BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory();
 
     default Block createBlock(BlockBehaviour.Properties properties, Supplier<? extends BlockEntityType<?>> type) {
         return new IOPortBlock(this, type, properties);
@@ -96,6 +99,13 @@ public interface IOPortKind {
 
     default @Nullable AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) { return null; }
     default void writeOpenData(FriendlyByteBuf buffer, BlockPos pos) { buffer.writeBlockPos(pos); }
+    default void writeOpenData(FriendlyByteBuf buffer, BlockPos pos, AbstractContainerMenu menu) {
+        writeOpenData(buffer, pos);
+    }
+    default InteractionResult openSpecialMenu(Player player, Level level, BlockPos pos) { return InteractionResult.PASS; }
+    default int interactWithContainer(ItemAccess access, BlockEntity owner, Player player, TransactionContext tx) {
+        return owner instanceof IOPortBlockEntity port ? interactWithContainer(access, port, tx) : 0;
+    }
     default boolean handlesContainerInteraction() { return false; }
     default int interactWithContainer(ItemAccess access, IOPortBlockEntity port, TransactionContext tx) { return 0; }
 

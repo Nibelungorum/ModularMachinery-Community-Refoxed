@@ -1,9 +1,11 @@
 package cn.howxu.mmcr.client.gui;
 
-import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
+import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.item.Items;
 import net.minecraft.core.Holder;
@@ -35,7 +37,9 @@ class CombinedPortScreenTest {
 
     @Test
     void combined_capability_selectors_are_item_then_fluid() {
-        assertThat(CombinedPortScreen.capabilityIds())
+        var state = ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState();
+        var host = new CombinedPortBlockEntity(BlockPos.ZERO, state);
+        assertThat(host.configurableAutoIOIds())
                 .containsExactly(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), BuiltinCapabilityDefinitions.FLUID_TYPE.id());
     }
 

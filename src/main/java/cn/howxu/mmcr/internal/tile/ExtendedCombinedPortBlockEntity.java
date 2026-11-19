@@ -2,7 +2,7 @@ package cn.howxu.mmcr.internal.tile;
 
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
-import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.api.port.MachinePort;
 import cn.howxu.mmcr.internal.port.ExtendedCombinedPortSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongResourceStorage;
@@ -162,7 +162,7 @@ public class ExtendedCombinedPortBlockEntity extends IOPortBlockEntity {
     }
 
     private static IOPortKind fallback(BlockState state) {
-        if (state.getBlock() instanceof IOPortBlock port && port.kind().ioType() == IOType.OUTPUT) {
+        if (state.getBlock() instanceof MachinePort port && port.kind().ioType() == IOType.OUTPUT) {
             return PortKinds.EXTENDED_COMBINED_OUTPUT;
         }
         return PortKinds.EXTENDED_COMBINED_INPUT;

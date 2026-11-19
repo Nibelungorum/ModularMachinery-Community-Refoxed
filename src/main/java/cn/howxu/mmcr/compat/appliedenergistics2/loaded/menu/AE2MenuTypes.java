@@ -3,13 +3,9 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu;
 import appeng.helpers.InterfaceLogicHost;
 import appeng.helpers.patternprovider.PatternProviderLogicHost;
 import appeng.menu.implementations.MenuTypeBuilder;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AE2PortKind;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.compat.appliedenergistics2.InterfaceScreenTitles;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AsyncOutputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.InputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.OutputInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.StockingInterfaceKind;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import java.util.function.BiConsumer;
@@ -44,11 +40,7 @@ public final class AE2MenuTypes {
     public static MenuType<?> typeFor(IOPortKind kind) {
         MenuType<?> extended = ExtendedAEContributorBootstrap.contributor().menuType(kind);
         if (extended != null) return extended;
-        if (kind == PatternInterfaceKind.INSTANCE) return PATTERN;
-        if (kind == InputInterfaceKind.INSTANCE || kind == StockingInterfaceKind.INSTANCE
-                || kind == OutputInterfaceKind.INSTANCE || kind == AsyncOutputInterfaceKind.INSTANCE) {
-            return INTERFACE;
-        }
+        if (kind instanceof AE2PortKind ae2) return ae2.menuType();
         throw new IllegalArgumentException("Unknown AE2 interface kind: " + kind.id());
     }
 }

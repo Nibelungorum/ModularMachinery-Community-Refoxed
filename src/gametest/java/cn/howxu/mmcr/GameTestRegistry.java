@@ -1,5 +1,6 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.internal.network.AutoIOConfigGameTest;
 import cn.howxu.mmcr.internal.recipe.RecipeSearchGameTest;
 
 import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
@@ -269,6 +270,7 @@ public final class GameTestRegistry {
                 helper -> new WrenchDismantleGameTest().wrenchDismantlingPlaysSoundOnlyOnSuccess(helper));
         register(event, "dynamic_controller_drops_self", 100, ItemBusCapabilityGameTest::dynamicControllerDropsItself);
         // Disabled: CPU scheduling delays can cause this otherwise-correct test to fail intermittently.
+        register(event, "auto_io_config_third_endpoint_and_stale_owner", 20, AutoIOConfigGameTest::thirdEndpointAndStaleOwner);
         register(event, "auto_io_adjacent_picked_icons", 20,
                 helper -> new AutoIOGameTest().adjacentIconsUsePickedItems(helper));
         register(event, "auto_io_fluid_output", 120, helper -> new AutoIOGameTest().fluidOutputAutoExports(helper));

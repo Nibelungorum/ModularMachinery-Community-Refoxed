@@ -26,7 +26,7 @@ public record PortFamilyDescriptor(
     }
 
     public boolean scopedInput() {
-        return ioType == IOType.INPUT && PortFamily.scopesInputs(familyId);
+        return ioType == IOType.INPUT && PortFamily.scopesInputs(bindingId);
     }
 
     public PortFamilyDescriptor {

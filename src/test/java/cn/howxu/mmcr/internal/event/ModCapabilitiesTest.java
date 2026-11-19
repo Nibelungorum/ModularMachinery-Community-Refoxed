@@ -26,6 +26,7 @@ import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.PortKinds;
 import cn.howxu.mmcr.test.TestBootstrap;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -76,7 +77,7 @@ class ModCapabilitiesTest {
         }
 
         for (var kind : List.of(PortKinds.ITEM_INPUT, PortKinds.ITEM_OUTPUT, PortKinds.EXTENDED_ITEM_INPUT)) {
-            var port = kind.entityFactory().create(BlockPos.ZERO, ModBlocks.BLOCKS.get(kind.id()).get().defaultBlockState());
+            var port = (IOPortBlockEntity) kind.entityFactory().create(BlockPos.ZERO, ModBlocks.BLOCKS.get(kind.id()).get().defaultBlockState());
             var level = LevelStub.createWithBlockEntities(List.of(port));
             var expected = kind == PortKinds.EXTENDED_ITEM_INPUT ? "adapter" : kind.id();
             assertThat(cap.getCapability(level, BlockPos.ZERO, null, port, Direction.NORTH)).isEqualTo(expected);
@@ -146,7 +147,7 @@ class ModCapabilitiesTest {
         return new IOPortKind() {
             @Override public String id() { return kind.id(); }
             @Override public IOType ioType() { return kind.ioType(); }
-            @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+            @Override public BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory() {
                 return kind.entityFactory();
             }
             @Override public PortDefinition definition() { return PortDefinition.of(MMCR.id(id()), bindings); }

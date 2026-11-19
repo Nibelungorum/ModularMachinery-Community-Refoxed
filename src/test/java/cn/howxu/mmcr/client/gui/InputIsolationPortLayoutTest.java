@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.client.gui;
 
-import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -65,13 +68,14 @@ class InputIsolationPortLayoutTest {
                 screen.autoIOPage = ioPage;
                 update.invoke(screen);
                 IsolationToggleButton isolation = (IsolationToggleButton) getField(screen, "isolationButton");
-                assertThat(isolation.visible).isEqualTo(!ioPage);
-                assertThat(isolation.active).isEqualTo(!ioPage);
+                boolean onControls = ioPage && navigationCount > 0;
+                assertThat(isolation.visible).isEqualTo(!onControls);
+                assertThat(isolation.active).isEqualTo(!onControls);
                 assertThat(isolation.getX()).isEqualTo(32);
                 int preceding = ioPage ? Math.min(1, navigationCount) : navigationCount;
                 assertThat(isolation.getY()).isEqualTo(41 + preceding * 18);
                 Button secondary = (Button) getField(screen, "secondaryAutoIOPageButton");
-                if (secondary != null) assertThat(secondary.visible).isEqualTo(!ioPage);
+                assertThat(secondary.visible).isEqualTo(!onControls && navigationCount > 1);
                 assertThat(screen.getMenu().inputIsolation().enabled()).isFalse();
             }
             screen.getMenu().inputIsolation().dataSlot().set(3);
@@ -81,6 +85,24 @@ class InputIsolationPortLayoutTest {
             update.invoke(screen);
             assertThat(((IsolationToggleButton) getField(screen, "isolationButton")).visible).isFalse();
         }
+    }
+
+    @Test
+    void controls_follow_a_late_client_host_without_hiding_input_isolation() throws Exception {
+        FixtureScreen screen = screen(0);
+        var update = AbstractPortScreen.class.getDeclaredMethod("updateAutoIOWidgets");
+        update.setAccessible(true);
+        Button page = (Button) getField(screen, "autoIOPageButton");
+        update.invoke(screen);
+        assertThat(page.visible).isFalse();
+        screen.host = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+        update.invoke(screen);
+        assertThat(page.visible).isTrue();
+        screen.autoIOPage = true;
+        screen.host = null;
+        update.invoke(screen);
+        assertThat(screen.autoIOPage).isFalse();
+        assertThat(((IsolationToggleButton) getField(screen, "isolationButton")).visible).isTrue();
     }
 
     private FixtureScreen screen(int navigationCount) throws Exception {
@@ -94,8 +116,13 @@ class InputIsolationPortLayoutTest {
         setField(screen, "hiddenSlotPositions", new ArrayList<>());
         setField(screen, "relocatedPlayerSlotPositions", new ArrayList<>());
         setField(screen, "isolationButton", new IsolationToggleButton(0, 0, Component.empty(), state::enabled, ignored -> {}));
-        if (navigationCount > 0) setField(screen, "autoIOPageButton", button());
-        if (navigationCount > 1) setField(screen, "secondaryAutoIOPageButton", button());
+        setField(screen, "autoIOPageButton", button());
+        setField(screen, "secondaryAutoIOPageButton", button());
+        screen.host = switch (navigationCount) {
+            case 1 -> RuntimeTestFixtures.itemInput(BlockPos.ZERO);
+            case 2 -> new CombinedPortBlockEntity(BlockPos.ZERO, ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState());
+            default -> null;
+        };
         return screen;
     }
 
@@ -125,9 +152,8 @@ class InputIsolationPortLayoutTest {
         @Override protected IOType ownerIOType() { return IOType.INPUT; }
         @Override protected int portSlotCount() { return 0; }
         @Override protected Identifier texture(boolean autoIOPage) { return null; }
-        @Override protected List<Identifier> supportedCapabilityIds() {
-            return List.of(BuiltinCapabilityDefinitions.ITEM_TYPE.id(), BuiltinCapabilityDefinitions.FLUID_TYPE.id());
-        }
+        private IOPortBlockEntity host;
+        @Override protected IOPortBlockEntity portEntity() { return host; }
     }
 
     /** @author howxu <dev@howxu.cn> */

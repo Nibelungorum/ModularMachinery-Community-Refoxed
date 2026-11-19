@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.event;
 
+import cn.howxu.mmcr.api.capability.MachineCapability;
+import cn.howxu.mmcr.api.capability.external.ExternalPortHost;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityContext;
 import cn.howxu.mmcr.api.capability.external.ExternalCapabilityRegistry;
 import cn.howxu.mmcr.api.capability.facet.TransferFacet;
@@ -12,7 +14,6 @@ import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.storage.LongEnergyHandler;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.FactorySchedulerBlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -31,6 +32,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 import net.neoforged.neoforge.capabilities.Capabilities;
 
+import java.util.function.Function;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -136,8 +138,8 @@ public final class ModCapabilities {
                 capability,
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
-                    if (!(be instanceof IOPortBlockEntity port)
-                            || !port.isNativeSideExposed(binding, side)) return null;
+                    if (!(be instanceof ExternalPortHost port) || port.ioType() != kind.ioType()
+                            || exposedValue(port, binding, side, Function.identity()) == null) return null;
                     return exposure.resolver().resolve(port, port.ioType(), side);
                 });
     }
@@ -149,7 +151,7 @@ public final class ModCapabilities {
                 ITEM_BLOCK,
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
-                    if (!(be instanceof IOPortBlockEntity port)
+                    if (!(be instanceof ExternalPortHost port)
                             || port.ioType() != kind.ioType()) return null;
                     ResourceStorage<ItemResource> storage = resourceStorage(port, bindings, side, ItemResource.class,
                             true);
@@ -165,7 +167,7 @@ public final class ModCapabilities {
                 FLUID_BLOCK,
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
-                    if (!(be instanceof IOPortBlockEntity port)
+                    if (!(be instanceof ExternalPortHost port)
                             || port.ioType() != kind.ioType()) return null;
                     ResourceStorage<FluidResource> storage = resourceStorage(port, bindings, side, FluidResource.class,
                             true);
@@ -181,7 +183,7 @@ public final class ModCapabilities {
                 ENERGY_BLOCK,
                 ModBlockEntities.BES.get(kind.id()).get(),
                 (be, side) -> {
-                    if (!(be instanceof IOPortBlockEntity port)
+                    if (!(be instanceof ExternalPortHost port)
                             || port.ioType() != kind.ioType()) return null;
                     LongValueStorage storage = valueStorage(port, bindings, side);
                     if (storage == null) return null;
@@ -189,33 +191,39 @@ public final class ModCapabilities {
                 });
     }
 
-    static <R> ResourceStorage<R> resourceStorage(IOPortBlockEntity port,
-                                                   List<CapabilityBinding> bindings, Direction side,
-                                                   Class<R> resourceType) {
+    static <R> ResourceStorage<R> resourceStorage(ExternalPortHost port, List<CapabilityBinding> bindings,
+                                                  Direction side, Class<R> resourceType) {
         return resourceStorage(port, bindings, side, resourceType, false);
     }
 
-    private static <R> ResourceStorage<R> resourceStorage(IOPortBlockEntity port,
-                                                          List<CapabilityBinding> bindings, Direction side,
-                                                          Class<R> resourceType, boolean requireTransferFacet) {
+    private static <R> ResourceStorage<R> resourceStorage(ExternalPortHost port, List<CapabilityBinding> bindings,
+                                                          Direction side, Class<R> resourceType, boolean requireTransferFacet) {
         for (CapabilityBinding binding : bindings) {
-            if (!port.isNativeSideExposed(binding, side)) continue;
-            var capability = port.capability(binding.type());
-            if (requireTransferFacet && capability.facet(TransferFacet.class).isEmpty()) {
-                continue;
-            }
-            ResourceStorage<R> storage = CapabilityFactories.resourceStorage(capability, resourceType);
+            ResourceStorage<R> storage = exposedValue(port, binding, side, capability ->
+                    requireTransferFacet && capability.facet(TransferFacet.class).isEmpty() ? null
+                            : CapabilityFactories.resourceStorage(capability, resourceType));
             if (storage != null) return storage;
         }
         return null;
     }
 
-    private static LongValueStorage valueStorage(IOPortBlockEntity port, List<CapabilityBinding> bindings,
-                                                 Direction side) {
+    private static LongValueStorage valueStorage(ExternalPortHost port, List<CapabilityBinding> bindings, Direction side) {
         for (CapabilityBinding binding : bindings) {
-            if (!port.isNativeSideExposed(binding, side)) continue;
-            LongValueStorage storage = CapabilityFactories.valueStorage(port.capability(binding.type()), LongValueStorage.class);
+            LongValueStorage storage = exposedValue(port, binding, side,
+                    capability -> CapabilityFactories.valueStorage(capability, LongValueStorage.class));
             if (storage != null) return storage;
+        }
+        return null;
+    }
+
+    private static <T> T exposedValue(ExternalPortHost port, CapabilityBinding binding, Direction side,
+                                      Function<MachineCapability, T> projection) {
+        if (!binding.directions().supports(port.ioType()) || !port.isNativeSideExposed(binding, side)) return null;
+        for (MachineCapability capability : port.capabilities()) {
+            if (binding.type().equals(capability.type()) && capability.directions().supports(port.ioType())) {
+                T value = projection.apply(capability);
+                if (value != null) return value;
+            }
         }
         return null;
     }

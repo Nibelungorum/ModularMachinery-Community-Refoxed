@@ -20,7 +20,7 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class ExtendedFluidMenu extends AbstractMachineMenu implements PortMenu {
+public final class ExtendedFluidMenu extends AbstractMachineMenu implements StorageSnapshotMenu {
     private final ExtendedFluidHatchBlockEntity owner;
     private final BlockPos pos;
     private final String kind;
@@ -87,10 +87,12 @@ public final class ExtendedFluidMenu extends AbstractMachineMenu implements Port
 
     public Identifier selectedCapabilityId() { return BuiltinCapabilityDefinitions.FLUID_TYPE.id(); }
 
+    @Override
     public boolean matches(BlockPos targetPos, String targetKind) {
         return pos.equals(targetPos) && kind.equals(targetKind);
     }
 
+    @Override
     public void applySnapshot(PktPortStorageSyncPayload payload, IOPortBlockEntity port) {
         if (payload == null || !matches(payload.pos(), payload.kind())) return;
         List<FluidStorageEntry> nextEntries = PktPortStorageSyncPayload.fluidEntries(port.fluidStorage());

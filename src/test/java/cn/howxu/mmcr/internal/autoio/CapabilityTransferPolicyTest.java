@@ -344,6 +344,24 @@ class CapabilityTransferPolicyTest {
     }
 
     @Test
+    void configurable_endpoint_skips_unusable_occurrences_and_tick_keeps_the_shared_profile() {
+        var unavailable = new OperationOnlyItemCapability();
+        var eligible = new OperationOnlyItemCapability();
+        eligible.transferEnabled = true;
+        var wrongDirection = new ItemBusCapability(new LongResourceStorage<>(
+                ItemResource.class, 1, 64L, ItemResource::isEmpty, () -> {}), IOType.OUTPUT);
+        var port = new OperationOnlyPort(wrongDirection, unavailable, eligible, unavailable);
+        port.setLevel(LevelStub.createWithBlockEntities(List.of(port)));
+        assertThat(port.configurableAutoIOIds()).containsExactly(eligible.type().id());
+        assertThat(port.configurableAutoIOCapability(eligible.type())).isSameAs(eligible);
+        port.setAutoIOEnabled(eligible.type(), true);
+        port.runAutoIOCycleForTesting();
+        assertThat(port.autoIOConfig(eligible.type()).enabled()).isTrue();
+        eligible.transferEnabled = false;
+        assertThat(port.configurableAutoIOIds()).isEmpty();
+    }
+
+    @Test
     void no_policy_cleanup_preserves_another_capability_configuration_and_state() throws Exception {
         OperationOnlyItemCapability item = new OperationOnlyItemCapability();
         OperationOnlyItemCapability fluid = new OperationOnlyItemCapability(BuiltinCapabilityDefinitions.FLUID_TYPE);

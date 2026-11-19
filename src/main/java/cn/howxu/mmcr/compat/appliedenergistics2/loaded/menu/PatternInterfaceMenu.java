@@ -7,7 +7,7 @@ import appeng.menu.slot.AppEngSlot;
 import appeng.util.ConfigMenuInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.internal.menu.InputIsolationMenuState;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MenuType;
@@ -23,7 +23,7 @@ public final class PatternInterfaceMenu extends PatternProviderMenu {
     public PatternInterfaceMenu(MenuType<? extends PatternInterfaceMenu> type, int id,
                                 Inventory inventory, PatternProviderLogicHost host) {
         super(type, id, inventory, host);
-        inputIsolation = InputIsolationMenuState.forPort(host instanceof IOPortBlockEntity port ? port : null);
+        inputIsolation = InputIsolationMenuState.forPort(host instanceof BlockEntity entity ? entity : null);
         addDataSlot(inputIsolation.dataSlot());
     }
 

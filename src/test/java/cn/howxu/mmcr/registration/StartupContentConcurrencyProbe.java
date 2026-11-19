@@ -4,9 +4,10 @@ import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
 import cn.howxu.mmcr.api.port.PortDefinition;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
+import cn.howxu.mmcr.internal.event.IndependentPortFixture;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
-import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
@@ -51,6 +52,7 @@ public final class StartupContentConcurrencyProbe {
                 case "items-first" -> itemsInitializeBeforeScriptRegistration();
                 case "scripts-first" -> scriptsInitializeBeforeItems();
                 case "concurrent" -> concurrentRegistrationsPreserveContent();
+                case "independent-port" -> IndependentPortFixture.verify();
                 default -> throw new IllegalArgumentException(arguments[0]);
             }
         } catch (Throwable failure) {
@@ -332,7 +334,7 @@ public final class StartupContentConcurrencyProbe {
         }
 
         @Override
-        public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
+        public BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory() {
             return PortKinds.ITEM_INPUT.entityFactory();
         }
 

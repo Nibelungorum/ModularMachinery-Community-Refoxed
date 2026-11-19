@@ -8,7 +8,6 @@ import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortBlockEntity;
 import cn.howxu.mmcr.compat.mekanism.loaded.ChemicalPortMenu;
 import cn.howxu.mmcr.compat.mekanism.loaded.HeatPortMenu;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedMekanismBridge;
-import cn.howxu.mmcr.internal.menu.AbstractMachineMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.ModBlockEntities;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -20,7 +19,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Inventory;
@@ -125,16 +123,13 @@ class ChemicalHatchScreenTest {
     }
 
     @Test
-    void chemical_and_heat_screens_select_their_loaded_capability_ids() throws Exception {
-        CapabilityProbeScreen chemicalScreen = CapabilityProbeScreen.create(
-                new ChemicalPortMenu(1, testInventory(), BlockPos.ZERO));
-        CapabilityProbeScreen heatScreen = CapabilityProbeScreen.create(
-                new HeatPortMenu(1, testInventory(), BlockPos.ZERO));
-
-        assertThat(chemicalScreen.supportedCapabilityIds())
-                .containsExactly(MekanismRecipeTypes.CHEMICAL);
-        assertThat(heatScreen.supportedCapabilityIds())
-                .containsExactly(MekanismRecipeTypes.HEAT);
+    void displayed_capability_is_not_an_auto_io_permission() throws Exception {
+        var menu = new ChemicalPortMenu(1, testInventory(), chemicalPort());
+        assertThat(menu.displayedCapability()).isEqualTo(MekanismRecipeTypes.CHEMICAL);
+        assertThat(menu.owner().configurableAutoIOIds()).isEmpty();
+        var heat = new HeatPortMenu(1, testInventory(), BlockPos.ZERO);
+        assertThat(heat.displayedCapability()).isEqualTo(MekanismRecipeTypes.HEAT);
+        assertThat(((HeatHatchScreen) unsafe().allocateInstance(HeatHatchScreen.class)).supportsAutoIOControlPage()).isFalse();
     }
 
     private static Inventory testInventory() throws Exception {
@@ -161,54 +156,6 @@ class ChemicalHatchScreenTest {
         if (holder == null) throw new NoSuchFieldException("holder");
         holder.setAccessible(true);
         holder.set(deferredHolder, Holder.direct(menuType));
-    }
-
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Class<?> type = target.getClass();
-        Field field = null;
-        while (type != null && field == null) {
-            try {
-                field = type.getDeclaredField(name);
-            } catch (NoSuchFieldException ignored) {
-                type = type.getSuperclass();
-            }
-        }
-        if (field == null) throw new NoSuchFieldException(name);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
-
-    private static final class CapabilityProbeScreen extends AbstractPortScreen<AbstractMachineMenu> {
-        private CapabilityProbeScreen() {
-            super(null, null, Component.empty(), 166);
-        }
-
-        private static CapabilityProbeScreen create(AbstractMachineMenu menu) throws Exception {
-            CapabilityProbeScreen screen = (CapabilityProbeScreen) unsafe()
-                    .allocateInstance(CapabilityProbeScreen.class);
-            setField(screen, "menu", menu);
-            return screen;
-        }
-
-        @Override
-        protected BlockPos portPos() {
-            return BlockPos.ZERO;
-        }
-
-        @Override
-        protected IOType ownerIOType() {
-            return IOType.INPUT;
-        }
-
-        @Override
-        protected int portSlotCount() {
-            return 0;
-        }
-
-        @Override
-        protected Identifier texture(boolean autoIOPage) {
-            return Identifier.parse("mmcr:test");
-        }
     }
 
     private static final class ChemicalProbePort extends ChemicalPortBlockEntity {

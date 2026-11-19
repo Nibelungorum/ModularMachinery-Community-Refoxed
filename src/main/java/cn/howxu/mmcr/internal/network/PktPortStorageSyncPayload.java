@@ -1,14 +1,11 @@
 package cn.howxu.mmcr.internal.network;
 
+import cn.howxu.mmcr.internal.menu.StorageSnapshotMenu;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.storage.ResourceStorage;
 import cn.howxu.mmcr.api.capability.sync.CapabilitySyncEntry;
 import cn.howxu.mmcr.api.capability.sync.CapabilitySyncRegistry;
 import cn.howxu.mmcr.config.CommonConfig;
-import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
-import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -96,7 +93,8 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
     }
 
     public static void sendTo(ServerPlayer player, IOPortBlockEntity port) {
-        if (player == null || port == null) return;
+        if (player == null || port == null || port.isRemoved() || port.getLevel() != player.level()
+                || player.level().getBlockEntity(port.getBlockPos()) != port) return;
         // The existing menu-open baseline is also the observer registration boundary.
         if (ownsMenu(player, port)) {
             VIEWERS.computeIfAbsent(port, ignored -> Collections.newSetFromMap(new WeakHashMap<>())).add(player);
@@ -110,20 +108,19 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
 
     public static void onMenuOpen(PlayerContainerEvent.Open event) {
         if (!(event.getEntity() instanceof ServerPlayer player) || player.containerMenu != event.getContainer()) return;
-        IOPortBlockEntity port = switch (event.getContainer()) {
-            case ExtendedItemMenu menu -> menu.owner();
-            case ExtendedFluidMenu menu -> menu.owner();
-            case CombinedPortMenu menu -> menu.owner();
-            case ExtendedCombinedMenu menu -> menu.owner();
-            default -> null;
-        };
-        if (port != null) sendTo(player, port);
+        if (event.getContainer() instanceof StorageSnapshotMenu menu && menu.owner() != null) {
+            sendTo(player, menu.owner());
+        }
     }
 
     public static void sendToViewers(IOPortBlockEntity port) {
         if (port == null || port.getLevel() == null || port.getLevel().isClientSide()) return;
         Set<ServerPlayer> registered = VIEWERS.get(port);
         if (registered == null) return;
+        if (port.isRemoved() || port.getLevel().getBlockEntity(port.getBlockPos()) != port) {
+            VIEWERS.remove(port);
+            return;
+        }
         registered.removeIf(player -> player.hasDisconnected() || player.level() != port.getLevel()
                 || !ownsMenu(player, port));
         if (registered.isEmpty()) {
@@ -152,17 +149,7 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
             for (CapabilitySyncEntry entry : entries) {
                 CapabilitySyncRegistry.decode(port.capabilitySnapshot(), entry, buffer);
             }
-            if (context.player().containerMenu instanceof ExtendedItemMenu menu
-                    && menu.matches(pos, kind)) {
-                menu.applySnapshot(this, port);
-            } else if (context.player().containerMenu instanceof ExtendedFluidMenu menu
-                    && menu.matches(pos, kind)) {
-                menu.applySnapshot(this, port);
-            } else if (context.player().containerMenu instanceof CombinedPortMenu menu
-                    && menu.matches(pos, kind)) {
-                menu.applySnapshot(this, port);
-            } else if (context.player().containerMenu instanceof ExtendedCombinedMenu menu
-                    && menu.matches(pos, kind)) {
+            if (context.player().containerMenu instanceof StorageSnapshotMenu menu && menu.matches(pos, kind)) {
                 menu.applySnapshot(this, port);
             }
         });
@@ -253,11 +240,8 @@ public record PktPortStorageSyncPayload(BlockPos pos, String kind, List<Capabili
     }
 
     private static boolean ownsMenu(ServerPlayer player, IOPortBlockEntity port) {
-        if (player.containerMenu instanceof ExtendedItemMenu menu) return menu.owner() == port;
-        if (player.containerMenu instanceof ExtendedFluidMenu menu) return menu.owner() == port;
-        if (player.containerMenu instanceof CombinedPortMenu menu) return menu.owner() == port;
-        if (player.containerMenu instanceof ExtendedCombinedMenu menu) return menu.owner() == port;
-        return false;
+        return player.containerMenu instanceof StorageSnapshotMenu menu && menu.owner() == port
+                && menu.matches(port.getBlockPos(), port.kind().id());
     }
 
     private static int maxEntries() {

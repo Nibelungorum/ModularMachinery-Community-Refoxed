@@ -1,7 +1,14 @@
 package cn.howxu.mmcr.client.gui;
 
-import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.registry.ModBlocks;
+import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
 import cn.howxu.mmcr.internal.capability.BuiltinCapabilityDefinitions;
+import cn.howxu.mmcr.internal.autoio.AutoIOAction;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
+import cn.howxu.mmcr.test.RuntimeTestFixtures;
+import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.FluidStorageEntry;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload.ItemStorageEntry;
@@ -78,7 +85,8 @@ class ExtendedPortScreenTest {
     @Test
     void auto_io_page_does_not_consume_text_scroll_and_resets_offset_when_toggled() throws Exception {
         ScrollProbeScreen screen = ScrollProbeScreen.create();
-        Button pageButton = screen.createPageButton();
+        screen.initButtons();
+        Button pageButton = screen.button("autoIOPageButton");
 
         boolean textScrollConsumed = screen.mouseScrolled(20, 30, 0, -1);
         int offsetAfterTextScroll = screen.firstLine();
@@ -99,6 +107,34 @@ class ExtendedPortScreenTest {
         assertThat(offsetAfterReturningToText).isZero();
         assertThat(reopenedTextScrollConsumed).isTrue();
         assertThat(reopenedTextOffset).isEqualTo(1);
+    }
+
+    @Test
+    void cycling_the_live_client_buttons_addresses_only_the_third_endpoint() throws Exception {
+        var screen = ScrollProbeScreen.create();
+        var energy = RuntimeTestFixtures.energyInput(BlockPos.ZERO).capabilities().getFirst();
+        screen.host = new CombinedPortBlockEntity(BlockPos.ZERO, ModBlocks.BLOCKS.get("combined_input_basic").get().defaultBlockState()) {
+            @Override public CapabilitySnapshot capabilitySnapshot() {
+                var endpoints = new ArrayList<>(super.capabilitySnapshot().capabilities());
+                endpoints.add(energy);
+                return new CapabilitySnapshot(endpoints);
+            }
+        };
+        screen.initButtons();
+        Button cycle = screen.button("secondaryAutoIOPageButton");
+        cycle.onPress(null);
+        cycle.onPress(null);
+        screen.button("autoIOPageButton").onPress(null);
+
+        var request = screen.configRequest(AutoIOAction.SET_SIDE, Direction.EAST, false);
+        assertThat(request).isNotNull();
+        assertThat(request.capabilityId()).isEqualTo(energy.type().id());
+        request.action().apply(screen.host, new CapabilityType(request.capabilityId()), request.side(), request.enabled());
+        assertThat(screen.host.autoIOConfig(energy.type()).isSideEnabled(Direction.EAST)).isFalse();
+        assertThat(screen.host.autoIOConfig(BuiltinCapabilityDefinitions.ITEM_TYPE).isSideEnabled(Direction.EAST)).isTrue();
+        assertThat(screen.host.autoIOConfig(BuiltinCapabilityDefinitions.FLUID_TYPE).isSideEnabled(Direction.EAST)).isTrue();
+        screen.host = null;
+        assertThat(screen.configRequest(AutoIOAction.SET_ENABLED, null, true)).isNull();
     }
 
     @Test
@@ -226,6 +262,7 @@ class ExtendedPortScreenTest {
 
         private static ScrollProbeScreen create() throws Exception {
             ScrollProbeScreen screen = (ScrollProbeScreen) unsafe().allocateInstance(ScrollProbeScreen.class);
+            screen.host = RuntimeTestFixtures.itemInput(BlockPos.ZERO);
             setField(screen, "font", unsafe().allocateInstance(Font.class));
             setField(screen, "imageHeight", 213);
             setField(screen, "leftPos", 0);
@@ -237,11 +274,22 @@ class ExtendedPortScreenTest {
             return screen;
         }
 
-        private Button createPageButton() throws Exception {
-            Method method = AbstractPortScreen.class.getDeclaredMethod("createAutoIOPageButton",
-                    int.class, int.class, Identifier.class);
-            method.setAccessible(true);
-            return (Button) method.invoke(this, 0, 0, BuiltinCapabilityDefinitions.ITEM_TYPE.id());
+        private IOPortBlockEntity host;
+
+        @Override protected IOPortBlockEntity portEntity() { return host; }
+
+        private void initButtons() throws Exception {
+            // Only the navigation buttons participate in these clicks; side icons require a running client.
+            Method create = AbstractPortScreen.class.getDeclaredMethod("createAutoIOPageButton", int.class, int.class, boolean.class);
+            create.setAccessible(true);
+            setField(this, "autoIOPageButton", create.invoke(this, 0, 0, false));
+            setField(this, "secondaryAutoIOPageButton", create.invoke(this, 0, 18, true));
+        }
+
+        private Button button(String name) throws Exception {
+            Field button = AbstractPortScreen.class.getDeclaredField(name);
+            button.setAccessible(true);
+            return (Button) button.get(this);
         }
 
         private int firstLine() {

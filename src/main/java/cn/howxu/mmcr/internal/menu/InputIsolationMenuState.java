@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.menu;
 
+import cn.howxu.mmcr.api.port.InputIsolationHost;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import net.minecraft.world.entity.player.Player;
@@ -19,7 +20,7 @@ public final class InputIsolationMenuState {
     private final DataSlot dataSlot = new DataSlot() {
         @Override public int get() {
             if (owner != null && owner.getLevel() != null && owner.getLevel().isClientSide()) return flags;
-            if (owner instanceof IOPortBlockEntity port) {
+            if (owner instanceof InputIsolationHost port) {
                 return (port.supportsInputIsolation() ? 1 : 0) | (port.isInputIsolated() ? 2 : 0);
             }
             if (owner instanceof MachineControllerBlockEntity controller) {
@@ -35,7 +36,11 @@ public final class InputIsolationMenuState {
     }
 
     public static InputIsolationMenuState forPort(@Nullable IOPortBlockEntity owner) {
-        return new InputIsolationMenuState(owner);
+        return forPort((BlockEntity) owner);
+    }
+
+    public static InputIsolationMenuState forPort(@Nullable BlockEntity owner) {
+        return new InputIsolationMenuState(owner instanceof InputIsolationHost ? owner : null);
     }
 
     public static InputIsolationMenuState forController(@Nullable MachineControllerBlockEntity owner) {
@@ -54,7 +59,7 @@ public final class InputIsolationMenuState {
                 || owner.getLevel().getBlockEntity(owner.getBlockPos()) != owner
                 || !menu.stillValid(player) || !supported()) return false;
         boolean enabled = buttonId == ENABLE;
-        if (owner instanceof IOPortBlockEntity port) port.setInputIsolated(enabled);
+        if (owner instanceof InputIsolationHost port) port.setInputIsolated(enabled);
         else if (owner instanceof MachineControllerBlockEntity controller) controller.setFullyInputIsolated(enabled);
         return true;
     }

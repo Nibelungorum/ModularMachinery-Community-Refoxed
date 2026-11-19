@@ -69,12 +69,10 @@ class PktAutoIOConfigPayloadTest {
         ChemicalPortMenu chemicalMenu = new ChemicalPortMenu(1, testInventory(), BlockPos.ZERO);
         HeatPortMenu heatMenu = new HeatPortMenu(1, testInventory(), BlockPos.ZERO);
 
-        assertThat(MekanismBridge.get().isPortMenuAt(chemicalMenu, BlockPos.ZERO, null)).isTrue();
-        assertThat(MekanismBridge.get().isPortMenuAt(heatMenu, BlockPos.ZERO, null)).isTrue();
-        assertThat(MekanismBridge.get().capabilityIdForMenu(chemicalMenu))
-                .isEqualTo(MekanismRecipeTypes.CHEMICAL);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(heatMenu))
-                .isEqualTo(MekanismRecipeTypes.HEAT);
+        assertThat(PktAutoIOConfigPayload.canUpdate(playerWith(chemicalMenu), BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
+        assertThat(PktAutoIOConfigPayload.canUpdate(playerWith(heatMenu), BlockPos.ZERO, AutoIOAction.SET_ENABLED, null)).isTrue();
+        assertThat(chemicalMenu.displayedCapability()).isEqualTo(MekanismRecipeTypes.CHEMICAL);
+        assertThat(heatMenu.displayedCapability()).isEqualTo(MekanismRecipeTypes.HEAT);
     }
 
     @Test
@@ -92,7 +90,6 @@ class PktAutoIOConfigPayloadTest {
 
             assertThat(PktAutoIOConfigPayload.canUpdate(player, BlockPos.ZERO,
                     AutoIOAction.SET_ENABLED, null)).isFalse();
-            assertThat(MekanismBridge.get().isPortMenuAt(nonPortMenu, BlockPos.ZERO, null)).isFalse();
             assertThat(PktAutoIOConfigPayload.ownsMenu(nonPortMenu, null)).isFalse();
         } catch (Throwable failure) {
             throw failure;

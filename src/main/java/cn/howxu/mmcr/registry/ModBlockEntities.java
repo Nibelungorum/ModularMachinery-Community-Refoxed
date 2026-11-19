@@ -38,7 +38,7 @@ public final class ModBlockEntities {
         PortKinds.all().forEach(kind -> {
             String name = kind.id();
             BES.put(name, register(name, () -> new BlockEntityType<>(
-                    (BlockEntityType.BlockEntitySupplier) kind.entityFactory(),
+                    kind.entityFactory(),
                     ModBlocks.BLOCKS.get(name).get())));
         });
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);

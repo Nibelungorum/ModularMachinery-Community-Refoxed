@@ -219,24 +219,6 @@ public final class LoadedMekanismBridge implements MekanismBridge {
     }
 
     @Override
-    public Identifier capabilityIdForMenu(AbstractContainerMenu menu) {
-        if (menu instanceof ChemicalPortMenu) return MekanismRecipeTypes.CHEMICAL;
-        if (menu instanceof HeatPortMenu) return MekanismRecipeTypes.HEAT;
-        return null;
-    }
-
-    @Override
-    public boolean isPortMenuAt(AbstractContainerMenu menu, BlockPos pos, IOPortBlockEntity port) {
-        if (menu instanceof ChemicalPortMenu chemical) {
-            return matches(chemical.pos(), chemical.owner(), pos, port);
-        }
-        if (menu instanceof HeatPortMenu heat) {
-            return matches(heat.pos(), heat.owner(), pos, port);
-        }
-        return false;
-    }
-
-    @Override
     public ResourceHandler<FluidResource> manualFluidContainerHandler(ResourceHandler<FluidResource> handler) {
         return AutomatedResourceHandler.manual(handler);
     }
@@ -265,27 +247,12 @@ public final class LoadedMekanismBridge implements MekanismBridge {
         return result == null ? 0 : result.amount();
     }
 
-    private static boolean matches(BlockPos menuPos, IOPortBlockEntity menuOwner,
-                                   BlockPos pos, IOPortBlockEntity port) {
-        if (pos == null) return false;
-        return menuPos.equals(pos) && (port == null || menuOwner == port);
-    }
-
     @Override
-    public AbstractContainerMenu createMenu(String id, int containerId, Inventory playerInventory,
-                                             Level level, BlockPos pos) {
-        return switch (id) {
-            case "chemical_input_hatch_basic", "chemical_output_hatch_basic",
-                    "chemical_input_hatch_advanced", "chemical_output_hatch_advanced",
-                    "chemical_input_hatch_elite", "chemical_output_hatch_elite",
-                    "chemical_input_hatch_ultimate", "chemical_output_hatch_ultimate",
-                    "radioactive_chemical_input_hatch", "radioactive_chemical_output_hatch" ->
-                    new ChemicalPortMenu(containerId, playerInventory,
-                            level.getBlockEntity(pos) instanceof ChemicalPortBlockEntity port ? port : null);
-            case "heat_input_hatch", "heat_output_hatch" ->
-                    new HeatPortMenu(containerId, playerInventory,
-                            level.getBlockEntity(pos) instanceof HeatPortBlockEntity port ? port : null);
-            default -> null;
+    public AbstractContainerMenu createMenu(PortType type, int containerId, Inventory inventory, Level level, BlockPos pos) {
+        var owner = level.getBlockEntity(pos);
+        return switch (type) {
+            case CHEMICAL -> owner instanceof ChemicalPortBlockEntity port ? new ChemicalPortMenu(containerId, inventory, port) : null;
+            case HEAT -> owner instanceof HeatPortBlockEntity port ? new HeatPortMenu(containerId, inventory, port) : null;
         };
     }
 

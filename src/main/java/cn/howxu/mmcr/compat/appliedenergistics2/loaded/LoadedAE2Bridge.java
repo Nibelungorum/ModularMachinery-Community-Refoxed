@@ -11,6 +11,7 @@ import appeng.blockentity.networking.WirelessAccessPointBlockEntity;
 import appeng.items.tools.MemoryCardItem;
 import appeng.menu.MenuOpener;
 import appeng.menu.locator.MenuLocators;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.AE2PortKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributor;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
@@ -87,13 +88,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
 
     @Override
     public boolean isPort(String id) {
-        return INPUT_INTERFACE_ID.equals(id)
-                || STOCKING_INTERFACE_ID.equals(id)
-                || OUTPUT_INTERFACE_ID.equals(id)
-                || ASYNC_OUTPUT_INTERFACE_ID.equals(id)
-                || PATTERN_INTERFACE_ID.equals(id)
-                || ExtendedAEPlusCompat.portKinds().stream().anyMatch(kind -> kind.id().equals(id))
-                || contributor.available() && contributor.isPort(id);
+        return portKinds().stream().anyMatch(kind -> kind.id().equals(id));
     }
 
     @Override
@@ -106,7 +101,7 @@ public final class LoadedAE2Bridge implements AE2Bridge {
         }
         if (contributor.available() && contributor.openMenu(player, level, pos)) return true;
         if (!(level.getBlockEntity(pos) instanceof IOPortBlockEntity host)
-                || !isPort(host.kind().id())) return false;
+                || !(host.kind() instanceof AE2PortKind)) return false;
         return MenuOpener.open(AE2MenuTypes.typeFor(host.kind()), player, MenuLocators.forBlockEntity(host));
     }
 

@@ -1,5 +1,10 @@
 package cn.howxu.mmcr.internal.tile;
 
+import cn.howxu.mmcr.api.port.PortTierPolicy;
+import cn.howxu.mmcr.api.capability.CapabilityType;
+import cn.howxu.mmcr.api.capability.CapabilityDirections;
+import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
+import cn.howxu.mmcr.api.port.PortFamily;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
@@ -212,6 +217,24 @@ class InputIsolationStateTest {
     }
 
     @Test
+    void isolation_uses_the_input_material_not_its_structure_alias_or_current_view() {
+        var material = PortFamily.declare(MMCR.id("isolation_shard"), true).id();
+        var binding = CapabilityBinding.internalOnly(new CapabilityType(material), CapabilityDirections.input(),
+                ignored -> item(IOType.OUTPUT), PortTierPolicy.always());
+        var alias = new PortFamilyDescriptor(MMCR.id("shard_structure_alias"), IOType.INPUT, 0, List.of(), material);
+        var input = new DeclaredPort(BlockPos.ZERO, new DeclaredKind(IOType.INPUT, List.of(alias), List.of(binding)), List.of());
+        input.setInputIsolated(true);
+        assertThat(input.isInputIsolated()).isTrue();
+        var outputBinding = CapabilityBinding.internalOnly(binding.type(), CapabilityDirections.output(),
+                binding.factory(), binding.tierPolicy());
+        var outputOnly = new DeclaredPort(BlockPos.ZERO, new DeclaredKind(IOType.INPUT, List.of(alias),
+                List.of(outputBinding)), List.of());
+        assertThat(outputOnly.supportsInputIsolation()).isFalse();
+        var legacy = new DeclaredPort(BlockPos.ZERO, new DeclaredKind(IOType.INPUT, List.of(alias)), List.of());
+        assertThat(legacy.supportsInputIsolation()).isTrue();
+    }
+
+    @Test
     void material_family_declarations_support_new_kinds_without_optional_loaded_types_or_size_metadata() {
         for (Identifier family : List.of(PortFamilyIds.ITEM, PortFamilyIds.FLUID,
                 MekanismPortFamilies.CHEMICAL, MekanismPortFamilies.RADIOACTIVE_CHEMICAL)) {
@@ -319,9 +342,10 @@ class InputIsolationStateTest {
     }
 
     /** @author howxu <dev@howxu.cn> */
-    private record DeclaredKind(IOType ioType, List<PortFamilyDescriptor> families) implements IOPortKind {
+    private record DeclaredKind(IOType ioType, List<PortFamilyDescriptor> families, List<CapabilityBinding> bindings) implements IOPortKind {
+        private DeclaredKind(IOType ioType, List<PortFamilyDescriptor> families) { this(ioType, families, List.of()); }
         @Override public String id() { return "isolation_state_test"; }
-        @Override public PortDefinition definition() { return PortDefinition.of(MMCR.id(id()), List.of()); }
+        @Override public PortDefinition definition() { return PortDefinition.of(MMCR.id(id()), bindings); }
         @Override public BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory() {
             return (pos, state) -> new DeclaredPort(pos, this, List.of());
         }

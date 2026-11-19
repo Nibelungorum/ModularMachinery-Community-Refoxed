@@ -1,6 +1,6 @@
 package cn.howxu.mmcr.internal.tile;
 
-import cn.howxu.mmcr.internal.block.IOPortBlock;
+import cn.howxu.mmcr.api.port.MachinePort;
 import cn.howxu.mmcr.internal.port.ExtendedItemBusSize;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.registry.PortKinds;
@@ -41,7 +41,7 @@ public class ExtendedItemBusBlockEntity extends ItemBusBlockEntity {
     }
 
     private static IOPortKind fallback(BlockState state) {
-        if (state.getBlock() instanceof IOPortBlock port && port.kind().ioType() == IOType.OUTPUT) {
+        if (state.getBlock() instanceof MachinePort port && port.kind().ioType() == IOType.OUTPUT) {
             return PortKinds.EXTENDED_ITEM_OUTPUT;
         }
         return PortKinds.EXTENDED_ITEM_INPUT;

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.appliedenergistics2;
 
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import appeng.api.networking.IManagedGridNode;
@@ -66,6 +67,7 @@ class ExtendedAEInterfaceKindTest {
         input.getInterfaceLogic().getConfig().setStack(35,
                 new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1));
 
+        assertThat(AE2MenuTypes.typeFor(expandedKind)).isSameAs(AE2MenuTypes.INTERFACE);
         assertThat(input.getInterfaceLogic().getConfig().getKey(35))
                 .isEqualTo(AEItemKey.of(Items.IRON_INGOT));
     }

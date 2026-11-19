@@ -1,5 +1,16 @@
 package cn.howxu.mmcr.registry;
 
+import cn.howxu.mmcr.internal.port.FluidContainerInteraction;
+import cn.howxu.mmcr.internal.tile.EnergyHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
+import cn.howxu.mmcr.internal.tile.ItemBusBlockEntity;
+import cn.howxu.mmcr.internal.menu.ExtendedCombinedMenu;
+import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedFluidMenu;
+import cn.howxu.mmcr.internal.menu.ExtendedItemMenu;
+import cn.howxu.mmcr.internal.menu.EnergyHatchMenu;
+import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
+import cn.howxu.mmcr.internal.menu.ItemBusMenu;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
@@ -32,6 +43,15 @@ import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
 import cn.howxu.mmcr.util.IOType;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
+import net.neoforged.neoforge.transfer.access.ItemAccess;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
@@ -47,7 +67,7 @@ public final class PortKinds {
     public record Simple(
             String id,
             IOType ioType,
-            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
+            BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory)
             implements IOPortKind {
         @Override
         public PortDefinition definition() {
@@ -61,6 +81,17 @@ public final class PortKinds {
             ItemBusSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+
+        @Override
+        public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof ItemBusBlockEntity owner
+                    ? new ItemBusMenu(containerId, inventory, owner) : null;
+        }
+
+        @Override
+        public void writeOpenData(FriendlyByteBuf buffer, BlockPos pos, AbstractContainerMenu menu) {
+            ItemBusMenu.writeClientOpenData(buffer, pos, ((ItemBusMenu) menu).owner());
+        }
 
         @Override
         public Optional<ItemBusSize> itemBusSize() {
@@ -87,6 +118,20 @@ public final class PortKinds {
             implements IOPortKind {
 
         @Override
+        public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof FluidHatchBlockEntity owner
+                    ? new FluidHatchMenu(containerId, inventory, owner) : null;
+        }
+
+        @Override public boolean handlesContainerInteraction() { return true; }
+
+        @Override
+        public int interactWithContainer(ItemAccess access, BlockEntity port, Player player, TransactionContext tx) {
+            return port instanceof FluidHatchBlockEntity owner
+                    ? FluidContainerInteraction.interact(access, player, owner, owner.getResourceHandler(null), tx) : 0;
+        }
+
+        @Override
         public Optional<FluidHatchSize> fluidHatchSize() {
             return Optional.of(size);
         }
@@ -109,6 +154,12 @@ public final class PortKinds {
             EnergyHatchSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+
+        @Override
+        public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity owner
+                    ? new EnergyHatchMenu(containerId, inventory, owner) : null;
+        }
 
         @Override
         public Optional<EnergyHatchSize> energyHatchSize() {
@@ -135,6 +186,17 @@ public final class PortKinds {
             implements IOPortKind {
 
         @Override
+        public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof ExtendedItemBusBlockEntity owner
+                    ? new ExtendedItemMenu(containerId, inventory, owner) : null;
+        }
+
+        @Override
+        public void writeOpenData(FriendlyByteBuf buffer, BlockPos pos, AbstractContainerMenu menu) {
+            ExtendedItemMenu.writeClientOpenData(buffer, ((ExtendedItemMenu) menu).owner());
+        }
+
+        @Override
         public Optional<ExtendedItemBusSize> extendedItemBusSize() {
             return Optional.of(size);
         }
@@ -157,6 +219,17 @@ public final class PortKinds {
             ExtendedFluidHatchSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+
+        @Override
+        public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof ExtendedFluidHatchBlockEntity owner
+                    ? new ExtendedFluidMenu(containerId, inventory, owner) : null;
+        }
+
+        @Override
+        public void writeOpenData(FriendlyByteBuf buffer, BlockPos pos, AbstractContainerMenu menu) {
+            ExtendedFluidMenu.writeClientOpenData(buffer, ((ExtendedFluidMenu) menu).owner());
+        }
 
         @Override
         public Optional<ExtendedFluidHatchSize> extendedFluidHatchSize() {
@@ -183,6 +256,12 @@ public final class PortKinds {
             implements IOPortKind {
 
         @Override
+        public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof EnergyHatchBlockEntity owner
+                    ? new EnergyHatchMenu(containerId, inventory, owner) : null;
+        }
+
+        @Override
         public Optional<ExtendedEnergyHatchSize> extendedEnergyHatchSize() {
             return Optional.of(size);
         }
@@ -205,6 +284,25 @@ public final class PortKinds {
             CombinedPortSize size,
             BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory)
             implements IOPortKind {
+
+        @Override
+        public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof CombinedPortBlockEntity owner
+                    ? new CombinedPortMenu(containerId, inventory, owner) : null;
+        }
+
+        @Override
+        public void writeOpenData(FriendlyByteBuf buffer, BlockPos pos, AbstractContainerMenu menu) {
+            CombinedPortMenu.writeClientOpenData(buffer, ((CombinedPortMenu) menu).owner());
+        }
+
+        @Override public boolean handlesContainerInteraction() { return true; }
+
+        @Override
+        public int interactWithContainer(ItemAccess access, BlockEntity port, Player player, TransactionContext tx) {
+            return port instanceof CombinedPortBlockEntity owner
+                    ? FluidContainerInteraction.interact(access, player, owner, owner.getResourceHandler(null), tx) : 0;
+        }
 
         @Override
         public Optional<CombinedPortSize> combinedPortSize() {
@@ -233,6 +331,17 @@ public final class PortKinds {
             implements IOPortKind {
 
         @Override
+        public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Level level, BlockPos pos) {
+            return level.getBlockEntity(pos) instanceof ExtendedCombinedPortBlockEntity owner
+                    ? new ExtendedCombinedMenu(containerId, inventory, owner) : null;
+        }
+
+        @Override
+        public void writeOpenData(FriendlyByteBuf buffer, BlockPos pos, AbstractContainerMenu menu) {
+            ExtendedCombinedMenu.writeClientOpenData(buffer, ((ExtendedCombinedMenu) menu).owner());
+        }
+
+        @Override
         public Optional<ExtendedCombinedPortSize> extendedCombinedPortSize() {
             return Optional.of(size);
         }
@@ -257,11 +366,11 @@ public final class PortKinds {
             String id,
             IOType ioType,
             List<PortFamilyDescriptor> families,
-            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
+            BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory,
             PortDefinition definition)
             implements IOPortKind {
         public CombinedKind(String id, IOType ioType, List<PortFamilyDescriptor> families,
-                            BlockEntityType.BlockEntitySupplier<? extends IOPortBlockEntity> entityFactory,
+                            BlockEntityType.BlockEntitySupplier<? extends BlockEntity> entityFactory,
                             PortDefinition definition) {
             this.id = id;
             this.ioType = ioType;

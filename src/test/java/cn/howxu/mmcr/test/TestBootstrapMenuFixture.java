@@ -60,21 +60,21 @@ public final class TestBootstrapMenuFixture {
         Inventory inventory = new Inventory(player, null);
         ChemicalPortMenu chemical = new ChemicalPortMenu(3, inventory, BlockPos.ZERO);
         HeatPortMenu heat = new HeatPortMenu(4, inventory, BlockPos.ZERO);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(chemical)).isEqualTo(MekanismRecipeTypes.CHEMICAL);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(heat)).isEqualTo(MekanismRecipeTypes.HEAT);
-        assertThat(MekanismBridge.get().isPortMenuAt(chemical, BlockPos.ZERO, null)).isTrue();
-        assertThat(MekanismBridge.get().isPortMenuAt(heat, BlockPos.ZERO, null)).isTrue();
+        assertThat(chemical.displayedCapability()).isEqualTo(MekanismRecipeTypes.CHEMICAL);
+        assertThat(heat.displayedCapability()).isEqualTo(MekanismRecipeTypes.HEAT);
+        assertThat(chemical.pos()).isEqualTo(BlockPos.ZERO);
+        assertThat(heat.pos()).isEqualTo(BlockPos.ZERO);
 
         MekanismBridge unavailable = MekanismBridgeBootstrap.selectForTesting(false);
         MekanismBridgeBootstrap.installForTesting(unavailable);
         TestBootstrap.bootstrap();
         assertThat(MekanismBridge.get()).isSameAs(unavailable);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(chemical)).isNull();
-        assertThat(MekanismBridge.get().isPortMenuAt(heat, BlockPos.ZERO, null)).isFalse();
+        assertThat(MekanismBridge.get().portDeclarations()).isEmpty();
         MekanismBridgeBootstrap.installForTesting(loaded);
         TestBootstrap.bootstrap();
         assertThat(MekanismBridge.get()).isSameAs(loaded);
-        assertThat(MekanismBridge.get().capabilityIdForMenu(chemical)).isEqualTo(MekanismRecipeTypes.CHEMICAL);
+        assertThat(MekanismBridge.get().portDeclarations()).extracting(MekanismBridge.PortDeclaration::id)
+                .contains("heat_input_hatch", "chemical_output_hatch_basic");
     }
 
     private static void bind(Object holder, MenuType<?> value) throws Exception {

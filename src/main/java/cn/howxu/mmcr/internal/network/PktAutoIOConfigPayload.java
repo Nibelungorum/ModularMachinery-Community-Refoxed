@@ -1,10 +1,10 @@
 package cn.howxu.mmcr.internal.network;
 
+import cn.howxu.mmcr.internal.menu.MenuSupport;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityType;
 import cn.howxu.mmcr.internal.menu.PortMenu;
 import cn.howxu.mmcr.internal.autoio.AutoIOAction;
-import cn.howxu.mmcr.internal.autoio.CapabilityTransferPolicies;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
@@ -47,12 +47,15 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-            if (!canUpdate(player, pos, capabilityId, action, side)) return;
-            if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return;
-            if (!ownsMenu(player.containerMenu, port)) return;
-            CapabilityType type = new CapabilityType(capabilityId);
-            action.apply(port, type, side, enabled);
+            apply(player);
         });
+    }
+
+    boolean apply(ServerPlayer player) {
+        IOPortBlockEntity port = target(player, pos, capabilityId, action, side);
+        if (port == null) return false;
+        action.apply(port, new CapabilityType(capabilityId), side, enabled);
+        return true;
     }
 
     public static boolean canUpdate(ServerPlayer player, BlockPos pos, AutoIOAction action, @Nullable Direction side) {
@@ -65,13 +68,16 @@ public record PktAutoIOConfigPayload(BlockPos pos, Identifier capabilityId, Auto
 
     public static boolean canUpdate(ServerPlayer player, BlockPos pos, Identifier capabilityId,
                                     AutoIOAction action, @Nullable Direction side) {
-        if (!canUpdate(player, pos, action, side) || capabilityId == null || player.level() == null) return false;
-        if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port)) return false;
-        CapabilityType type = new CapabilityType(capabilityId);
-        var capability = port.capability(type);
-        CapabilityTransferPolicies.ensureRegistered();
-        return capability != null && capability.directions().supports(port.ioType())
-                && CapabilityTransferPolicies.policyFor(capability).isPresent();
+        return target(player, pos, capabilityId, action, side) != null;
+    }
+
+    private static @Nullable IOPortBlockEntity target(ServerPlayer player, BlockPos pos, Identifier capabilityId,
+                                                       AutoIOAction action, @Nullable Direction side) {
+        if (capabilityId == null || !canUpdate(player, pos, action, side) || player.level() == null
+                || !MenuSupport.stillValidWithin(player, pos)) return null;
+        if (!(player.level().getBlockEntity(pos) instanceof IOPortBlockEntity port) || port.isRemoved()
+                || !ownsMenu(player.containerMenu, port)) return null;
+        return port.configurableAutoIOCapability(new CapabilityType(capabilityId)) != null ? port : null;
     }
 
     static boolean ownsMenu(AbstractContainerMenu menu, IOPortBlockEntity port) {

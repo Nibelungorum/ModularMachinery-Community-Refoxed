@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.compat.appliedflux.loaded.kind;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.resources.Identifier;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
@@ -39,6 +43,11 @@ public final class FluxEnergyInputKind implements IOPortKind {
             (binding, tier) -> tier >= DETECTION_TIER));
 
     private FluxEnergyInputKind() {
+    }
+
+    @Override
+    public InteractionResult openSpecialMenu(Player player, Level level, BlockPos pos) {
+        return InteractionResult.CONSUME;
     }
 
     @Override public List<Identifier> overlayTextures() { return List.of(MMCR.id("block/appliedflux/appflux_input")); }

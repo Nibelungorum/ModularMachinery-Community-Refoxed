@@ -1,30 +1,17 @@
 package cn.howxu.mmcr.internal.network;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.capability.transfer.ContainerResourceTransfer;
-import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
-import cn.howxu.mmcr.internal.menu.CombinedPortMenu;
-import cn.howxu.mmcr.internal.menu.FluidHatchMenu;
 import cn.howxu.mmcr.internal.menu.PortMenu;
 import cn.howxu.mmcr.internal.menu.MenuSupport;
-import cn.howxu.mmcr.internal.tile.CombinedPortBlockEntity;
-import cn.howxu.mmcr.internal.tile.FluidHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
-import cn.howxu.mmcr.util.IOType;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
-import net.neoforged.neoforge.transfer.RangedResourceHandler;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.access.ItemAccess;
-import net.neoforged.neoforge.transfer.fluid.FluidResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
-import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
  * GUI request for the currently open ordinary port tank.
@@ -53,29 +40,13 @@ public record PktPortContainerTransferPayload(int containerId, int tankIndex, bo
     public static int interactOnServer(ServerPlayer player, PktPortContainerTransferPayload payload) {
         if (player == null || payload == null || payload.tankIndex < 0) return 0;
         AbstractContainerMenu menu = player.containerMenu;
-        if (menu.containerId != payload.containerId || !menu.stillValid(player)
-                || menu.getCarried().isEmpty()) return 0;
+        if (menu.containerId != payload.containerId || menu.getCarried().isEmpty()
+                || !(menu instanceof PortMenu opened)) return 0;
+        IOPortBlockEntity owner = opened.owner();
+        if (!validTarget(player, menu, owner) || !owner.getBlockPos().equals(opened.pos())) return 0;
         int moved;
         try (Transaction transaction = Transaction.openRoot()) {
-            if (menu instanceof FluidHatchMenu fluid) {
-                FluidHatchBlockEntity port = fluid.owner();
-                if (!validTarget(player, menu, port) || payload.tankIndex != 0
-                        || port.kind().fluidHatchSize().isEmpty()
-                        || port.kind().extendedFluidHatchSize().isPresent()) return 0;
-                moved = transferFluid(player, menu, port, port.getResourceHandler(null),
-                        payload.tankIndex, payload.extract, transaction);
-            } else if (menu instanceof CombinedPortMenu combined) {
-                CombinedPortBlockEntity port = combined.owner();
-                if (!validTarget(player, menu, port)
-                        || port.kind().combinedPortSize().isEmpty()
-                        || payload.tankIndex >= combined.fluidTankCount()
-                        || payload.tankIndex >= port.fluidStorage().size()) return 0;
-                moved = transferFluid(player, menu, port, port.getResourceHandler(null),
-                        payload.tankIndex, payload.extract, transaction);
-            } else if (menu instanceof PortMenu opened && validTarget(player, menu, opened.owner())
-                    && opened.pos().equals(opened.owner().getBlockPos())) {
-                moved = opened.transferContainer(player, payload.tankIndex, payload.extract, transaction);
-            } else return 0;
+            moved = opened.transferContainer(player, payload.tankIndex, payload.extract, transaction);
             if (moved > 0) transaction.commit();
         }
         if (moved > 0) menu.broadcastChanges();
@@ -83,20 +54,11 @@ public record PktPortContainerTransferPayload(int containerId, int tankIndex, bo
     }
 
     public static boolean validTarget(ServerPlayer player, AbstractContainerMenu menu, IOPortBlockEntity port) {
-        return port != null && player.containerMenu == menu
+        return port != null && !port.isRemoved() && player.containerMenu == menu
                 && port.getLevel() == player.level()
                 && player.level().getBlockEntity(port.getBlockPos()) == port
                 && menu.stillValid(player)
                 && MenuSupport.stillValidWithin(player, port.getBlockPos());
     }
 
-    private static int transferFluid(ServerPlayer player, AbstractContainerMenu menu,
-                                     IOPortBlockEntity port, ResourceHandler<FluidResource> storage,
-                                     int tankIndex, boolean extract, TransactionContext transaction) {
-        ItemAccess access = ItemAccess.forPlayerCursor(player, menu);
-        ResourceHandler<FluidResource> container = MekanismBridge.get()
-                .manualFluidContainerHandler(access.getCapability(Capabilities.Fluid.ITEM));
-        return ContainerResourceTransfer.transfer(port.ioType() == IOType.OUTPUT || extract ? IOType.OUTPUT : IOType.INPUT, container,
-                RangedResourceHandler.ofSingleIndex(storage, tankIndex), transaction);
-    }
 }
