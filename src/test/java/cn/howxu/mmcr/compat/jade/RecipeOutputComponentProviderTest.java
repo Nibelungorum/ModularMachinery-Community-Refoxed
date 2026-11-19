@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
 import cn.howxu.mmcr.LevelStub;
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.internal.runtime.CrystalShard;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
@@ -8,6 +9,8 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.OutputType;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.compat.mekanism.loaded.jade.ChemicalOutputRenderer;
@@ -28,11 +31,14 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.data.AtlasIds;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.locale.Language;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.ObjectContents;
+import net.minecraft.network.chat.contents.objects.AtlasSprite;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
@@ -45,6 +51,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.ITooltip;
+import snownee.jade.api.IWailaClientRegistration;
 import snownee.jade.api.TooltipPosition;
 
 import java.lang.reflect.Proxy;
@@ -75,6 +82,8 @@ class RecipeOutputComponentProviderTest {
                 "jade.mmcr.machine_controller.recipe_output", "Recipe Output",
                 "jade.mmcr.machine_controller.recipe_output.fluid", "%s %s",
                 "jade.mmcr.machine_controller.recipe_output.generic", "%s × %s",
+                "output.ae2lt:high_voltage", "High Voltage Lightning",
+                "output.ae2lt:extreme_high_voltage", "Extreme High Voltage Lightning",
                 "chat.square_brackets", "[%s]"), false));
     }
 
@@ -167,6 +176,37 @@ class RecipeOutputComponentProviderTest {
     @Test
     void priorityIsTooltipTail() {
         assertThat(RecipeOutputComponentProvider.INSTANCE.getDefaultPriority()).isEqualTo(TooltipPosition.TAIL - 9);
+    }
+
+    @Test
+    void registeredLightningRowsPairEachTierSpriteWithItsTransportedAmount() {
+        var high = new LightningOutput(LightningTier.HIGH_VOLTAGE, 2, 1F);
+        var extreme = new LightningOutput(LightningTier.EXTREME_HIGH_VOLTAGE, 1, 1F);
+        OutputRegistry.register(high.outputType());
+        OutputRegistry.register(extreme.outputType());
+        var data = new CompoundTag();
+        RecipeOutputCodec.write(data, List.of(new MachineOutputAmount(high, 4_294_967_297L),
+                new MachineOutputAmount(extreme, 7L)));
+
+        LightningBridgeBootstrap.installForTesting(LightningBridgeBootstrap.selectForTesting(true));
+        try {
+            new JadePlugin().registerClient((IWailaClientRegistration) Proxy.newProxyInstance(
+                    IWailaClientRegistration.class.getClassLoader(), new Class<?>[]{IWailaClientRegistration.class},
+                    (_, _, _) -> null));
+            var rows = collectCalls(data).stream().filter(call -> call.value() instanceof Component).toList();
+            assertThat(rows).extracting(TooltipCall::method).containsExactly("add", "add", "append", "add", "append");
+            assertThat(rows.getFirst().value()).isEqualTo(Component.translatable("jade.mmcr.machine_controller.recipe_output"));
+            assertLightningRow(rows, 1, "ae2lt:item/high_voltage_lightning", "4294967297 × High Voltage Lightning");
+            assertLightningRow(rows, 3, "ae2lt:item/extreme_high_voltage_lightning", "7 × Extreme High Voltage Lightning");
+        } finally {
+            LightningBridgeBootstrap.resetForTesting();
+        }
+    }
+
+    private static void assertLightningRow(List<TooltipCall> rows, int index, String sprite, String label) {
+        assertThat(((Component) rows.get(index).value()).getContents()).isInstanceOfSatisfying(ObjectContents.class,
+                object -> assertThat(object.contents()).isEqualTo(new AtlasSprite(AtlasIds.ITEMS, Identifier.parse(sprite))));
+        assertThat(((Component) rows.get(index + 1).value()).getString()).isEqualTo(label);
     }
 
     @Test

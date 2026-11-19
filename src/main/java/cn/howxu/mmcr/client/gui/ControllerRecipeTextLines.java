@@ -4,6 +4,9 @@ import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.controller.ui.ControllerUiSnapshot;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
+import cn.howxu.mmcr.compat.ae2lt.client.LightningSprites;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
@@ -155,7 +158,7 @@ final class ControllerRecipeTextLines {
         var type = output.outputType();
         var name = Component.translatableWithFallback(type.presentation().translationKey(), type.id().toString());
         return new ControllerTextLine(Component.translatable("gui.mmcr.controller.recipe_output.generic", amount, name),
-                MachineControllerScreen.STATUS_LABEL_COLOR, null, List.of(), OUTPUT_INDENT);
+                MachineControllerScreen.STATUS_LABEL_COLOR, icon, List.of(), OUTPUT_INDENT);
     }
 
     private static ControllerTextLine.@Nullable Icon icon(MachineOutput output, long amount) {
@@ -171,6 +174,9 @@ final class ControllerRecipeTextLines {
         }
         if (output instanceof LoadedChemicalOutput chemical) {
             return new ControllerTextLine.ChemicalIcon(chemical.id(), amount);
+        }
+        if (output instanceof LightningOutput lightning && LightningBridge.get().available()) {
+            return new ControllerTextLine.SpriteIcon(LightningSprites.forTier(lightning.tier()));
         }
         return null;
     }

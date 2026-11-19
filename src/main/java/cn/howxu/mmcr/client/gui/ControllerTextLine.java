@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.client.gui;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.objects.AtlasSprite;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.fluids.FluidStack;
@@ -37,8 +38,16 @@ public record ControllerTextLine(Component text, int color, Icon icon, List<Comp
         return leftIndent + (icon == null ? 0 : icon.width() + 2);
     }
 
-    public sealed interface Icon permits ItemIcon, FluidIcon, ChemicalIcon {
+    public sealed interface Icon permits ItemIcon, FluidIcon, ChemicalIcon, SpriteIcon {
         int width();
+    }
+
+    /** @author howxu <dev@howxu.cn> */
+    public record SpriteIcon(AtlasSprite sprite) implements Icon {
+        @Override
+        public int width() {
+            return 9;
+        }
     }
 
     public record ItemIcon(ItemStack stack) implements Icon {

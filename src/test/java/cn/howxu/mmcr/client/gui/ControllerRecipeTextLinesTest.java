@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.client.gui;
 
+import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineOutputAmount;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -11,6 +12,8 @@ import com.mojang.serialization.Dynamic;
 import com.mojang.serialization.JsonOps;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.runtime.ControllerRecipePresentation;
+import cn.howxu.mmcr.compat.ae2lt.LightningBridgeBootstrap;
+import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridgeBootstrap;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedChemicalOutput;
@@ -18,7 +21,10 @@ import cn.howxu.mmcr.internal.runtime.CrystalShard;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.data.AtlasIds;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.objects.AtlasSprite;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.Rarity;
@@ -26,6 +32,8 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.List;
 import java.util.Map;
@@ -82,6 +90,31 @@ class ControllerRecipeTextLinesTest {
 
         assertThat(line.icon()).isInstanceOfSatisfying(ControllerTextLine.ItemIcon.class,
                 icon -> assertThat(icon.stack().is(Items.DIAMOND)).isTrue());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"HIGH_VOLTAGE,ae2lt:item/high_voltage_lightning",
+            "EXTREME_HIGH_VOLTAGE,ae2lt:item/extreme_high_voltage_lightning"})
+    void lightningLinesAndFactoryPreviewUseTheNativeSpriteWhenAvailable(LightningTier tier, String sprite) {
+        var output = new LightningOutput(tier, 3L, 1F);
+        try (var scope = OutputRegistry.openTestScope()) {
+            OutputRegistry.register(output.outputType());
+            var presentation = new ControllerRecipePresentation(List.of(new MachineOutputAmount(output, 4_294_967_297L)),
+                    0L, 0L, 0D);
+            LightningBridgeBootstrap.installForTesting(LightningBridgeBootstrap.selectForTesting(false));
+            var fallback = ControllerRecipeTextLines.outputs(presentation.outputs()).getFirst();
+            assertThat(fallback.icon()).isNull();
+            assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation)).isEmpty();
+
+            LightningBridgeBootstrap.installForTesting(LightningBridgeBootstrap.selectForTesting(true));
+            var line = ControllerRecipeTextLines.outputs(presentation.outputs()).getFirst();
+            var icon = new ControllerTextLine.SpriteIcon(new AtlasSprite(AtlasIds.ITEMS, Identifier.parse(sprite)));
+            assertThat(line.text()).isEqualTo(fallback.text());
+            assertThat(line.icon()).isEqualTo(icon);
+            assertThat(ControllerRecipeTextLines.firstRenderableOutputIcon(presentation)).contains(icon);
+        } finally {
+            LightningBridgeBootstrap.resetForTesting();
+        }
     }
 
     @Test

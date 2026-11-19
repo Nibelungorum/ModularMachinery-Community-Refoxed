@@ -3,9 +3,11 @@ package cn.howxu.mmcr.client.gui;
 import cn.howxu.mmcr.client.render.ChemicalGuiRenderer;
 import cn.howxu.mmcr.client.render.FluidGuiRenderer;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -243,6 +245,9 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
             }
             case ControllerTextLine.FluidIcon fluid ->
                     FluidGuiRenderer.drawFluid(graphics, fluid.stack(), x, y, size, size);
+            case ControllerTextLine.SpriteIcon(var sprite) -> graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
+                    Minecraft.getInstance().getAtlasManager().getAtlasOrThrow(sprite.atlas()).getSprite(sprite.sprite()),
+                    x, y, size, size);
             case ControllerTextLine.ChemicalIcon chemical -> {
                 MekanismBridge.ChemicalRenderData data = MekanismBridge.get().chemicalRenderData(chemical.chemicalId());
                 if (data != null) {

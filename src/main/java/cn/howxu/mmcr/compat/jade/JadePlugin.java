@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.compat.jade;
 
+import cn.howxu.mmcr.compat.ae2lt.LightningBridge;
+import cn.howxu.mmcr.compat.ae2lt.client.LightningJadeDisplay;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedflux.AppliedFluxBridge;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
@@ -39,6 +41,7 @@ public final class JadePlugin implements IWailaPlugin {
         registration.addConfig(MachineControllerComponentProvider.UID, true);
         registration.registerBlockComponent(MachineControllerComponentProvider.INSTANCE, MachineControllerBlock.class);
         if (MekanismBridge.get().available()) ChemicalOutputRenderer.register();
+        if (LightningBridge.get().available()) LightningJadeDisplay.register();
         registration.addConfig(RecipeOutputComponentProvider.UID, true);
         registration.registerBlockComponent(RecipeOutputComponentProvider.INSTANCE, MachineControllerBlock.class);
         registration.addConfig(ParallelControllerComponentProvider.UID, true);

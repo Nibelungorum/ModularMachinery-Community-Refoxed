@@ -89,8 +89,12 @@ public enum RecipeOutputComponentProvider implements IComponentProvider<BlockAcc
         var type = output.outputType();
         var renderer = (Renderer<MachineOutput>) RENDERERS.get(type);
         if (renderer != null) return renderer.row(output, amount);
+        return tooltip -> tooltip.add(genericText(type, amount));
+    }
+
+    public static Component genericText(OutputType<?> type, long amount) {
         Component name = Component.translatableWithFallback(type.presentation().translationKey(), type.id().toString());
-        return tooltip -> tooltip.add(Component.translatable("jade.mmcr.machine_controller.recipe_output.generic", amount, name));
+        return Component.translatable("jade.mmcr.machine_controller.recipe_output.generic", amount, name);
     }
 
     private static void renderItem(ITooltip tooltip, MachineOutput.ItemOutput item, long amount) {
