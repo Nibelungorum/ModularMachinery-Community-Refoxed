@@ -571,7 +571,7 @@ public final class ComponentRuntime {
     public void markCapabilityPresentationChanged(@Nullable BlockPos sourcePos) {
         capabilityPresentationEpoch++;
         // Input retry and availability notifications must not expand the same committed source eagerly.
-        if (pendingCapabilitySources.contains(sourcePos)) return;
+        if ((sourcePos != null && sourcePos == lastPendingSource) || pendingCapabilitySources.contains(sourcePos)) return;
         invalidateCapabilitySource(sourcePos);
     }
 

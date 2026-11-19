@@ -414,6 +414,32 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void presentation_retry_reuses_the_pending_source_only_until_capture() {
+        ComponentRuntime runtime = new ComponentRuntime();
+        var source = new BlockPos(9, 20, 30) {
+            int hashes;
+            @Override public int hashCode() { hashes++; return super.hashCode(); }
+        };
+        CountingItemStorage storage = new CountingItemStorage();
+        runtime.replaceComponents(List.of(component(new TestCapabilityHost(source,
+                List.of(new TestCapability("source", storage))), "source")));
+        runtime.capabilityPresentations();
+        storage.setContents(0, new ItemStack(Items.IRON_INGOT), 5L);
+        runtime.markCapabilitySourceChanged(source);
+        int hashes = source.hashes;
+        long epoch = runtime.capabilityPresentationEpoch();
+
+        runtime.markCapabilityPresentationChanged(source);
+        assertThat(source.hashes).isEqualTo(hashes);
+        assertThat(runtime.capabilityPresentationEpoch()).isEqualTo(epoch + 1);
+        assertThat(runtime.capabilityPresentations().getFirst().amount()).isEqualTo(5L);
+
+        storage.setContents(0, new ItemStack(Items.IRON_INGOT), 8L);
+        runtime.markCapabilityPresentationChanged(source);
+        assertThat(runtime.capabilityPresentations().getFirst().amount()).isEqualTo(8L);
+    }
+
+    @Test
     void deferred_source_invalidation_keeps_historical_and_current_storage_aliases() {
         BlockPos source = new BlockPos(8, 20, 30);
         ComponentRuntime runtime = new ComponentRuntime();
