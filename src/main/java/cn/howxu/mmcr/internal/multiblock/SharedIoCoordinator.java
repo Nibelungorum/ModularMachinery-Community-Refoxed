@@ -93,6 +93,7 @@ public final class SharedIoCoordinator {
     private final Set<DomainKey> postDirtyDomains = new HashSet<>();
     private final Set<ExecutionSlot> dirtyTerminations = Collections.newSetFromMap(new IdentityHashMap<>());
     private final NavigableMap<DomainKey, DomainBucket> postCandidates = new TreeMap<>();
+    private boolean drainingPost;
     private final Map<Long, StructureClaimRegistry.ResourceDomain> postKnownDomains = new HashMap<>();
     private long lastDrainRound = Long.MIN_VALUE;
     private long lastDrainTime = Long.MIN_VALUE;
@@ -230,8 +231,7 @@ public final class SharedIoCoordinator {
             DomainBucket bucket = slot.domain == null ? null : domains.get(slot.domain);
             if (slot.execution != null && !slot.waiting && bucket != null) {
                 bucket.addPending(slot);
-                changedExecutionDomains.add(slot.domain);
-                postDirtyDomains.add(slot.domain);
+                domainAdmitted(slot.domain, bucket, changedExecutionDomains);
             }
         }
         schedulingRevision++;
@@ -483,8 +483,7 @@ public final class SharedIoCoordinator {
             DomainBucket bucket = domains.computeIfAbsent(slot.domain, ignored -> new DomainBucket());
             bucket.putInstalled(slot);
             schedulingRevision++;
-            changedExecutionDomains.add(slot.domain);
-            postDirtyDomains.add(slot.domain);
+            domainAdmitted(slot.domain, bucket, changedExecutionDomains);
             slot.synchronousRound = Long.MIN_VALUE;
             publishExecution(slot, false);
             if (controller.activeWorkMode() == MachineWorkMode.SYNC) grantSynchronousRound(executionRoundId);
@@ -505,7 +504,7 @@ public final class SharedIoCoordinator {
         if (execution.owner().controller().activeWorkMode() != MachineWorkMode.SYNC) return false;
         ExecutionSlot slot = activeExecutions.get(execution.owner());
         return slot != null && slot.execution == execution && remainingRequests > 0
-                && eligibleExecution(slot, level, true) && attemptExecution(slot, level);
+                && eligibleExecution(slot, level, true) && attemptExecution(slot, level, false);
     }
 
     private boolean currentPermit(MachineControllerBlockEntity controller, ControllerPermit permit, ServerLevel level) {
@@ -582,14 +581,20 @@ public final class SharedIoCoordinator {
         return true;
     }
 
-    private boolean attemptExecution(ExecutionSlot slot, ServerLevel level) {
+    private boolean attemptExecution(ExecutionSlot slot, ServerLevel level, boolean fromPostCandidates) {
         InstalledRecipeProgram execution = slot.execution;
         CraftingRuntime owner = slot.acceptedOwner;
         MachineControllerBlockEntity controller = slot.controller;
         MachineWorkMode mode = controller.activeWorkMode();
         long sourceRevision = controller.componentRuntime().capabilityContentRevision();
         DomainBucket bucket = domains.get(slot.domain);
-        if (bucket != null) bucket.removePending(slot);
+        if (bucket != null) {
+            bucket.removePending(slot);
+            if (fromPostCandidates && bucket.requestCount == 0
+                    && !bucket.pendingAdditions && bucket.pendingControllers.isEmpty()) {
+                postCandidates.remove(slot.domain, bucket);
+            }
+        }
         if (!currentPermit(controller, slot.permit, level)) return false;
         // Full admission happens once, after permit/world queries and before any claim or budget charge.
         if (!validExecution(slot, level, owner, controller)) {
@@ -651,8 +656,7 @@ public final class SharedIoCoordinator {
         DomainBucket bucket = domains.computeIfAbsent(slot.domain, ignored -> new DomainBucket());
         bucket.putInstalled(slot);
         schedulingRevision++;
-        changedExecutionDomains.add(slot.domain);
-        postDirtyDomains.add(slot.domain);
+        domainAdmitted(slot.domain, bucket, changedExecutionDomains);
     }
 
     private void wakeDueExecutions(long gameTime) {
@@ -977,14 +981,20 @@ public final class SharedIoCoordinator {
     public void enqueue(Request request) {
         schedulingRevision++;
         DomainKey key = new DomainKey(request.domainId(), request.domainGeneration());
-        changedRequestDomains.add(key);
-        postDirtyDomains.add(key);
         DomainBucket bucket = domains.computeIfAbsent(key, ignored -> new DomainBucket());
+        domainAdmitted(key, bucket, changedRequestDomains);
         bucket.requests.get(requestType(request))
                 .computeIfAbsent(request.laneKey(), ignored -> new ArrayDeque<>()).add(request);
         bucket.requestCount++;
         requestsByController.computeIfAbsent(request.laneKey().controllerPos(),
                 ignored -> Collections.newSetFromMap(new IdentityHashMap<>())).add(request);
+    }
+
+    private void domainAdmitted(DomainKey key, DomainBucket bucket, Set<DomainKey> changed) {
+        changed.add(key);
+        postDirtyDomains.add(key);
+        // A nested resolve can consume the change sets before the outer Post resumes.
+        if (drainingPost) postCandidates.put(key, bucket);
     }
 
     public boolean enqueueTickWork(ServerLevel level, StructureClaimRegistry.ResourceDomain domain,
@@ -1132,7 +1142,13 @@ public final class SharedIoCoordinator {
                 if (bucket != null) postCandidates.put(key, bucket);
             }
         }
-        return drainDomains(postKnownDomains, level, postCandidates);
+        boolean wasDrainingPost = drainingPost;
+        drainingPost = true;
+        try {
+            return drainDomains(postKnownDomains, level, postCandidates);
+        } finally {
+            drainingPost = wasDrainingPost;
+        }
     }
 
     /** Main-thread cancellation or committed terminal payment wakes Post without global polling. */
@@ -1214,7 +1230,7 @@ public final class SharedIoCoordinator {
                 Object next = selection.work;
                 if (next instanceof ExecutionSlot slot) {
                     RecipeCommitLedger payment = slot.ledger;
-                    if (attemptExecution(slot, level)) {
+                    if (attemptExecution(slot, level, candidates == postCandidates)) {
                         progress++;
                         // Completion can retire/reuse the slot before returning; keep the paid ledger.
                         if (payment.state().outputPaid()) includeSpawnedSuccessors(key, RequestType.START, eligible);
