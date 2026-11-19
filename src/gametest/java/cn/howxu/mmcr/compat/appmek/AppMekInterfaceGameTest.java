@@ -150,7 +150,7 @@ public final class AppMekInterfaceGameTest {
         StockingInterfaceBlockEntity host = helper.getBlockEntity(pos);
         MekanismKey oxygen = MekanismKey.of(AppMekGameTestFixtures.chemical("oxygen", 1L));
         MekanismKey hydrogen = MekanismKey.of(AppMekGameTestFixtures.chemical("hydrogen", 1L));
-        host.getInterfaceLogic().getConfig().setStack(0, new GenericStack(oxygen, 1L));
+        host.getInterfaceLogic().getConfig().setStack(0, new GenericStack(oxygen, 37L));
         var handler = ((ChemicalHandlerPort) host.capability(new CapabilityType(MekanismRecipeTypes.CHEMICAL))).chemicalHandler();
         var network = AppMekGameTestFixtures.createChemicalNetwork(helper, pos);
         helper.startSequence().thenWaitUntil(() -> network.connectWhenReady(helper))
@@ -269,6 +269,8 @@ public final class AppMekInterfaceGameTest {
             target.loadWithComponents(source.saveWithoutMetadata(helper.getLevel().registryAccess()), helper.getLevel().registryAccess());
             var handler = ((ChemicalHandlerPort) target.capability(new CapabilityType(MekanismRecipeTypes.CHEMICAL))).chemicalHandler();
             if (target instanceof StockingInterfaceBlockEntity stocking) {
+                helper.assertTrue(new GenericStack(oxygen, 500L).equals(stocking.getConfig().getStack(0)),
+                        "The original chemical marker survives save/load without rewriting its amount");
                 helper.assertTrue(stocking.configuredKeys().contains(oxygen) && handler.extractChemical(0, 100L, Action.EXECUTE).isEmpty(),
                         "Restored Stocking configuration does not turn network display amounts into stored chemicals");
             } else {

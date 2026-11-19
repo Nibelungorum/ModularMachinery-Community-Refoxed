@@ -169,7 +169,6 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void saveChanges() {
-        normalizeConfigAmounts();
         refreshNetworkStorage();
         configureWatcher();
         notifyStorageChanged();
@@ -222,7 +221,6 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
             super.loadAdditional(input, registries);
             mainNode.loadFromNBT(input);
             logic.readFromNBT(input, registries);
-            normalizeConfigAmounts();
             refreshNetworkStorage();
             configureWatcher();
         } finally {
@@ -358,22 +356,6 @@ public final class StockingInterfaceBlockEntity extends IOPortBlockEntity
 
     public long storageMirrorRefreshes() {
         return storageMirrorRefreshes;
-    }
-
-    private void normalizeConfigAmounts() {
-        var config = logic.getConfig();
-        config.beginBatch();
-        try {
-            for (int slot = 0; slot < config.size(); slot++) {
-                GenericStack stack = config.getStack(slot);
-                long defaultAmount = stack == null ? 1L : Math.max(1L, stack.what().getType().getAmountPerUnit());
-                if (stack != null && stack.amount() != defaultAmount) {
-                    config.setStack(slot, new GenericStack(stack.what(), defaultAmount));
-                }
-            }
-        } finally {
-            config.endBatchSuppressed();
-        }
     }
 
 }

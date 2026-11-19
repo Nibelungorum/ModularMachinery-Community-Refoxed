@@ -2,7 +2,6 @@ package cn.howxu.mmcr.compat.appliedenergistics2.loaded.client;
 
 import appeng.api.config.FuzzyMode;
 import appeng.api.config.Settings;
-import appeng.client.gui.implementations.UpgradeableScreen;
 import appeng.client.gui.style.ScreenStyle;
 import appeng.client.gui.widgets.ServerSettingToggleButton;
 import appeng.client.gui.widgets.SettingToggleButton;
@@ -24,14 +23,14 @@ import java.util.List;
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class AE2InterfaceScreen extends UpgradeableScreen<AE2InterfaceMenu> {
+public final class AE2InterfaceScreen extends InterfaceMarkerScreen<AE2InterfaceMenu> {
     private final SettingToggleButton<FuzzyMode> fuzzyMode;
     private final List<InterfaceAmountButton> amountButtons = new ArrayList<>();
     private final InputIsolationButton isolationButton;
     private int isolationGestureButton = -1;
 
     public AE2InterfaceScreen(AE2InterfaceMenu menu, Inventory inventory, Component title, ScreenStyle style) {
-        super(menu, inventory, title, style);
+        super(menu, inventory, title, style, menu.getSlots(SlotSemantics.CONFIG));
         fuzzyMode = new ServerSettingToggleButton<>(Settings.FUZZY_MODE, FuzzyMode.IGNORE_ALL);
         addToLeftToolbar(fuzzyMode);
         isolationButton = addToLeftToolbar(new InputIsolationButton(enabled -> {

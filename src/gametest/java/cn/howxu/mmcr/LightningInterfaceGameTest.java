@@ -133,7 +133,7 @@ public final class LightningInterfaceGameTest {
         backing.setStack(0, new GenericStack(high, 150L));
         backing.setStack(1, new GenericStack(extreme, 250L));
         energy.getMainNode().addService(IStorageProvider.class, mounts -> mounts.mount(backing, 0));
-        port.getInterfaceLogic().getConfig().setStack(0, new GenericStack(high, 1L));
+        port.getInterfaceLogic().getConfig().setStack(0, new GenericStack(high, 7L));
         port.getInterfaceLogic().getConfig().setStack(1, new GenericStack(extreme, 1L));
         var storage = LoadedLightningBridge.storage(port);
         IGridConnection[] connection = new IGridConnection[1];
