@@ -71,6 +71,25 @@ class MultiblockDetectorSelectionRendererTest {
     }
 
     @Test
+    void region_outline_connects_adjacent_corners_along_twelve_distinct_edges() {
+        List<Vertex> vertices = render((pose, buffer) -> MultiblockDetectorSelectionRenderer.renderBoxEdges(
+                pose, buffer, new Vec3(10, 20, 30), 11, 22, 33, 15, 27, 39));
+        assertThat(vertices).hasSize(24).extracting(Vertex::color).containsOnly(0xFF00FF00);
+        for (Vertex vertex : vertices) {
+            assertThat(vertex.position().x).isIn(1.0, 5.0);
+            assertThat(vertex.position().y).isIn(2.0, 7.0);
+            assertThat(vertex.position().z).isIn(3.0, 9.0);
+        }
+        List<Vec3> midpoints = new ArrayList<>();
+        for (int i = 0; i < vertices.size(); i += 2) {
+            Vec3 a = vertices.get(i).position(), b = vertices.get(i + 1).position();
+            assertThat((a.x != b.x ? 1 : 0) + (a.y != b.y ? 1 : 0) + (a.z != b.z ? 1 : 0)).isOne();
+            midpoints.add(a.add(b).scale(0.5));
+        }
+        assertThat(midpoints).doesNotHaveDuplicates();
+    }
+
+    @Test
     void no_controller_overlay_is_emitted_without_a_position_and_selected_face() {
         assertThat(render(MultiblockDetectorSelection.EMPTY, Vec3.ZERO)).isEmpty();
         assertThat(render(new MultiblockDetectorSelection(BlockPos.ZERO, null, null, null), Vec3.ZERO)).isEmpty();
@@ -91,7 +110,7 @@ class MultiblockDetectorSelectionRendererTest {
                         pendingPosition[0] = new Vec3((float) args[0], (float) args[1], (float) args[2]);
                     } else if (method.getName().equals("setColor") && args.length == 1) {
                         vertices.add(new Vertex(pendingPosition[0], (int) args[0]));
-                    } else {
+                    } else if (!method.getName().equals("setNormal") && !method.getName().equals("setLineWidth")) {
                         throw new AssertionError("Unexpected vertex operation: " + method);
                     }
                     return proxy;

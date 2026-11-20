@@ -102,6 +102,9 @@ public final class TerminalHighlightClientHandler {
         event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.debugFilledBox(),
                 (pose, buffer) -> MultiblockDetectorSelectionRenderer.renderRegionMask(pose, buffer, camera,
                         mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ));
+        event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.lines(),
+                (pose, buffer) -> MultiblockDetectorSelectionRenderer.renderBoxEdges(pose, buffer, camera,
+                        mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ));
     }
 
     private static double renderRadius() {
