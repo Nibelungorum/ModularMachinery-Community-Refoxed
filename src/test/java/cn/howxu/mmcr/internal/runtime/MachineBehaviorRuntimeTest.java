@@ -714,12 +714,53 @@ class MachineBehaviorRuntimeTest {
     }
 
     @Test
+    void direct_tick_state_belongs_to_each_controller_and_survives_pauses_and_reformation() {
+        List<Integer> observed = new ArrayList<>();
+        /** @author howxu <dev@howxu.cn> */
+        class Heater implements MachineBehavior.TickCallback {
+            private int heat;
+            public void accept(TickBehaviorContext ctx) {
+                assertThat(ctx.dataStorage()).isNull();
+                observed.add(++heat);
+            }
+        }
+        var behavior = TickBehavior.builder().serverTick(Heater::new).build();
+        Machine machine = machine(TEST_MACHINE_ID, behavior);
+        var a = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        var b = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
+        RuntimeTestFixtures.formStructure(a, machine);
+        RuntimeTestFixtures.formStructure(b, machine);
+        ServerLevel level = (ServerLevel) a.getLevel();
+        a.tickRuntimeWork(level, a.getBlockPos());
+        b.tickRuntimeWork((ServerLevel) b.getLevel(), b.getBlockPos());
+        RuntimeTestFixtures.setDirectSignal(level, a.getBlockPos(), 15);
+        a.tickRuntimeWork(level, a.getBlockPos());
+        RuntimeTestFixtures.setDirectSignal(level, a.getBlockPos(), 0);
+        a.invalidateFormedStructure();
+        a.tickRuntimeWork(level, a.getBlockPos());
+        RuntimeTestFixtures.publishStructure(a, machine, true);
+        a.tickRuntimeWork(level, a.getBlockPos());
+        assertThat(observed).containsExactly(1, 1, 2);
+
+        a.onChunkUnloaded();
+        a.onLoad();
+        a.tickRuntimeWork(level, a.getBlockPos());
+        a.setMachine(machine(MMCR.id("other_heater"), behavior));
+        a.setMachine(machine);
+        a.tickRuntimeWork(level, a.getBlockPos());
+        assertThat(observed).containsExactly(1, 1, 2, 1, 1);
+    }
+
+    @Test
     void direct_tick_failure_is_published_and_prevents_the_behavior_callback() {
         AtomicInteger callbacks = new AtomicInteger();
         AtomicInteger phases = new AtomicInteger();
+        AtomicInteger constructions = new AtomicInteger();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(TEST_MACHINE_ID);
-        Machine tickMachine = machine(controller.machineId(), TickBehavior.builder()
-                .serverTick(context -> callbacks.incrementAndGet()).build());
+        Machine tickMachine = machine(controller.machineId(), TickBehavior.builder().serverTick(() -> {
+            constructions.incrementAndGet();
+            return context -> callbacks.incrementAndGet();
+        }).build());
         RuntimeTestFixtures.formStructure(controller, tickMachine);
         installTickCapability(controller, new TickCapability(context -> {
             phases.incrementAndGet();
@@ -730,6 +771,7 @@ class MachineBehaviorRuntimeTest {
 
         assertThat(phases).hasValue(1);
         assertThat(callbacks).hasValue(0);
+        assertThat(constructions).hasValue(0);
         assertThat(controller.runtimeSnapshot().crafting().failure()).isNotNull();
     }
 
@@ -1119,10 +1161,14 @@ class MachineBehaviorRuntimeTest {
     void async_recipe_tick_callback_runs_on_the_controller_tick_thread() {
         Identifier machineId = TEST_MACHINE_ID;
         AtomicReference<Thread> callbackThread = new AtomicReference<>();
+        AtomicReference<Thread> factoryThread = new AtomicReference<>();
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controllerEntity(machineId, BlockPos.ZERO);
         RuntimeTestFixtures.registerRecipePool(machineId);
         RuntimeTestFixtures.formStructure(controller, machine(machineId, RecipeBehavior.builder()
-                .recipeTick(context -> callbackThread.set(Thread.currentThread()))
+                .recipeTick(() -> {
+                    factoryThread.set(Thread.currentThread());
+                    return context -> callbackThread.set(Thread.currentThread());
+                })
                 .build()));
         ServerLevel level = (ServerLevel) controller.getLevel();
         assertThat(StructureClaimRegistry.get(level).claim(controller.getBlockPos(), List.of()).accepted()).isTrue();
@@ -1138,6 +1184,7 @@ class MachineBehaviorRuntimeTest {
 
             controller.serverTick();
 
+            assertThat(factoryThread).hasValue(controllerTickThread);
             assertThat(callbackThread).hasValue(controllerTickThread);
         } finally {
             MachineAsyncCoordinator.discard(level);

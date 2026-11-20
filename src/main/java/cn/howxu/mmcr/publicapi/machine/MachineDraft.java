@@ -8,6 +8,7 @@ import cn.howxu.mmcr.publicapi.network.FailureHandler;
 import cn.howxu.mmcr.publicapi.recipe.modifier.SmartModifierSpec;
 import cn.howxu.mmcr.publicapi.runtime.RecipeFailureMode;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.ApiStatus;
 
@@ -20,9 +21,18 @@ public interface MachineDraft {
     MachineDraft appearance(Consumer<AppearanceOptions> configure);
     MachineDraft factory(Consumer<FactoryOptions> configure);
     MachineDraft recipeBehavior(Consumer<RecipeHooks> configure);
+    /**
+     * Binds the selected methods to one new instance per controller, shared by all of its factory lanes.
+     * For example: {@code recipeBehavior(Heater::new, h -> h.beforeStart(Heater::start).recipeTick(Heater::heat))}.
+     * Pausing or reforming the structure retains the instance; unloading, removal or a different machine
+     * binding discards it. Persist selected fields explicitly, e.g. via {@link MachineContext#dataStorage()}.
+     */
+    <T> MachineDraft recipeBehavior(Supplier<T> factory, Consumer<RecipeHooks.ForInstance<T>> configure);
     MachineDraft tickBehavior(Consumer<TickHooks> configure);
     MachineDraft preServerTick(Consumer<MachineContext> callback);
+    MachineDraft preServerTick(Supplier<? extends Consumer<MachineContext>> factory);
     MachineDraft postServerTick(Consumer<MachineContext> callback);
+    MachineDraft postServerTick(Supplier<? extends Consumer<MachineContext>> factory);
     MachineDraft role(MachineKind kind);
     MachineDraft acceptedModule(Identifier id);
     MachineDraft networkInterface(int maxCount, int maxConnections);

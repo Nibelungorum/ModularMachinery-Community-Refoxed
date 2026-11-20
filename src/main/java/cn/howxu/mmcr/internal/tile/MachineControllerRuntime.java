@@ -42,11 +42,13 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Owns the authoritative runtime state and publishes immutable controller snapshots.
@@ -59,6 +61,7 @@ public final class MachineControllerRuntime {
     private final ComponentRuntime components = new ComponentRuntime();
     private final CraftingRuntime craftingRuntime;
     private final FactoryRuntime factoryRuntime;
+    private @Nullable Map<Supplier<?>, Object> hookInstances;
     private final ControllerScreenTextState screenText = new ControllerScreenTextState();
     private final JadeText jadeText = JadeTextSupport.create();
     private final Map<String, ControllerScreenTextState> recipeScreenTexts = new LinkedHashMap<>();
@@ -152,6 +155,16 @@ public final class MachineControllerRuntime {
             throw new IllegalStateException("Controller runtime context requires a configured machine");
         }
         return new ControllerRuntimeContext(configuredMachine.registryName(), controller.getBlockPos(), screenText);
+    }
+
+    @SuppressWarnings("unchecked") // The registration is both the identity key and the sole producer of its value.
+    <T> T hookInstance(Supplier<T> registration) {
+        if (hookInstances == null) hookInstances = new IdentityHashMap<>();
+        return (T) hookInstances.computeIfAbsent(registration, Supplier::get);
+    }
+
+    void clearHookInstances() {
+        hookInstances = null;
     }
 
     public MachineBehaviorContext behaviorContext() {
@@ -634,6 +647,7 @@ public final class MachineControllerRuntime {
     boolean publishFormationState(Machine machine, BlockArray pattern,
                                   @Nullable CompiledMachinePattern compiledPattern,
                                   Direction facing, Direction rollFacing, int matchedStage) {
+        if (structure.machine() != machine) clearHookInstances();
         boolean changed = structure.publishFormationState(machine, pattern, compiledPattern, facing, rollFacing, matchedStage,
                 countStructureBlocks(pattern));
         publishSnapshot();

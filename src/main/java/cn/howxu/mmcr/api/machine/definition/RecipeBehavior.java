@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.api.machine.definition;
 
 import java.util.Objects;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 /**
  * Callback strategy for machines driven by recipes.
@@ -111,6 +113,61 @@ public final class RecipeBehavior implements MachineBehavior {
         return postServerTickRegistered;
     }
 
+    /** Selects callbacks sharing one instance across all lanes of a controller.
+     * @author howxu <dev@howxu.cn>
+     */
+    public static final class InstanceBuilder<T> {
+        private final Builder builder;
+        private final HookBinding<T> binding;
+
+        InstanceBuilder(Builder builder, Supplier<T> factory) {
+            this.builder = builder;
+            this.binding = new HookBinding<>(factory);
+        }
+
+        public InstanceBuilder<T> idleStart(BiConsumer<T, MachineBehaviorContext> callback) {
+            var invoke = binding.bind(callback);
+            builder.idleStart(c -> invoke.accept(c, c));
+            return this;
+        }
+
+        public InstanceBuilder<T> idleEnd(BiConsumer<T, MachineBehaviorContext> callback) {
+            var invoke = binding.bind(callback);
+            builder.idleEnd(c -> invoke.accept(c, c));
+            return this;
+        }
+
+        public InstanceBuilder<T> beforeStart(BiConsumer<T, RecipeStartContext> callback) {
+            var invoke = binding.bind(callback);
+            builder.beforeStart(c -> invoke.accept(c.machineContext(), c));
+            return this;
+        }
+
+        public InstanceBuilder<T> recipeTick(BiConsumer<T, RecipeTickContext> callback) {
+            var invoke = binding.bind(callback);
+            builder.recipeTick(c -> invoke.accept(c.machineContext(), c));
+            return this;
+        }
+
+        public InstanceBuilder<T> beforeFinish(BiConsumer<T, RecipeFinishContext> callback) {
+            var invoke = binding.bind(callback);
+            builder.beforeFinish(c -> invoke.accept(c.machineContext(), c));
+            return this;
+        }
+
+        public InstanceBuilder<T> preServerTick(BiConsumer<T, MachineBehaviorContext> callback) {
+            var invoke = binding.bind(callback);
+            builder.preServerTick(c -> invoke.accept(c, c));
+            return this;
+        }
+
+        public InstanceBuilder<T> postServerTick(BiConsumer<T, MachineBehaviorContext> callback) {
+            var invoke = binding.bind(callback);
+            builder.postServerTick(c -> invoke.accept(c, c));
+            return this;
+        }
+    }
+
     public static final class Builder {
         private MachineCallback idleStart = context -> { };
         private MachineCallback idleEnd = context -> { };
@@ -127,10 +184,18 @@ public final class RecipeBehavior implements MachineBehavior {
         private boolean preServerTickRegistered;
         private boolean postServerTickRegistered;
 
+        public Builder idleStart(Supplier<? extends MachineCallback> factory) {
+            return idleStart(HookBinding.machineCallback(factory));
+        }
+
         public Builder idleStart(MachineCallback callback) {
             idleStart = Objects.requireNonNull(callback, "idleStart");
             idleStartRegistered = true;
             return this;
+        }
+
+        public Builder idleEnd(Supplier<? extends MachineCallback> factory) {
+            return idleEnd(HookBinding.machineCallback(factory));
         }
 
         public Builder idleEnd(MachineCallback callback) {
@@ -139,10 +204,20 @@ public final class RecipeBehavior implements MachineBehavior {
             return this;
         }
 
+        public Builder beforeStart(Supplier<? extends RecipeStartCallback> factory) {
+            var binding = new HookBinding<>(factory);
+            return beforeStart(c -> binding.instance(c.machineContext()).accept(c));
+        }
+
         public Builder beforeStart(RecipeStartCallback callback) {
             beforeStart = Objects.requireNonNull(callback, "beforeStart");
             beforeStartRegistered = true;
             return this;
+        }
+
+        public Builder recipeTick(Supplier<? extends RecipeTickCallback> factory) {
+            var binding = new HookBinding<>(factory);
+            return recipeTick(c -> binding.instance(c.machineContext()).accept(c));
         }
 
         public Builder recipeTick(RecipeTickCallback callback) {
@@ -151,16 +226,29 @@ public final class RecipeBehavior implements MachineBehavior {
             return this;
         }
 
+        public Builder beforeFinish(Supplier<? extends RecipeFinishCallback> factory) {
+            var binding = new HookBinding<>(factory);
+            return beforeFinish(c -> binding.instance(c.machineContext()).accept(c));
+        }
+
         public Builder beforeFinish(RecipeFinishCallback callback) {
             beforeFinish = Objects.requireNonNull(callback, "beforeFinish");
             beforeFinishRegistered = true;
             return this;
         }
 
+        public Builder preServerTick(Supplier<? extends MachineCallback> factory) {
+            return preServerTick(HookBinding.machineCallback(factory));
+        }
+
         public Builder preServerTick(MachineCallback callback) {
             preServerTick = Objects.requireNonNull(callback, "preServerTick");
             preServerTickRegistered = true;
             return this;
+        }
+
+        public Builder postServerTick(Supplier<? extends MachineCallback> factory) {
+            return postServerTick(HookBinding.machineCallback(factory));
         }
 
         public Builder postServerTick(MachineCallback callback) {

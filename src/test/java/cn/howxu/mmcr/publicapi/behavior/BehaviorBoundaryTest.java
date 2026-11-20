@@ -11,6 +11,7 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.api.facade.behavior.BehaviorAdapters;
+import cn.howxu.mmcr.internal.api.facade.machine.MachineAdapters;
 import cn.howxu.mmcr.internal.api.facade.recipe.OutputAdapters;
 import cn.howxu.mmcr.internal.api.facade.recipe.RequirementAdapters;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
@@ -27,6 +28,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Core-owned contexts are wrapped only when Java hooks run; writes remain authoritative.
@@ -64,7 +68,7 @@ class BehaviorBoundaryTest {
         assertEquals(40, start.duration()); assertTrue(finish.cancelled()); assertFalse(finish.outputsDiscarded());
         var defaults = BehaviorAdapters.configureRecipe(RecipeBehavior.builder(), ignored -> {}).build();
         assertFalse(defaults.hasIdleStart()); assertFalse(defaults.hasBeforeStart()); assertFalse(defaults.hasPreServerTick());
-        assertThrows(NullPointerException.class, () -> BehaviorAdapters.configureRecipe(RecipeBehavior.builder(), h -> h.idleStart(null)));
+        assertThrows(NullPointerException.class, () -> BehaviorAdapters.configureRecipe(RecipeBehavior.builder(), h -> h.idleStart((Consumer<MachineContext>) null)));
     }
 
     @Test
@@ -118,6 +122,63 @@ class BehaviorBoundaryTest {
         assertTrue(builder.build().hasServerTick());
         assertThrows(IllegalStateException.class, () -> builder.build().serverTick().accept(nativeTick));
         assertFalse(BehaviorAdapters.configureTick(TickBehavior.builder(), ignored -> {}).build().hasServerTick());
+    }
+
+    @Test
+    void factory_registrations_are_independent_and_top_level_hooks_still_override_nested_ones() {
+        List<Integer> counts = new ArrayList<>();
+        List<String> phases = new ArrayList<>();
+        /** @author howxu <dev@howxu.cn> */
+        class Probe implements Consumer<MachineContext> {
+            int count;
+            public void accept(MachineContext c) { counts.add(++count); }
+        }
+        Supplier<Consumer<MachineContext>> factory = Probe::new;
+        var draft = MachineAdapters.machine(Identifier.parse("test:hooks")).recipeBehavior(h -> h
+                .idleStart(factory).idleEnd(factory)
+                .preServerTick(() -> c -> fail("overridden pre")).postServerTick(() -> c -> fail("overridden post"))
+                .beforeStart(() -> c -> c.setDuration(40))
+                .recipeTick(() -> c -> phases.add("tick:" + c.currentTick()))
+                .beforeFinish(() -> RecipeFinishContext::cancel))
+                .preServerTick(factory).postServerTick(factory);
+        var hooks = (RecipeBehavior) MachineAdapters.unwrap(draft.build()).behavior();
+        var base = TestBootstrap.newController().behaviorContext();
+        hooks.preServerTick().accept(base);
+        hooks.idleStart().accept(base);
+        hooks.idleEnd().accept(base);
+        hooks.postServerTick().accept(base);
+        hooks.preServerTick().accept(base);
+        assertEquals(List.of(1, 1, 1, 1, 2), counts);
+
+        var recipe = recipe();
+        var start = new cn.howxu.mmcr.api.machine.definition.RecipeStartContext(base, recipe, 1, 1, 20, List.of(), List.of());
+        var tick = new cn.howxu.mmcr.api.machine.definition.RecipeTickContext(base, recipe, 1, 20, 1, List.of(), List.of());
+        var finish = new cn.howxu.mmcr.api.machine.definition.RecipeFinishContext(base, recipe, 1, 1, List.of());
+        hooks.beforeStart().accept(start); hooks.recipeTick().accept(tick); hooks.beforeFinish().accept(finish);
+        assertEquals(40, start.duration());
+        assertEquals(List.of("tick:1"), phases);
+        assertTrue(finish.cancelled());
+    }
+
+    @Test
+    void failed_tick_factory_is_not_cached_and_receives_the_current_context_on_retry() {
+        var attempts = new AtomicInteger();
+        List<Long> times = new ArrayList<>();
+        var draft = MachineAdapters.machine(Identifier.parse("test:heater")).tickBehavior(t -> t.serverTick(() ->
+                attempts.incrementAndGet() == 1 ? null : c -> times.add(c.gameTime())));
+        var hooks = (TickBehavior) MachineAdapters.unwrap(draft.build()).behavior();
+        assertEquals(0, attempts.get());
+        var controller = TestBootstrap.newController();
+        var capabilities = new CapabilitySnapshot(List.of());
+        for (int i = 0; i < 3; i++) {
+            var current = new MachineBehaviorContext(controller, null, controller.getBlockPos(), controller.machineId(),
+                    i, new ControllerScreenTextState());
+            var tick = new TickBehaviorContext(current, capabilities);
+            if (i == 0) assertThrows(NullPointerException.class, () -> hooks.serverTick().accept(tick));
+            else hooks.serverTick().accept(tick);
+        }
+        assertEquals(2, attempts.get());
+        assertEquals(List.of(1L, 2L), times);
     }
 
     private static MachineBehaviorContext base() {

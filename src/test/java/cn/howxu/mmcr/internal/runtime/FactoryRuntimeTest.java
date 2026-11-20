@@ -42,6 +42,8 @@ import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.internal.api.facade.machine.MachineAdapters;
+import cn.howxu.mmcr.publicapi.behavior.RecipeTickContext;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
@@ -227,6 +229,31 @@ class FactoryRuntimeTest {
         assertThat(snapshot.laneLimit()).isEqualTo(3);
         assertThat(snapshot.presentationLanes()).hasSize(3).isUnmodifiable();
         assertThat(snapshot.lanes()).isUnmodifiable();
+    }
+
+    @Test
+    void factory_lanes_call_the_same_java_instance_across_recipe_phases() {
+        List<String> trace = new ArrayList<>();
+        /** @author howxu <dev@howxu.cn> */
+        class Heater {
+            int heat;
+            void heat(RecipeTickContext tick) { trace.add("tick:" + ++heat); }
+        }
+        var draft = MachineAdapters.machine(MMCR.id("factory_attached_fixture")).recipeBehavior(Heater::new, hooks -> hooks
+                .beforeStart((heater, start) -> trace.add("start:" + ++heater.heat))
+                .recipeTick(Heater::heat));
+        var behavior = (RecipeBehavior) MachineAdapters.unwrap(draft.build()).behavior();
+        assertThat(behavior.hasBeforeFinish()).isFalse();
+        var controller = attachedFactoryController(RuntimeTestFixtures.itemInput(new BlockPos(1, 0, 0)), behavior);
+        var factory = new FactoryRuntime();
+        factory.ensureBaseLane(controller);
+        factory.setLaneLimit(2);
+        var recipe = RecipeTestSupport.create(MMCR.id("shared_heater"), controller.currentRecipePoolId(),
+                20, List.of(), List.of(), List.of(), 0, 2);
+        factory.tick(List.of(recipe), 1, 0L);
+        assertThat(factory.activeRuntimes()).hasSize(2);
+        factory.tick(List.of(recipe), 1, 1L);
+        assertThat(trace).containsExactly("start:1", "start:2", "tick:3", "tick:4");
     }
 
     @Test

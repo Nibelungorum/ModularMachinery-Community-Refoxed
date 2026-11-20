@@ -8,8 +8,12 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.definition.MachineBehavior;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehavior;
+import cn.howxu.mmcr.api.machine.definition.TickBehaviorContext;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.component.DataComponentPredicateSet;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
@@ -59,6 +63,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
@@ -77,6 +82,50 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class DataStorageGameTest {
     private static final Identifier MACHINE_ID = MMCR.id("data_storage_tick");
+
+    public void newHookInstanceReadsRestoredStorage(GameTestHelper helper) {
+        var controllerPos = new BlockPos(1, 1, 1);
+        var storagePos = controllerPos.west();
+        var controllerState = ModBlocks.controllerFor(MACHINE_ID).get().defaultBlockState();
+        var storageState = ModBlocks.DATA_STORAGE.get().defaultBlockState();
+        var reads = new ArrayList<Integer>();
+        /** @author howxu <dev@howxu.cn> */
+        class Heater implements MachineBehavior.TickCallback {
+            boolean initialized;
+            public void accept(TickBehaviorContext context) {
+                if (initialized) return;
+                var data = context.dataStorage();
+                int heat = data.get("heat").flatMap(value -> value.asInt()).orElse(0);
+                data.set("heat", heat + 1);
+                reads.add(heat);
+                initialized = true;
+            }
+        }
+        var machine = MachineStructureRegistry.toRuntimeMachine(MachineRegistration.builder(MACHINE_ID)
+                .behavior(TickBehavior.builder().serverTick(Heater::new).build()).build(),
+                MachineStructureRegistry.effectiveSnapshot().get(MACHINE_ID));
+        helper.setBlock(controllerPos, controllerState);
+        helper.setBlock(storagePos, storageState);
+        helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class).setMachine(machine);
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(!reads.isEmpty(), "First controller writes its heat"))
+                .thenExecute(() -> {
+                    var registries = helper.getLevel().registryAccess();
+                    var saved = helper.getBlockEntity(storagePos, DataStorageBlockEntity.class).saveCustomOnly(registries);
+                    helper.setBlock(controllerPos, Blocks.AIR);
+                    helper.setBlock(storagePos, Blocks.AIR);
+                    helper.setBlock(storagePos, storageState);
+                    helper.getBlockEntity(storagePos, DataStorageBlockEntity.class)
+                            .loadCustomOnly(TagValueInput.create(ProblemReporter.DISCARDING, registries, saved));
+                    helper.setBlock(controllerPos, controllerState);
+                    helper.getBlockEntity(controllerPos, MachineControllerBlockEntity.class).setMachine(machine);
+                })
+                .thenWaitUntil(() -> helper.assertTrue(reads.size() >= 2, "Replacement controller runs its own hook"))
+                .thenExecute(() -> helper.assertTrue(reads.equals(List.of(0, 1)),
+                        "A fresh hook reads the heat explicitly saved by its predecessor"))
+                .thenSucceed();
+    }
 
     public void pureTickWritesBoundStorage(GameTestHelper helper) {
         BlockPos controllerBlockPos = new BlockPos(1, 1, 1);

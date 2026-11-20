@@ -233,6 +233,8 @@ public final class GameTestRegistry {
                 helper -> new ControllerTickGameTest().formedTickCommitsPartialOutputAndDataAtomically(helper));
         register(event, "data_storage_pure_tick", 100,
                 helper -> new DataStorageGameTest().pureTickWritesBoundStorage(helper));
+        register(event, "data_storage_hook_instance", 100,
+                helper -> new DataStorageGameTest().newHookInstanceReadsRestoredStorage(helper));
         register(event, "data_storage_recipe_snapshot", 100,
                 helper -> new DataStorageGameTest().recipeSnapshotLoadsWithoutStartCallbackRerun(helper));
         register(event, "multi_factory_controller", 160,
