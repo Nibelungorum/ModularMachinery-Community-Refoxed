@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.machine.definition;
 
 import java.util.Objects;
+import java.util.function.Supplier;
 import cn.howxu.mmcr.api.capability.tick.CapabilityTickPhase;
 
 /**
@@ -52,6 +53,12 @@ public final class TickBehavior implements MachineBehavior {
             serverTick = Objects.requireNonNull(callback, "serverTick");
             serverTickRegistered = true;
             return this;
+        }
+
+        /** Lazily constructs one callback per controller, not per tick. */
+        public Builder serverTick(Supplier<? extends TickCallback> factory) {
+            var binding = new HookBinding<>(factory);
+            return serverTick(c -> binding.instance(c).accept(c));
         }
 
         public TickBehavior build() {

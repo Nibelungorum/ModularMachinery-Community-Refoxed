@@ -32,6 +32,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.minecraft.resources.ResourceLocation;
 
 /** Machine boundary: a single core builder or definition owns all state. @author howxu <dev@howxu.cn> */
@@ -112,15 +113,26 @@ public final class MachineAdapters {
             delegate.recipeBehavior(builder -> BehaviorAdapters.configureRecipe(builder, configure));
             return this;
         }
+        @Override public <T> MachineDraft recipeBehavior(Supplier<T> factory, Consumer<RecipeHooks.ForInstance<T>> configure) {
+            Objects.requireNonNull(configure, "configure");
+            delegate.recipeBehavior(factory, builder -> configure.accept(BehaviorAdapters.wrap(builder)));
+            return this;
+        }
         @Override public MachineDraft tickBehavior(Consumer<TickHooks> configure) {
             Objects.requireNonNull(configure, "configure");
             delegate.tickBehavior(builder -> BehaviorAdapters.configureTick(builder, configure));
             return this;
         }
+        @Override public MachineDraft preServerTick(Supplier<? extends Consumer<MachineContext>> factory) {
+            delegate.preServerTick(BehaviorAdapters.machineCallbackFactory(factory)); return this;
+        }
         @Override public MachineDraft preServerTick(Consumer<MachineContext> callback) {
             Objects.requireNonNull(callback, "callback");
             delegate.preServerTick(context -> callback.accept(BehaviorAdapters.wrap(context)));
             return this;
+        }
+        @Override public MachineDraft postServerTick(Supplier<? extends Consumer<MachineContext>> factory) {
+            delegate.postServerTick(BehaviorAdapters.machineCallbackFactory(factory)); return this;
         }
         @Override public MachineDraft postServerTick(Consumer<MachineContext> callback) {
             Objects.requireNonNull(callback, "callback");

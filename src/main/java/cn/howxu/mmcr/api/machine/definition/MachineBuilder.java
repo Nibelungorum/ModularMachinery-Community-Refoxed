@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
@@ -98,6 +99,13 @@ public final class MachineBuilder {
         return this;
     }
 
+    public <T> MachineBuilder recipeBehavior(Supplier<T> factory, Consumer<RecipeBehavior.InstanceBuilder<T>> configure) {
+        return recipeBehavior(builder -> {
+            Objects.requireNonNull(configure, "configure").accept(new RecipeBehavior.InstanceBuilder<>(builder, factory));
+            return builder;
+        });
+    }
+
     public MachineBuilder tickBehavior(Consumer<TickBehavior.Builder> builder) {
         if (preServerTick != null || postServerTick != null) {
             throw new IllegalStateException("Cannot configure server tick hooks for tick behavior");
@@ -108,12 +116,20 @@ public final class MachineBuilder {
         return this;
     }
 
+    public MachineBuilder preServerTick(Supplier<? extends MachineBehavior.MachineCallback> factory) {
+        return preServerTick(HookBinding.machineCallback(factory));
+    }
+
     public MachineBuilder preServerTick(MachineBehavior.MachineCallback callback) {
         if (behavior instanceof TickBehavior) {
             throw new IllegalStateException("Recipe server tick hooks require recipe behavior");
         }
         preServerTick = Objects.requireNonNull(callback, "preServerTick");
         return this;
+    }
+
+    public MachineBuilder postServerTick(Supplier<? extends MachineBehavior.MachineCallback> factory) {
+        return postServerTick(HookBinding.machineCallback(factory));
     }
 
     public MachineBuilder postServerTick(MachineBehavior.MachineCallback callback) {

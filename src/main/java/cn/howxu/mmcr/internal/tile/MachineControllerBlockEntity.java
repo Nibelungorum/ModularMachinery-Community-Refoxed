@@ -174,6 +174,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.function.LongFunction;
 
@@ -704,6 +705,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         syncRuntimeStateIfChanged();
     }
 
+    public <T> T hookInstance(Supplier<T> registration) {
+        return runtime.hookInstance(registration);
+    }
+
     public MachineBehaviorContext behaviorContext() {
         return runtime.behaviorContext();
     }
@@ -1069,8 +1074,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void setMachine(Machine m) {
-        if (level instanceof ServerLevel serverLevel && runtime.currentStructureSnapshot().configuredMachine() != m) {
-            invalidateAsyncLifecycle(serverLevel);
+        if (runtime.currentStructureSnapshot().configuredMachine() != m) {
+            runtime.clearHookInstances();
+            if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
         }
         StructureSnapshot current = currentStructureSnapshot();
         runtimeTopologyReady = false;
@@ -1188,6 +1194,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     public void onMachineDestroyed() {
+        runtime.clearHookInstances();
         notifyPreviewReceiversCleared();
         resetMachine(true, false);
     }
@@ -5025,6 +5032,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
     public void setLevel(Level level) {
         boolean changedLevel = this.level != level;
         if (this.level != null && this.level != level) {
+            runtime.clearHookInstances();
             if (this.level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
             ControllerSyncEvents.forgetController(this);
             trackingObservers.clear();
@@ -5041,6 +5049,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     public void setRemoved() {
+        runtime.clearHookInstances();
         if (level != null && !level.isClientSide()) releaseStressContributions();
         if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
         ControllerSyncEvents.forgetController(this);
@@ -5064,6 +5073,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     @Override
     public void onChunkUnloaded() {
+        runtime.clearHookInstances();
         if (level != null && !level.isClientSide()) releaseStressContributions();
         if (level instanceof ServerLevel serverLevel) {
             StatusBlockCoordinator.get(serverLevel).remove(worldPosition);
