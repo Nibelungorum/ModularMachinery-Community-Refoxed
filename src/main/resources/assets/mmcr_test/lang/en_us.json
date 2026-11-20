@@ -43,6 +43,7 @@
     "block.mmcr.network_producer_machine_controller": "Network Producer Machine Controller",
     "block.mmcr.network_center_machine_controller": "Network Center Machine Controller",
     "block.mmcr.pure_tick_machine_controller": "Pure Tick Machine Controller",
+    "block.mmcr.stateful_pure_tick_machine_controller": "Stateful Pure Tick Machine Controller",
     "block.mmcr.recipe_ticker_controller": "Recipe Ticker Controller",
     "block.mmcr.jei_recipe_machine_controller": "JEI Recipe Machine Controller",
 
@@ -60,6 +61,7 @@
     "item.mmcr.network_producer_machine_controller": "Network Producer Machine Controller",
     "item.mmcr.network_center_machine_controller": "Network Center Machine Controller",
     "item.mmcr.pure_tick_machine_controller": "Pure Tick Machine Controller",
+    "item.mmcr.stateful_pure_tick_machine_controller": "Stateful Pure Tick Machine Controller",
     "item.mmcr.recipe_ticker_controller": "Recipe Ticker Controller",
     "item.mmcr.jei_recipe_machine_controller": "JEI Recipe Machine Controller",
 
@@ -77,8 +79,16 @@
     "machine.mmcr.network_producer_machine": "Network Producer Machine",
     "machine.mmcr.network_center_machine": "Network Center Machine",
     "machine.mmcr.pure_tick_machine": "Pure Tick Machine",
+    "machine.mmcr.stateful_pure_tick_machine": "Stateful Pure Tick Machine",
     "machine.mmcr.recipe_ticker": "Recipe Ticker",
     "machine.mmcr.jei_recipe_machine": "JEI Recipe Machine",
+
+    "gui.mmcr_test.stateful_pure_tick.needs_energy": "Needs 10 FE",
+    "gui.mmcr_test.stateful_pure_tick.needs_iron": "Waiting for an iron ingot",
+    "gui.mmcr_test.stateful_pure_tick.energy_error": "Could not consume energy",
+    "gui.mmcr_test.stateful_pure_tick.powered": "Consumed 10 FE",
+    "gui.mmcr_test.stateful_pure_tick.converted": "Converted an iron ingot into a gold nugget",
+    "gui.mmcr_test.stateful_pure_tick.completed_batches": "Batches completed this session: %s",
 
     "level.mmcr.thermal_smelting_coil": "Coil",
 
@@ -110,6 +120,7 @@
     "recipe_pool.mmcr.space_2": "Pool For Test 2",
     "recipe_pool.mmcr.space_3": "Long Name Pool For Test 3",
     "recipe_pool.mmcr.monster_farm": "Monster Farm",
+    "recipe_pool.mmcr.stateful_pure_tick_machine": "Stateful Pure Tick Machine",
     "recipe_pool.mmcr.recipe_ticker": "Recipe Ticker",
     "recipe_pool.mmcr.jei_recipe_machine": "JEI Recipe Matrix",
 

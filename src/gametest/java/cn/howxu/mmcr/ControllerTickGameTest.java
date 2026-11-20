@@ -403,6 +403,57 @@ public class ControllerTickGameTest {
         helper.succeed();
     }
 
+    public void statefulExampleCountsCommittedBatchesPerController(GameTestHelper helper) {
+        var firstPos = new BlockPos(2, 2, 3);
+        var secondPos = firstPos.above(4);
+        var first = placeStatefulExample(helper, firstPos);
+        var second = placeStatefulExample(helper, secondPos);
+        var firstInput = helper.<ItemInputBusBlockEntity>getBlockEntity(firstPos.west()).nativeItemHandler();
+        var secondInput = helper.<ItemInputBusBlockEntity>getBlockEntity(secondPos.west()).nativeItemHandler();
+        var firstOutput = helper.<ItemOutputBusBlockEntity>getBlockEntity(firstPos.east()).nativeItemHandler();
+        var secondOutput = helper.<ItemOutputBusBlockEntity>getBlockEntity(secondPos.east()).nativeItemHandler();
+        insert(firstInput, 0, new ItemStack(Items.IRON_INGOT));
+
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(showsBatches(first, 1) && showsBatches(second, 0),
+                        "Only the controller supplied with iron counts a conversion"))
+                .thenExecute(() -> {
+                    helper.assertTrue(count(firstOutput, Items.GOLD_NUGGET) == 1 && count(secondOutput, Items.GOLD_NUGGET) == 0,
+                            "The displayed batch counts match actual outputs");
+                    insert(firstInput, 0, new ItemStack(Items.IRON_INGOT));
+                    insert(secondInput, 0, new ItemStack(Items.IRON_INGOT));
+                })
+                .thenWaitUntil(() -> helper.assertTrue(showsBatches(first, 2) && showsBatches(second, 1),
+                        "Both controllers retain their own batch count"))
+                .thenExecute(() -> helper.assertTrue(count(firstOutput, Items.GOLD_NUGGET) == 2
+                                && count(secondOutput, Items.GOLD_NUGGET) == 1,
+                        "Each subsequent batch produced one more nugget"))
+                .thenSucceed();
+    }
+
+    private static MachineControllerBlockEntity placeStatefulExample(GameTestHelper helper, BlockPos origin) {
+        ResourceLocation id = MMCR.id("stateful_pure_tick_machine");
+        Machine machine = MachineRegistry.getMachine(id);
+        helper.assertTrue(machine != null, "Built-in provider registers the stateful example");
+        machine.pattern().symbolsByPosition().forEach((relative, symbol) -> {
+            if (symbol == 'X') helper.setBlock(origin.offset(relative), Blocks.GREEN_TERRACOTTA);
+            if (symbol == 'A') helper.setBlock(origin.offset(relative), Blocks.GREEN_WOOL);
+        });
+        helper.setBlock(origin.west(), ModBlocks.BLOCKS.get("item_input_bus").get());
+        helper.setBlock(origin.east(), ModBlocks.BLOCKS.get("item_output_bus").get());
+        BlockPos energyPos = origin.north().west();
+        helper.setBlock(energyPos, ModBlocks.BLOCKS.get("energy_input_hatch").get());
+        helper.<EnergyInputHatchBlockEntity>getBlockEntity(energyPos).energyStorage().setAmount(1_000);
+        helper.setBlock(origin, ModBlocks.controllerFor(id).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        return helper.getBlockEntity(origin);
+    }
+
+    private static boolean showsBatches(MachineControllerBlockEntity controller, long batches) {
+        Component expected = Component.translatable("gui.mmcr_test.stateful_pure_tick.completed_batches", batches);
+        return screenTextSnapshot(controller).lines().stream().anyMatch(line -> line.text().equals(expected));
+    }
+
     public void formedTickCommitsPartialOutputAndDataAtomically(GameTestHelper helper) {
         ResourceLocation machineId = MMCR.id("task7_tick_io");
         BlockPos controllerPos = new BlockPos(3, 1, 3);
