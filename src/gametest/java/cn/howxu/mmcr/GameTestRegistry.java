@@ -229,6 +229,8 @@ public final class GameTestRegistry {
                 helper -> new UpgradeBusGameTest().optionalBusesPreserveActiveRecipe(helper));
         register(event, "controller_tick_recipe_hooks", 100,
                 helper -> new ControllerTickGameTest().recipeMachineHooksPublishTextAndRespectRedstone(helper));
+        register(event, "stateful_pure_tick_example", 200,
+                helper -> new ControllerTickGameTest().statefulExampleCountsCommittedBatchesPerController(helper));
         register(event, "controller_tick_partial_io", 100,
                 helper -> new ControllerTickGameTest().formedTickCommitsPartialOutputAndDataAtomically(helper));
         register(event, "data_storage_pure_tick", 100,
