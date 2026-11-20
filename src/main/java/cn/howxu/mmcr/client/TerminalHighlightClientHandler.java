@@ -94,6 +94,9 @@ public final class TerminalHighlightClientHandler {
             MultiblockDetectorSelectionRenderer.renderRegionMask(pose, buffers.getBuffer(RenderType.debugFilledBox()), camera,
                     mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ);
             buffers.endBatch(RenderType.debugFilledBox());
+            MultiblockDetectorSelectionRenderer.renderBoxEdges(pose.last(), buffers.getBuffer(RenderType.lines()), camera,
+                    mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ);
+            buffers.endBatch(RenderType.lines());
         }
     }
 

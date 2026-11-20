@@ -86,7 +86,7 @@ public final class MultiblockDetectorSelectionRenderer {
         return off.is(ModItems.MULTIBLOCK_DETECTOR.get()) ? off : ItemStack.EMPTY;
     }
 
-    private static void renderBoxEdges(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
+    static void renderBoxEdges(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera,
             double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
         line(pose, buffer, camera, minX, minY, minZ, maxX, minY, minZ);
         line(pose, buffer, camera, minX, minY, maxZ, maxX, minY, maxZ);
