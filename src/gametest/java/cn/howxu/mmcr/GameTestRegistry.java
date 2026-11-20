@@ -167,6 +167,8 @@ public final class GameTestRegistry {
             register(event, "input_isolation_chemical_shared_heat", 20, InputIsolationGameTest::chemicalIsolationStillSharesHeatAndEnergy);
         }
         if (ModList.get().isLoaded("kubejs")) {
+            register(event, "status_blocks_recipe_and_shared_cleanup", 250, StatusBlockGameTest::recipeAndSharedCleanup);
+            register(event, "status_blocks_do_not_load_chunks", 100, StatusBlockGameTest::doesNotLoadChunks);
             register(event, "startup_kubejs_registry_references", 20,
                     StartupRegistryReferenceGameTest::kubejsReferencesResolveAfterRegistryCallbacks);
         }

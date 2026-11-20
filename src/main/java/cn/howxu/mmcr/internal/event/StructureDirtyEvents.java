@@ -6,6 +6,7 @@ import cn.howxu.mmcr.internal.tile.ModuleCouplerBlockEntity;
 
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue;
+import cn.howxu.mmcr.internal.multiblock.StatusBlockCoordinator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -65,6 +66,7 @@ public final class StructureDirtyEvents {
                 && serverLevel.getServer().isCurrentlySaving()) return;
         MachineControllerBlockEntity.markStructureChunkUnloaded(event.getLevel(), event.getChunk().getPos());
         if (event.getLevel() instanceof ServerLevel serverLevel) {
+            StatusBlockCoordinator.get(serverLevel).chunkUnloaded(event.getChunk().getPos());
             ModuleConnectionCoordinator.enqueueCouplersInChunk(
                     serverLevel, event.getChunk().getPos());
         }
@@ -75,6 +77,7 @@ public final class StructureDirtyEvents {
                 && serverLevel.getServer().isCurrentlySaving()) return;
         MachineControllerBlockEntity.markStructureChunkDirty(event.getLevel(), event.getChunk().getPos());
         if (event.getLevel() instanceof ServerLevel serverLevel) {
+            StatusBlockCoordinator.get(serverLevel).chunkLoaded(event.getChunk().getPos());
             ModuleConnectionCoordinator.enqueueCouplersInChunk(
                     serverLevel, event.getChunk().getPos());
         }

@@ -1,0 +1,6 @@
+{
+    "parent": "minecraft:block/cube_all",
+    "textures": {
+        "all": "kubejs:block/machine_coil_cupronickel/particle_bloom"
+    }
+}

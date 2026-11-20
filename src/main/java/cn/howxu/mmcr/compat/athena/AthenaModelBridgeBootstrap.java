@@ -29,9 +29,13 @@ public final class AthenaModelBridgeBootstrap {
         return athenaLoaded ? loadLoadedBridge() : UnavailableAthenaModelBridge.INSTANCE;
     }
 
-    private static AthenaModelBridge load() {
+    static boolean isAthenaLoaded() {
         ModList mods = ModList.get();
-        return mods != null && mods.isLoaded(ATHENA_MOD_ID) ? loadLoadedBridge() : UnavailableAthenaModelBridge.INSTANCE;
+        return mods != null && mods.isLoaded(ATHENA_MOD_ID);
+    }
+
+    private static AthenaModelBridge load() {
+        return isAthenaLoaded() ? loadLoadedBridge() : UnavailableAthenaModelBridge.INSTANCE;
     }
 
     private static AthenaModelBridge loadLoadedBridge() {

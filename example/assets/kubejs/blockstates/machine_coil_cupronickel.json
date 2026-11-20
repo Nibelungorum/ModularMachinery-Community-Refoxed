@@ -1,15 +1,68 @@
 {
+    "neoforge:definition_type": "mmcr:athena_variants",
     "variants": {
-        "": {
+        "lit=false": {
             "model": "kubejs:block/machine_coil_cupronickel"
+        },
+        "lit=true": {
+            "type": "neoforge:composite",
+            "models": [
+                { "model": "kubejs:block/machine_coil_cupronickel" },
+                {
+                    "type": "mmcr:emissive_overlay",
+                    "light_emission": 15,
+                    "shade": false,
+                    "model": { "model": "kubejs:block/machine_coil_cupronickel_bloom" }
+                }
+            ]
         }
     },
-    "athena:loader": "athena:ctm",
-    "ctm_textures": {
-        "center": "kubejs:block/machine_coil_cupronickel/center",
-        "empty": "kubejs:block/machine_coil_cupronickel/empty",
-        "horizontal": "kubejs:block/machine_coil_cupronickel/horizontal",
-        "particle": "kubejs:block/machine_coil_cupronickel/particle",
-        "vertical": "kubejs:block/machine_coil_cupronickel/vertical"
+    "athena_variants": {
+        "lit=false": {
+            "type": "athena:athena",
+            "athena:loader": "athena:ctm",
+            "connect_to": { "type": "sameBlock" },
+            "ctm_textures": {
+                "center": "kubejs:block/machine_coil_cupronickel/center",
+                "empty": "kubejs:block/machine_coil_cupronickel/empty",
+                "horizontal": "kubejs:block/machine_coil_cupronickel/horizontal",
+                "particle": "kubejs:block/machine_coil_cupronickel/particle",
+                "vertical": "kubejs:block/machine_coil_cupronickel/vertical"
+            }
+        },
+        "lit=true": {
+            "type": "neoforge:composite",
+            "models": [
+                {
+                    "type": "athena:athena",
+                    "athena:loader": "athena:ctm",
+                    "connect_to": { "type": "sameBlock" },
+                    "ctm_textures": {
+                        "center": "kubejs:block/machine_coil_cupronickel/center",
+                        "empty": "kubejs:block/machine_coil_cupronickel/empty",
+                        "horizontal": "kubejs:block/machine_coil_cupronickel/horizontal",
+                        "particle": "kubejs:block/machine_coil_cupronickel/particle",
+                        "vertical": "kubejs:block/machine_coil_cupronickel/vertical"
+                    }
+                },
+                {
+                    "type": "mmcr:emissive_overlay",
+                    "light_emission": 15,
+                    "shade": false,
+                    "model": {
+                        "type": "athena:athena",
+                        "athena:loader": "athena:ctm",
+                        "connect_to": { "type": "sameBlock" },
+                        "ctm_textures": {
+                            "center": "kubejs:block/machine_coil_cupronickel/center_bloom",
+                            "empty": "kubejs:block/machine_coil_cupronickel/empty_bloom",
+                            "horizontal": "kubejs:block/machine_coil_cupronickel/horizontal_bloom",
+                            "particle": "kubejs:block/machine_coil_cupronickel/particle_bloom",
+                            "vertical": "kubejs:block/machine_coil_cupronickel/vertical_bloom"
+                        }
+                    }
+                }
+            ]
+        }
     }
 }

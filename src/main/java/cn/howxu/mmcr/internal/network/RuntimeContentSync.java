@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.network;
 
+import cn.howxu.mmcr.internal.multiblock.StatusBlockCoordinator;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.internal.registration.RuntimeContentCoordinator;
 import net.minecraft.server.MinecraftServer;
@@ -32,7 +33,9 @@ public final class RuntimeContentSync {
         if (event.getPlayer() != null) {
             sendTo(event.getPlayer());
         } else {
-            sendToAll(event.getPlayerList().getServer());
+            var server = event.getPlayerList().getServer();
+            server.getAllLevels().forEach(level -> StatusBlockCoordinator.get(level).reload());
+            sendToAll(server);
         }
     }
 

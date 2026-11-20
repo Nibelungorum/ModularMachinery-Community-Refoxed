@@ -3,6 +3,9 @@ StartupEvents.registry('block', event => {
         .displayName('隔热殷钢机械方块')
 
     event.create('machine_coil_cupronickel')
+        .property(BlockProperties.LIT)
+        .defaultState(s => s.set(BlockProperties.LIT, false))
+        .tagBlock(['mmcr:status_block'])
         .displayName('白铜线圈方块')
 })
 
