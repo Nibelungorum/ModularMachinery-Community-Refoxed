@@ -1,0 +1,9 @@
+{
+    "model": {
+        "type": "minecraft:composite",
+        "models": [
+            { "type": "minecraft:model", "model": "mmcr:block/basic_casing" },
+            { "type": "minecraft:model", "model": "mmcr:block/decoration/vent" }
+        ]
+    }
+}

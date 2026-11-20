@@ -28,6 +28,7 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class StatusBlockGameTest {
+    static final Identifier DECORATIVE_MACHINE = MMCR.id("decorative_casing_fixture");
     private static final Identifier MACHINE = Identifier.parse("mmcr_test:status_fixture");
 
     public static void recipeAndSharedCleanup(GameTestHelper helper) {
@@ -71,6 +72,40 @@ public final class StatusBlockGameTest {
                 }).thenWaitUntil(() -> helper.assertTrue(right.controller.structureSnapshot().formed() && lit(helper, shared)
                                 && !lit(helper, right.passive) && helper.getBlockState(shared).getLightEmission() == 0,
                         "Reformation rebuilds the index without creating a world light source"))
+                .thenSucceed();
+    }
+
+    public static void decorativeCasingsFollowRecipe(GameTestHelper helper) {
+        var origin = new BlockPos(3, 2, 3);
+        var shape = MachineRegistry.getCompiledStages(DECORATIVE_MACHINE).getFirst().rotatedPattern(Direction.SOUTH);
+        shape.pattern().forEach((relative, predicate) -> {
+            if (!relative.equals(BlockPos.ZERO)) {
+                var state = predicate.preferredState().orElseThrow();
+                helper.assertTrue(state.is(ModBlocks.BASIC_CASING_CTM), "All five casing backgrounds must connect");
+                helper.setBlock(origin.offset(relative), state);
+            }
+        });
+        var members = List.of(origin.offset(offset(shape, 'G')), origin.offset(offset(shape, 'A')), origin.offset(offset(shape, 'F')));
+        var vent = origin.offset(offset(shape, 'V'));
+        var staticVent = helper.getBlockState(vent);
+        helper.assertTrue(!staticVent.hasProperty(BlockStateProperties.LIT) && !staticVent.is(ModBlocks.STATUS_BLOCK),
+                "The vent participates in CTM but not in activity changes");
+        helper.assertTrue(members.stream().noneMatch(pos -> lit(helper, pos)), "New decorations are idle");
+        helper.setBlock(origin, ModBlocks.controllerFor(DECORATIVE_MACHINE).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        var controller = helper.getBlockEntity(origin, MachineControllerBlockEntity.class);
+        RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(MMCR.id("decorative_casing_visual_test"), DECORATIVE_MACHINE,
+                600, List.of(), List.of(), List.of(), 0, 1, false, false, false, Set.of()));
+
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(members.stream().allMatch(pos ->
+                        lit(helper, pos) && helper.getBlockState(pos).getLightEmission() == 0),
+                "A running recipe animates all three decorations without producing block light"))
+                .thenExecute(() -> helper.setBlock(origin.south(), Blocks.LEVER.defaultBlockState()
+                        .setValue(LeverBlock.FACE, AttachFace.WALL).setValue(LeverBlock.FACING, Direction.SOUTH)
+                        .setValue(LeverBlock.POWERED, true)))
+                .thenWaitUntil(() -> helper.assertTrue(controller.isRedstonePaused() && controller.structureSnapshot().formed()
+                                && members.stream().noneMatch(pos -> lit(helper, pos)) && helper.getBlockState(vent) == staticVent,
+                        "Pausing leaves the structure formed, restores the idle decorations and does not change the vent"))
                 .thenSucceed();
     }
 

@@ -172,6 +172,7 @@ public final class GameTestRegistry {
             register(event, "startup_kubejs_registry_references", 20,
                     StartupRegistryReferenceGameTest::kubejsReferencesResolveAfterRegistryCallbacks);
         }
+        register(event, "decorative_casings_follow_recipe", 200, StatusBlockGameTest::decorativeCasingsFollowRecipe);
         register(event, "running_energy_admission", 20, RunningRecipeGameTest::ordinaryEnergyChargesOnlyRecipeTicks);
         register(event, "running_installed_fluid_probability", 20, RunningRecipeGameTest::installedFluidProbabilityAttempts);
         register(event, "running_mixed_input_rollback", 20, RunningRecipeGameTest::mixedInputCommitRollsBackAfterEnergyChanges);
@@ -639,6 +640,7 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
+        event.registerMachine(MachineBuilder.machine(StatusBlockGameTest.DECORATIVE_MACHINE).build());
         event.registerMachine(MachineBuilder.machine(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE)
                 .displayNameKey("machine.mmcr_test.controller_placement_required_vertical")
                 .controller(controller -> controller.requireVerticalFacing()).build());
@@ -696,6 +698,15 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineStructures(StructureRegistration event) {
+        event.registerStructure(StatusBlockGameTest.DECORATIVE_MACHINE, structure -> structure.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("GACFVB")
+                        .where('G', BlockPredicate.deferredBlock(ModBlocks.GEARBOX))
+                        .where('A', BlockPredicate.deferredBlock(ModBlocks.AIR_INTAKE))
+                        .where('C', BlockPredicate.deferredBlock(() -> ModBlocks.controllerFor(StatusBlockGameTest.DECORATIVE_MACHINE).get()))
+                        .where('F', BlockPredicate.deferredBlock(ModBlocks.COMBUSTION_CHAMBER))
+                        .where('V', BlockPredicate.deferredBlock(ModBlocks.VENT))
+                        .where('B', BlockPredicate.deferredBlock(ModBlocks.BASIC_CASING))
+                        .controller('C'))));
         event.registerStructure(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE,
                 structure -> structure.fullStructure(stage -> stage.pattern(pattern -> pattern.layer("C")
                         .where('C', BlockPredicate.deferredBlock(

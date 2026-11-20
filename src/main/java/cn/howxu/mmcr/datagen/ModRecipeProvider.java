@@ -24,11 +24,13 @@ import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.data.recipes.RecipeProvider;
 import net.minecraft.data.recipes.ShapedRecipeBuilder;
 import net.minecraft.data.recipes.ShapelessRecipeBuilder;
+import net.minecraft.data.recipes.SingleItemRecipeBuilder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.conditions.ICondition;
@@ -36,6 +38,7 @@ import net.neoforged.neoforge.common.conditions.ModLoadedCondition;
 import net.neoforged.neoforge.common.Tags;
 
 import java.util.Arrays;
+import java.util.List;
 
 public final class ModRecipeProvider extends RecipeProvider {
     private final HolderGetter<Item> items;
@@ -66,6 +69,12 @@ public final class ModRecipeProvider extends RecipeProvider {
                 .define('X', ModItems.MODULARIUM.get())
                 .define('A', Tags.Items.STORAGE_BLOCKS_REDSTONE)
                 .save(output);
+
+        for (var decoration : List.of(ModBlocks.GEARBOX, ModBlocks.AIR_INTAKE, ModBlocks.COMBUSTION_CHAMBER, ModBlocks.VENT)) {
+            SingleItemRecipeBuilder.stonecutting(Ingredient.of(ModBlocks.BASIC_CASING.get()), RecipeCategory.DECORATIONS, decoration.get(), 1)
+                    .unlockedBy("has_basic_casing", has(ModBlocks.BASIC_CASING.get()))
+                    .save(output);
+        }
 
         ItemLike previous = ModItems.ITEMS.get("item_input_bus_tiny").get();
         shaped(previous, 1)

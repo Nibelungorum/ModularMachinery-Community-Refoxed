@@ -3,6 +3,7 @@ package cn.howxu.mmcr.registry;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
+import cn.howxu.mmcr.internal.block.ActiveCasingBlock;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -20,6 +21,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -27,18 +29,24 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.LinkedHashMap;
 import java.util.Collection;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public final class ModBlocks {
 
+    public static final TagKey<Block> BASIC_CASING_CTM = TagKey.create(Registries.BLOCK, MMCR.id("basic_casing_ctm"));
     public static final TagKey<Block> STATUS_BLOCK = TagKey.create(Registries.BLOCK, MMCR.id("status_block"));
     public static final DeferredRegister.Blocks REGISTER = DeferredRegister.createBlocks(MMCR.MODID);
 
     public static final LinkedHashMap<String, DeferredHolder<Block, Block>> BLOCKS = new LinkedHashMap<>();
 
+    public static final DeferredHolder<Block, Block> BASIC_CASING = registerCasing("basic_casing", MachineCasingBlock::new);
+    public static final DeferredHolder<Block, Block> GEARBOX = registerCasing("gearbox", ActiveCasingBlock::new);
+    public static final DeferredHolder<Block, Block> AIR_INTAKE = registerCasing("air_intake", ActiveCasingBlock::new);
+    public static final DeferredHolder<Block, Block> COMBUSTION_CHAMBER = registerCasing("combustion_chamber", ActiveCasingBlock::new);
+    public static final DeferredHolder<Block, Block> VENT = registerCasing("vent", MachineCasingBlock::new);
+
     static {
-        BLOCKS.put("basic_casing", REGISTER.registerBlock("basic_casing", MachineCasingBlock::new,
-                properties -> properties.mapColor(MapColor.METAL)));
         PortKinds.all().forEach(ModBlocks::registerIoPort);
         PortDefinitionRegistry.freeze();
         for (ParallelTier tier : ParallelTier.values()) registerParallelController(tier);
@@ -50,7 +58,6 @@ public final class ModBlocks {
         for (UpgradeBusSize size : UpgradeBusSize.values()) registerUpgradeBus(size);
     }
 
-    public static final DeferredHolder<Block, Block> BASIC_CASING = BLOCKS.get("basic_casing");
     public static final DeferredHolder<Block, Block> SMART_INTERFACE = BLOCKS.get("smart_interface");
     public static final DeferredHolder<Block, Block> DATA_STORAGE = BLOCKS.get("data_storage");
     public static final DeferredHolder<Block, Block> NETWORK_INTERFACE = BLOCKS.get("network_interface");
@@ -59,6 +66,12 @@ public final class ModBlocks {
 
     /** Compatibility alias for {@link #BASIC_CASING}; the block id was renamed from {@code casing} to {@code basic_casing}. */
     public static final DeferredHolder<Block, Block> CASING = BASIC_CASING;
+
+    private static DeferredHolder<Block, Block> registerCasing(String name, Function<BlockBehaviour.Properties, Block> factory) {
+        var block = REGISTER.registerBlock(name, factory, properties -> properties.mapColor(MapColor.METAL));
+        BLOCKS.put(name, block);
+        return block;
+    }
 
     private static void registerMachineController(Identifier machineId) {
         String name = MachineControllerSpec.defaultsFor(machineId).id().getPath();

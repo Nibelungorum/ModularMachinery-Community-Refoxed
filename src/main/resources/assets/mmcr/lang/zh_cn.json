@@ -32,6 +32,10 @@
   "pack.mmcr.arrow_interfaces_resource": "MMCR AE2 箭头接口",
 
   "block.mmcr.basic_casing": "基础机器外壳",
+  "block.mmcr.gearbox": "齿轮箱",
+  "block.mmcr.air_intake": "进气口",
+  "block.mmcr.combustion_chamber": "燃烧室",
+  "block.mmcr.vent": "通风口",
 
   "block.mmcr.energy_input_hatch_tiny": "微型能量输入仓",
   "block.mmcr.energy_input_hatch_small": "小型能量输入仓",
@@ -449,6 +453,10 @@
   "gui.mmcr.factory.thread_parallelism": "并行数: %s",
   "gui.mmcr.factory.thread_progress": "进度: %s / %s (%s)",
   "item.mmcr.basic_casing": "基础机器外壳",
+  "item.mmcr.gearbox": "齿轮箱",
+  "item.mmcr.air_intake": "进气口",
+  "item.mmcr.combustion_chamber": "燃烧室",
+  "item.mmcr.vent": "通风口",
   "item.mmcr.appflux_me_flux_input_interface": "ME通量输入接口",
   "item.mmcr.appflux_me_flux_output_interface": "ME通量输出接口",
   "item.mmcr.blueprint": "蓝图",
