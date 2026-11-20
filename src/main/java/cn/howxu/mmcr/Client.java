@@ -5,6 +5,7 @@ import cn.howxu.mmcr.publicapi.event.RegisterControllerUisEvent;
 import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.internal.api.facade.client.UiClientAdapters;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
+import cn.howxu.mmcr.compat.athena.AthenaModelBridgeBootstrap;
 import cn.howxu.mmcr.compat.extendedae.ExtendedAEContributorBootstrap;
 import cn.howxu.mmcr.compat.mekanism.MekanismBridge;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
@@ -80,6 +81,7 @@ public class Client {
         modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         modBus.addListener(Client::registerMenuScreens);
         modBus.addListener(Client::registerModelLoaders);
+        modBus.addListener(AthenaModelBridgeBootstrap::registerGeometryLoader);
         modBus.addListener(Client::registerItemModels);
         modBus.addListener(Client::registerMachineRenderers);
         // modBus.addListener(ArtificialStarRenderer::registerModel);

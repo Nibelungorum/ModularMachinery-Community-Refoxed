@@ -1,6 +1,14 @@
 {
     "parent": "minecraft:block/cube_all",
-    "textures": {
-        "all": "kubejs:block/machine_coil_cupronickel/particle_bloom"
+    "textures": { "all": "kubejs:block/machine_coil_cupronickel/particle_bloom" },
+    "loader": { "id": "mmcr:athena", "optional": true },
+    "athena:loader": "athena:ctm",
+    "connect_to": { "type": "sameBlock" },
+    "ctm_textures": {
+        "center": "kubejs:block/machine_coil_cupronickel/center_bloom",
+        "empty": "kubejs:block/machine_coil_cupronickel/empty_bloom",
+        "horizontal": "kubejs:block/machine_coil_cupronickel/horizontal_bloom",
+        "particle": "kubejs:block/machine_coil_cupronickel/particle_bloom",
+        "vertical": "kubejs:block/machine_coil_cupronickel/vertical_bloom"
     }
 }

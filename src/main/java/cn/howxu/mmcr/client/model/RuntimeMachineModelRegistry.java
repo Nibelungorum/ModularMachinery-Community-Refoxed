@@ -3,7 +3,6 @@ package cn.howxu.mmcr.client.model;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
-import cn.howxu.mmcr.compat.athena.AthenaVariantsDefinition;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
 import cn.howxu.mmcr.internal.block.FactorySchedulerBlock;
 import cn.howxu.mmcr.internal.block.IOPortBlock;
@@ -50,7 +49,6 @@ public final class RuntimeMachineModelRegistry {
         event.registerModel(DynamicOverlayModelLoader.CONTROLLER_ID, DynamicOverlayModelLoader.CONTROLLER_CODEC);
         event.registerModel(DynamicOverlayModelLoader.PORT_ID, DynamicOverlayModelLoader.PORT_CODEC);
         event.registerModel(MMCR.id("emissive_overlay"), EmissiveOverlayModel.Unbaked.CODEC);
-        event.registerDefinition(MMCR.id("athena_variants"), AthenaVariantsDefinition.CODEC);
     }
 
     public static void registerItemModels(RegisterItemModelsEvent event) {

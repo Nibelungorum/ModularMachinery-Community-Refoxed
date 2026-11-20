@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.athena",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "SingleVariantMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

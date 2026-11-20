@@ -23,6 +23,10 @@ config="mixins/mmcr.mixins.json"
 config="mixins/mmcr.ui.mixins.json"
 
 [[mixins]]
+config="mixins/extras/mmcr.athena.mixins.json"
+requiredMods=["athena"]
+
+[[mixins]]
 config="mixins/extras/mmcr.jei.mixins.json"
 requiredMods=["jei"]
 

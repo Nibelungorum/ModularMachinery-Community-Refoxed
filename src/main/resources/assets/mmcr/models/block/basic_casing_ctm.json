@@ -1,0 +1,13 @@
+{
+    "parent": "mmcr:block/basic_casing",
+    "loader": { "id": "mmcr:athena", "optional": true },
+    "athena:loader": "athena:ctm",
+    "connect_to": { "type": "tag", "tag": "mmcr:basic_casing_ctm" },
+    "ctm_textures": {
+        "center": "mmcr:block/ctm/basic_casing/center",
+        "empty": "mmcr:block/ctm/basic_casing/empty",
+        "horizontal": "mmcr:block/ctm/basic_casing/horizontal",
+        "particle": "mmcr:block/ctm/basic_casing/particle",
+        "vertical": "mmcr:block/ctm/basic_casing/vertical"
+    }
+}

@@ -1,6 +1,8 @@
 package cn.howxu.mmcr.compat.athena;
 
+import cn.howxu.mmcr.compat.athena.loaded.AthenaGeometryModel;
 import net.neoforged.fml.ModList;
+import net.neoforged.neoforge.client.event.ModelEvent;
 
 /**
  * Lazily selects the optional Athena bridge without linking its implementation early.
@@ -29,7 +31,11 @@ public final class AthenaModelBridgeBootstrap {
         return athenaLoaded ? loadLoadedBridge() : UnavailableAthenaModelBridge.INSTANCE;
     }
 
-    static boolean isAthenaLoaded() {
+    public static void registerGeometryLoader(ModelEvent.RegisterLoaders event) {
+        if (isAthenaLoaded()) AthenaGeometryModel.register(event);
+    }
+
+    private static boolean isAthenaLoaded() {
         ModList mods = ModList.get();
         return mods != null && mods.isLoaded(ATHENA_MOD_ID);
     }
