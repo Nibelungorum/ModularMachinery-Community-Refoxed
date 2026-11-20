@@ -1,0 +1,13 @@
+{
+    "parent": "kubejs:block/machine_coil_cupronickel",
+    "loader": { "id": "athena:athena", "optional": true },
+    "athena:loader": "athena:ctm",
+    "connect_to": { "type": "sameBlock" },
+    "ctm_textures": {
+        "center": "kubejs:block/machine_coil_cupronickel/center",
+        "empty": "kubejs:block/machine_coil_cupronickel/empty",
+        "horizontal": "kubejs:block/machine_coil_cupronickel/horizontal",
+        "particle": "kubejs:block/machine_coil_cupronickel/particle",
+        "vertical": "kubejs:block/machine_coil_cupronickel/vertical"
+    }
+}

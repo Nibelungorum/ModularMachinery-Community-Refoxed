@@ -65,6 +65,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionStatus;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SmartInterfaceBindingCoordinator;
 import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.internal.multiblock.StatusBlockCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.network.PktMachineStatePayload;
 import cn.howxu.mmcr.internal.network.MachineReferenceHasher;
@@ -1195,8 +1196,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean before = physicalFormed();
         StructureSnapshot current = currentStructureSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded(current), f, current.configuredMachine(), current.matchedStage());
-        if (f) registerFormedController();
-        else {
+        if (f) {
+            registerFormedController();
+            if (level instanceof ServerLevel server && current.pattern() != null) {
+                StatusBlockCoordinator.get(server).formed(worldPosition, current.pattern(), getBlockState().getValue(MachineControllerBlock.ACTIVE), false);
+            }
+        } else {
+            if (level instanceof ServerLevel server) StatusBlockCoordinator.get(server).remove(worldPosition);
             unregisterFormedController();
             runtime.clearAllText();
         }
@@ -1337,7 +1343,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.requestStructureCheck(StructureRuntime.CheckReason.DIRTY_EVENT);
         publishStructureWork(state -> state.withPendingInvalidation(state.scan() != null)
                 .withComponentRefreshRequired(true));
-        if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
+        if (level instanceof ServerLevel serverLevel) {
+            StatusBlockCoordinator.get(serverLevel).membersChanged(serverLevel, worldPosition, changedPositions);
+            ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
+        }
         setChanged();
         publishRuntimeState();
     }
@@ -3312,6 +3321,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             boolean structureChanged = runtime.publishFormationState(matchedMachine, rotatedPattern, compiledPattern,
                     facing, rollFacing, compiledPattern == null ? 1 : compiledPattern.stageNumber());
 
+            if (level instanceof ServerLevel serverLevel) {
+                StatusBlockCoordinator.get(serverLevel).formed(worldPosition, rotatedPattern,
+                        getBlockState().getValue(MachineControllerBlock.ACTIVE), structureChanged);
+            }
             boolean refreshComponents = !previousStructure.formed() || structureChanged
                     || previousWork.componentRefreshRequired() || !topologyPreviouslyReady;
             if (!refreshComponents) {
@@ -3977,7 +3990,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void pauseActiveForUnloadedStructure() {
         releaseStressContributions();
-        if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
+        if (level instanceof ServerLevel serverLevel) {
+            StatusBlockCoordinator.get(serverLevel).remove(worldPosition);
+            invalidateAsyncLifecycle(serverLevel);
+        }
         stopFactoryController();
         if (!runtime.craftingRuntime().active()) {
             syncRuntimeStateIfChanged();
@@ -4045,6 +4061,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtimeTopologyReady = false;
         releaseStressContributions();
         if (level instanceof ServerLevel serverLevel) {
+            StatusBlockCoordinator.get(serverLevel).remove(worldPosition);
             invalidateAsyncLifecycle(serverLevel);
         }
         StructureSnapshot structure = runtime.currentStructureSnapshot();
@@ -4986,6 +5003,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (level == null || level.isClientSide() || isRemoved()) return;
         if (getBlockState().getValue(MachineControllerBlock.ACTIVE) != activeState) {
             level.setBlock(getBlockPos(), getBlockState().setValue(MachineControllerBlock.ACTIVE, activeState), 3);
+            if (level instanceof ServerLevel serverLevel) StatusBlockCoordinator.get(serverLevel).target(worldPosition, activeState);
         }
     }
 
@@ -5047,7 +5065,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
     @Override
     public void onChunkUnloaded() {
         if (level != null && !level.isClientSide()) releaseStressContributions();
-        if (level instanceof ServerLevel serverLevel) invalidateAsyncLifecycle(serverLevel);
+        if (level instanceof ServerLevel serverLevel) {
+            StatusBlockCoordinator.get(serverLevel).remove(worldPosition);
+            invalidateAsyncLifecycle(serverLevel);
+        }
         ControllerSyncEvents.forgetController(this);
         trackingObservers.clear();
         menuObservers.clear();

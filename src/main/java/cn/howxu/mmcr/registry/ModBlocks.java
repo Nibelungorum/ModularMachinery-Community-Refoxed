@@ -15,7 +15,9 @@ import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.api.port.PortDefinitionRegistry;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -30,6 +32,7 @@ import java.util.function.Supplier;
 
 public final class ModBlocks {
 
+    public static final TagKey<Block> STATUS_BLOCK = TagKey.create(Registries.BLOCK, MMCR.id("status_block"));
     public static final DeferredRegister.Blocks REGISTER = DeferredRegister.createBlocks(MMCR.MODID);
 
     public static final LinkedHashMap<String, DeferredHolder<Block, Block>> BLOCKS = new LinkedHashMap<>();

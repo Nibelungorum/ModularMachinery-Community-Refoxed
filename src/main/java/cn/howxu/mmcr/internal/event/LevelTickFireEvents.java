@@ -4,6 +4,7 @@ import cn.howxu.mmcr.internal.multiblock.ModuleConnectionCoordinator;
 import cn.howxu.mmcr.internal.multiblock.ModuleConnectionRefreshQueue;
 import cn.howxu.mmcr.internal.multiblock.NetworkInterfaceBindingCoordinator;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
+import cn.howxu.mmcr.internal.multiblock.StatusBlockCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -53,6 +54,7 @@ public final class LevelTickFireEvents {
         });
         IOPortBlockEntity.flushStorageChanges(level);
         async.pumpReceiptDrains();
+        StatusBlockCoordinator.get(level).tick(level);
         if (level.getServer() != null) NetworkInterfaceBindingCoordinator.heartbeat(level);
     }
 
@@ -65,6 +67,7 @@ public final class LevelTickFireEvents {
         if (event.getLevel() instanceof ServerLevel level) {
             MachineAsyncCoordinator.discard(level);
             SharedIoCoordinator.discard(level);
+            StatusBlockCoordinator.discard(level);
             ModuleConnectionRefreshQueue.discard(level);
             StructureClaimRegistry.discard(level);
             MachineControllerBlockEntity.clearFormedControllerIndex(level);

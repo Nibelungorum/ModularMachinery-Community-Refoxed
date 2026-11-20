@@ -40,6 +40,7 @@ public final class ModBlockTags extends BlockTagsProvider {
         //         .map(holder -> holder.get())
         //         .filter(block -> !(block instanceof MachineControllerBlock))
         //         .toArray(Block[]::new));
+        tag(ModBlocks.STATUS_BLOCK);
         tag(blockTag("machine_casings")).add(ModBlocks.BASIC_CASING.get());
         tag(blockTag("machines")).add(ModBlocks.BLOCKS.values().stream()
                 .map(DeferredHolder::get)

@@ -1,0 +1,12 @@
+MMCREvents.server(event => {
+    const api = event.getAPI()
+    const coil = api.block('mmcr_test:status_coil')
+    const passive = api.block('mmcr_test:passive_coil')
+    event.createStructure('mmcr_test:status_fixture')
+        .pattern('ZCS', ' P ')
+        .set('Z', coil)
+        .set('S', api.anyOf(coil, passive))
+        .set('P', passive)
+        .controller('C')
+        .build()
+})

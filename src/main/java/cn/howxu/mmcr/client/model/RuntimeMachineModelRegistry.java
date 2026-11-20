@@ -48,6 +48,7 @@ public final class RuntimeMachineModelRegistry {
     public static void registerGeometryLoaders(ModelEvent.RegisterGeometryLoaders event) {
         event.register(DynamicOverlayModelLoader.CONTROLLER_ID, DynamicOverlayModelLoader.CONTROLLER);
         event.register(DynamicOverlayModelLoader.PORT_ID, DynamicOverlayModelLoader.PORT);
+        event.register(MMCR.id("emissive_overlay"), EmissiveOverlayModel.LOADER);
     }
 
     static Stream<Block> dynamicBlocks() {
