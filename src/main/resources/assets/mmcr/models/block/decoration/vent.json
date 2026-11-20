@@ -1,0 +1,4 @@
+{
+    "parent": "mmcr:block/decoration/template",
+    "textures": { "decoration": "mmcr:block/decoration/vent" }
+}

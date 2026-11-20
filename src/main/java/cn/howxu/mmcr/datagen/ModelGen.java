@@ -3,6 +3,7 @@ package cn.howxu.mmcr.datagen;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.internal.block.DataStorageBlock;
+import cn.howxu.mmcr.internal.block.MachineCasingBlock;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.block.NetworkInterfaceBlock;
 import cn.howxu.mmcr.internal.block.UpgradeBusBlock;
@@ -16,7 +17,9 @@ import net.minecraft.data.PackOutput;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.neoforged.neoforge.client.model.generators.BlockStateProvider;
+import net.neoforged.neoforge.client.model.generators.loaders.CompositeModelBuilder;
 import net.neoforged.neoforge.common.data.ExistingFileHelper;
 
 import java.util.ArrayList;
@@ -36,6 +39,8 @@ public final class ModelGen extends BlockStateProvider {
                         ManaPortAppearance.generateModels(this, block.get(), name);
                     } else if (isCreateStressPort(name)) {
                         StressInterfaceAppearance.generateModels(this, block.get(), name);
+                    } else if (block.get() instanceof MachineCasingBlock casing) {
+                        decorativeCasing(casing, name);
                     } else {
                         var model = models().cubeAll(name, textureFor(name));
                         simpleBlockWithItem(block.get(), model);
@@ -44,6 +49,24 @@ public final class ModelGen extends BlockStateProvider {
         itemModels().withExistingParent("basic_casing", MMCR.id("block/basic_casing"));
         itemModels().withExistingParent("modular_guide", ResourceLocation.withDefaultNamespace("item/generated"))
                 .texture("layer0", MMCR.id("item/modular_guide"));
+    }
+
+    private void decorativeCasing(MachineCasingBlock block, String name) {
+        var parts = getMultipartBuilder(block);
+        parts.part().modelFile(models().getExistingFile(MMCR.id("block/basic_casing_ctm"))).addModel();
+        var overlay = MMCR.id("block/decoration/" + name);
+        var idle = models().getExistingFile(overlay);
+        var idlePart = parts.part().modelFile(idle).addModel();
+        if (block.defaultBlockState().hasProperty(BlockStateProperties.LIT)) {
+            idlePart.condition(BlockStateProperties.LIT, false);
+            parts.part().modelFile(models().getExistingFile(overlay.withSuffix("_active"))).addModel()
+                    .condition(BlockStateProperties.LIT, true);
+        }
+
+        var base = models().getExistingFile(MMCR.id("block/basic_casing"));
+        itemModels().getBuilder(name).parent(base).customLoader(CompositeModelBuilder::begin)
+                .child("base", itemModels().nested().parent(base))
+                .child("decoration", itemModels().nested().parent(idle));
     }
 
     static List<GeneratedModel> collectRegisteredModels() {

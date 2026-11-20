@@ -66,6 +66,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 
 import java.lang.reflect.Field;
@@ -143,6 +144,7 @@ public final class TestBootstrap {
         bindNetworkInterface();
         bindModuleBridge();
         bindUpgradeBuses();
+        bindDecorativeCasings();
         bind(ModItems.MULTIBLOCK_DETECTOR, registerItem(ModItems.MULTIBLOCK_DETECTOR));
         bind(ModItems.THREAD_DISPERSER, registerItem(ModItems.THREAD_DISPERSER));
         bind(ModItems.TERMINAL, registerItem(ModItems.TERMINAL));
@@ -676,13 +678,23 @@ public final class TestBootstrap {
         throw new NoSuchFieldException(name);
     }
 
+    private static void bindDecorativeCasings() throws Exception {
+        var blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        blocks.unfreeze();
+        for (var holder : List.of(ModBlocks.GEARBOX, ModBlocks.AIR_INTAKE, ModBlocks.COMBUSTION_CHAMBER, ModBlocks.VENT)) {
+            Block block = Registry.register(blocks, holder.getId(), registeredSupplier(ModBlocks.REGISTER, holder).get());
+            var item = ModItems.ITEMS.get(holder.getId().getPath());
+            Item.BY_BLOCK.put(block, registerItem(item));
+        }
+        blocks.freeze();
+    }
+
     @SuppressWarnings("unchecked")
-    private static Supplier<Item> registeredItemSupplier(DeferredHolder<Item, Item> itemHolder) throws Exception {
-        Field field = ModItems.REGISTER.getClass().getSuperclass().getDeclaredField("entries");
+    private static <T> Supplier<? extends T> registeredSupplier(DeferredRegister<T> register, DeferredHolder<T, T> holder) throws Exception {
+        Field field = DeferredRegister.class.getDeclaredField("entries");
         field.setAccessible(true);
-        Map<DeferredHolder<Item, ? extends Item>, Supplier<? extends Item>> entries =
-                (Map<DeferredHolder<Item, ? extends Item>, Supplier<? extends Item>>) field.get(ModItems.REGISTER);
-        return (Supplier<Item>) entries.get(itemHolder);
+        var entries = (Map<DeferredHolder<T, ? extends T>, Supplier<? extends T>>) field.get(register);
+        return entries.get(holder);
     }
 
     private static Item registerItem(DeferredHolder<Item, Item> itemHolder) throws Exception {
@@ -691,7 +703,7 @@ public final class TestBootstrap {
             return BuiltInRegistries.ITEM.get(itemHolder.getId());
         }
         items.unfreeze();
-        Item item = registeredItemSupplier(itemHolder).get();
+        Item item = registeredSupplier(ModItems.REGISTER, itemHolder).get();
         Registry.register(BuiltInRegistries.ITEM, itemHolder.getId(), item);
         items.freeze();
         return item;
