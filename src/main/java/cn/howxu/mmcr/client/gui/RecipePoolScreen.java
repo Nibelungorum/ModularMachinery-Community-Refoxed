@@ -6,6 +6,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -181,6 +182,10 @@ public final class RecipePoolScreen extends Screen {
         int length = value.length();
         while (length > 0 && font.width(value.substring(0, length) + suffix) > maxWidth) length--;
         return value.substring(0, length) + suffix;
+    }
+
+    public Rect2i guiBounds() {
+        return new Rect2i(left(), top(), IMAGE_WIDTH, IMAGE_HEIGHT);
     }
 
     private int left() {
