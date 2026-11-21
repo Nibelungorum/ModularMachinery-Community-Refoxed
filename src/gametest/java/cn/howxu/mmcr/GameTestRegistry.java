@@ -648,6 +648,8 @@ public final class GameTestRegistry {
         event.registerMachine(MachineBuilder.machine(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE)
                 .displayNameKey("machine.mmcr_test.controller_placement_required_vertical")
                 .controller(controller -> controller.requireVerticalFacing()).build());
+        event.registerMachine(MachineBuilder.machine(ControllerUiGameTest.NO_STRUCTURE_ID)
+                .displayNameKey("gui.mmcr.ui.test_machine").build());
         event.registerMachine(MachineBuilder.machine(ControllerUiGameTest.MACHINE_ID)
                 .displayNameKey("gui.mmcr.ui.test_machine")
                 .allowMultithreading()
