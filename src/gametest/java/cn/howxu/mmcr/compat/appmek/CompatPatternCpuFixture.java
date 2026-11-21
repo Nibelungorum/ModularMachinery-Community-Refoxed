@@ -133,6 +133,8 @@ public final class CompatPatternCpuFixture {
                                 && host.getMainNode().isActive() && cpuBlock().getCluster() != null
                                 && cpuBlock().getCluster().isActive(),
                         "Real single-lane machine, parallel hardware and native CPU become available"))
+                .thenWaitUntil(() -> helper.assertFalse(controller.hasPendingNormalThreadSearchOrStart(),
+                        "The normal recipe thread finishes its initial search before native pattern admission"))
                 .thenExecute(() -> host.getLogic().updatePatterns());
     }
 

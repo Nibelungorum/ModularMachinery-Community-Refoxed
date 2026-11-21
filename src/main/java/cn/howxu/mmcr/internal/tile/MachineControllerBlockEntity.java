@@ -517,7 +517,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                     .guard(() -> factory.patternStartCurrent(lane))
                     .afterCommit(() -> factory.rememberPatternStartedRecipe(lane));
         }
-        if (normalRecipeThread.isStartPending() || normalRecipeThread.hasPendingAsyncSearch()) {
+        if (hasPendingNormalThreadSearchOrStart()) {
             return PatternStartReservation.unavailable();
         }
         CraftingRuntime crafting = runtime.craftingRuntime();
@@ -2177,8 +2177,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private void tickSingleAsyncRecipe() {
         boolean startedThisTick = false;
-        if (!runtime.craftingRuntime().active() && !normalRecipeThread.isStartPending()
-                && !normalRecipeThread.hasPendingAsyncSearch()) {
+        if (!runtime.craftingRuntime().active() && !hasPendingNormalThreadSearchOrStart()) {
             ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
             StartResult restart = normalRecipeThread.tryRestartLastRecipe(recipesForMachine(), getMaxParallelism(),
                     snapshot.structure().version());
@@ -4366,6 +4365,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return StartResult.NO_MATCH;
         }
         return requestSharedStart(candidate, StartOrigin.LAST_RECIPE);
+    }
+
+    public boolean hasPendingNormalThreadSearchOrStart() {
+        return normalRecipeThread.isStartPending() || normalRecipeThread.hasPendingAsyncSearch();
     }
 
     public boolean hasPendingNormalRecipeStart() {
