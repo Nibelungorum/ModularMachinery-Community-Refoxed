@@ -343,17 +343,24 @@ class FactoryControllerScreenTest {
     }
 
     @Test
-    void background_draw_size_matches_the_factory_texture() throws IOException {
+    void background_and_scrollbar_fit_the_factory_texture() throws IOException {
         var background = ImageIO.read(getClass().getResource("/assets/mmcr/textures/gui/guifactory.png"));
         assertThat(FactoryControllerScreen.IMAGE_WIDTH).isEqualTo(background.getWidth());
         assertThat(FactoryControllerScreen.IMAGE_HEIGHT).isEqualTo(background.getHeight());
+
+        int x = FactoryControllerScreen.SCROLLBAR_X;
+        int top = FactoryControllerScreen.scrollbarHandleY(0, 12);
+        int bottom = FactoryControllerScreen.scrollbarHandleY(6, 12) + FactoryControllerScreen.SCROLLBAR_HANDLE_HEIGHT;
+        int trackColor = background.getRGB(x, top);
+        assertThat(background.getRGB(x, top - 1)).isNotEqualTo(trackColor);
+        assertThat(background.getRGB(x, bottom - 1)).isEqualTo(trackColor);
+        assertThat(background.getRGB(x, bottom)).isNotEqualTo(trackColor);
     }
 
     @Test
-    void dragging_the_scrollbar_keeps_the_grabbed_pixel_on_the_shortened_track() {
+    void dragging_the_scrollbar_keeps_the_grabbed_pixel_at_each_offset() {
         int threadCount = 12;
         assertThat(FactoryControllerScreen.scrollbarHandleY(0, threadCount)).isEqualTo(7);
-        assertThat(FactoryControllerScreen.scrollbarHandleY(6, threadCount)).isEqualTo(170);
         for (int offset = 0; offset <= 6; offset++) {
             int mouseY = FactoryControllerScreen.scrollbarHandleY(offset, threadCount) + 15;
             assertThat(FactoryControllerScreen.scrollOffsetFromScrollbarY(mouseY, threadCount, 15)).isEqualTo(offset);

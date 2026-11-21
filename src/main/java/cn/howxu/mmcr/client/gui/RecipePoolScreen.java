@@ -31,10 +31,10 @@ public final class RecipePoolScreen extends Screen {
     static final int SCROLLBAR_X = 92;
     static final int SCROLLBAR_Y = ROW_Y;
     static final int SCROLLBAR_RIGHT = 104;
-    static final int SCROLLBAR_BOTTOM = SCROLLBAR_Y + 117;
+    static final int SCROLLBAR_BOTTOM = 123;
     static final int SCROLLBAR_HANDLE_HEIGHT = 32;
     static final int RETURN_X = 92;
-    static final int RETURN_Y = 123;
+    static final int RETURN_Y = SCROLLBAR_BOTTOM;
     static final int RETURN_SIZE = 12;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/gui_recipe_pool.png");
     private static final Identifier ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");

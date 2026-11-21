@@ -81,7 +81,7 @@ class SideButtonInputTest {
     void sidebar_press_drag_and_release_preserve_carried_items_and_slots() throws Exception {
         // Port navigation on the left; normal/factory M and C rows on the right.
         for (int[] layout : List.of(new int[]{176, -18, 1}, new int[]{176, 178, 1},
-                new int[]{176, 178, 19}, new int[]{280, 282, -1}, new int[]{280, 282, 17})) {
+                new int[]{176, 178, 19}, new int[]{280, 282, 1}, new int[]{280, 282, 19})) {
             FixtureScreen screen = screen(layout[0]);
             var presses = new AtomicInteger();
             StyledButton sidebar = screen.addButton(50 + layout[1], 40 + layout[2], button -> {
@@ -133,7 +133,7 @@ class SideButtonInputTest {
 
     @Test
     void isolation_sidebar_uses_confirmed_state_and_captures_drag_and_release() throws Exception {
-        for (int[] position : List.of(new int[]{32, 77}, new int[]{228, 77}, new int[]{332, 75})) {
+        for (int[] position : List.of(new int[]{32, 77}, new int[]{228, 77}, new int[]{332, 77})) {
             FixtureScreen screen = screen(position[0] > 300 ? 280 : 176);
             var state = InputIsolationMenuState.forPort(null);
             state.dataSlot().set(1);

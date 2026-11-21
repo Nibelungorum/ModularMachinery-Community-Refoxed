@@ -46,7 +46,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int THREAD_TEXT_COLOR = 0xFF222222;
     static final int SCROLLBAR_X = 95;
     static final int SCROLLBAR_Y = THREAD_ROW_Y;
-    static final int SCROLLBAR_HEIGHT = 195;
+    static final int SCROLLBAR_HEIGHT = 197;
     static final int SCROLLBAR_HANDLE_WIDTH = 12;
     static final int SCROLLBAR_HANDLE_HEIGHT = 32;
     private static final int ELEMENT_TEXTURE_WIDTH = 256;
@@ -58,7 +58,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final int DETAIL_Y = 10;
     private static final float DETAIL_TEXT_SCALE = 0.85F;
     private static final float THREAD_TEXT_SCALE = 0.85F;
-    private static final int ACTION_BUTTON_Y = -1;
+    private static final int ACTION_BUTTON_Y = 1;
     private static final int ACTION_BUTTON_SIZE = 16;
     private static final int ACTION_BUTTON_GAP = 2;
     private static final Identifier BACKGROUND = MMCR.id("textures/gui/guifactory.png");

@@ -29,6 +29,13 @@ class RecipePoolScreenTest {
         assertThat(RecipePoolScreen.VISIBLE_ROWS).isEqualTo(4);
         assertThat(RecipePoolScreen.RETURN_X).isEqualTo(92);
         assertThat(RecipePoolScreen.RETURN_Y).isEqualTo(123);
+
+        int x = RecipePoolScreen.SCROLLBAR_X;
+        int bottom = RecipePoolScreen.scrollbarHandleY(4, 8) + RecipePoolScreen.SCROLLBAR_HANDLE_HEIGHT;
+        assertThat(bottom).isEqualTo(RecipePoolScreen.RETURN_Y);
+        int trackColor = background.getRGB(x, RecipePoolScreen.scrollbarHandleY(0, 8));
+        assertThat(background.getRGB(x, bottom - 1)).isEqualTo(trackColor);
+        assertThat(background.getRGB(x, bottom)).isNotEqualTo(trackColor);
     }
 
     @Test
@@ -43,7 +50,6 @@ class RecipePoolScreenTest {
         assertThat(RecipePoolScreen.clampScrollOffset(-1, 8)).isZero();
         assertThat(RecipePoolScreen.clampScrollOffset(99, 8)).isEqualTo(4);
         assertThat(RecipePoolScreen.scrollbarHandleY(0, 8)).isEqualTo(4);
-        assertThat(RecipePoolScreen.scrollbarHandleY(4, 8)).isEqualTo(89);
         for (int offset = 0; offset <= 4; offset++) {
             int mouseY = RecipePoolScreen.scrollbarHandleY(offset, 8) + 15;
             assertThat(RecipePoolScreen.scrollOffsetFromScrollbarY(mouseY, 8, 15)).isEqualTo(offset);
@@ -51,15 +57,15 @@ class RecipePoolScreenTest {
     }
 
     @Test
-    void scroll_wheel_covers_the_last_row_but_not_the_gap_above_the_return_button() {
+    void scroll_wheel_covers_the_last_row_and_track_but_not_the_return_button() {
         int listX = RecipePoolScreen.ROW_X;
         int trackX = RecipePoolScreen.SCROLLBAR_X;
         assertThat(RecipePoolScreen.mouseOverListOrScrollbar(listX, 134, 8)).isTrue();
         assertThat(RecipePoolScreen.mouseOverListOrScrollbar(listX, 135, 8)).isFalse();
         assertThat(RecipePoolScreen.mouseOverListOrScrollbar(trackX, 3, 8)).isFalse();
         assertThat(RecipePoolScreen.mouseOverListOrScrollbar(trackX, 4, 8)).isTrue();
-        assertThat(RecipePoolScreen.mouseOverListOrScrollbar(trackX, 120, 8)).isTrue();
-        assertThat(RecipePoolScreen.mouseOverListOrScrollbar(trackX, 121, 8)).isFalse();
+        assertThat(RecipePoolScreen.mouseOverListOrScrollbar(trackX, 121, 8)).isTrue();
+        assertThat(RecipePoolScreen.mouseOverListOrScrollbar(trackX, 122, 8)).isTrue();
         assertThat(RecipePoolScreen.mouseOverListOrScrollbar(trackX, RecipePoolScreen.RETURN_Y, 8)).isFalse();
     }
 
