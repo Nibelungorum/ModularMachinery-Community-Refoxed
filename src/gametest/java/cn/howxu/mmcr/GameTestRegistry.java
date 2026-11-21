@@ -1022,6 +1022,8 @@ public final class GameTestRegistry {
                     .appearance(appearance -> appearance.machineBasicBlock("minecraft:gold_block"))
                     .maxParallelism(2).parallelizable(true).build());
         }
+        event.registerMachine(MachineBuilder.machine(ControllerUiGameTest.NO_STRUCTURE_ID)
+                .displayNameKey("gui.mmcr.ui.test_machine").build());
         event.registerMachine(MachineBuilder.machine(ControllerUiGameTest.MACHINE_ID)
                 .displayNameKey("gui.mmcr.ui.test_machine")
                 .allowMultithreading()

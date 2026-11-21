@@ -147,7 +147,7 @@ public class MachineControllerBlock extends Block implements EntityBlock {
     public MenuProvider getMenuProvider(BlockState state, Level level, BlockPos pos) {
         return new MenuProvider() {
             @Override
-            public Component getDisplayName() { return titleFor(machineId); }
+            public Component getDisplayName() { return Component.translatable(controllerTitleKey()); }
 
             @Override
             public @Nullable AbstractContainerMenu createMenu(int containerId, Inventory inventory, Player player) {
@@ -171,11 +171,9 @@ public class MachineControllerBlock extends Block implements EntityBlock {
         return new MachineControllerMenu(containerId, playerInventory, controller);
     }
 
-    static Component titleFor(ResourceLocation machineId) {
-        MachineRegistration registration = MachineDefinitions.effectiveSnapshot().get(machineId);
-        return registration == null
-                ? Component.translatable("container.mmcr.machine_controller")
-                : registration.displayName();
+    public String controllerTitleKey() {
+        MachineRegistration registration = MachineDefinitions.getRegistration(machineId);
+        return registration == null ? getDescriptionId() : registration.displayNameKey();
     }
 
     @Override

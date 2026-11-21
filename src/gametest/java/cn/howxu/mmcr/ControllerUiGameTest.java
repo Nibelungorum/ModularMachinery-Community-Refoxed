@@ -118,6 +118,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class ControllerUiGameTest {
     static final ResourceLocation MACHINE_ID = MMCR.id("controller_ui_storage_fixture");
+    static final ResourceLocation NO_STRUCTURE_ID = MMCR.id("controller_ui_no_structure");
     private static final Map<ServerPlayer, Probe> PROBES = new IdentityHashMap<>();
     private static final Map<Integer, Probe> VIEWERS = new HashMap<>();
     private static final ThreadLocal<Probe> DECODING = new ThreadLocal<>();
@@ -1744,7 +1745,7 @@ public final class ControllerUiGameTest {
     }
     public static void spectatorControllerMetadata(GameTestHelper helper) {
         BlockPos relative = new BlockPos(2, 1, 2);
-        for (var machine : List.of(MMCR.id("test_cube"), MMCR.id("data_storage_tick"))) {
+        for (var machine : List.of(MMCR.id("test_cube"), MMCR.id("data_storage_tick"), NO_STRUCTURE_ID)) {
             helper.setBlock(relative, ModBlocks.controllerFor(machine).get().defaultBlockState());
             assertSpectatorMetadata(helper, helper.getBlockEntity(relative),
                     machine.getPath().equals("data_storage_tick") ? Kind.TICK : Kind.NORMAL);
@@ -1768,6 +1769,12 @@ public final class ControllerUiGameTest {
             helper.assertTrue(player.containerMenu instanceof ControllerUiMenu,
                     "Spectator native interaction opens the shared controller menu: " + kind);
             var opening = packets(player, AdvancedOpenScreenPayload.class).getLast();
+            if (ui(player).uiOpenData().machineId().equals(NO_STRUCTURE_ID)) {
+                var baseline = packets(player, PktControllerUiSnapshotPayload.class).getLast().snapshotData();
+                helper.assertTrue(!baseline.formed() && baseline.machineName().equals(opening.name())
+                                && baseline.machineName().equals(Component.translatable("gui.mmcr.ui.test_machine")),
+                        "Without a registered structure the controller keeps its opening name above the unformed status");
+            }
             var buffer = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(opening.additionalData()), helper.getLevel().registryAccess());
             try {
                 var metadata = ControllerMenuOpenData.read(buffer);

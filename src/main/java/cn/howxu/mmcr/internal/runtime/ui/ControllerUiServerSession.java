@@ -411,7 +411,8 @@ public final class ControllerUiServerSession {
                 runtime.stateVersion(), runtime.foundModifiers(), runtime.foundLevels(), runtime.linkedPortPositions(),
                 runtime.moduleConnectionStatus(), runtime.installedModuleCount(), runtime.crafting(), runtime.factory(),
                 runtime.componentPresentations(), runtime.capabilityPresentations(), runtime.foundLevelIds(),
-                openData.machineId().toString(), machine == null ? runtime.machineName() : machine.displayNameKey(),
+                openData.machineId().toString(), machine == null
+                        ? ((MachineControllerBlock) owner.getBlockState().getBlock()).controllerTitleKey() : machine.displayNameKey(),
                 openData.role().ordinal(), runtime.factorySupported(), runtime.factoryControllerPresent(),
                 runtime.parallelControllerCount(), runtime.maxParallelControllerCount(), runtime.maxParallelism(),
                 runtime.upgradeItems(), runtime.upgradeContentRevision(), runtime.dataStorageValues(), runtime.recipePresentation());

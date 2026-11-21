@@ -49,7 +49,7 @@ final class ControllerUiTextLines {
         lines.add(MachineControllerScreen.statusLine(snapshot.formed(), active));
         ResourceLocation pool = MachineControllerScreen.displayedRecipePoolId(
                 snapshot.currentRecipePoolId().orElse(null), snapshot.recipePoolIds());
-        if (snapshot.formed() && pool != null) {
+        if (!tick && snapshot.formed() && pool != null) {
             lines.add(label(Component.translatable("gui.mmcr.controller.recipe_pool",
                     RecipePoolDisplayName.component(pool))));
         }

@@ -114,9 +114,7 @@ class MachineControllerScreenTest {
                 .extracting(ControllerTextLine::text)
                 .containsExactly(Component.translatable("gui.mmcr.controller.status_label")
                         .append(Component.literal(" "))
-                        .append(Component.translatable("gui.mmcr.controller.running")),
-                        Component.translatable("gui.mmcr.controller.recipe_pool",
-                                Component.literal(TICK_MACHINE_ID.toString())));
+                        .append(Component.translatable("gui.mmcr.controller.running")));
     }
 
     @Test
@@ -202,7 +200,6 @@ class MachineControllerScreenTest {
         current.set(uiSnapshot(ControllerUiSnapshot.Kind.TICK));
         assertThat(screen.scrollableTextLines()).extracting(ControllerTextLine::text).containsExactly(
                 MachineControllerScreen.statusLine(true, true).text(),
-                Component.translatable("gui.mmcr.controller.recipe_pool", Component.literal("mmcr:server_only_pool")),
                 Component.literal("global"));
     }
 
