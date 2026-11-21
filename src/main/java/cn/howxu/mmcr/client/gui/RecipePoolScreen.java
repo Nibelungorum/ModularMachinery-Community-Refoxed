@@ -5,6 +5,7 @@ import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -19,20 +20,20 @@ import java.util.List;
  */
 public final class RecipePoolScreen extends Screen {
     static final int IMAGE_WIDTH = 108;
-    static final int IMAGE_HEIGHT = 141;
+    static final int IMAGE_HEIGHT = 139;
     static final int ROW_X = 4;
-    static final int ROW_Y = 6;
+    static final int ROW_Y = 4;
     static final int ROW_WIDTH = 86;
     static final int ROW_HEIGHT = 32;
     static final int ROW_GAP = 1;
     static final int VISIBLE_ROWS = 4;
     static final int SCROLLBAR_X = 92;
-    static final int SCROLLBAR_Y = 6;
+    static final int SCROLLBAR_Y = ROW_Y;
     static final int SCROLLBAR_RIGHT = 104;
-    static final int SCROLLBAR_BOTTOM = 125;
+    static final int SCROLLBAR_BOTTOM = 123;
     static final int SCROLLBAR_HANDLE_HEIGHT = 32;
     static final int RETURN_X = 92;
-    static final int RETURN_Y = 125;
+    static final int RETURN_Y = SCROLLBAR_BOTTOM;
     static final int RETURN_SIZE = 12;
     private static final ResourceLocation BACKGROUND = MMCR.id("textures/gui/gui_recipe_pool.png");
     private static final ResourceLocation ELEMENTS = MMCR.id("textures/gui/guifactoryelements.png");
@@ -91,7 +92,7 @@ public final class RecipePoolScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
-            if (mouseOverScrollbar((int) mouseX, (int) mouseY)) {
+            if (mouseOverScrollbar((int) mouseX - left(), (int) mouseY - top(), recipePoolIds.size())) {
                 draggingScrollbar = true;
                 scrollbarDragOffsetY = Math.max(0, Math.min(SCROLLBAR_HANDLE_HEIGHT,
                         (int) mouseY - top() - scrollbarHandleY(scrollOffset, recipePoolIds.size())));
@@ -131,7 +132,7 @@ public final class RecipePoolScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
-        if (!mouseOverListOrScrollbar((int) mouseX, (int) mouseY)) {
+        if (!mouseOverListOrScrollbar((int) mouseX - left(), (int) mouseY - top(), recipePoolIds.size())) {
             return super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
         }
         scrollOffset = clampScrollOffset(scrollOffset - (int) Math.signum(deltaY), recipePoolIds.size());
@@ -181,6 +182,10 @@ public final class RecipePoolScreen extends Screen {
         return value.substring(0, length) + suffix;
     }
 
+    public Rect2i guiBounds() {
+        return new Rect2i(left(), top(), IMAGE_WIDTH, IMAGE_HEIGHT);
+    }
+
     private int left() {
         return (width - IMAGE_WIDTH) / 2;
     }
@@ -189,15 +194,14 @@ public final class RecipePoolScreen extends Screen {
         return (height - IMAGE_HEIGHT) / 2;
     }
 
-    private boolean mouseOverScrollbar(int mouseX, int mouseY) {
-        return recipePoolIds.size() > VISIBLE_ROWS && mouseX >= left() + SCROLLBAR_X
-                && mouseX < left() + SCROLLBAR_RIGHT && mouseY >= top() + SCROLLBAR_Y
-                && mouseY < top() + SCROLLBAR_BOTTOM;
+    private static boolean mouseOverScrollbar(int localX, int localY, int poolCount) {
+        return poolCount > VISIBLE_ROWS && localX >= SCROLLBAR_X && localX < SCROLLBAR_RIGHT
+                && localY >= SCROLLBAR_Y && localY < SCROLLBAR_BOTTOM;
     }
 
-    private boolean mouseOverListOrScrollbar(int mouseX, int mouseY) {
-        return mouseOverScrollbar(mouseX, mouseY) || mouseX >= left() + ROW_X
-                && mouseX < left() + ROW_X + ROW_WIDTH && mouseY >= top() + ROW_Y
-                && mouseY < top() + SCROLLBAR_BOTTOM;
+    static boolean mouseOverListOrScrollbar(int localX, int localY, int poolCount) {
+        int listBottom = ROW_Y + VISIBLE_ROWS * ROW_HEIGHT + (VISIBLE_ROWS - 1) * ROW_GAP;
+        return mouseOverScrollbar(localX, localY, poolCount) || localX >= ROW_X && localX < ROW_X + ROW_WIDTH
+                && localY >= ROW_Y && localY < listBottom;
     }
 }

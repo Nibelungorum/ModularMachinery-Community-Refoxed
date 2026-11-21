@@ -30,9 +30,9 @@ import java.util.function.Supplier;
 public final class FactoryControllerScreen extends AbstractScrollableTextScreen<FactoryControllerMenu> {
     private static final int CONTROLLER_TITLE_COLOR = ControllerTextLine.DEFAULT_COLOR;
     static final int IMAGE_WIDTH = 280;
-    static final int IMAGE_HEIGHT = 216;
+    static final int IMAGE_HEIGHT = 214;
     static final int THREAD_ROW_X = 8;
-    static final int THREAD_ROW_Y = 9;
+    static final int THREAD_ROW_Y = 7;
     public static final int THREAD_ROW_WIDTH = 86;
     static final int THREAD_ROW_HEIGHT = 32;
     static final int THREAD_ROW_GAP = 1;
@@ -43,7 +43,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private static final float THREAD_PROGRESS_TEXT_SCALE = 0.7F;
     private static final int THREAD_TEXT_COLOR = 0xFF222222;
     static final int SCROLLBAR_X = 95;
-    static final int SCROLLBAR_Y = 9;
+    static final int SCROLLBAR_Y = THREAD_ROW_Y;
     static final int SCROLLBAR_HEIGHT = 197;
     static final int SCROLLBAR_HANDLE_WIDTH = 12;
     static final int SCROLLBAR_HANDLE_HEIGHT = 32;
@@ -53,8 +53,10 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     static final int PROGRESS_THREAD_OVERLAY = 0x6600AA55;
     private static final int DETAIL_LINE_SPACING = 10;
     private static final int DETAIL_X = 115;
+    private static final int DETAIL_Y = 10;
     private static final float DETAIL_TEXT_SCALE = 0.85F;
     private static final float THREAD_TEXT_SCALE = 0.85F;
+    private static final int ACTION_BUTTON_Y = 1;
     private static final int ACTION_BUTTON_SIZE = 16;
     private static final int ACTION_BUTTON_GAP = 2;
     private static final ResourceLocation BACKGROUND = MMCR.id("textures/gui/guifactory.png");
@@ -86,8 +88,9 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     protected void init() {
         super.init();
         int buttonX = leftPos + imageWidth + ACTION_BUTTON_GAP;
+        int buttonY = topPos + ACTION_BUTTON_Y;
         recipePoolButton = addRenderableWidget(new StyledButton(
-                buttonX, topPos + 1, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
+                buttonX, buttonY, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
                 Component.translatable("gui.mmcr.recipe_pool.button"), button -> {
                     ControllerUiSnapshot value = snapshot.get();
                     minecraft.setScreen(new RecipePoolScreen(this, value.controllerPos(), value.recipePoolIds(),
@@ -96,14 +99,14 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         recipePoolButton.setIcon(MMCR.id("textures/gui/button/mode.png"));
         recipePoolButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.recipe_pool.open")));
         structureCheckButton = addRenderableWidget(new StyledButton(
-                buttonX, topPos + 1, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
+                buttonX, buttonY, ACTION_BUTTON_SIZE, ACTION_BUTTON_SIZE,
                 Component.translatable("gui.mmcr.controller.check_structure.button"), button -> {
                     PacketDistributor.sendToServer(new PktControllerStructureCheckPayload(snapshot.get().controllerPos()));
                     button.setFocused(false);
                 }));
         structureCheckButton.setIcon(MMCR.id("textures/gui/button/check.png"));
         structureCheckButton.setTooltip(Tooltip.create(Component.translatable("gui.mmcr.controller.check_structure")));
-        isolationButton = addRenderableWidget(new IsolationToggleButton(buttonX, topPos + 1,
+        isolationButton = addRenderableWidget(new IsolationToggleButton(buttonX, buttonY,
                 Component.translatable("mmcr.input_isolation.button"), menu.inputIsolation()::enabled, button -> {
             if (minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId,
                     menu.inputIsolation().enabled() ? InputIsolationMenuState.DISABLE : InputIsolationMenuState.ENABLE);
@@ -122,25 +125,25 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
     private void updateControllerButtons() {
         boolean showRecipePools = snapshot.get().recipePoolIds().size() > 1;
         int buttonX = leftPos + imageWidth + ACTION_BUTTON_GAP;
+        int buttonY = topPos + ACTION_BUTTON_Y;
         if (recipePoolButton != null) {
             recipePoolButton.visible = showRecipePools;
             recipePoolButton.active = showRecipePools;
-            recipePoolButton.setPosition(buttonX, topPos + 1);
+            recipePoolButton.setPosition(buttonX, buttonY);
         }
         if (structureCheckButton != null) {
             structureCheckButton.setPosition(buttonX,
-                    topPos + 1 + (showRecipePools ? ACTION_BUTTON_SIZE + ACTION_BUTTON_GAP : 0));
+                    buttonY + (showRecipePools ? ACTION_BUTTON_SIZE + ACTION_BUTTON_GAP : 0));
         }
         if (isolationButton != null) {
             isolationButton.updateState(menu.inputIsolation(), true);
-            isolationButton.setPosition(buttonX, topPos + 1 + (showRecipePools ? 2 : 1) * 18);
+            isolationButton.setPosition(buttonX, buttonY + (showRecipePools ? 2 : 1) * 18);
         }
     }
 
     @Override
     protected TextViewport scrollableTextViewport() {
-        int bodyY = 12 + DETAIL_LINE_SPACING;
-        return new TextViewport(DETAIL_X, bodyY, 160, 123 - bodyY + 1,
+        return new TextViewport(DETAIL_X, DETAIL_Y + DETAIL_LINE_SPACING, 160, 102,
                 DETAIL_TEXT_SCALE, DETAIL_LINE_SPACING);
     }
 
@@ -303,7 +306,7 @@ public final class FactoryControllerScreen extends AbstractScrollableTextScreen<
         }
         Lane selected = ControllerUiTextLines.selectedLane(value, selectedLaneId).orElse(null);
         int x = DETAIL_X;
-        int y = 12;
+        int y = DETAIL_Y;
         graphics.pose().pushPose();
         graphics.pose().scale(DETAIL_TEXT_SCALE, DETAIL_TEXT_SCALE, 1F);
         x = (int) (x / DETAIL_TEXT_SCALE);

@@ -10,7 +10,9 @@ import cn.howxu.mmcr.publicapi.event.RegisterJeiRecipeInformationEvent;
 import cn.howxu.mmcr.publicapi.event.RegisterJeiWorkstationsEvent;
 import cn.howxu.mmcr.internal.api.facade.client.ClientRegistrationAdapters;
 import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
+import cn.howxu.mmcr.client.gui.AbstractScrollableTextScreen;
 import cn.howxu.mmcr.client.gui.BlueprintScreen;
+import cn.howxu.mmcr.client.gui.RecipePoolScreen;
 import cn.howxu.mmcr.internal.client.JeiWorkstationRegistry;
 import cn.howxu.mmcr.internal.client.RecipeInformationRegistry;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -174,7 +176,9 @@ public final class JeiPlugin implements IModPlugin {
 
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+        registration.addGenericGuiContainerHandler(AbstractScrollableTextScreen.class, new SidebarGuiHandler());
         registration.addGuiScreenHandler(BlueprintScreen.class, new BlueprintScreenJeiHandler());
+        registration.addGuiScreenHandler(RecipePoolScreen.class, screen -> new ScreenProperties(screen, screen.guiBounds()));
     }
 
     static Set<ResourceLocation> machineIds() {

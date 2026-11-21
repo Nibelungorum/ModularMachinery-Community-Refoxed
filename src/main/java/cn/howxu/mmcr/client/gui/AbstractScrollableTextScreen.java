@@ -21,7 +21,7 @@ import java.util.List;
  * @param <M> the menu displayed by this screen
  * @author howxu <dev@howxu.cn>
  */
-abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
+public abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
         extends AbstractContainerScreen<M> {
 
     protected record TextViewport(int x, int y, int width, int height,
@@ -33,8 +33,8 @@ abstract class AbstractScrollableTextScreen<M extends AbstractContainerMenu>
     private List<ControllerScreenTextComposer.VisualLine> frameLines;
     private boolean sidebarButtonGesture;
 
-    protected AbstractScrollableTextScreen(M menu, Inventory inventory,
-                                           Component title, int imageWidth, int imageHeight) {
+    AbstractScrollableTextScreen(M menu, Inventory inventory,
+                                 Component title, int imageWidth, int imageHeight) {
         super(menu, inventory, title);
         this.imageWidth = imageWidth;
         this.imageHeight = imageHeight;
