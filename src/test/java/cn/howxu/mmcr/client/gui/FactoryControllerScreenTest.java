@@ -41,6 +41,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import javax.imageio.ImageIO;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -341,19 +343,39 @@ class FactoryControllerScreenTest {
     }
 
     @Test
-    void thread_scroll_hit_test_stays_separate_from_detail_viewport() {
+    void background_draw_size_matches_the_factory_texture() throws IOException {
+        var background = ImageIO.read(getClass().getResource("/assets/mmcr/textures/gui/guifactory.png"));
+        assertThat(FactoryControllerScreen.IMAGE_WIDTH).isEqualTo(background.getWidth());
+        assertThat(FactoryControllerScreen.IMAGE_HEIGHT).isEqualTo(background.getHeight());
+    }
+
+    @Test
+    void dragging_the_scrollbar_keeps_the_grabbed_pixel_on_the_shortened_track() {
+        int threadCount = 12;
+        assertThat(FactoryControllerScreen.scrollbarHandleY(0, threadCount)).isEqualTo(7);
+        assertThat(FactoryControllerScreen.scrollbarHandleY(6, threadCount)).isEqualTo(170);
+        for (int offset = 0; offset <= 6; offset++) {
+            int mouseY = FactoryControllerScreen.scrollbarHandleY(offset, threadCount) + 15;
+            assertThat(FactoryControllerScreen.scrollOffsetFromScrollbarY(mouseY, threadCount, 15)).isEqualTo(offset);
+        }
+    }
+
+    @Test
+    void thread_scroll_hit_test_stays_separate_from_detail_viewport() throws Exception {
         int left = 37;
         int top = 19;
-        AbstractScrollableTextScreen.TextViewport viewport =
-                new AbstractScrollableTextScreen.TextViewport(113, 22, 160, 102, 0.85F, 10);
+        var screen = (FactoryControllerScreen) unsafe().allocateInstance(FactoryControllerScreen.class);
+        var viewport = screen.scrollableTextViewport();
+        int listX = left + FactoryControllerScreen.THREAD_ROW_X;
+        int textX = left + viewport.x();
 
-        assertThat(FactoryControllerScreen.mouseOverThreadList(left, top,
-                left + FactoryControllerScreen.THREAD_ROW_X + 1,
-                top + FactoryControllerScreen.THREAD_ROW_Y + 1)).isTrue();
-        assertThat(AbstractScrollableTextScreen.containsViewport(viewport, left, top,
-                left + viewport.x(), top + viewport.y())).isTrue();
-        assertThat(FactoryControllerScreen.mouseOverThreadList(left, top,
-                left + viewport.x(), top + viewport.y())).isFalse();
+        assertThat(FactoryControllerScreen.mouseOverThreadList(left, top, listX, top + 6)).isFalse();
+        assertThat(FactoryControllerScreen.mouseOverThreadList(left, top, listX, top + 7)).isTrue();
+        assertThat(AbstractScrollableTextScreen.containsViewport(viewport, left, top, textX, top + 19)).isFalse();
+        assertThat(AbstractScrollableTextScreen.containsViewport(viewport, left, top, textX, top + 20)).isTrue();
+        assertThat(AbstractScrollableTextScreen.containsViewport(viewport, left, top, textX, top + 121)).isTrue();
+        assertThat(AbstractScrollableTextScreen.containsViewport(viewport, left, top, textX, top + 122)).isFalse();
+        assertThat(FactoryControllerScreen.mouseOverThreadList(left, top, textX, top + 20)).isFalse();
     }
 
     @Test

@@ -113,9 +113,9 @@ class FactoryControllerMenuTest {
         FactoryControllerMenu menu = FactoryControllerMenu.clientOpen(1, new Inventory(null, null));
 
         assertThat(menu.slots.getFirst().x).isEqualTo(112);
-        assertThat(menu.slots.getFirst().y).isEqualTo(132);
+        assertThat(menu.slots.getFirst().y).isEqualTo(130);
         assertThat(menu.slots.get(27).x).isEqualTo(112);
-        assertThat(menu.slots.get(27).y).isEqualTo(190);
+        assertThat(menu.slots.get(27).y).isEqualTo(188);
     }
 
     @Test

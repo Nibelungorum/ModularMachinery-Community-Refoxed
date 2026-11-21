@@ -82,7 +82,7 @@ class ControllerActionButtonsTest {
                 assertThat(isolationButton.getY()).isEqualTo(checkButton.getY() + 18);
                 assertThat(checkButton.getX()).isEqualTo(poolButton.getX());
                 assertThat(checkButton.getX()).isEqualTo(50 + backgroundWidth + 2);
-                assertThat(poolButton.getY()).isEqualTo(41);
+                assertThat(poolButton.getY()).isEqualTo(type == MachineControllerScreen.class ? 41 : 39);
                 if (showPools) {
                     assertThat(checkButton.getY()).isEqualTo(poolButton.getY() + poolButton.getHeight() + 2);
                 } else {

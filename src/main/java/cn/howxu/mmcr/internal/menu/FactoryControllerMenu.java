@@ -42,7 +42,7 @@ import net.minecraft.network.chat.Component;
  */
 public final class FactoryControllerMenu extends AbstractMachineMenu implements ControllerUiMenu {
     private static final int FACTORY_PLAYER_INVENTORY_X = 112;
-    private static final int FACTORY_PLAYER_INVENTORY_Y_OFFSET = 1;
+    private static final int FACTORY_PLAYER_INVENTORY_Y_OFFSET = -1;
     private static final ControllerSyncRuntime SYNC_RUNTIME = new ControllerSyncRuntime();
 
     private final BlockPos controllerPos;
