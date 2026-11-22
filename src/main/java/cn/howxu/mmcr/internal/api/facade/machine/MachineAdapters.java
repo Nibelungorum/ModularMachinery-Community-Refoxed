@@ -145,8 +145,7 @@ public final class MachineAdapters {
         @Override public MachineDraft allowNetworkMachine(ResourceLocation id) { delegate.allowNetworkMachine(id); return this; }
         @Override public MachineDraft maxParallelism(long amount) { delegate.maxParallelism(amount); return this; }
         @Override public MachineDraft parallelizable(boolean enabled) { delegate.parallelizable(enabled); return this; }
-        @Override public MachineDraft allowModifiers() { delegate.allowModifiers(); return this; }
-        @Override public MachineDraft allowModifiers(boolean enabled) { delegate.allowModifiers(enabled); return this; }
+        @Override public MachineDraft allowModifier(ResourceLocation id) { delegate.allowModifier(id); return this; }
         @Override public MachineDraft allowMultithreading() { delegate.allowMultithreading(); return this; }
         @Override public MachineDraft allowMultithreading(boolean enabled) { delegate.allowMultithreading(enabled); return this; }
         @Override public MachineDraft maxParallelAmount(int amount) { delegate.maxParallelAmount(amount); return this; }
@@ -177,7 +176,7 @@ public final class MachineAdapters {
         @Override public long maxParallelism() { return delegate.maxParallelism(); }
         @Override public int maxParallelAmount() { return delegate.maxParallelAmount(); }
         @Override public boolean parallelizable() { return delegate.parallelizable(); }
-        @Override public boolean allowModifiers() { return delegate.allowModifiers(); }
+        @Override public Set<ResourceLocation> allowedModifierIds() { return delegate.allowedModifierIds(); }
         @Override public boolean allowMultithreading() { return delegate.allowMultithreading(); }
         @Override public boolean shareSmartInterfaces() { return delegate.shareSmartInterfaces(); }
         @Override public RecipeFailureMode failureAction() { return fromCore(delegate.failureAction()); }

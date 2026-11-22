@@ -14,6 +14,7 @@ import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.internal.tile.ItemInputBusBlockEntity;
 import cn.howxu.mmcr.internal.tile.ItemOutputBusBlockEntity;
@@ -166,8 +167,16 @@ public class UpgradeBusGameTest {
                         helper.assertTrue(controller.runtimeSnapshot().crafting().totalTick() == 23,
                                 "Recipe starts with the Upgrade Bus effective duration");
 
-                        firstBus.itemHandler().setContents(0, new ItemStack(Items.DIAMOND), 1L);
+                        firstBus.itemHandler().setContents(0, new ItemStack(Items.DIAMOND_BLOCK), 1L);
                         controller.serverTick();
+
+                        var foreignId = MMCR.id("alloy_furnace_diamond_speedup");
+                        helper.assertTrue(foreignId.equals(ModifierRegistry.modifierFor(new ItemStack(Items.DIAMOND_BLOCK))),
+                                "The diamond block is a registered upgrade for the alloy furnace");
+                        helper.assertTrue(controller.componentRuntime().upgradeItems().stream().anyMatch(stack -> stack.is(Items.DIAMOND_BLOCK))
+                                        && !controller.componentRuntime().upgradeModifierUnits().containsKey(foreignId),
+                                "This machine keeps the foreign upgrade in the bus without activating it");
+                        assertDuration(helper, controller, 102);
 
                         helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
                                 "Bus content mutation keeps the active effective recipe snapshot");

@@ -192,6 +192,7 @@ class PatternInterfaceCraftingMachineTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
         host.linkControllerAppearance(controller.getBlockPos(), null);
         controller.setMachine(parallelMachine(10));
+        controller.componentRuntime().setAllowedModifierIds(Set.of(ResourceLocation.parse("parallel")));
         controller.componentRuntime().replaceModifiers(Map.of("parallel", List.of(
                 MachineModifier.numeric("parallelism", "machine", 9D, "add", false))));
         formForPattern(controller, true);
@@ -213,6 +214,7 @@ class PatternInterfaceCraftingMachineTest {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"), host);
         host.linkControllerAppearance(controller.getBlockPos(), null);
         controller.setMachine(parallelMachine(10));
+        controller.componentRuntime().setAllowedModifierIds(Set.of(ResourceLocation.parse("parallel")));
         controller.componentRuntime().replaceModifiers(Map.of("parallel", List.of(
                 MachineModifier.numeric("parallelism", "machine", 9D, "add", false))));
         formForPattern(controller, true);

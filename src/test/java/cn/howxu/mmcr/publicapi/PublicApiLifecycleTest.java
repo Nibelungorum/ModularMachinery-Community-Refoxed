@@ -49,6 +49,7 @@ import cn.howxu.mmcr.internal.api.facade.registration.RegistrationAdapters;
 import cn.howxu.mmcr.internal.api.PublicApiBootstrap;
 import cn.howxu.mmcr.internal.api.PublicMachineDefinitionProviders;
 import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.internal.registration.StartupContentRegistration;
 import cn.howxu.mmcr.internal.tile.SmartInterfaceBlockEntity;
 import cn.howxu.mmcr.registry.ModBlocks;
@@ -235,7 +236,7 @@ class PublicApiLifecycleTest {
     }
 
     @Test
-    void structure_event_freeze_validates_modifier_and_level_references_and_returns_snapshot() {
+    void separate_definition_and_structure_windows_freeze_their_own_declarations() {
         ResourceLocation machineId = id("snapshot_machine");
         ResourceLocation typeId = id("snapshot_type");
         ResourceLocation levelId = id("snapshot_level");
@@ -247,7 +248,9 @@ class PublicApiLifecycleTest {
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlock(Blocks.FURNACE),
                 ItemStack.EMPTY,
                 ModifierDefinition.EMPTY));
-        event.registerModifier(modifierId, new ModifierDefinition(List.of()));
+        var definitions = new MachineDefinitionRegistration();
+        definitions.registerModifier(modifierId, ModifierDefinition.EMPTY);
+        definitions.freeze();
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
                 .requirements(requirements -> requirements.levelSlot('F', typeId).modifier('F', modifierId))));
@@ -256,22 +259,22 @@ class PublicApiLifecycleTest {
 
         assertThat(snapshot.levelTypes()).containsKey(typeId);
         assertThat(snapshot.levels()).containsKey(levelId);
-        assertThat(snapshot.modifiers()).containsKey(modifierId);
+        assertThat(definitions.modifierSnapshot().modifiers()).containsKey(modifierId);
         assertThatThrownBy(() -> snapshot.structures().clear()).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> event.registerModifier(id("late"), new ModifierDefinition(List.of())))
+        assertThatThrownBy(() -> definitions.registerModifier(id("late"), ModifierDefinition.EMPTY))
                 .isInstanceOf(ApiRegistrationException.class);
     }
 
     @Test
-    void structure_event_rejects_unknown_references_at_freeze() {
+    void structure_rejects_unknown_references_at_link_time() {
         ResourceLocation machineId = id("invalid_snapshot_machine");
         StructureRegistration event = new StructureRegistration(List.of(machineId));
-        event.registerModifier(id("known_modifier"), new ModifierDefinition(List.of()));
         event.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
                 .requirements(requirements -> requirements.modifier('F', id("unknown_modifier")))));
 
-        assertThatThrownBy(event::freeze)
+        var runtime = MachineDefinitionConverter.toStructureDefinition(event.freeze().structures().get(machineId));
+        assertThatThrownBy(() -> runtime.validateModifiers(Set.of(), Set.of(id("known_modifier"))))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("unknown_modifier");
     }
@@ -282,12 +285,12 @@ class PublicApiLifecycleTest {
         ResourceLocation modifierId = id("lifecycle_modifier");
         ItemStack stack = new ItemStack(Items.EMERALD, 1);
         stack.set(DataComponents.MAX_STACK_SIZE, 32);
-        StructureRegistration event = new StructureRegistration(List.of());
+        var event = new MachineDefinitionRegistration();
         event.registerModifier(modifierId, new ModifierDefinition(List.of()));
         event.registerModifierItem(stack, modifierId);
         event.freeze();
 
-        ContentRegistrationCoordinator.collectStructures(event);
+        ContentRegistrationCoordinator.collectMachines(event);
         ContentRegistrationCoordinator.commitStartup();
 
         assertThat(ModifierRegistry.get(modifierId)).isNotNull();

@@ -410,6 +410,7 @@ class MachineControllerBlockEntityTest {
                     default -> throw new AssertionError(change);
                 }
             }).build());
+            controller.componentRuntime().setAllowedModifierIds(Set.of(ResourceLocation.parse("new_energy")));
             ServerLevel level = (ServerLevel) controller.getLevel();
             runtimeStateBatchLevels.add(level);
             if (shared) {

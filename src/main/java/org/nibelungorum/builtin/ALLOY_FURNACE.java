@@ -35,12 +35,38 @@ public class ALLOY_FURNACE {
 
     private static final ResourceLocation ALLOY_FURNACE = id("alloy_furnace");
 
+    private static final ResourceLocation DIAMOND_SPEEDUP = id("alloy_furnace_diamond_speedup");
+    private static final ResourceLocation GOLD_DOUBLING = id("alloy_furnace_gold_doubling");
+
     public static void registerDefinitions(RegisterMachineDefinitionsEvent event) {
         if (!event.definitions().containsKey(ALLOY_FURNACE)) {
+            event.registerModifier(
+                    DIAMOND_SPEEDUP,
+                    Modifiers.bundle(Modifiers.numeric(
+                            "duration",
+                            ModifierScope.INPUT,
+                            0.5F,
+                            ModifierOperation.MULTIPLY,
+                            false
+                    )));
+            event.registerModifierItem(ResourceLocation.parse("minecraft:diamond_block"), DIAMOND_SPEEDUP);
+
+            event.registerModifier(
+                    GOLD_DOUBLING,
+                    Modifiers.bundle(Modifiers.numeric(
+                            "output",
+                            ModifierScope.OUTPUT,
+                            2.0F,
+                            ModifierOperation.MULTIPLY,
+                            false
+                    )));
+            event.registerModifierItem(ResourceLocation.parse("minecraft:gold_block"), GOLD_DOUBLING);
+
             MachineSpec machine = Machines
                     .machine(ALLOY_FURNACE)
                     .recipePool(ALLOY_FURNACE)
-                    .allowModifiers()
+                    .allowModifier(DIAMOND_SPEEDUP)
+                    .allowModifier(GOLD_DOUBLING)
                     .displayNameKey("machine.mmcr.alloy_furnace")
                     .appearance(appearance -> appearance.machineBasicBlock(ResourceLocation.parse("minecraft:bricks")))
                     .build();
@@ -50,30 +76,6 @@ public class ALLOY_FURNACE {
 
     @SubscribeEvent
     public static void registerStructures(RegisterMachineStructuresEvent event) {
-
-        // register your modifier first
-        event.registerModifier(
-                id("alloy_furnace_diamond_speedup"),
-                Modifiers.bundle(Modifiers.numeric(
-                        "duration",
-                        ModifierScope.INPUT,
-                        0.5F,
-                        ModifierOperation.MULTIPLY,
-                        false
-                )));
-        event.registerModifierItem(ResourceLocation.parse("minecraft:diamond_block"), id("alloy_furnace_diamond_speedup"));
-
-        event.registerModifier(
-                id("alloy_furnace_gold_doubling"),
-                Modifiers.bundle(Modifiers.numeric(
-                        "output",
-                        ModifierScope.OUTPUT,
-                        2.0F,
-                        ModifierOperation.MULTIPLY,
-                        false
-                )));
-        event.registerModifierItem(ResourceLocation.parse("minecraft:gold_block"), id("alloy_furnace_gold_doubling"));
-
 
         if (!event.structures().containsKey(ALLOY_FURNACE)) {
             StructureSpec structure = Structures
@@ -92,8 +94,8 @@ public class ALLOY_FURNACE {
                                     .where('M', block(Blocks.BLAST_FURNACE))
                                     .controller('C'))
                             .requirements(r -> r
-                                    .modifier('M', id("alloy_furnace_diamond_speedup"), block(Blocks.DIAMOND_BLOCK))
-                                    .modifier('M', id("alloy_furnace_gold_doubling"), block(Blocks.GOLD_BLOCK))
+                                    .modifier('M', DIAMOND_SPEEDUP, block(Blocks.DIAMOND_BLOCK))
+                                    .modifier('M', GOLD_DOUBLING, block(Blocks.GOLD_BLOCK))
                             ))
                     .build(ALLOY_FURNACE);
             event.registerStructure(structure);

@@ -10,7 +10,6 @@ import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.compat.create.StressSession;
@@ -205,7 +204,7 @@ public final class StressInterfaceGameTest {
             RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(recipeId).recipePool(machine.id())
                     .duration(40).inputItem(Items.COAL, 1).inputStress(2D, 16D)
                     .outputItem(new ItemStack(Items.DIAMOND)).build(),
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())));
+                    Map.of(), Map.of()));
         }
         machine.items().nativeItemHandler().setStackInSlot(0, new ItemStack(Items.COAL));
         StressInputBlockEntity input = helper.getBlockEntity(PORT);
@@ -283,7 +282,7 @@ public final class StressInterfaceGameTest {
             RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(recipeId).recipePool(machine.id())
                     .duration(40).inputItem(Items.COAL, 1).outputStress(8D, -16D)
                     .outputItem(new ItemStack(Items.DIAMOND)).build(),
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())));
+                    Map.of(), Map.of()));
         }
         StressOutputBlockEntity output = helper.getBlockEntity(PORT);
         KineticBlockEntity shaft = helper.getBlockEntity(SHAFT);
@@ -401,7 +400,7 @@ public final class StressInterfaceGameTest {
             RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(recipeId)
                     .recipePool(machine.id()).duration(6).inputItem(Items.COAL, 1).outputStress(8D, -16D)
                     .outputItem(new ItemStack(Items.DIAMOND)).build(),
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())));
+                    Map.of(), Map.of()));
         }
         StressOutputBlockEntity output = helper.getBlockEntity(PORT);
         KineticBlockEntity fan = helper.getBlockEntity(MOTOR);
@@ -442,7 +441,7 @@ public final class StressInterfaceGameTest {
             RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(recipeId)
                     .recipePool(machine.id()).duration(6).inputItem(Items.COAL, 1).outputStress(8D, -16D)
                     .outputItem(new ItemStack(Items.DIAMOND)).build(),
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())));
+                    Map.of(), Map.of()));
         }
         StressOutputBlockEntity output = helper.getBlockEntity(PORT);
         KineticBlockEntity shaft = helper.getBlockEntity(SHAFT);

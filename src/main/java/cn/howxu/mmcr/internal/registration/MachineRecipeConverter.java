@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.registration;
 
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
@@ -28,9 +27,8 @@ public final class MachineRecipeConverter {
     }
 
     public static MachineRecipe toRecipe(MachineRecipeDefinition definition,
-                                         StructureRegistration.Snapshot snapshot) {
-        Map<ResourceLocation, ModifierDefinition> modifiers = snapshot.modifiers();
-        Map<ResourceLocation, MachineLevel> levels = snapshot.levels();
+                                         Map<ResourceLocation, MachineLevel> levels,
+                                         Map<ResourceLocation, ModifierDefinition> modifiers) {
         List<MachineRequirement> requirements = new ArrayList<>(MachineRequirement.copyList(definition.requirements()));
         List<MachineOutput> outputs = new ArrayList<>(requirements.stream()
                 .map(OutputRegistry::fromRequirement).filter(Objects::nonNull).toList());

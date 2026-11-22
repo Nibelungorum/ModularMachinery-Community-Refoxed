@@ -83,21 +83,21 @@ class ContentRegistrationCoordinatorTest {
     @Test
     void commitsMachineStructureAndRecipeAsOneStartupModel() {
         ResourceLocation machineId = id("coordinated_machine");
-        MachineDefinition machine = MachineBuilder.machine(machineId).build();
+        ResourceLocation modifierId = id("coordinated_modifier");
+        MachineDefinition machine = MachineBuilder.machine(machineId).allowModifier(modifierId).build();
         MachineDefinitionRegistration definitions = new MachineDefinitionRegistration();
         definitions.registerMachine(machine);
+        definitions.registerModifier(modifierId, ModifierDefinition.EMPTY);
         definitions.freeze();
         StructureRegistration structures = new StructureRegistration(List.of(machineId));
         ResourceLocation typeId = id("coordinated_type");
         ResourceLocation levelId = id("coordinated_level");
-        ResourceLocation modifierId = id("coordinated_modifier");
         structures.registerLevelType(new LevelType(typeId,
                 Component.literal("Coil")));
         structures.registerLevel(new MachineLevel(levelId, typeId, 1,
                 new cn.howxu.mmcr.api.machine.BlockPredicate.OfBlockState(Blocks.FURNACE.defaultBlockState()),
                 ItemStack.EMPTY,
                 ModifierDefinition.EMPTY));
-        structures.registerModifier(modifierId, new ModifierDefinition(List.of()));
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
                 .requirements(requirements -> requirements.levelSlot('F', typeId).modifier('F', modifierId))));
@@ -120,6 +120,42 @@ class ContentRegistrationCoordinatorTest {
         assertThat(MachineLevelRegistry.getType(typeId)).isNotNull();
         assertThat(MachineLevelRegistry.getLevel(levelId)).isNotNull();
         assertThat(ModifierRegistry.get(modifierId)).isNotNull();
+    }
+
+    @Test
+    void registered_modifier_cannot_be_granted_by_a_structure() {
+        var machine = id("restricted_machine");
+        var speed = id("restricted_speed");
+        var type = id("restricted_structure_level");
+        var definitions = new MachineDefinitionRegistration();
+        definitions.registerModifier(speed, ModifierDefinition.EMPTY);
+        definitions.registerMachine(MachineBuilder.machine(machine).build());
+        var structures = new StructureRegistration(List.of(machine));
+        structures.registerLevelType(new LevelType(type, Component.literal("Coil")));
+        structures.registerStructure(machine, builder -> builder.fullStructure(stage -> stage
+                .pattern(pattern -> pattern.layer("M").where('M', BlockPredicate.block(Blocks.FURNACE)).controller('M'))
+                .requirements(requirements -> requirements.modifier('M', speed))));
+        ContentRegistrationCoordinator.beginStartup();
+        ContentRegistrationCoordinator.collectMachines(definitions);
+        ContentRegistrationCoordinator.collectStructures(structures);
+
+        assertThatThrownBy(ContentRegistrationCoordinator::commitStructures)
+                .hasMessageContaining(machine.toString()).hasMessageContaining("symbol M")
+                .hasMessageContaining(speed.toString()).hasMessageContaining("not allowed");
+        assertThat(MachineStructureRegistry.startupSnapshot()).doesNotContainKey(machine);
+        assertThat(MachineLevelRegistry.getType(type)).isNull();
+    }
+
+    @Test
+    void machine_cannot_authorize_an_undefined_modifier_even_without_a_structure() {
+        var machine = id("dangling_upgrade_machine");
+        var missing = id("undefined_upgrade");
+        ContentRegistrationCoordinator.beginStartup();
+        ContentRegistrationCoordinator.collectMachine(MachineBuilder.machine(machine).allowModifier(missing).build());
+
+        assertThatThrownBy(ContentRegistrationCoordinator::commitStructures)
+                .hasMessageContaining(machine.toString()).hasMessageContaining(missing.toString());
+        assertThat(MachineDefinitions.getRegistration(machine)).isNull();
     }
 
     @Test
@@ -192,7 +228,7 @@ class ContentRegistrationCoordinatorTest {
         ResourceLocation recipeId = id("repeated_begin_recipe");
         ResourceLocation modifierId = id("repeated_begin_modifier");
         StructureRegistration structures = new StructureRegistration(List.of(machineId));
-        structures.registerModifier(modifierId, ModifierDefinition.EMPTY);
+        ContentRegistrationCoordinator.startupDefinitions().registerModifier(modifierId, ModifierDefinition.EMPTY);
         structures.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage.pattern(pattern -> pattern
                 .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))));
         ContentRegistrationCoordinator.beginStartup();
@@ -227,7 +263,7 @@ class ContentRegistrationCoordinatorTest {
         assertThat(MachineDefinitions.getRegistration(id("artificial_star"))).isNotNull();
         var declaration = MachineStructureBuilder.structure().fullStructure(stage -> stage.pattern(pattern -> pattern
                 .layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))).build(machineId);
-        var structure = MachineDefinitionConverter.toStructureDefinition(declaration, Map.of());
+        var structure = MachineDefinitionConverter.toStructureDefinition(declaration);
         assertThatCode(() -> RuntimeContentCoordinator.commitDynamic(Map.of(machineId, structure), Map.of()))
                 .doesNotThrowAnyException();
         assertThat(MachineRegistry.getMachine(machineId)).isNotNull();
@@ -240,9 +276,9 @@ class ContentRegistrationCoordinatorTest {
         var typeId = id("forward_startup_type");
         var levelId = id("forward_startup_level");
         var modifierId = id("forward_startup_modifier");
+        var machineId = id("forward_modifier_machine");
         Runnable references = () -> {
             event.createLevel(levelId).type(typeId).state("minecraft:copper_block").register();
-            event.registerModifierItem("minecraft:diamond", modifierId.toString());
         };
         Runnable definitions = () -> {
             event.createLevelType(typeId).register();
@@ -257,7 +293,10 @@ class ContentRegistrationCoordinatorTest {
                 Consumer.class, Consumer.class, Consumer.class, boolean.class, boolean.class, boolean.class,
                 IEventBus.class);
         register.setAccessible(true);
-        Consumer<RegisterMachineDefinitionsEvent> machines = ignored -> { };
+        Consumer<RegisterMachineDefinitionsEvent> machines = java -> {
+            java.registerMachine(machineId, machine -> machine.allowModifier(modifierId));
+            java.registerModifierItem(ResourceLocation.withDefaultNamespace("diamond"), modifierId);
+        };
         Consumer<RegisterMachineStructuresEvent> structures = ignored -> {
             if (javaFirst) references.run();
         };
@@ -277,6 +316,7 @@ class ContentRegistrationCoordinatorTest {
         assertThat(ContentRegistrationCoordinator.isCommitted()).isTrue();
         assertThat(ContentRegistrationCoordinator.commitCountForTesting()).isEqualTo(1);
         assertThat(MachineLevelRegistry.getLevel(levelId).typeId()).isEqualTo(typeId);
+        assertThat(MachineDefinitions.getRegistration(machineId).allowedModifierIds()).containsExactly(modifierId);
         assertThat(ModifierRegistry.modifierFor(new ItemStack(Items.DIAMOND))).isEqualTo(modifierId);
         assertThatThrownBy(() -> event.createLevelType(id("late_forward_type")).register())
                 .hasMessageContaining("frozen");
@@ -348,8 +388,7 @@ class ContentRegistrationCoordinatorTest {
                 existingMachine, null));
         RecipeRegistry.registerStatic(MachineRecipeConverter.toRecipe(
                 MachineRecipeBuilder.recipe(existingRecipeId).recipePool(existingMachineId).duration(1).build(),
-                new StructureRegistration.Snapshot(Map.of(), Map.of(),
-                        Map.of(), Map.of())));
+                Map.of(), Map.of()));
         ContentRegistrationCoordinator.beginStartup();
 
         ResourceLocation newMachineId = id("atomic_new_machine");

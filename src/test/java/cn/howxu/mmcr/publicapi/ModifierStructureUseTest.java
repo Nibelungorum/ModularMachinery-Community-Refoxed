@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.machine.MachineStructureRequirementCompiler;
 import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
-import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.definition.ModifierUse;
 import cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.definition.StructureRequirements;
@@ -49,11 +48,11 @@ class ModifierStructureUseTest {
         ResourceLocation speedupId = MMCR.id("speedup");
         ModifierUse use = ModifierUse.of(speedupId, BlockPredicate.block(Blocks.DIAMOND_BLOCK));
         StructureRegistration event = new StructureRegistration(List.of(machineId));
-        event.registerModifier(speedupId, new ModifierDefinition(List.of()));
         event.registerStructure(structure(machineId, use));
         var snapshot = event.freeze();
 
         var runtime = MachineDefinitionConverter.toStructureDefinition(snapshot.structures().get(machineId));
+        runtime.validateModifiers(Set.of(speedupId), Set.of(speedupId));
         var declaration = runtime.declarations().getFirst();
         var compiled = MachineStructureRequirementCompiler.compile(declaration.pattern(), declaration.requirements());
         BlockPos position = BlockPos.ZERO;
@@ -71,14 +70,15 @@ class ModifierStructureUseTest {
     }
 
     @Test
-    void unknown_modifier_id_is_rejected_when_structure_event_freezes() {
+    void unknown_modifier_id_is_rejected_when_linking_the_structure() {
         ResourceLocation machineId = MMCR.id("unknown_modifier_structure");
         ResourceLocation unknownId = MMCR.id("unknown_speedup");
         StructureRegistration event = new StructureRegistration(List.of(machineId));
         event.registerStructure(structure(machineId,
                 ModifierUse.of(unknownId, BlockPredicate.block(Blocks.DIAMOND_BLOCK))));
 
-        assertThatThrownBy(event::freeze)
+        var runtime = MachineDefinitionConverter.toStructureDefinition(event.freeze().structures().get(machineId));
+        assertThatThrownBy(() -> runtime.validateModifiers(Set.of(), Set.of()))
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining(unknownId.toString());
     }

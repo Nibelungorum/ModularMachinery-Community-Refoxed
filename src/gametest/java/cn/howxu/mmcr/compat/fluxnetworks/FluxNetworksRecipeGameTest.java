@@ -10,7 +10,6 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.RecipeSearchTask;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInputBlockEntity;
@@ -258,7 +257,7 @@ public final class FluxNetworksRecipeGameTest {
             // A real prior definition shares the ID/pool but no longer matches the startup catalog's duration=5.
             MachineRecipe priorDefinition = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(RECIPE_ID)
                     .recipePool(MACHINE_ID).duration(4).parallelized(true).inputEnergy(10L).build(),
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                    Map.of(), Map.of());
             warmAndStart(helper, runtime, priorDefinition, 2, network);
             runtime.tick();
             helper.assertTrue(rig.input().getTransferBuffer() == 60L && rig.input().getTransferHandler().reserved() == 60L

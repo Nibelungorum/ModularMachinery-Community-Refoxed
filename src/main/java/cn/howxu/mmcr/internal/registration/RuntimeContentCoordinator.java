@@ -15,7 +15,6 @@ import cn.howxu.mmcr.internal.network.ControllerSpecSync;
 import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import cn.howxu.mmcr.internal.sync.RuntimeContentVersion;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Set;
 import net.minecraft.resources.ResourceLocation;
 
@@ -193,15 +192,7 @@ public final class RuntimeContentCoordinator {
             if (!id.equals(structure.machineId())) {
                 throw new IllegalStateException("Structure key does not match machine id: " + id + " != " + structure.machineId());
             }
-            structure.declarations().forEach(declaration -> declaration.requirements().modifierReplacements().values()
-                    .stream().flatMap(Collection::stream)
-                    .forEach(replacement -> {
-                        ResourceLocation modifierId = replacement.getModifierId();
-                        if (ModifierRegistry.get(modifierId) == null) {
-                            throw new IllegalStateException("Structure " + id
-                                    + " refers to unknown machine modifier " + modifierId);
-                        }
-                    }));
+            structure.validateModifiers(registration.allowedModifierIds(), ModifierRegistry.definitions().keySet());
             registrations.put(id, registration.withPattern(structure.pattern()));
         }
         MachineRoleValidator.validate(registrations.values(), null);

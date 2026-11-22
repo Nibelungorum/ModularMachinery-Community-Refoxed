@@ -31,7 +31,7 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class ContentRegistrationCoordinator {
-    private static final Map<ResourceLocation, MachineDefinition> MACHINES = new LinkedHashMap<>();
+    private static MachineDefinitionRegistration startupDefinitions = new MachineDefinitionRegistration();
     private static final Map<ResourceLocation, cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition> STRUCTURES =
             new LinkedHashMap<>();
     private static final Map<ResourceLocation, MachineRecipeDefinition> RECIPES = new LinkedHashMap<>();
@@ -46,7 +46,6 @@ public final class ContentRegistrationCoordinator {
     public static synchronized void beginStartup() {
         // KubeJS plugins can collect declarations before MMCR's construct event begins startup.
         if (state != State.BEFORE_BEGIN) return;
-        MACHINES.clear();
         STRUCTURES.clear();
         RECIPES.clear();
         STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
@@ -57,14 +56,19 @@ public final class ContentRegistrationCoordinator {
         return state == State.COMMITTED;
     }
 
+    /** Shared startup declarations, also available to scripts that run before beginStartup. */
+    public static synchronized MachineDefinitionRegistration startupDefinitions() {
+        return startupDefinitions;
+    }
+
     public static synchronized void collectMachines(MachineDefinitionRegistration event) {
         requireCollecting();
-        event.definitions().forEach((id, definition) -> putUnique(MACHINES, id, definition, "machine"));
+        startupDefinitions.collectFrom(event);
     }
 
     public static synchronized void collectMachine(MachineDefinition definition) {
         requireCollecting();
-        putUnique(MACHINES, definition.id(), definition, "machine");
+        startupDefinitions.registerMachine(definition);
     }
 
     public static synchronized void collectStructures(StructureRegistration event) {
@@ -72,8 +76,6 @@ public final class ContentRegistrationCoordinator {
         STRUCTURE_SNAPSHOT = event.freeze();
         event.structures().forEach((id, structure) -> putUnique(STRUCTURES, id, structure, "structure"));
         MachineLevelRegistry.validateSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(),
-                STRUCTURE_SNAPSHOT.levels().values());
-        MachineLevelRegistry.installSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(),
                 STRUCTURE_SNAPSHOT.levels().values());
     }
 
@@ -94,7 +96,7 @@ public final class ContentRegistrationCoordinator {
         commitRecipes();
         testCommitCount++;
         lastStartupSnapshot = new StartupSnapshotForTesting(
-                Set.copyOf(MACHINES.keySet()), Set.copyOf(STRUCTURES.keySet()), Set.copyOf(RECIPES.keySet()));
+                Set.copyOf(startupDefinitions.definitions().keySet()), Set.copyOf(STRUCTURES.keySet()), Set.copyOf(RECIPES.keySet()));
         }
     }
 
@@ -108,10 +110,14 @@ public final class ContentRegistrationCoordinator {
     public static synchronized void commitStructures() {
         requireCollecting();
 
-        Map<ResourceLocation, MachineRegistration> registrations = validateAndConvertMachines();
-        Map<ResourceLocation, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
-        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), Map.of(), STRUCTURE_SNAPSHOT.stacking(),
-                STRUCTURE_SNAPSHOT.modifierItemLimits());
+        var modifiers = startupDefinitions.modifierSnapshot();
+        Set<ResourceLocation> registeredIds = modifiers.modifiers().keySet();
+        Map<ResourceLocation, MachineRegistration> registrations = validateAndConvertMachines(registeredIds);
+        Map<ResourceLocation, MachineStructureDefinition> structures = validateAndConvertStructures(registrations, registeredIds);
+        MachineLevelRegistry.installSnapshot(STRUCTURE_SNAPSHOT.levelTypes().values(),
+                STRUCTURE_SNAPSHOT.levels().values());
+        startupDefinitions.freeze();
+        ModifierRegistry.installSnapshot(modifiers.modifiers(), Map.of(), modifiers.stacking(), modifiers.modifierItemLimits());
         registrations.values().forEach(registration -> {
             if (MachineDefinitions.containsStatic(registration.id())) {
                 MachineDefinitions.replace(registration);
@@ -125,8 +131,9 @@ public final class ContentRegistrationCoordinator {
     /** Resolves startup item IDs only after their default data components are available. */
     public static synchronized void commitModifierItemsAfterComponentsBound() {
         requireCollecting();
-        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.resolveModifierItems(),
-                STRUCTURE_SNAPSHOT.stacking(), STRUCTURE_SNAPSHOT.modifierItemLimits());
+        var modifiers = startupDefinitions.modifierSnapshot();
+        ModifierRegistry.installSnapshot(modifiers.modifiers(), modifiers.resolveModifierItems(),
+                modifiers.stacking(), modifiers.modifierItemLimits());
     }
 
     /**
@@ -164,7 +171,7 @@ public final class ContentRegistrationCoordinator {
 
     /** Test-only reset hook; resets coordinator-owned collection state only. */
     public static synchronized void clearForTesting() {
-        MACHINES.clear();
+        startupDefinitions = new MachineDefinitionRegistration();
         STRUCTURES.clear();
         RECIPES.clear();
         STRUCTURE_SNAPSHOT = emptyStructureSnapshot();
@@ -183,13 +190,19 @@ public final class ContentRegistrationCoordinator {
         MachineRegistry.clearForTesting();
         MachineStructureRegistry.clearForTesting();
         MachineLevelRegistry.installSnapshot(List.of(), List.of());
+        ModifierRegistry.installSnapshot(Map.of());
         RecipeRegistry.clearForTesting();
     }
 
-    private static Map<ResourceLocation, MachineRegistration> validateAndConvertMachines() {
+    private static Map<ResourceLocation, MachineRegistration> validateAndConvertMachines(Set<ResourceLocation> registeredIds) {
         Map<ResourceLocation, MachineRegistration> registrations = new LinkedHashMap<>();
-        MACHINES.forEach((id, definition) -> registrations.put(id,
-                MachineDefinitionConverter.toStartupRegistration(definition, STRUCTURES.get(id))));
+        startupDefinitions.definitions().forEach((id, definition) -> {
+            for (ResourceLocation modifierId : definition.allowedModifierIds()) {
+                if (!registeredIds.contains(modifierId)) throw new ApiRegistrationException(
+                        "Machine " + id + " allows unknown machine modifier " + modifierId);
+            }
+            registrations.put(id, MachineDefinitionConverter.toStartupRegistration(definition, STRUCTURES.get(id)));
+        });
         Map<ResourceLocation, MachineRegistration> all = new LinkedHashMap<>();
         MachineDefinitions.allRegistrations().forEach(registration -> all.put(registration.id(), registration));
         all.putAll(registrations);
@@ -198,8 +211,7 @@ public final class ContentRegistrationCoordinator {
     }
 
     private static Map<ResourceLocation, MachineStructureDefinition> validateAndConvertStructures(
-            Map<ResourceLocation, MachineRegistration> registrations) {
-        StructureRegistration.Snapshot snapshot = STRUCTURE_SNAPSHOT;
+            Map<ResourceLocation, MachineRegistration> registrations, Set<ResourceLocation> registeredIds) {
         Map<ResourceLocation, MachineStructureDefinition> structures = new LinkedHashMap<>();
         STRUCTURES.forEach((id, structure) -> {
             if (!registrations.containsKey(id) && MachineDefinitions.getRegistration(id) == null) {
@@ -207,7 +219,8 @@ public final class ContentRegistrationCoordinator {
             }
             MachineRegistration registration = registrations.get(id);
             if (registration == null) registration = MachineDefinitions.getRegistration(id);
-            MachineStructureDefinition converted = MachineDefinitionConverter.toStructureDefinition(structure, snapshot.modifiers());
+            MachineStructureDefinition converted = MachineDefinitionConverter.toStructureDefinition(structure);
+            converted.validateModifiers(registration.allowedModifierIds(), registeredIds);
             MachineStructureRegistry.toRuntimeMachine(registration, converted);
             structures.put(id, converted);
         });
@@ -215,10 +228,10 @@ public final class ContentRegistrationCoordinator {
     }
 
     private static Map<ResourceLocation, MachineRecipe> validateAndConvertRecipes() {
-        StructureRegistration.Snapshot snapshot = STRUCTURE_SNAPSHOT;
+        var modifiers = startupDefinitions.modifiers();
         Map<ResourceLocation, MachineRecipe> recipes = new LinkedHashMap<>();
         RECIPES.forEach((id, definition) -> {
-            recipes.put(id, MachineRecipeConverter.toRecipe(definition, snapshot));
+            recipes.put(id, MachineRecipeConverter.toRecipe(definition, STRUCTURE_SNAPSHOT.levels(), modifiers));
         });
         return recipes;
     }
@@ -242,7 +255,7 @@ public final class ContentRegistrationCoordinator {
     }
 
     private static StructureRegistration.Snapshot emptyStructureSnapshot() {
-        return new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
+        return new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of());
     }
 
     private static <V> void putUnique(Map<ResourceLocation, V> target, ResourceLocation id, V value, String kind) {

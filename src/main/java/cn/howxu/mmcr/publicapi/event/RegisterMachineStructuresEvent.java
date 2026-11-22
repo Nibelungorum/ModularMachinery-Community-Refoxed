@@ -5,16 +5,12 @@ import cn.howxu.mmcr.publicapi.structure.StructureDraft;
 import cn.howxu.mmcr.publicapi.structure.StructureSpec;
 import cn.howxu.mmcr.publicapi.structure.level.LevelTypeSpec;
 import cn.howxu.mmcr.publicapi.structure.level.MachineLevelSpec;
-import cn.howxu.mmcr.publicapi.recipe.modifier.BlockStackingMode;
-import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierBundle;
 import cn.howxu.mmcr.publicapi.registration.StructureRegistrar;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.Event;
 
 /** Structure registration event posted on NeoForge.EVENT_BUS after controllers exist.
@@ -35,20 +31,7 @@ public final class RegisterMachineStructuresEvent extends Event {
     public void registerStructure(StructureSpec structure) { registrar.registerStructure(structure); }
     public void registerLevelType(LevelTypeSpec type) { registrar.registerLevelType(type); }
     public void registerLevel(MachineLevelSpec level) { registrar.registerLevel(level); }
-    public void registerModifier(ResourceLocation id, ModifierBundle modifier) { registrar.registerModifier(id, modifier); }
-    public void registerModifier(ResourceLocation id, ModifierBundle modifier, boolean stackable) {
-        registrar.registerModifier(id, modifier, stackable);
-    }
-    public void registerModifier(ResourceLocation id, ModifierBundle modifier, boolean stackable, BlockStackingMode mode) {
-        registrar.registerModifier(id, modifier, stackable, mode);
-    }
-    public void registerModifierItem(ResourceLocation itemId, ResourceLocation id) { registrar.registerModifierItem(itemId, id); }
-    /** Declares a positive per-machine cap on effective upgrade items, not on inventory or structure blocks. */
-    public void limitModifierItems(ResourceLocation modifierId, int maxCount) { registrar.limitModifierItems(modifierId, maxCount); }
     public Map<ResourceLocation, StructureSpec> structures() { return registrar.structures(); }
     public Map<ResourceLocation, LevelTypeSpec> levelTypes() { return registrar.levelTypes(); }
     public Map<ResourceLocation, MachineLevelSpec> levels() { return registrar.levels(); }
-    public Map<ResourceLocation, ModifierBundle> modifiers() { return registrar.modifiers(); }
-    public Map<ResourceLocation, List<ItemStack>> modifierItems() { return registrar.modifierItems(); }
-    public Map<ResourceLocation, ResourceLocation> modifierItemIds() { return registrar.modifierItemIds(); }
 }

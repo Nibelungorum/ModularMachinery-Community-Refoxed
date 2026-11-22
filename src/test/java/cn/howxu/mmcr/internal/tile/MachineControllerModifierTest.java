@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.internal.tile;
 
+import java.util.Set;
+import net.minecraft.resources.ResourceLocation;
 import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -55,8 +57,9 @@ class MachineControllerModifierTest {
                 new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK));
 
         Map<String, List<MachineModifier>> found = collectFoundModifiers(controller,
-                Map.of(BlockPos.ZERO, List.of(replacement)));
+                Map.of(BlockPos.ZERO, List.of(replacement)), Set.of(modifierId));
 
+        assertThat(collectFoundModifiers(controller, Map.of(BlockPos.ZERO, List.of(replacement)), Set.of())).isEmpty();
         assertThat(replacement.getModifiers()).isEmpty();
         assertThat(found).containsEntry(modifierId.toString(), List.of(modifier));
     }
@@ -73,7 +76,7 @@ class MachineControllerModifierTest {
         try {
             for (var policy : List.of(ModifierStacking.LEGACY, ModifierStacking.ADD, ModifierStacking.MULTIPLY)) {
                 ModifierRegistry.installSnapshot(Map.of(id, effect), Map.of(), Map.of(id, policy));
-                var found = collectFoundModifiers(controller, positions).get(id.toString());
+                var found = collectFoundModifiers(controller, positions, Set.of(id)).get(id.toString());
                 float ticks = IntegrationTypeHelper.applyDuration(MachineModifier.recipeModifiers(found), 100);
                 assertThat(Math.round(ticks)).isEqualTo(policy == ModifierStacking.LEGACY ? 90
                         : policy == ModifierStacking.ADD ? 80 : 81);
@@ -107,10 +110,10 @@ class MachineControllerModifierTest {
     @SuppressWarnings("unchecked")
     private static Map<String, List<MachineModifier>> collectFoundModifiers(
             MachineControllerBlockEntity controller,
-            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) throws Exception {
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements, Set<ResourceLocation> allowed) throws Exception {
         Method method = MachineControllerBlockEntity.class
-                .getDeclaredMethod("collectFoundModifiers", Map.class);
+                .getDeclaredMethod("collectFoundModifiers", Map.class, Set.class);
         method.setAccessible(true);
-        return (Map<String, List<MachineModifier>>) method.invoke(controller, replacements);
+        return (Map<String, List<MachineModifier>>) method.invoke(controller, replacements, allowed);
     }
 }

@@ -9,7 +9,6 @@ import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.MachineRecipeDefinition;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.compat.create.CreateRecipeTypes;
 import cn.howxu.mmcr.compat.botania.BotaniaManaIds;
 import cn.howxu.mmcr.compat.mekanism.loaded.LoadedHeatRequirement;
@@ -52,8 +51,6 @@ import static org.assertj.core.groups.Tuple.tuple;
  */
 class PneumaticAirDisplayTest {
     private static final ResourceLocation ID = ResourceLocation.parse("test:air_display");
-    private static final StructureRegistration.Snapshot EMPTY_STRUCTURE =
-            new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of());
 
     @BeforeAll
     static void bootstrap() throws Exception {
@@ -170,8 +167,7 @@ class PneumaticAirDisplayTest {
         var modifiers = ModifierDefinition.of("output", "output", 3, "multiply", false);
         var definition = builder().inputAir(40, 4.1F, List.of("drive"))
                 .outputAir(80, List.of("generator")).modifier(modifierId).build();
-        var snapshot = new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of(modifierId, modifiers));
-        var display = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(definition, snapshot));
+        var display = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(definition, Map.of(), Map.of(modifierId, modifiers)));
 
         assertThat(display.airInputs()).containsExactly(new MachineRecipeDisplay.AirDisplay(40, 4.1F, List.of("drive")));
         assertThat(display.airOutputs()).containsExactly(new MachineRecipeDisplay.AirDisplay(240, 0F, List.of("generator")));
@@ -203,12 +199,11 @@ class PneumaticAirDisplayTest {
         TestBootstrap.registerType(type);
         TestBootstrap.registerLevel(level);
         TestBootstrap.freezeRegistration();
-        var snapshot = new StructureRegistration.Snapshot(Map.of(), Map.of(levelType, type), Map.of(levelId, level), Map.of());
         var baselineDefinition = mixedBuilder(levelType, levelId).build();
         var mixedDefinition = mixedBuilder(levelType, levelId)
                 .inputAir(0, 4F).inputAir(40, 4.5F).outputAir(80).outputAir(120).build();
-        var baseline = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(baselineDefinition, snapshot));
-        var mixed = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(mixedDefinition, snapshot));
+        var baseline = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(baselineDefinition, Map.of(levelId, level), Map.of()));
+        var mixed = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(mixedDefinition, Map.of(levelId, level), Map.of()));
 
         assertThat(mixed.entries()).extracting(JeiDisplayEntry::typeId)
                 .containsExactlyElementsOf(baseline.entries().stream().map(JeiDisplayEntry::typeId).toList());
@@ -309,7 +304,6 @@ class PneumaticAirDisplayTest {
         TestBootstrap.registerType(type);
         TestBootstrap.registerLevel(level);
         TestBootstrap.freezeRegistration();
-        var snapshot = new StructureRegistration.Snapshot(Map.of(), Map.of(levelType, type), Map.of(levelId, level), Map.of());
         var builder = builder().inputEnergy(40).outputEnergy(80).inputAir(40, 4F).outputAir(80)
                 .requiredHost(ResourceLocation.parse("test:air_display_host"))
                 .levelRequirement(levelType, levelId).stageRequirement(2)
@@ -318,7 +312,7 @@ class PneumaticAirDisplayTest {
         for (int index = 0; index < 15; index++) {
             builder.inputItem(Items.IRON_INGOT, 1).outputItem(Items.GOLD_INGOT, 1);
         }
-        var display = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(builder.build(), snapshot));
+        var display = MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(builder.build(), Map.of(levelId, level), Map.of()));
         for (int scale = 1; scale <= 5; scale++) {
             var layout = MachineRecipeLayout.forDisplay(display, scale);
             assertThat(layout.height()).isGreaterThanOrEqualTo(switch (scale) {
@@ -418,7 +412,7 @@ class PneumaticAirDisplayTest {
     }
 
     private static MachineRecipeDisplay display(MachineRecipeDefinition definition) {
-        return MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(definition, EMPTY_STRUCTURE));
+        return MachineRecipeDisplay.from(MachineRecipeConverter.toRecipe(definition, Map.of(), Map.of()));
     }
 
     private static void assertTranslation(Component component, String suffix, Object... arguments) {

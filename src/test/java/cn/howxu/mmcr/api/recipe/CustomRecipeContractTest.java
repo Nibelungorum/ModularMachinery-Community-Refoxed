@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.api.recipe;
 
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.capability.MachineCapability;
 import cn.howxu.mmcr.api.capability.CapabilitySnapshot;
@@ -104,7 +103,7 @@ class CustomRecipeContractTest {
                     .custom(customOutput)
                     .build();
             var recipe = MachineRecipeConverter.toRecipe(definition,
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                    Map.of(), Map.of());
 
             assertThat(recipe.requirements()).containsExactly(input);
             assertThat(recipe.machineOutputs()).containsExactly(output);

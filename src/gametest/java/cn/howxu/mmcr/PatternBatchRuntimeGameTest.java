@@ -585,7 +585,7 @@ public final class PatternBatchRuntimeGameTest {
             var registries = helper.getLevel().registryAccess();
             var saved = new CompoundTag();
             if (factory) runtime.factoryRuntime().save(saved, registries); else runtime.craftingRuntime().save(saved, registries);
-            controller.componentRuntime().setModifiersAllowed(true);
+            controller.componentRuntime().setAllowedModifierIds(Set.of(ResourceLocation.parse("changed")));
             controller.componentRuntime().replaceModifiers(Map.of("changed", List.of(
                     MachineModifier.numeric("output", "output", 2D, "multiply", false))));
             if (factory) {

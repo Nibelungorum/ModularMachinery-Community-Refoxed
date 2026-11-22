@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.machine;
 
+import java.util.Set;
+import cn.howxu.mmcr.api.registration.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -68,6 +70,20 @@ public record MachineStructureDefinition(ResourceLocation machineId, List<Declar
     public Map<BlockPos, List<SingleBlockModifierReplacement>> modifierReplacements() {
         Declaration declaration = declarations.getFirst();
         return compiled(declaration).modifierReplacements();
+    }
+
+    public void validateModifiers(Set<ResourceLocation> allowedIds, Set<ResourceLocation> registeredIds) {
+        for (Declaration declaration : declarations) {
+            declaration.requirements().modifierReplacements().forEach((symbol, replacements) -> {
+                for (SingleBlockModifierReplacement replacement : replacements) {
+                    ResourceLocation id = replacement.getModifierId();
+                    if (!registeredIds.contains(id)) throw new ApiRegistrationException(
+                            "Structure " + machineId + " symbol " + symbol + " refers to unknown machine modifier " + id);
+                    if (!allowedIds.contains(id)) throw new ApiRegistrationException(
+                            "Structure " + machineId + " symbol " + symbol + " uses modifier " + id + " not allowed by the machine");
+                }
+            });
+        }
     }
 
     public Map<BlockPos, ResourceLocation> levelSlots() {

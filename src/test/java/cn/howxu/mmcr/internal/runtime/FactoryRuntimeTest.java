@@ -240,9 +240,11 @@ class FactoryRuntimeTest {
     void ratio_upgrades_change_lane_admission_and_batch_size_only_for_new_jobs(MachineWorkMode mode) throws Exception {
         ConfigTestSupport.setMachineWorkMode(mode);
         var id = MMCR.id("scheduling_upgrade_factory");
+        var upgrade = MMCR.id("scheduling_upgrade");
+        var veto = MMCR.id("scheduling_veto");
         if (MachineDefinitions.getRegistration(id) == null) {
             MachineDefinitions.beginRegistryPhase();
-            MachineDefinitions.register(MachineRegistration.builder(id).allowModifiers(true).build());
+            MachineDefinitions.register(MachineRegistration.builder(id).allowModifier(upgrade).allowModifier(veto).build());
         }
         var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
         var scheduler = new FactorySchedulerBlockEntity(BlockPos.ZERO.west(),
@@ -264,14 +266,12 @@ class FactoryRuntimeTest {
         RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, bus, parallel, input);
         var level = (ServerLevel) controller.getLevel();
         installInlineFactoryCoordinator(level);
-        var upgrade = MMCR.id("scheduling_upgrade");
         var item = new ItemStack(Items.DIAMOND);
         var effects = new ModifierDefinition(List.of(
                 MachineModifier.numeric("parallelism", "machine", 0.5, "add_ratio", false),
                 MachineModifier.numeric("factory_threads", "machine", 3, "add_ratio", false),
                 MachineModifier.numeric("recipe_threads", "recipe", -0.25, "add_ratio", false),
                 MachineModifier.numeric("duration", "input", -0.25, "add_ratio", false)));
-        var veto = MMCR.id("scheduling_veto");
         var vetoItem = new ItemStack(Items.REDSTONE);
         var singleBatch = new ModifierDefinition(List.of(MachineModifier.parallelized(false),
                 MachineModifier.numeric("factory_threads", "machine", 3, "add_ratio", false)));

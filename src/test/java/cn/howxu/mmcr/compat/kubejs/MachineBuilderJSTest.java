@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
@@ -172,13 +173,13 @@ class MachineBuilderJSTest {
         var registration = new MachineBuilderJS(MMCR.id("arc_furnace"))
                 .displayNameKey("machine.mmcr.arc_furnace")
                 .allowVerticalFacing()
-                .allowModifiers()
+                .allowModifier("mmcr:speed")
                 .createObject();
 
         assertThat(registration.id()).isEqualTo(MMCR.id("arc_furnace"));
         assertThat(registration.displayNameKey()).isEqualTo("machine.mmcr.arc_furnace");
         assertThat(registration.controllerSpec().allowVerticalFacing()).isTrue();
-        assertThat(registration.allowModifiers()).isTrue();
+        assertThat(registration.allowedModifierIds()).containsExactly(MMCR.id("speed"));
     }
 
     @Test
@@ -307,8 +308,9 @@ class MachineBuilderJSTest {
     @Test
     void registered_machine_keeps_runtime_capabilities_and_sounds() {
         ResourceLocation id = MMCR.id("registered_capabilities");
+        new MMCRStartupEventJS().registerModifier(MMCR.id("speed"), ModifierDefinition.EMPTY);
         new MachineBuilderJS(id)
-                .allowModifiers()
+                .allowModifier("mmcr:speed")
                 .allowMultithreading()
                 .allowParallelism()
                 .maxParallelAmount(6)
@@ -321,7 +323,7 @@ class MachineBuilderJSTest {
 
         Plugin.freezeStartupRegistryPhaseForTesting();
         MachineRegistration registration = MachineDefinitions.getRegistration(id);
-        assertThat(registration.allowModifiers()).isTrue();
+        assertThat(registration.allowedModifierIds()).containsExactly(MMCR.id("speed"));
         assertThat(registration.allowMultithreading()).isTrue();
         assertThat(registration.allowParallelism()).isTrue();
         assertThat(registration.maxParallelAmount()).isEqualTo(6);
@@ -632,7 +634,7 @@ class MachineBuilderJSTest {
 
         assertThatThrownBy(() -> new MachineRegistration(registration.id(), registration.displayNameKey(),
                 registration.controllerSpec(), registration.appearance(), registration.recipePoolId(),
-                registration.allowModifiers(), registration.allowMultithreading(), registration.allowParallelism(),
+                registration.allowedModifierIds(), registration.allowMultithreading(), registration.allowParallelism(),
                 registration.maxParallelAmount(), registration.expandableStructure(), registration.smartInterfaceTypes(),
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers(),
                 ResourceLocation.parse("mmcr:not_registered"), null, registration.role(), registration.acceptedModuleIds(),

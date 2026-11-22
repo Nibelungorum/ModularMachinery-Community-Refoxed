@@ -119,7 +119,7 @@ public final class ComponentRuntime {
     private Map<ResourceLocation, List<MachineModifier>> upgradeModifiers = Map.of();
     private List<MachineModifier> smartInterfaceModifiers = List.of();
     private long upgradeContentRevision;
-    private boolean modifiersAllowed = true;
+    private Set<ResourceLocation> allowedModifierIds = Set.of();
 
     public boolean replaceComponents(List<ProcessingComponent> components) {
         List<ProcessingComponent> nextComponents = List.copyOf(components == null ? List.of() : components);
@@ -500,9 +500,10 @@ public final class ComponentRuntime {
         return true;
     }
 
-    public void setModifiersAllowed(boolean allowed) {
-        if (modifiersAllowed == allowed) return;
-        modifiersAllowed = allowed;
+    public void setAllowedModifierIds(Set<ResourceLocation> ids) {
+        if (allowedModifierIds.equals(ids)) return;
+        allowedModifierIds = Set.copyOf(ids);
+        rebuildUpgradeModifiers();
         rebuildModifierList();
         modifierVersion++;
         stateVersion++;
@@ -732,20 +733,16 @@ public final class ComponentRuntime {
 
         upgradeBuses = next;
         List<ItemStack> items = new ArrayList<>();
-        Map<ResourceLocation, Long> units = new LinkedHashMap<>();
         for (UpgradeBusSnapshot bus : next) {
             List<ItemStack> stacks = bus.stacks();
             for (int slot = 0; slot < stacks.size(); slot++) {
                 ItemStack stack = stacks.get(slot);
                 if (stack.isEmpty()) continue;
                 items.add(stack.copy());
-                ResourceLocation modifierId = ModifierRegistry.modifierFor(stack);
-                if (modifierId != null) units.merge(modifierId, (long) stack.getCount(), Long::sum);
             }
         }
         upgradeItems = List.copyOf(items);
-        upgradeModifierUnits = immutableMap(units);
-        upgradeModifiers = upgradeModifiers(units);
+        rebuildUpgradeModifiers();
         upgradeContentRevision++;
         rebuildModifierList();
         modifierVersion++;
@@ -753,7 +750,18 @@ public final class ComponentRuntime {
         return true;
     }
 
-    private Map<ResourceLocation, List<MachineModifier>> upgradeModifiers(Map<ResourceLocation, Long> units) {
+    private void rebuildUpgradeModifiers() {
+        if (allowedModifierIds.isEmpty() || upgradeItems.isEmpty()) {
+            upgradeModifierUnits = Map.of();
+            upgradeModifiers = Map.of();
+            return;
+        }
+        Map<ResourceLocation, Long> units = new LinkedHashMap<>();
+        for (ItemStack stack : upgradeItems) {
+            ResourceLocation id = ModifierRegistry.modifierFor(stack);
+            if (id != null && allowedModifierIds.contains(id)) units.merge(id, (long) stack.getCount(), Long::sum);
+        }
+        upgradeModifierUnits = immutableMap(units);
         Map<ResourceLocation, List<MachineModifier>> result = new LinkedHashMap<>();
         for (Map.Entry<ResourceLocation, Long> entry : units.entrySet()) {
             ResourceLocation id = entry.getKey();
@@ -762,7 +770,7 @@ public final class ComponentRuntime {
             long count = ModifierRegistry.cappedItemCount(id, entry.getValue());
             result.put(id, ModifierRegistry.stacking(id).items(definition.modifiers(), count));
         }
-        return immutableMap(result);
+        upgradeModifiers = immutableMap(result);
     }
 
     private void rebuildModifierList() {
@@ -772,11 +780,12 @@ public final class ComponentRuntime {
                 .map(Map.Entry::getValue)
                 .map(MachineLevel::modifier)
                 .forEach(definition -> modifiers.addAll(definition.modifiers()));
-        if (modifiersAllowed) {
+        if (!allowedModifierIds.isEmpty()) {
             Map<ResourceLocation, List<MachineModifier>> remaining = upgradeModifiers;
             for (var block : foundModifiers.entrySet()) {
-                ResourceLocation id = remaining.isEmpty() ? null : ResourceLocation.tryParse(block.getKey());
-                List<MachineModifier> item = id == null ? null : remaining.get(id);
+                ResourceLocation id = ResourceLocation.tryParse(block.getKey());
+                if (id == null || !allowedModifierIds.contains(id)) continue;
+                List<MachineModifier> item = remaining.get(id);
                 if (item != null && ModifierRegistry.stacking(id) == ModifierStacking.UNIQUE) {
                     modifiers.addAll(MachineModifier.bestOf(block.getValue(), item));
                     if (remaining == upgradeModifiers) remaining = new LinkedHashMap<>(upgradeModifiers);

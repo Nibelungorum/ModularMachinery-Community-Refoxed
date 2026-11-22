@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.internal.runtime;
 
+import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.capability.CapabilityHost;
 import cn.howxu.mmcr.api.capability.CapabilityDirections;
 import cn.howxu.mmcr.api.capability.CapabilityRequest;
@@ -1500,6 +1501,7 @@ class ComponentRuntimeTest {
         controller.setCurrentParallelism(10);
         ComponentRuntime runtime = new ComponentRuntime();
         runtime.replaceComponents(List.of(component(controller, "controller")));
+        runtime.setAllowedModifierIds(Set.of(ResourceLocation.parse("parallelism")));
         runtime.replaceModifiers(Map.of("parallelism", List.of(
                 MachineModifier.numeric("parallelism", "machine", 2D, "multiply", false),
                 MachineModifier.numeric("parallelism", "machine", -3D, "add", false))));
@@ -1521,6 +1523,7 @@ class ComponentRuntimeTest {
 
         assertThat(runtime.maxParallelism(machine)).isEqualTo(1L);
 
+        runtime.setAllowedModifierIds(Set.of(ResourceLocation.parse("parallelism")));
         runtime.replaceModifiers(Map.of("parallelism", List.of(
                 MachineModifier.numeric("parallelism", "machine", 3D, "add", false),
                 MachineModifier.numeric("parallelism", "machine", 2D, "multiply", false))));
@@ -1564,6 +1567,7 @@ class ComponentRuntimeTest {
         var components = new ComponentRuntime();
         components.replaceComponents(List.of(component(parallel, "parallel")));
         var bonus = ModifierDefinition.of("parallelism", "machine", 0.25, "add_ratio", false);
+        components.setAllowedModifierIds(Set.of(id));
         components.replaceModifiers(Map.of(id.toString(), ModifierStacking.ADD.blocks(bonus.modifiers(), 2)));
         assertThat(components.maxParallelism(parallelizableMachine(id, 20))).isEqualTo(12);
         assertThat(components.maxParallelism(parallelizableMachine(id, 10))).isEqualTo(10);
@@ -1589,6 +1593,7 @@ class ComponentRuntimeTest {
         modifiers.put("second", List.of(second));
         ComponentRuntime runtime = new ComponentRuntime();
 
+        runtime.setAllowedModifierIds(Set.of(ResourceLocation.parse("first"), ResourceLocation.parse("second"), ResourceLocation.parse("third")));
         runtime.replaceModifiers(modifiers);
         long version = runtime.modifierVersion();
         runtime.replaceModifiers(new LinkedHashMap<>(modifiers));
@@ -1605,6 +1610,7 @@ class ComponentRuntimeTest {
     void modifier_list_reuses_immutable_content_until_modifiers_change() {
         MachineModifier modifier = MachineModifier.numeric("duration", "input", 1D, "add", false);
         ComponentRuntime runtime = new ComponentRuntime();
+        runtime.setAllowedModifierIds(Set.of(ResourceLocation.parse("cached"), ResourceLocation.parse("changed")));
         runtime.replaceModifiers(Map.of("cached", List.of(modifier)));
 
         List<MachineModifier> first = runtime.modifierList();
@@ -1670,6 +1676,33 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void machine_authorization_selects_entire_bundles_without_changing_bus_contents() {
+        var speed = ResourceLocation.parse("test:overclock");
+        var other = ResourceLocation.parse("test:other_upgrade");
+        var bundle = new ModifierDefinition(List.of(
+                MachineModifier.numeric("duration", "input", 0.5, "multiply", false),
+                MachineModifier.numeric("output", "output", 2, "multiply", false)));
+        var diamond = new ItemStack(Items.DIAMOND);
+        var first = MachineRegistration.builder(ResourceLocation.parse("test:furnace")).allowModifier(speed).build();
+        var second = MachineRegistration.builder(ResourceLocation.parse("test:mill")).allowModifier(other).build();
+        var runtime = new ComponentRuntime();
+        ModifierRegistry.installSnapshot(Map.of(speed, bundle, other, ModifierDefinition.EMPTY), Map.of(speed, List.of(diamond)));
+        try {
+            runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(diamond))));
+            assertThat(runtime.modifierList()).isEmpty();
+            runtime.setAllowedModifierIds(first.allowedModifierIds());
+            assertThat(duration(runtime, 100)).isEqualTo(50);
+            assertThat(IntegrationTypeHelper.applyItemOutput(MachineModifier.recipeModifiers(runtime.modifierList()), 10)).isEqualTo(20);
+            runtime.setAllowedModifierIds(second.allowedModifierIds());
+            assertThat(runtime.modifierList()).isEmpty();
+            assertThat(runtime.upgradeModifierUnits()).isEmpty();
+            assertThat(runtime.upgradeItems()).singleElement().satisfies(stack -> assertThat(stack.is(Items.DIAMOND)).isTrue());
+        } finally {
+            ModifierRegistry.installSnapshot(Map.of());
+        }
+    }
+
+    @Test
     void four_modifier_sources_share_relative_math_but_keep_their_own_gates_and_counts() {
         ResourceLocation id = ResourceLocation.parse("test:relative_duration");
         var definition = ModifierDefinition.of("duration", "input", -0.1, "add_ratio", false);
@@ -1677,6 +1710,7 @@ class ComponentRuntimeTest {
         ModifierRegistry.installSnapshot(Map.of(id, definition), Map.of(id, List.of(item)));
         var runtime = new ComponentRuntime();
         try {
+            runtime.setAllowedModifierIds(Set.of(id));
             runtime.replaceModifiers(Map.of(id.toString(), definition.modifiers()));
             assertThat(duration(runtime, 100)).isEqualTo(90);
             runtime.replaceModifiers(Map.of());
@@ -1684,7 +1718,7 @@ class ComponentRuntimeTest {
             assertThat(duration(runtime, 100)).isEqualTo(90);
             runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(item.copyWithCount(2)))));
             assertThat(duration(runtime, 100)).isEqualTo(80);
-            runtime.setModifiersAllowed(false);
+            runtime.setAllowedModifierIds(Set.of());
             assertThat(duration(runtime, 100)).isEqualTo(100);
             runtime.replaceLevels(Map.of(id, new MachineLevel(id, id, 1, new BlockPredicate.Any(), ItemStack.EMPTY, definition)));
             assertThat(duration(runtime, 100)).isEqualTo(90);
@@ -1708,6 +1742,7 @@ class ComponentRuntimeTest {
         try {
             ModifierRegistry.installSnapshot(Map.of(id, multiplier), bindings);
             var legacy = new ComponentRuntime();
+            legacy.setAllowedModifierIds(Set.of(id));
             legacy.replaceModifiers(Map.of(id.toString(), ModifierRegistry.stacking(id).blocks(multiplier.modifiers(), 2)));
             assertThat(duration(legacy, 1000)).isEqualTo(100);
             legacy.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(stack))));
@@ -1717,6 +1752,7 @@ class ComponentRuntimeTest {
 
             ModifierRegistry.installSnapshot(Map.of(id, ratio), bindings, Map.of(id, ModifierStacking.UNIQUE));
             var unique = new ComponentRuntime();
+            unique.setAllowedModifierIds(Set.of(id));
             unique.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(stack.copyWithCount(8)))));
             unique.replaceModifiers(Map.of(id.getPath(), ModifierRegistry.stacking(id).blocks(ratio.modifiers(), 2)));
             assertThat(duration(unique, 100)).isEqualTo(90);
@@ -1741,6 +1777,7 @@ class ComponentRuntimeTest {
             ModifierRegistry.installSnapshot(Map.of(id, definition), Map.of(id, List.of(diamond)),
                     Map.of(id, stacking), Map.of(id, itemLimit));
             var runtime = new ComponentRuntime();
+            runtime.setAllowedModifierIds(Set.of(id));
             runtime.replaceModifiers(Map.of(id.toString(), stacking.blocks(definition.modifiers(), 2)));
             runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(
                     BlockPos.ZERO, List.of(diamond.copyWithCount(6)))));
@@ -1761,6 +1798,7 @@ class ComponentRuntimeTest {
         var runtime = new ComponentRuntime();
         try {
             runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(item))));
+            runtime.setAllowedModifierIds(Set.of(id));
             runtime.replaceModifiers(Map.of(id.toString(), List.of(
                     MachineModifier.numeric("duration", "input", -10, "add", false),
                     MachineModifier.numeric("output", "output", 1.2, "multiply", false))));
@@ -1795,6 +1833,7 @@ class ComponentRuntimeTest {
                 Map.of(speedupId, List.of(speedup)));
 
         ComponentRuntime runtime = new ComponentRuntime();
+        runtime.setAllowedModifierIds(Set.of(speedupId));
         runtime.replaceUpgradeBuses(List.of(
                 new ComponentRuntime.UpgradeBusSnapshot(new BlockPos(1, 0, 0), List.of(sameSpeedup)),
                 new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(speedup, ItemStack.EMPTY, differentSpeedup))));

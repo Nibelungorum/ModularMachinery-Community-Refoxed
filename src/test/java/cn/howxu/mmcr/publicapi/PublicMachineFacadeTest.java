@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.publicapi;
 
+import java.util.Set;
 import cn.howxu.mmcr.internal.api.facade.machine.MachineAdapters;
 import cn.howxu.mmcr.publicapi.machine.ControllerOptions;
 import cn.howxu.mmcr.publicapi.machine.FactoryOptions;
@@ -37,16 +38,18 @@ class PublicMachineFacadeTest {
                 .recipePool(id("event_pool"))
                 .controller(controller -> controller.tooltip("event.tooltip"));
         var draft = MachineAdapters.wrap(coreBuilder);
-        draft.displayNameKey("event.machine.name").allowModifiers();
+        draft.displayNameKey("event.machine.name").allowModifier(id("speed"));
         assertEquals("event.machine.name", coreBuilder.build().displayNameKey());
-        assertTrue(coreBuilder.build().allowModifiers());
+        assertEquals(Set.of(id("speed")), coreBuilder.build().allowedModifierIds());
         coreBuilder.appearance(appearance -> appearance.machineBasicBlock(id("event_base")));
         var first = draft.build();
         assertEquals(id("event_machine"), first.id());
         assertEquals(id("event_pool"), first.recipePoolId());
         assertEquals(List.of("event.tooltip"), first.controller().tooltip());
         assertEquals(id("event_base"), first.appearance().machineBasicBlock());
-        coreBuilder.recipePool(id("later_pool"));
+        coreBuilder.recipePool(id("later_pool")).allowModifier(id("yield"));
+        assertEquals(Set.of(id("speed")), first.allowedModifierIds());
+        assertEquals(Set.of(id("speed"), id("yield")), draft.build().allowedModifierIds());
         assertEquals(id("later_pool"), draft.build().recipePoolId());
         assertEquals(id("event_pool"), first.recipePoolId());
     }
@@ -145,7 +148,7 @@ class PublicMachineFacadeTest {
                         .controllerActiveOverlayTexture(id("active")))
                 .controller(options -> options.tooltip("old"))
                 .runningSound(id("running")).finishSound(id("finish"))
-                .failureAction(RecipeFailureMode.RESET).allowModifiers().allowMultithreading()
+                .failureAction(RecipeFailureMode.RESET).allowModifier(id("speed")).allowMultithreading()
                 .maxParallelism(7).maxParallelAmount(3).parallelizable(true).shareSmartInterfaces();
         var first = draft.build();
         var second = draft.appearance(options -> options.machineBasicBlock(id("replacement")))
@@ -164,7 +167,7 @@ class PublicMachineFacadeTest {
         assertEquals(core.maxParallelism(), first.maxParallelism());
         assertEquals(core.maxParallelAmount(), first.maxParallelAmount());
         assertEquals(core.parallelizable(), first.parallelizable());
-        assertEquals(core.allowModifiers(), first.allowModifiers());
+        assertEquals(core.allowedModifierIds(), first.allowedModifierIds());
         assertEquals(core.allowMultithreading(), first.allowMultithreading());
         assertEquals(core.shareSmartInterfaces(), first.shareSmartInterfaces());
         assertEquals(RecipeFailureMode.RESET, first.failureAction());

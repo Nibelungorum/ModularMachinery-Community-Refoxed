@@ -17,7 +17,6 @@ import cn.howxu.mmcr.internal.storage.LongEnergyStorage;
 import cn.howxu.mmcr.api.capability.storage.FloatValueStorage;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.internal.api.facade.recipe.RecipeAdapters;
 import cn.howxu.mmcr.internal.api.facade.recipe.RequirementAdapters;
 import cn.howxu.mmcr.internal.capability.EnergyHatchCapability;
@@ -421,7 +420,7 @@ class PublicExtensionProductionTest {
         var draft = Recipes.recipe(id("recipe")).recipePool(id("pool"));
         requirements.forEach(draft::requirement);
         return MachineRecipeConverter.toRecipe(RecipeAdapters.unwrap(draft.build()),
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
     }
 
     private static RequirementKind<Payload> register(String path, Set<ResourceLocation> selector, RequirementExecution<Payload> execution) {

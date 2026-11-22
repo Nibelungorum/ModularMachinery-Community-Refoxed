@@ -32,7 +32,7 @@ public record MachineRegistration(
         MachineControllerSpec controllerSpec,
         MachineAppearanceSpec appearance,
         List<ResourceLocation> recipePoolIds,
-        boolean allowModifiers,
+        Set<ResourceLocation> allowedModifierIds,
         boolean allowMultithreading,
         boolean allowParallelism,
         long maxParallelAmount,
@@ -52,14 +52,14 @@ public record MachineRegistration(
         int factoryThreadLimit
 ) {
     public MachineRegistration(ResourceLocation id, String displayNameKey, MachineControllerSpec controllerSpec,
-            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, boolean allowModifiers,
+            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, Set<ResourceLocation> allowedModifierIds,
             boolean allowMultithreading, boolean allowParallelism, long maxParallelAmount,
             boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
             @Nullable ResourceLocation runningSoundId, @Nullable ResourceLocation finishSoundId, MachineRole role,
             Set<ResourceLocation> acceptedModuleIds, NetworkInterfaceSpec networkInterface, BlockArray pattern,
             MachineBehavior behavior) {
-        this(id, displayNameKey, controllerSpec, appearance, singletonPool(recipePoolId), allowModifiers, allowMultithreading,
+        this(id, displayNameKey, controllerSpec, appearance, singletonPool(recipePoolId), allowedModifierIds, allowMultithreading,
                 allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
                 smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface,
                 pattern, behavior, Map.of(), Map.of(), 1);
@@ -77,6 +77,7 @@ public record MachineRegistration(
         if (runningSoundId != null) validateSound(runningSoundId);
         if (finishSoundId != null) validateSound(finishSoundId);
         role = role == null ? MachineRole.NORMAL : role;
+        allowedModifierIds = Set.copyOf(allowedModifierIds);
         acceptedModuleIds = copyAcceptedModuleIds(acceptedModuleIds);
         networkInterface = networkInterface == null ? NetworkInterfaceSpec.disabled() : networkInterface;
         if (role != MachineRole.HOST && !acceptedModuleIds.isEmpty()) {
@@ -89,26 +90,26 @@ public record MachineRegistration(
     }
 
     public MachineRegistration(ResourceLocation id, String displayNameKey, MachineControllerSpec controllerSpec,
-            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, boolean allowModifiers,
+            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, Set<ResourceLocation> allowedModifierIds,
             boolean allowMultithreading, boolean allowParallelism, long maxParallelAmount,
             boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
             @Nullable ResourceLocation runningSoundId, @Nullable ResourceLocation finishSoundId, MachineRole role,
             Set<ResourceLocation> acceptedModuleIds, BlockArray pattern) {
-        this(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowModifiers,
+        this(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowedModifierIds,
                 allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure,
                 smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
                 finishSoundId, role, acceptedModuleIds, pattern, RecipeBehavior.defaults());
     }
 
     public MachineRegistration(ResourceLocation id, String displayNameKey, MachineControllerSpec controllerSpec,
-            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, boolean allowModifiers,
+            MachineAppearanceSpec appearance, ResourceLocation recipePoolId, Set<ResourceLocation> allowedModifierIds,
             boolean allowMultithreading, boolean allowParallelism, long maxParallelAmount,
             boolean expandableStructure, Map<String, SmartInterfaceType> smartInterfaceTypes,
             boolean shareSmartInterfaces, List<SmartInterfaceModifier> smartInterfaceModifiers,
             @Nullable ResourceLocation runningSoundId, @Nullable ResourceLocation finishSoundId, MachineRole role,
             Set<ResourceLocation> acceptedModuleIds, BlockArray pattern, MachineBehavior behavior) {
-        this(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowModifiers,
+        this(id, displayNameKey, controllerSpec, appearance, recipePoolId, allowedModifierIds,
                 allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure,
                 smartInterfaceTypes, shareSmartInterfaces, smartInterfaceModifiers, runningSoundId,
                 finishSoundId, role, acceptedModuleIds, NetworkInterfaceSpec.disabled(), pattern, behavior);
@@ -136,7 +137,7 @@ public record MachineRegistration(
     }
 
     public MachineRegistration withPattern(BlockArray pattern) {
-        return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipePoolIds, allowModifiers,
+        return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipePoolIds, allowedModifierIds,
                 allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
                  smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface, pattern, behavior,
                 requestProcessors, requestFailures, factoryThreadLimit);
@@ -188,7 +189,7 @@ public record MachineRegistration(
         private MachineControllerSpec controllerSpec;
         private MachineAppearanceSpec appearance;
         private List<ResourceLocation> recipePoolIds;
-        private boolean allowModifiers;
+        private final Set<ResourceLocation> allowedModifierIds = new LinkedHashSet<>();
         private boolean allowMultithreading;
         private boolean allowParallelism;
         private long maxParallelAmount = 1L;
@@ -242,8 +243,8 @@ public record MachineRegistration(
             return this;
         }
 
-        public Builder allowModifiers(boolean allowModifiers) {
-            this.allowModifiers = allowModifiers;
+        public Builder allowModifier(ResourceLocation id) {
+            allowedModifierIds.add(Objects.requireNonNull(id, "modifier id"));
             return this;
         }
 
@@ -371,7 +372,7 @@ public record MachineRegistration(
                 throw new IllegalArgumentException("Machine roles are mutually exclusive");
             }
             MachineRole role = host ? MachineRole.HOST : module ? MachineRole.MODULE : MachineRole.NORMAL;
-            return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipePoolIds, allowModifiers,
+            return new MachineRegistration(id, displayNameKey, controllerSpec, appearance, recipePoolIds, allowedModifierIds,
                     allowMultithreading, allowParallelism, maxParallelAmount, expandableStructure, smartInterfaceTypes, shareSmartInterfaces,
                      smartInterfaceModifiers, runningSoundId, finishSoundId, role, acceptedModuleIds, networkInterface, pattern, behavior,
                     requestProcessors, requestFailures, factoryThreadLimit);

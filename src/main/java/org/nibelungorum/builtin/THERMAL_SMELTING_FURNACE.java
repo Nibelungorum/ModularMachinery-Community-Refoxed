@@ -53,7 +53,6 @@ public class THERMAL_SMELTING_FURNACE {
                     .recipePool(THERMAL_SMELTING_FURNACE)
                     .displayNameKey("machine.mmcr.thermal_smelting_furnace")
                     .appearance(a -> a.machineBasicBlock(ResourceLocation.parse("minecraft:smooth_basalt")))
-                    .allowModifiers()
                     .parallelizable(true)
                     .maxParallelism(4)
                     .allowMultithreading()

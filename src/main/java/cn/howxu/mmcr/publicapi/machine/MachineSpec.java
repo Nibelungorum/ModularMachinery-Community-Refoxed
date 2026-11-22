@@ -29,7 +29,7 @@ public interface MachineSpec {
     long maxParallelism();
     int maxParallelAmount();
     boolean parallelizable();
-    boolean allowModifiers();
+    Set<ResourceLocation> allowedModifierIds();
     boolean allowMultithreading();
     boolean shareSmartInterfaces();
     RecipeFailureMode failureAction();
