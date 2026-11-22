@@ -742,9 +742,11 @@ public final class ComponentRuntime {
     private Map<Identifier, List<MachineModifier>> upgradeModifiers(Map<Identifier, Long> units) {
         Map<Identifier, List<MachineModifier>> result = new LinkedHashMap<>();
         for (Map.Entry<Identifier, Long> entry : units.entrySet()) {
-            ModifierDefinition definition = ModifierRegistry.get(entry.getKey());
+            Identifier id = entry.getKey();
+            ModifierDefinition definition = ModifierRegistry.get(id);
             if (definition == null) continue;
-            result.put(entry.getKey(), ModifierRegistry.stacking(entry.getKey()).items(definition.modifiers(), entry.getValue()));
+            long count = ModifierRegistry.cappedItemCount(id, entry.getValue());
+            result.put(id, ModifierRegistry.stacking(id).items(definition.modifiers(), count));
         }
         return immutableMap(result);
     }

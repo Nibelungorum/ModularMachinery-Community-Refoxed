@@ -11,7 +11,10 @@ import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
 import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
 import cn.howxu.mmcr.api.machine.definition.RecipeFinishContext;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
+import cn.howxu.mmcr.internal.runtime.ComponentRuntime;
 import cn.howxu.mmcr.internal.runtime.ControllerScreenTextState;
 import cn.howxu.mmcr.internal.runtime.JadeTextState;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
@@ -80,6 +83,7 @@ public final class StartupRegistryReferenceGameTest {
         assertLevel(helper, "mmcr_test:kubejs_reference_coil", "kubejs:mmcr_reference_coil");
         assertBinding(helper, "kubejs:mmcr_reference_upgrade", "mmcr_test:kubejs_reference_speed");
         assertBinding(helper, "kubejs:mmcr_reference_coil", "mmcr_test:kubejs_reference_speed");
+        assertSharedItemLimit(helper);
         var typeId = Identifier.parse("mmcr_test:kubejs_reference_coil");
         helper.assertTrue(MachineLevelRegistry.getType(typeId) != null
                         && MachineLevelRegistry.getLevel(typeId).typeId().equals(typeId),
@@ -92,6 +96,24 @@ public final class StartupRegistryReferenceGameTest {
                 "Script level declarations preserve explicit state properties through deferred compilation");
         assertIdentifierOverloads(helper);
         helper.succeed();
+    }
+
+    private static void assertSharedItemLimit(GameTestHelper helper) {
+        var speed = Identifier.parse("mmcr_test:kubejs_reference_speed");
+        var items = ModifierRegistry.modifierItems().get(speed);
+        var first = new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(items.getFirst().copyWithCount(3)));
+        var second = new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO.east(),
+                List.of(items.getLast().copyWithCount(3)));
+        var runtime = new ComponentRuntime();
+        runtime.replaceUpgradeBuses(List.of(first, second));
+        helper.assertTrue(runtime.upgradeModifierUnits().getOrDefault(speed, 0L) == 6L
+                        && runtime.upgradeItems().stream().mapToInt(ItemStack::getCount).sum() == 6,
+                "Both carriers keep all six items even though only four are effective");
+        helper.assertTrue(IntegrationTypeHelper.applyDuration(MachineModifier.recipeModifiers(runtime.modifierList()), 160) == 10,
+                "The two buses share four duration halvings between them");
+        runtime.replaceUpgradeBuses(List.of(first));
+        helper.assertTrue(IntegrationTypeHelper.applyDuration(MachineModifier.recipeModifiers(runtime.modifierList()), 160) == 20,
+                "Removing one bus leaves only three effective items");
     }
 
     private static void assertIdentifierOverloads(GameTestHelper helper) {

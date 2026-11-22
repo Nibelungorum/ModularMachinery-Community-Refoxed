@@ -36,6 +36,7 @@ public final class StructureRegistration {
     protected final Map<Identifier, ModifierDefinition> modifiers = new LinkedHashMap<>();
     protected final Map<Identifier, List<ItemStack>> modifierItems = new LinkedHashMap<>();
     private final Map<Identifier, ModifierStacking> stacking = new LinkedHashMap<>();
+    private final Map<Identifier, Integer> modifierItemLimits = new LinkedHashMap<>();
     private final Map<ModifierItemKey, Identifier> modifierItemKeys = new LinkedHashMap<>();
     private final Map<Identifier, Identifier> modifierItemIds = new LinkedHashMap<>();
     private boolean frozen;
@@ -53,6 +54,7 @@ public final class StructureRegistration {
             prepared.levelDeclarations.putAll(current.levelDeclarations);
             prepared.modifiers.putAll(current.modifiers);
             prepared.stacking.putAll(current.stacking);
+            prepared.modifierItemLimits.putAll(current.modifierItemLimits);
             current.modifierItems().forEach((modifierId, stacks) -> stacks.forEach(stack ->
                     prepared.registerModifierItem(stack, modifierId)));
             prepared.modifierItemIds.putAll(current.modifierItemIds);
@@ -166,6 +168,16 @@ public final class StructureRegistration {
         }
     }
 
+    public void limitModifierItems(Identifier modifierId, int maxCount) {
+        requireOpen();
+        require(modifierId, "modifier id");
+        if (maxCount < 1) throw new ApiRegistrationException(
+                "Modifier item limit for " + modifierId + " must be positive: " + maxCount);
+        if (modifierItemLimits.putIfAbsent(modifierId, maxCount) != null) {
+            throw new ApiRegistrationException("Duplicate modifier item limit: " + modifierId);
+        }
+    }
+
     public Map<Identifier, MachineStructureDefinition> structures() {
         return snapshot == null ? immutable(structures) : snapshot.structures();
     }
@@ -225,6 +237,10 @@ public final class StructureRegistration {
             if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
                     "Modifier item " + itemId + " refers to unknown machine modifier " + modifierId);
         });
+        modifierItemLimits.keySet().forEach(modifierId -> {
+            if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
+                    "Modifier item limit refers to unknown machine modifier " + modifierId);
+        });
         Map<Identifier, MachineLevel> resolvedLevels = new LinkedHashMap<>(levels);
         levelDeclarations.forEach((id, declaration) -> {
             try {
@@ -236,7 +252,8 @@ public final class StructureRegistration {
         levels.putAll(resolvedLevels);
         levelDeclarations.clear();
         frozen = true;
-        snapshot = new Snapshot(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds, stacking);
+        snapshot = new Snapshot(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds,
+                stacking, modifierItemLimits);
         return snapshot;
     }
 
@@ -265,7 +282,15 @@ public final class StructureRegistration {
             Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
             Map<Identifier, ModifierDefinition> modifiers,
             Map<Identifier, List<ItemStack>> modifierItems,
-            Map<Identifier, Identifier> modifierItemIds, Map<Identifier, ModifierStacking> stacking) {
+            Map<Identifier, Identifier> modifierItemIds, Map<Identifier, ModifierStacking> stacking,
+            Map<Identifier, Integer> modifierItemLimits) {
+        public Snapshot(Map<Identifier, MachineStructureDefinition> structures, Map<Identifier, LevelType> levelTypes,
+                        Map<Identifier, MachineLevel> levels, Map<Identifier, ModifierDefinition> modifiers,
+                        Map<Identifier, List<ItemStack>> modifierItems, Map<Identifier, Identifier> modifierItemIds,
+                        Map<Identifier, ModifierStacking> stacking) {
+            this(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds, stacking, Map.of());
+        }
+
         public Snapshot(Map<Identifier, MachineStructureDefinition> structures, Map<Identifier, LevelType> levelTypes,
                         Map<Identifier, MachineLevel> levels, Map<Identifier, ModifierDefinition> modifiers,
                         Map<Identifier, List<ItemStack>> modifierItems, Map<Identifier, Identifier> modifierItemIds) {
@@ -292,6 +317,7 @@ public final class StructureRegistration {
             modifierItems = immutableItemBindings(modifierItems);
             modifierItemIds = immutable(modifierItemIds);
             stacking = immutable(stacking);
+            modifierItemLimits = immutable(modifierItemLimits);
         }
 
         @Override

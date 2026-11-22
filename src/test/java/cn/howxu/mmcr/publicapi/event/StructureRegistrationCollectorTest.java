@@ -98,6 +98,26 @@ class StructureRegistrationCollectorTest {
     }
 
     @Test
+    void item_limit_allows_a_forward_reference_but_not_an_invalid_or_duplicate_declaration() {
+        var speed = MMCR.id("limited_speed");
+        var event = new RegisterMachineStructuresEvent(Set.of());
+        assertThatThrownBy(() -> event.limitModifierItems(speed, 0))
+                .isInstanceOf(RegistrationException.class).hasMessageContaining("positive");
+        event.limitModifierItems(speed, 4);
+        assertThatThrownBy(() -> event.limitModifierItems(speed, 8))
+                .isInstanceOf(RegistrationException.class).hasMessageContaining("Duplicate")
+                .hasMessageContaining(speed.toString());
+        assertThatThrownBy(() -> RegistrationAdapters.freeze(event))
+                .isInstanceOf(RegistrationException.class).hasMessageContaining("unknown machine modifier")
+                .hasMessageContaining(speed.toString());
+
+        event.registerModifier(speed, Modifiers.bundle());
+        assertThat(RegistrationAdapters.freeze(event).modifierItemLimits()).containsEntry(speed, 4);
+        assertThatThrownBy(() -> event.limitModifierItems(speed, 2))
+                .isInstanceOf(RegistrationException.class).hasMessageContaining("frozen");
+    }
+
+    @Test
     void unresolved_modifier_binding_rejects_freeze_without_closing_collector() {
         var modifier = MMCR.id("unresolved_public_modifier");
         var event = new RegisterMachineStructuresEvent(Set.of());

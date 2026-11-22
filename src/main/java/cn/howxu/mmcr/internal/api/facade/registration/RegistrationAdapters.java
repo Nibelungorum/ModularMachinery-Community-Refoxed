@@ -154,6 +154,9 @@ public final class RegistrationAdapters {
             Objects.requireNonNull(id, "modifierId");
             registration(() -> core.registerModifierItem(itemId, id));
         }
+        @Override public void limitModifierItems(Identifier modifierId, int maxCount) {
+            registration(() -> core.limitModifierItems(modifierId, maxCount));
+        }
         @Override public Map<Identifier, StructureSpec> structures() { return views(core.structures(), StructureAdapters::wrap); }
         @Override public Map<Identifier, LevelTypeSpec> levelTypes() { return views(core.levelTypes(), StructureAdapters::wrap); }
         @Override public Map<Identifier, MachineLevelSpec> levels() {

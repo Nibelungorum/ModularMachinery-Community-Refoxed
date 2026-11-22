@@ -21,6 +21,7 @@ public final class ModifierRegistry {
     private static final Map<String, AbstractModifierReplacement> REPLACEMENTS = new HashMap<>();
     private static Map<Identifier, ModifierDefinition> DEFINITIONS = Map.of();
     private static Map<Identifier, ModifierStacking> STACKING = Map.of();
+    private static Map<Identifier, Integer> ITEM_LIMITS = Map.of();
     private static Map<ModifierItemKey, Identifier> ITEM_BINDINGS = Map.of();
     private static Map<Identifier, List<ItemStack>> ITEM_BINDING_SNAPSHOT = Map.of();
 
@@ -44,6 +45,7 @@ public final class ModifierRegistry {
         REPLACEMENTS.clear();
         DEFINITIONS = Map.of();
         STACKING = Map.of();
+        ITEM_LIMITS = Map.of();
         ITEM_BINDINGS = Map.of();
         ITEM_BINDING_SNAPSHOT = Map.of();
     }
@@ -63,8 +65,19 @@ public final class ModifierRegistry {
 
     public static void installSnapshot(Map<Identifier, ModifierDefinition> definitions,
             Map<Identifier, List<ItemStack>> itemBindings, Map<Identifier, ModifierStacking> policies) {
+        installSnapshot(definitions, itemBindings, policies, Map.of());
+    }
+
+    public static void installSnapshot(Map<Identifier, ModifierDefinition> definitions,
+            Map<Identifier, List<ItemStack>> itemBindings, Map<Identifier, ModifierStacking> policies,
+            Map<Identifier, Integer> itemLimits) {
         Map<Identifier, ModifierDefinition> nextDefinitions = Map.copyOf(
                 definitions == null ? Map.of() : definitions);
+        Map<Identifier, Integer> nextLimits = Map.copyOf(itemLimits);
+        nextLimits.forEach((id, limit) -> {
+            if (limit < 1 || !nextDefinitions.containsKey(id)) throw new ApiRegistrationException(
+                    "Invalid modifier item limit " + limit + " for machine modifier " + id);
+        });
         Map<ModifierItemKey, Identifier> nextBindings = new LinkedHashMap<>();
         Map<Identifier, List<ItemStack>> nextSnapshot = new LinkedHashMap<>();
         if (itemBindings != null) {
@@ -88,6 +101,7 @@ public final class ModifierRegistry {
             });
         }
         STACKING = Map.copyOf(policies);
+        ITEM_LIMITS = nextLimits;
         DEFINITIONS = nextDefinitions;
         ITEM_BINDINGS = Collections.unmodifiableMap(new LinkedHashMap<>(nextBindings));
         ITEM_BINDING_SNAPSHOT = immutableItemBindings(nextSnapshot);
@@ -99,6 +113,11 @@ public final class ModifierRegistry {
 
     public static Map<Identifier, ModifierDefinition> definitions() {
         return DEFINITIONS;
+    }
+
+    public static long cappedItemCount(Identifier id, long count) {
+        Integer limit = ITEM_LIMITS.get(id);
+        return limit == null ? count : Math.min(count, limit);
     }
 
     public static @Nullable Identifier modifierFor(ItemStack stack) {
