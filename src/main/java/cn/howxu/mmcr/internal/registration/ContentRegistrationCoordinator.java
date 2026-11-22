@@ -110,7 +110,8 @@ public final class ContentRegistrationCoordinator {
 
         Map<ResourceLocation, MachineRegistration> registrations = validateAndConvertMachines();
         Map<ResourceLocation, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
-        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), Map.of(), STRUCTURE_SNAPSHOT.stacking());
+        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), Map.of(), STRUCTURE_SNAPSHOT.stacking(),
+                STRUCTURE_SNAPSHOT.modifierItemLimits());
         registrations.values().forEach(registration -> {
             if (MachineDefinitions.containsStatic(registration.id())) {
                 MachineDefinitions.replace(registration);
@@ -125,7 +126,7 @@ public final class ContentRegistrationCoordinator {
     public static synchronized void commitModifierItemsAfterComponentsBound() {
         requireCollecting();
         ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.resolveModifierItems(),
-                STRUCTURE_SNAPSHOT.stacking());
+                STRUCTURE_SNAPSHOT.stacking(), STRUCTURE_SNAPSHOT.modifierItemLimits());
     }
 
     /**

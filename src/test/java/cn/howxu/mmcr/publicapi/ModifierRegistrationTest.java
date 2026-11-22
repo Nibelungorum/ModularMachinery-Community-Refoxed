@@ -117,6 +117,20 @@ class ModifierRegistrationTest {
     }
 
     @Test
+    void invalid_item_limits_cannot_replace_published_limits_or_item_bindings() {
+        var speed = id("limited_speed");
+        var definitions = Map.of(speed, ModifierDefinition.EMPTY);
+        var diamond = new ItemStack(Items.DIAMOND);
+        ModifierRegistry.installSnapshot(definitions, Map.of(speed, List.of(diamond)), Map.of(), Map.of(speed, 4));
+        for (var invalid : List.of(Map.of(speed, -1), Map.of(id("missing"), 1))) {
+            assertThatThrownBy(() -> ModifierRegistry.installSnapshot(definitions, Map.of(), Map.of(), invalid))
+                    .isInstanceOf(ApiRegistrationException.class);
+        }
+        assertThat(ModifierRegistry.modifierFor(diamond)).isEqualTo(speed);
+        assertThat(ModifierRegistry.cappedItemCount(speed, 6)).isEqualTo(4);
+    }
+
+    @Test
     void modifier_item_key_copies_mutable_component_state() {
         ItemStack source = new ItemStack(Items.DIAMOND, 1);
         source.set(DataComponents.MAX_STACK_SIZE, 32);

@@ -72,6 +72,7 @@ class StartupRegistryReferenceTest {
         Object machine = context.evaluateString(scope, """
                 let api = event.getAPI()
                 let fx = api.modifierDefinition([api.modifier("duration", "input", -0.1, "add_ratio", false)])
+                event.limitModifierItems("test:old", 4)
                 event.registerModifier("test:old", fx)
                 event.registerModifierItem("minecraft:diamond", "test:old")
                 event.registerModifier(api.id("test:unique"), fx, false)
@@ -80,11 +81,17 @@ class StartupRegistryReferenceTest {
                 event.createLevel("test:copper").type("test:coil").state("minecraft:copper_block").modifier(fx).register()
                 event.createMachine("test:smart").durationByInterface("signal", v => -v / 10, api.modifierOperation().ADD_RATIO).createObject()
                 """, "modifier-registration", 1, null);
+        for (String invalid : List.of("1.5", "2147483648", "NaN")) {
+            assertThatThrownBy(() -> context.evaluateString(scope, "event.limitModifierItems('test:bad', " + invalid + ")",
+                    "invalid-item-limit", 1, null)).hasMessageContaining("integer");
+        }
         assertThatThrownBy(() -> new MMCRStartupEventJS().registerModifier("test:bad", ModifierDefinition.EMPTY, true, "typo"))
                 .isInstanceOf(IllegalArgumentException.class);
         ContentRegistrationCoordinator.beginStartup();
         ContentRegistrationCoordinator.collectStructures(StructureRegistration.prepare(Set.of()));
         ContentRegistrationCoordinator.commitStructures();
+        var old = ResourceLocation.parse("test:old");
+        assertThat(ModifierRegistry.cappedItemCount(old, 6)).isEqualTo(4);
         var smart = ((MachineRegistration) Wrapper.unwrapped(machine)).smartInterfaceModifiers().getFirst();
         var level = MachineLevelRegistry.getLevel(ResourceLocation.parse("test:copper"));
         List<MachineModifier> both = List.of(level.modifier().modifiers().getFirst(), smart.toModifier(1));
@@ -93,7 +100,10 @@ class StartupRegistryReferenceTest {
         ContentRegistrationCoordinator.commitModifierItemsAfterComponentsBound();
         assertThat(ModifierRegistry.stacking(ResourceLocation.parse("test:stack"))).isEqualTo(ModifierStacking.MULTIPLY);
         assertThat(ModifierRegistry.stacking(ResourceLocation.parse("test:old"))).isEqualTo(ModifierStacking.LEGACY);
-        assertThat(ModifierRegistry.modifierFor(new ItemStack(Items.DIAMOND))).isEqualTo(ResourceLocation.parse("test:old"));
+        assertThat(ModifierRegistry.modifierFor(new ItemStack(Items.DIAMOND))).isEqualTo(old);
+        assertThat(ModifierRegistry.cappedItemCount(old, 6)).isEqualTo(4);
+        ModifierRegistry.installSnapshot(Map.of(old, ModifierDefinition.EMPTY));
+        assertThat(ModifierRegistry.cappedItemCount(old, Long.MAX_VALUE)).isEqualTo(Long.MAX_VALUE);
     }
 
     @Test

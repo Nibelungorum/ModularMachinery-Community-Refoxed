@@ -33,6 +33,10 @@ public interface StructureRegistrar {
         throw new UnsupportedOperationException("This registrar does not support explicit modifier stacking");
     }
     void registerModifierItem(ResourceLocation itemId, ResourceLocation modifierId);
+    /** Caps the combined effective item count for this modifier across one machine's upgrade buses. */
+    default void limitModifierItems(ResourceLocation modifierId, int maxCount) {
+        throw new UnsupportedOperationException("This registrar does not support modifier item limits");
+    }
     Map<ResourceLocation, StructureSpec> structures();
     Map<ResourceLocation, LevelTypeSpec> levelTypes();
     Map<ResourceLocation, MachineLevelSpec> levels();

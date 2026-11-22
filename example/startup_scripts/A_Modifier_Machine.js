@@ -24,6 +24,8 @@ MMCREvents.startup(event => {
         "minecraft:emerald_block",
         "mmcr_kubejs:alloy_furnace_emerald_speedup"
     )
+    // Optional: cap all items bound to this effect at four effective units per machine.
+    // event.limitModifierItems("mmcr_kubejs:alloy_furnace_emerald_speedup", 4)
 
     event.registerModifier(
         "mmcr_kubejs:alloy_furnace_lapis_doubling",

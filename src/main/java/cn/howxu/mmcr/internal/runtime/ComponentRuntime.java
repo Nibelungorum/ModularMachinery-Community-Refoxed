@@ -756,9 +756,11 @@ public final class ComponentRuntime {
     private Map<ResourceLocation, List<MachineModifier>> upgradeModifiers(Map<ResourceLocation, Long> units) {
         Map<ResourceLocation, List<MachineModifier>> result = new LinkedHashMap<>();
         for (Map.Entry<ResourceLocation, Long> entry : units.entrySet()) {
-            ModifierDefinition definition = ModifierRegistry.get(entry.getKey());
+            ResourceLocation id = entry.getKey();
+            ModifierDefinition definition = ModifierRegistry.get(id);
             if (definition == null) continue;
-            result.put(entry.getKey(), ModifierRegistry.stacking(entry.getKey()).items(definition.modifiers(), entry.getValue()));
+            long count = ModifierRegistry.cappedItemCount(id, entry.getValue());
+            result.put(id, ModifierRegistry.stacking(id).items(definition.modifiers(), count));
         }
         return immutableMap(result);
     }

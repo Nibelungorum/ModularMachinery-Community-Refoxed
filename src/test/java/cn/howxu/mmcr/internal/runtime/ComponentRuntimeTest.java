@@ -59,6 +59,8 @@ import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -1723,6 +1725,26 @@ class ComponentRuntimeTest {
             assertThat(unique.upgradeItems()).singleElement().satisfies(item -> assertThat(item.getCount()).isEqualTo(8));
             ModifierRegistry.installSnapshot(Map.of(id, multiplier), bindings);
             assertThat(ModifierRegistry.stacking(id)).isEqualTo(ModifierStacking.LEGACY);
+        } finally {
+            ModifierRegistry.installSnapshot(Map.of());
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ADD, 1, 70", "UNIQUE, 4, 90"})
+    void item_limit_does_not_spend_a_block_share_or_override_unique_stacking(
+            ModifierStacking stacking, int itemLimit, int expectedDuration) {
+        var id = ResourceLocation.parse("test:capped_duration");
+        var definition = ModifierDefinition.of("duration", "input", -0.1, "add_ratio", false);
+        var diamond = new ItemStack(Items.DIAMOND);
+        try {
+            ModifierRegistry.installSnapshot(Map.of(id, definition), Map.of(id, List.of(diamond)),
+                    Map.of(id, stacking), Map.of(id, itemLimit));
+            var runtime = new ComponentRuntime();
+            runtime.replaceModifiers(Map.of(id.toString(), stacking.blocks(definition.modifiers(), 2)));
+            runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(
+                    BlockPos.ZERO, List.of(diamond.copyWithCount(6)))));
+            assertThat(duration(runtime, 100)).isEqualTo(expectedDuration);
         } finally {
             ModifierRegistry.installSnapshot(Map.of());
         }

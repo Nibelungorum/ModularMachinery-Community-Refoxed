@@ -19,6 +19,7 @@ MMCREvents.startup(event => {
     api.levelRequirement('mmcr_test:kubejs_reference_coil', 'mmcr_test:kubejs_reference_horizontal_log')
     event.registerModifierItem('kubejs:mmcr_reference_upgrade', 'mmcr_test:kubejs_reference_speed')
     event.registerModifierItem('kubejs:mmcr_reference_coil', 'mmcr_test:kubejs_reference_speed')
+    event.limitModifierItems(api.id('mmcr_test:kubejs_reference_speed'), 4)
     event.createLevel('mmcr_test:kubejs_reference_coil')
         .type('mmcr_test:kubejs_reference_coil').state('kubejs:mmcr_reference_coil').register()
     event.createLevel('mmcr_test:kubejs_reference_horizontal_log')

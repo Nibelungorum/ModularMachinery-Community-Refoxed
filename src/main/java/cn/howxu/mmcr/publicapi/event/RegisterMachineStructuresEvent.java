@@ -43,6 +43,8 @@ public final class RegisterMachineStructuresEvent extends Event {
         registrar.registerModifier(id, modifier, stackable, mode);
     }
     public void registerModifierItem(ResourceLocation itemId, ResourceLocation id) { registrar.registerModifierItem(itemId, id); }
+    /** Declares a positive per-machine cap on effective upgrade items, not on inventory or structure blocks. */
+    public void limitModifierItems(ResourceLocation modifierId, int maxCount) { registrar.limitModifierItems(modifierId, maxCount); }
     public Map<ResourceLocation, StructureSpec> structures() { return registrar.structures(); }
     public Map<ResourceLocation, LevelTypeSpec> levelTypes() { return registrar.levelTypes(); }
     public Map<ResourceLocation, MachineLevelSpec> levels() { return registrar.levels(); }

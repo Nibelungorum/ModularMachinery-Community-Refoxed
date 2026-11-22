@@ -106,6 +106,18 @@ public final class MMCRStartupEventJS implements KubeEvent {
         StructureRegistration.current().registerModifierItem(itemId, modifierId);
     }
 
+    public void limitModifierItems(String modifierId, double maxCount) {
+        limitModifierItems(parseResourceLocation(modifierId, "modifierId"), maxCount);
+    }
+
+    public void limitModifierItems(ResourceLocation modifierId, double maxCount) {
+        // An int parameter would let Rhino silently truncate a fractional count.
+        int count = (int) maxCount;
+        if (count != maxCount) throw new IllegalArgumentException(
+                "Modifier item limit for " + modifierId + " must be a positive 32-bit integer: " + maxCount);
+        StructureRegistration.current().limitModifierItems(modifierId, count);
+    }
+
     public void addRecipePoolWorkstation(String recipePoolId, String itemId) {
         addRecipePoolWorkstation(parseResourceLocation(recipePoolId, "recipePoolId"), parseResourceLocation(itemId, "itemId"));
     }
