@@ -2,7 +2,7 @@ package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextRegistry;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
 import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
@@ -73,7 +73,7 @@ public final class MMCRStartupEventJS implements KubeEvent {
     }
 
     public void registerModifier(Identifier id, ModifierDefinition definition) {
-        StructureRegistration.current().registerModifier(id, definition);
+        ContentRegistrationCoordinator.startupDefinitions().registerModifier(id, definition);
     }
 
     public void registerModifier(String id, ModifierDefinition definition, boolean stackable) {
@@ -94,7 +94,7 @@ public final class MMCRStartupEventJS implements KubeEvent {
             case "multiply" -> ModifierStacking.MULTIPLY;
             default -> throw new IllegalArgumentException("Unknown block stacking mode: " + blockMode);
         };
-        StructureRegistration.current().registerModifier(id, definition, stackable ? policy : ModifierStacking.UNIQUE);
+        ContentRegistrationCoordinator.startupDefinitions().registerModifier(id, definition, stackable ? policy : ModifierStacking.UNIQUE);
     }
 
     public void registerModifierItem(String itemId, String modifierId) {
@@ -103,7 +103,7 @@ public final class MMCRStartupEventJS implements KubeEvent {
     }
 
     public void registerModifierItem(Identifier itemId, Identifier modifierId) {
-        StructureRegistration.current().registerModifierItem(itemId, modifierId);
+        ContentRegistrationCoordinator.startupDefinitions().registerModifierItem(itemId, modifierId);
     }
 
     public void limitModifierItems(String modifierId, double maxCount) {
@@ -115,7 +115,7 @@ public final class MMCRStartupEventJS implements KubeEvent {
         int count = (int) maxCount;
         if (count != maxCount) throw new IllegalArgumentException(
                 "Modifier item limit for " + modifierId + " must be a positive 32-bit integer: " + maxCount);
-        StructureRegistration.current().limitModifierItems(modifierId, count);
+        ContentRegistrationCoordinator.startupDefinitions().limitModifierItems(modifierId, count);
     }
 
     public void addRecipePoolWorkstation(String recipePoolId, String itemId) {

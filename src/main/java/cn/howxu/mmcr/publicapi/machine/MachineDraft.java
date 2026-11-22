@@ -39,8 +39,8 @@ public interface MachineDraft {
     MachineDraft allowNetworkMachine(Identifier id);
     MachineDraft maxParallelism(long amount);
     MachineDraft parallelizable(boolean enabled);
-    MachineDraft allowModifiers();
-    MachineDraft allowModifiers(boolean enabled);
+    /** Allows this registered effect bundle from upgrade items or structure replacements. */
+    MachineDraft allowModifier(Identifier id);
     MachineDraft allowMultithreading();
     MachineDraft allowMultithreading(boolean enabled);
     MachineDraft maxParallelAmount(int amount);

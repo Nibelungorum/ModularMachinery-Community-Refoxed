@@ -15,7 +15,6 @@ import cn.howxu.mmcr.api.recipe.OutputRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerRegistry;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.internal.recipe.RequirementPlanner;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -114,7 +113,7 @@ class UnavailableRecipeCodecPlannerTest {
             assertThat(chemical.consumeChance()).isEqualTo(0.25F);
             assertThat(chemical.tags()).containsExactly("unavailable");
             var recipe = MachineRecipeConverter.toRecipe(declaration,
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                    Map.of(), Map.of());
             assertThat(recipe.requirements()).extracting(value -> value.type().id())
                     .containsExactly(MekanismRecipeTypes.CHEMICAL, MekanismRecipeTypes.HEAT_TEMPERATURE,
                             MekanismRecipeTypes.CHEMICAL, MekanismRecipeTypes.HEAT);

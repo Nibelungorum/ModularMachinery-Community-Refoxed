@@ -1,10 +1,10 @@
 package cn.howxu.mmcr.publicapi;
 
-import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
 import cn.howxu.mmcr.api.registration.ApiRegistrationException;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
 import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.definition.ModifierUse;
@@ -51,11 +51,11 @@ class ModifierRegistrationTest {
         Identifier modifierId = id("component_modifier");
         ItemStack namedStack = new ItemStack(Items.IRON_INGOT, 1);
         namedStack.set(DataComponents.MAX_STACK_SIZE, 32);
-        StructureRegistration event = new StructureRegistration(List.of());
+        MachineDefinitionRegistration event = new MachineDefinitionRegistration();
         event.registerModifier(modifierId, new ModifierDefinition(List.of()));
         event.registerModifierItem(namedStack, modifierId);
 
-        StructureRegistration.Snapshot snapshot = event.freeze();
+        var snapshot = event.modifierSnapshot();
         ModifierRegistry.installSnapshot(snapshot.modifiers(), snapshot.modifierItems());
 
         assertThat(snapshot.modifiers()).containsEntry(modifierId, new ModifierDefinition(List.of()));
@@ -73,7 +73,7 @@ class ModifierRegistrationTest {
     void duplicate_item_binding_is_rejected_after_count_normalization() {
         Identifier modifierId = id("duplicate_modifier");
         ItemStack stack = new ItemStack(Items.GOLD_INGOT);
-        StructureRegistration event = new StructureRegistration(List.of());
+        MachineDefinitionRegistration event = new MachineDefinitionRegistration();
         event.registerModifier(modifierId, new ModifierDefinition(List.of()));
         event.registerModifierItem(stack, modifierId);
 
@@ -83,11 +83,11 @@ class ModifierRegistrationTest {
     }
 
     @Test
-    void unknown_modifier_item_binding_is_rejected_when_frozen() {
-        StructureRegistration event = new StructureRegistration(List.of());
+    void unknown_modifier_item_binding_is_rejected_at_link_time() {
+        MachineDefinitionRegistration event = new MachineDefinitionRegistration();
         event.registerModifierItem(new ItemStack(Items.COPPER_INGOT), id("unknown_modifier"));
 
-        assertThatThrownBy(event::freeze)
+        assertThatThrownBy(event::modifierSnapshot)
                 .isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining("unknown_modifier");
     }
@@ -97,11 +97,11 @@ class ModifierRegistrationTest {
         Identifier modifierId = id("isolated_modifier");
         ItemStack source = new ItemStack(Items.DIAMOND, 1);
         source.set(DataComponents.MAX_STACK_SIZE, 32);
-        StructureRegistration event = new StructureRegistration(List.of());
+        MachineDefinitionRegistration event = new MachineDefinitionRegistration();
         event.registerModifier(modifierId, new ModifierDefinition(List.of()));
         event.registerModifierItem(source, modifierId);
 
-        StructureRegistration.Snapshot snapshot = event.freeze();
+        var snapshot = event.modifierSnapshot();
         source.set(DataComponents.MAX_STACK_SIZE, 64);
         assertThat(snapshot.modifierItems().get(modifierId).getFirst().get(DataComponents.MAX_STACK_SIZE))
                 .isEqualTo(32);

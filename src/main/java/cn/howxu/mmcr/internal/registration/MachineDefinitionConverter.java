@@ -22,7 +22,6 @@ import cn.howxu.mmcr.api.machine.definition.PatternDefinition;
 import cn.howxu.mmcr.api.machine.definition.PortRequirements;
 import cn.howxu.mmcr.api.machine.definition.PortTiers;
 import cn.howxu.mmcr.api.machine.definition.StructureRequirements;
-import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.definition.StructureStage;
 import cn.howxu.mmcr.api.machine.definition.MachineLevel;
 import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
@@ -137,12 +136,12 @@ public final class MachineDefinitionConverter {
                 .appearance(toAppearanceSpec(definition.appearance()))
                 .allowParallelism(definition.parallelizable())
                 .maxParallelAmount(definition.maxParallelism())
-                .allowModifiers(definition.allowModifiers())
                 .allowMultithreading(definition.allowMultithreading())
                 .factoryThreadLimit(definition.factory().threadLimit())
                 .networkInterface(definition.networkInterface())
                 .shareSmartInterfaces(definition.shareSmartInterfaces())
                 .behavior(definition.behavior());
+        definition.allowedModifierIds().forEach(builder::allowModifier);
         definition.requestProcessors().forEach(builder::requestProcess);
         definition.requestFailures().forEach((id, failure) -> builder.requestFailed(id, toInternalRequestFailed(failure)));
         definition.smartInterfaceTypes().values().forEach(builder::smartInterfaceType);
@@ -163,12 +162,6 @@ public final class MachineDefinitionConverter {
     }
 
     public static MachineStructureDefinition toStructureDefinition(cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure) {
-        return toStructureDefinition(structure, Map.of());
-    }
-
-    public static MachineStructureDefinition toStructureDefinition(
-            cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure,
-            Map<Identifier, ModifierDefinition> ignoredModifiers) {
         return new MachineStructureDefinition(structure.machineId(), structure.stages().stream()
                 .map(stage -> toDeclaration(stage, structure.stateSensitive())).toList());
     }

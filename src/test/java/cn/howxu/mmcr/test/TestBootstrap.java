@@ -1,5 +1,6 @@
 package cn.howxu.mmcr.test;
 
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
@@ -398,11 +399,13 @@ public final class TestBootstrap {
     }
 
     public static void registerTestMachineDefinitions(MachineDefinitionRegistration event) {
+        var speed = id("speed");
+        event.registerModifier(speed, ModifierDefinition.EMPTY);
         for (String name : testMachineNames()) {
             Identifier id = id(name);
             event.registerMachine(id, builder -> {
                 builder.displayNameKey("machine.mmcr_test." + name);
-                if (name.equals("test_cube")) builder.allowModifiers();
+                if (name.equals("test_machine_name")) builder.allowModifier(speed);
                 return builder;
             });
         }

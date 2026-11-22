@@ -2,7 +2,6 @@ package cn.howxu.mmcr.publicapi;
 
 import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.compat.ae2lt.LightningOutput;
 import cn.howxu.mmcr.compat.ae2lt.LightningRecipeTypes;
 import cn.howxu.mmcr.compat.ae2lt.LightningRequirement;
@@ -39,7 +38,7 @@ class PublicLightningRecipeTest {
         assertThat(draft.lightningOutput(HIGH_VOLTAGE, 78L, 0.25F)).isSameAs(draft);
         assertThat(draft.lightningOutput(EXTREME_HIGH_VOLTAGE, 90L)).isSameAs(draft);
         var recipe = MachineRecipeConverter.toRecipe(RecipeAdapters.unwrap(draft.build()),
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
         var codec = MachineRecipe.CODEC.codec();
         var decoded = codec.parse(JsonOps.INSTANCE, codec.encodeStart(JsonOps.INSTANCE, recipe).getOrThrow())
                 .getOrThrow();

@@ -1,5 +1,9 @@
 package cn.howxu.mmcr.publicapi.event;
 
+import java.util.List;
+import net.minecraft.world.item.ItemStack;
+import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierBundle;
+import cn.howxu.mmcr.publicapi.recipe.modifier.BlockStackingMode;
 import cn.howxu.mmcr.internal.api.facade.registration.RegistrationAdapters;
 import cn.howxu.mmcr.publicapi.machine.MachineDraft;
 import cn.howxu.mmcr.publicapi.machine.MachineSpec;
@@ -25,4 +29,17 @@ public final class RegisterMachineDefinitionsEvent extends Event {
     }
     public void registerMachine(MachineSpec definition) { registrar.registerMachine(definition); }
     public Map<Identifier, MachineSpec> definitions() { return registrar.definitions(); }
+    public void registerModifier(Identifier id, ModifierBundle modifier) { registrar.registerModifier(id, modifier); }
+    public void registerModifier(Identifier id, ModifierBundle modifier, boolean stackable) {
+        registrar.registerModifier(id, modifier, stackable);
+    }
+    public void registerModifier(Identifier id, ModifierBundle modifier, boolean stackable, BlockStackingMode mode) {
+        registrar.registerModifier(id, modifier, stackable, mode);
+    }
+    public void registerModifierItem(Identifier itemId, Identifier id) { registrar.registerModifierItem(itemId, id); }
+    /** Declares a positive per-machine cap on effective upgrade items, not on inventory or structure blocks. */
+    public void limitModifierItems(Identifier modifierId, int maxCount) { registrar.limitModifierItems(modifierId, maxCount); }
+    public Map<Identifier, ModifierBundle> modifiers() { return registrar.modifiers(); }
+    public Map<Identifier, List<ItemStack>> modifierItems() { return registrar.modifierItems(); }
+    public Map<Identifier, Identifier> modifierItemIds() { return registrar.modifierItemIds(); }
 }

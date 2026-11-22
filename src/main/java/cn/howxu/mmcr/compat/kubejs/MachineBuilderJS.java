@@ -45,7 +45,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
     public transient boolean allowVerticalFacing = false;
     public transient boolean fullyRotationallySymmetric = false;
     public transient boolean requireVerticalFacing = false;
-    public transient boolean allowModifiers = false;
+    private final Set<Identifier> allowedModifierIds = new LinkedHashSet<>();
     public transient boolean allowMultithreading = false;
     public transient boolean allowParallelism = false;
     public transient long maxParallelAmount = 1L;
@@ -152,7 +152,6 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .displayNameKey(displayNameKey)
                 .controllerSpec(explicitControllerSpec != null ? explicitControllerSpec : controllerSpec())
                 .appearance(explicitAppearance != null ? explicitAppearance : appearanceSpec())
-                .allowModifiers(allowModifiers)
                 .allowMultithreading(allowMultithreading)
                 .factoryThreadLimit(factoryThreadLimit)
                 .allowParallelism(allowParallelism)
@@ -161,6 +160,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
                 .finishSound(finishSoundId)
                 .shareSmartInterfaces(shareSmartInterfaces)
                 .behavior(behaviorWithServerTickHooks());
+        allowedModifierIds.forEach(registration::allowModifier);
         if (recipePoolIds != null) registration.recipePoolIds(recipePoolIds);
         registration.networkInterface(networkInterfaceMaxCount, networkInterfaceMaxConnections);
         allowedNetworkMachineIds.forEach(registration::allowNetworkMachine);
@@ -452,12 +452,12 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         return this;
     }
 
-    public MachineBuilderJS allowModifiers() {
-        return allowModifiers(true);
+    public MachineBuilderJS allowModifier(String id) {
+        return allowModifier(Identifier.parse(id));
     }
 
-    public MachineBuilderJS allowModifiers(boolean allow) {
-        this.allowModifiers = allow;
+    public MachineBuilderJS allowModifier(Identifier id) {
+        allowedModifierIds.add(Objects.requireNonNull(id, "modifier id"));
         return this;
     }
 
@@ -771,7 +771,7 @@ public class MachineBuilderJS extends BuilderBase<MachineRegistration> {
         MachineDefinition base = builder.build();
         MachineDefinition definition = new MachineDefinition(base.id(), base.recipePoolIds(), base.displayNameKey(), base.controller(), base.appearance(),
                 base.factory(), base.role(), base.acceptedModuleIds(), base.networkInterface(), base.maxParallelism(), base.parallelizable(), base.failureAction(),
-                registration.allowModifiers(), registration.allowMultithreading(), factoryThreadLimit,
+                registration.allowedModifierIds(), registration.allowMultithreading(), factoryThreadLimit,
                 registration.expandableStructure(), registration.smartInterfaceTypes(),
                 registration.shareSmartInterfaces(), registration.smartInterfaceModifiers(),
                 registration.runningSoundId(), registration.finishSoundId(), registration.pattern(), registration.behavior(),

@@ -427,7 +427,7 @@ public final class PatternBatchRuntimeGameTest {
             var lookup = helper.getLevel().registryAccess();
             var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, lookup);
             if (factory) runtime.factoryRuntime().save(saved); else runtime.craftingRuntime().save(saved);
-            controller.componentRuntime().setModifiersAllowed(true);
+            controller.componentRuntime().setAllowedModifierIds(Set.of(Identifier.parse("changed")));
             controller.componentRuntime().replaceModifiers(Map.of("changed", List.of(
                     MachineModifier.numeric("output", "output", 2D, "multiply", false))));
             var input = TagValueInput.create(ProblemReporter.DISCARDING, lookup, saved.buildResult());

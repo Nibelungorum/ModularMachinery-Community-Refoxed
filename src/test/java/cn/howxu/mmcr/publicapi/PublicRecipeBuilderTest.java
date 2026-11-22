@@ -147,7 +147,7 @@ class PublicRecipeBuilderTest {
         assertThat(recipe.energyOutputs()).extracting(EnergyRequirement::fePerTick)
                 .containsExactly(Long.MAX_VALUE);
         assertThat(MachineRecipeConverter.toRecipe(recipe,
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of())).requirements())
+                Map.of(), Map.of()).requirements())
                 .filteredOn(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.class::isInstance)
                 .extracting(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement.class::cast)
                 .extracting(cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement::fePerTick)
@@ -256,12 +256,9 @@ class PublicRecipeBuilderTest {
                 .requiredHost(id("host"))
                 .modifier(id("snapshot_modifier"))
                 .build();
-        var recipe = MachineRecipeConverter.toRecipe(definition, new StructureRegistration.Snapshot(
-                Map.of(),
-                Map.of(),
-                 Map.of(TEST_LEVEL, MachineLevelRegistry.getLevel(TEST_LEVEL)),
+        var recipe = MachineRecipeConverter.toRecipe(definition, Map.of(TEST_LEVEL, MachineLevelRegistry.getLevel(TEST_LEVEL)),
                 Map.of(id("snapshot_modifier"), new ModifierDefinition(List.of(
-                        MachineModifier.numeric("output", "output", 2D, "multiply", true))))));
+                        MachineModifier.numeric("output", "output", 2D, "multiply", true)))));
 
         assertThat(recipe.requirements()).hasSize(7);
         assertThat(recipe.requirements()).anySatisfy(requirement -> {
@@ -274,7 +271,7 @@ class PublicRecipeBuilderTest {
         });
         var smartRecipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("adapter_smart")).recipePool(id("machine"))
                 .requirement(SmartInterfaceRequirement.input("Mode", 1F, 2F)).build(),
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
         assertThat(smartRecipe.requirements()).singleElement().satisfies(requirement -> {
             assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement.class);
             var smart = (cn.howxu.mmcr.api.recipe.requirement.SmartInterfaceRequirement) requirement;
@@ -307,7 +304,7 @@ class PublicRecipeBuilderTest {
                 .build();
 
         var recipe = MachineRecipeConverter.toRecipe(definition,
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
 
         assertThat(recipe.requirements()).singleElement().satisfies(requirement -> {
             assertThat(requirement).isInstanceOf(cn.howxu.mmcr.api.recipe.requirement.ItemRequirement.class);
@@ -329,7 +326,7 @@ class PublicRecipeBuilderTest {
 
         var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_output")).recipePool(id("machine"))
                         .outputItem(output, components).build(),
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
 
         assertThatCode(() -> RecipeRegistry.validateClientSnapshot(Map.of(recipe.id(), recipe))).doesNotThrowAnyException();
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
@@ -348,7 +345,7 @@ class PublicRecipeBuilderTest {
 
         var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("enchantment_network_output")).recipePool(id("machine"))
                         .outputItem(output, components).build(),
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(),
                 networkRegistryAccess());
 
@@ -427,7 +424,7 @@ class PublicRecipeBuilderTest {
         var definition = MachineRecipeBuilder.recipe(id("canonical_requirement")).recipePool(id("machine"))
                 .requirement(source).build();
         var recipe = MachineRecipeConverter.toRecipe(definition,
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
 
         assertThat(definition.requirements()).containsExactly(source);
         assertThat(recipe.runtimeRequirements()).singleElement().isInstanceOfSatisfying(ItemRequirement.class, item -> {
@@ -444,7 +441,7 @@ class PublicRecipeBuilderTest {
                 .build();
 
         var recipe = MachineRecipeConverter.toRecipe(def,
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
 
         assertThat(recipe.requirements()).singleElement().satisfies(requirement -> {
             assertThat(requirement).isInstanceOf(FluidRequirement.class);
@@ -504,7 +501,7 @@ class PublicRecipeBuilderTest {
                 .custom(new CustomRecipeIo(output.outputType().id(), IOType.OUTPUT, outputPayload))
                 .build();
         var recipe = MachineRecipeConverter.toRecipe(definition,
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
 
         assertThat(recipe.requirements()).contains(input);
         assertThat(recipe.requirements()).anySatisfy(requirement -> assertThat(requirement)
@@ -546,7 +543,7 @@ class PublicRecipeBuilderTest {
         var recipe = MachineRecipeConverter.toRecipe(MachineRecipeBuilder.recipe(id("custom_extension")).recipePool(id("machine"))
                     .custom(new CustomRecipeIo(TestRequirement.TYPE.id(), IOType.INPUT, requirementPayload))
                     .custom(customOutput).build(),
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                    Map.of(), Map.of());
 
             assertThat(recipe.requirements()).containsExactly(requirement);
             assertThat(recipe.machineOutputs()).containsExactly(output);

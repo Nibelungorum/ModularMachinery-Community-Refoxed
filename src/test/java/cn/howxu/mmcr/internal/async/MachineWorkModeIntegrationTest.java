@@ -1129,6 +1129,7 @@ class MachineWorkModeIntegrationTest {
         thread.runtime().finish();
         thread.markRecipeFinished();
         controller.componentRuntime().replaceLinkedPortPositions(Set.of(new BlockPos(8, 0, 0)));
+        controller.componentRuntime().setAllowedModifierIds(Set.of(Identifier.parse("current_energy")));
         controller.componentRuntime().replaceModifiers(Map.of("current_energy", List.of(
                 MachineModifier.numeric("energy", "input", 2D, "multiply", false))));
         RuntimeTestFixtures.republish(controller);

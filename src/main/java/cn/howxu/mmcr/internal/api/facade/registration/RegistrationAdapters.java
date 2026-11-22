@@ -96,6 +96,30 @@ public final class RegistrationAdapters {
         @Override public void registerMachine(MachineSpec definition) {
             registration(() -> core.registerMachine(definition == null ? null : MachineAdapters.unwrap(definition)));
         }
+        @Override public void registerModifier(Identifier id, ModifierBundle modifier) {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(modifier, "modifier");
+            registration(() -> core.registerModifier(id, ModifierAdapters.unwrap(modifier)));
+        }
+        @Override public void registerModifier(Identifier id, ModifierBundle modifier, boolean stackable, BlockStackingMode mode) {
+            ModifierStacking policy = switch (mode) {
+                case ADD -> ModifierStacking.ADD;
+                case MULTIPLY -> ModifierStacking.MULTIPLY;
+            };
+            registration(() -> core.registerModifier(id, ModifierAdapters.unwrap(modifier),
+                    stackable ? policy : ModifierStacking.UNIQUE));
+        }
+        @Override public void registerModifierItem(Identifier itemId, Identifier id) {
+            Objects.requireNonNull(itemId, "itemId");
+            Objects.requireNonNull(id, "modifierId");
+            registration(() -> core.registerModifierItem(itemId, id));
+        }
+        @Override public void limitModifierItems(Identifier modifierId, int maxCount) {
+            registration(() -> core.limitModifierItems(modifierId, maxCount));
+        }
+        @Override public Map<Identifier, ModifierBundle> modifiers() { return views(core.modifiers(), ModifierAdapters::wrap); }
+        @Override public Map<Identifier, List<ItemStack>> modifierItems() { return core.modifierItems(); }
+        @Override public Map<Identifier, Identifier> modifierItemIds() { return core.modifierItemIds(); }
         @Override public Map<Identifier, MachineSpec> definitions() { return views(core.definitions(), MachineAdapters::wrap); }
     }
 
@@ -136,27 +160,6 @@ public final class RegistrationAdapters {
             Objects.requireNonNull(level, "level");
             registration(() -> StructureAdapters.registerLevel(core, level));
         }
-        @Override public void registerModifier(Identifier id, ModifierBundle modifier) {
-            Objects.requireNonNull(id, "id");
-            Objects.requireNonNull(modifier, "modifier");
-            registration(() -> core.registerModifier(id, ModifierAdapters.unwrap(modifier)));
-        }
-        @Override public void registerModifier(Identifier id, ModifierBundle modifier, boolean stackable, BlockStackingMode mode) {
-            ModifierStacking policy = switch (mode) {
-                case ADD -> ModifierStacking.ADD;
-                case MULTIPLY -> ModifierStacking.MULTIPLY;
-            };
-            registration(() -> core.registerModifier(id, ModifierAdapters.unwrap(modifier),
-                    stackable ? policy : ModifierStacking.UNIQUE));
-        }
-        @Override public void registerModifierItem(Identifier itemId, Identifier id) {
-            Objects.requireNonNull(itemId, "itemId");
-            Objects.requireNonNull(id, "modifierId");
-            registration(() -> core.registerModifierItem(itemId, id));
-        }
-        @Override public void limitModifierItems(Identifier modifierId, int maxCount) {
-            registration(() -> core.limitModifierItems(modifierId, maxCount));
-        }
         @Override public Map<Identifier, StructureSpec> structures() { return views(core.structures(), StructureAdapters::wrap); }
         @Override public Map<Identifier, LevelTypeSpec> levelTypes() { return views(core.levelTypes(), StructureAdapters::wrap); }
         @Override public Map<Identifier, MachineLevelSpec> levels() {
@@ -165,8 +168,5 @@ public final class RegistrationAdapters {
             levels.putAll(views(core.levels(), StructureAdapters::wrap));
             return Collections.unmodifiableMap(levels);
         }
-        @Override public Map<Identifier, ModifierBundle> modifiers() { return views(core.modifiers(), ModifierAdapters::wrap); }
-        @Override public Map<Identifier, List<ItemStack>> modifierItems() { return core.modifierItems(); }
-        @Override public Map<Identifier, Identifier> modifierItemIds() { return core.modifierItemIds(); }
     }
 }

@@ -1,5 +1,6 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineDefinitions;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
@@ -41,14 +42,17 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public final class StartupRegistryReferenceGameTest {
+    public static void registerPublicModifier(RegisterMachineDefinitionsEvent event) {
+        Identifier modifierId = Identifier.parse("mmcr_test:public_mek_upgrade");
+        event.registerModifierItem(Identifier.parse("mekanism:basic_control_circuit"), modifierId);
+        event.registerModifier(modifierId, Modifiers.bundle());
+    }
+
     public static void registerPublicReferences(RegisterMachineStructuresEvent event) {
         Identifier typeId = Identifier.parse("mmcr_test:public_induction_cell");
-        Identifier modifierId = Identifier.parse("mmcr_test:public_mek_upgrade");
         event.registerLevel(Levels.level(Identifier.parse("mmcr_test:public_basic_induction_cell"), typeId, 0,
                 BlockConditions.state("mekanism:basic_induction_cell"), Modifiers.bundle()));
-        event.registerModifierItem(Identifier.parse("mekanism:basic_control_circuit"), modifierId);
         event.registerLevelType(Levels.type(typeId, Component.translatable("level.mmcr_test.public_induction_cell")));
-        event.registerModifier(modifierId, Modifiers.bundle());
     }
 
     public static void mekanismExampleResolvesRegisteredContent(GameTestHelper helper) {
@@ -105,6 +109,8 @@ public final class StartupRegistryReferenceGameTest {
         var second = new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO.east(),
                 List.of(items.getLast().copyWithCount(3)));
         var runtime = new ComponentRuntime();
+        var machine = MachineDefinitions.getRegistration(Identifier.parse("mmcr_test:kubejs_identifier_overloads"));
+        runtime.setAllowedModifierIds(machine.allowedModifierIds());
         runtime.replaceUpgradeBuses(List.of(first, second));
         helper.assertTrue(runtime.upgradeModifierUnits().getOrDefault(speed, 0L) == 6L
                         && runtime.upgradeItems().stream().mapToInt(ItemStack::getCount).sum() == 6,

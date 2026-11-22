@@ -67,6 +67,13 @@ public final class TypedFixture implements MachineDefinitionProvider {
 
     @Override
     public void register(RegisterMachineDefinitionsEvent event) {
+        event.registerModifier(MODIFIER, upgradeBundle()); event.registerModifierItem(Identifier.parse("minecraft:diamond"), MODIFIER);
+        event.limitModifierItems(MODIFIER, 4);
+        var relative = Modifiers.bundle(Modifiers.numeric("duration", ModifierScope.INPUT, -0.1,
+                ModifierOperation.ADD_RATIO, false));
+        event.registerModifier(id("stacked_upgrade"), relative, true, BlockStackingMode.ADD);
+        event.registerModifier(id("unique_upgrade"), relative, false);
+
         SmartInterfaceSpec smart = SmartInterfaces.type("power", 1, 0, 10, 1, SmartInterfaces.ValueType.FLOAT);
         SmartModifierSpec mapping = Modifiers.smartEnergy("power", value -> 1D + Math.pow(value / 10D, 2D), ModifierOperation.MULTIPLY);
         MachineDraft draft = Machines.machine(MACHINE).recipePool(POOL).displayNameKey("machine.example_addon.name")
@@ -80,7 +87,7 @@ public final class TypedFixture implements MachineDefinitionProvider {
                         .controllerIdleOverlayTexture(id("idle")).controllerActiveOverlayTexture(id("active")))
                 .factory((FactoryOptions options) -> options.hasFactory(true).threadLimit(4).thread("main", id("recipe")))
                 .maxParallelism(64).maxParallelAmount(8).parallelizable(true)
-                .allowModifiers().allowMultithreading().smartInterface(smart).shareSmartInterfaces()
+                .allowModifier(MODIFIER).allowMultithreading().smartInterface(smart).shareSmartInterfaces()
                 .smartInterfaceModifier(mapping)
                 .smartInterfaceModifier(Modifiers.smartDuration("power", value -> 1D / (1D + value / 10D), ModifierOperation.MULTIPLY))
                 .smartInterfaceModifier(Modifiers.smartItem("power", IoDirection.OUTPUT, true, value -> 1D + value / 10D, ModifierOperation.MULTIPLY))
@@ -108,22 +115,19 @@ public final class TypedFixture implements MachineDefinitionProvider {
                 .tickBehavior((TickHooks hooks) -> hooks.serverTick((TickContext context) -> tick(context))));
     }
 
-    public static void structures(RegisterMachineStructuresEvent event) {
+    private static ModifierBundle upgradeBundle() {
         NumericModifierSpec duration = Modifiers.numeric("duration", ModifierScope.INPUT, 0.5,
                 ModifierOperation.MULTIPLY, false);
         NumericModifierSpec threads = Modifiers.numeric("factory_threads", ModifierScope.MACHINE, 1,
                 ModifierOperation.ADD, false);
         ParallelizationModifierSpec parallel = Modifiers.parallelized(true);
-        ModifierBundle bundle = Modifiers.combine(Modifiers.bundle(duration, threads), Modifiers.bundle(parallel));
+        return Modifiers.combine(Modifiers.bundle(duration, threads), Modifiers.bundle(parallel));
+    }
+
+    public static void structures(RegisterMachineStructuresEvent event) {
         LevelTypeSpec type = Levels.type(LEVEL_TYPE, Component.translatable("level.example_addon.coil"));
-        MachineLevelSpec level = Levels.level(LEVEL, LEVEL_TYPE, 1, BlockConditions.state("minecraft:iron_block"), bundle);
+        MachineLevelSpec level = Levels.level(LEVEL, LEVEL_TYPE, 1, BlockConditions.state("minecraft:iron_block"), upgradeBundle());
         event.registerLevelType(type); event.registerLevel(level);
-        event.registerModifier(MODIFIER, bundle); event.registerModifierItem(Identifier.parse("minecraft:diamond"), MODIFIER);
-        event.limitModifierItems(MODIFIER, 4);
-        var relative = Modifiers.bundle(Modifiers.numeric("duration", ModifierScope.INPUT, -0.1,
-                ModifierOperation.ADD_RATIO, false));
-        event.registerModifier(id("stacked_upgrade"), relative, true, BlockStackingMode.ADD);
-        event.registerModifier(id("unique_upgrade"), relative, false);
         BlockCondition ports = BlockConditions.any(BlockConditions.itemPorts(), BlockConditions.fluidPorts(),
                 BlockConditions.energyPorts(), BlockConditions.chemicalPorts(), BlockConditions.heatPorts(),
                 BlockConditions.radioactiveChemicalPorts(), BlockConditions.upgradeBus(), BlockConditions.parallelControllers(),

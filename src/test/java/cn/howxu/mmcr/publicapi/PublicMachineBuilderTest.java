@@ -228,8 +228,8 @@ class PublicMachineBuilderTest {
 
         Identifier diamondId = MMCR.id("alloy_furnace_diamond_speedup");
         Identifier goldId = MMCR.id("alloy_furnace_gold_doubling");
-        var itemBindings = structures.freeze().resolveModifierItems();
-        assertThat(definitions.definitions()).containsKey(machineId);
+        var itemBindings = definitions.modifierSnapshot().resolveModifierItems();
+        assertThat(definitions.definitions().get(machineId).allowedModifierIds()).containsExactlyInAnyOrder(diamondId, goldId);
         assertThat(itemBindings.get(diamondId)).singleElement()
                 .satisfies(stack -> assertThat(stack.is(Items.DIAMOND_BLOCK)).isTrue());
         assertThat(itemBindings.get(goldId)).singleElement()

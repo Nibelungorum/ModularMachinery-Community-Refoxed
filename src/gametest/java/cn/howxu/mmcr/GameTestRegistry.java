@@ -45,7 +45,6 @@ import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.block.Rotation;
@@ -59,6 +58,9 @@ import java.util.List;
 
 @EventBusSubscriber(modid = MMCR.MODID)
 public final class GameTestRegistry {
+    private static final Identifier BUS_BLOCK_MODIFIER = MMCR.id("upgrade_bus_test_block_modifier");
+    private static final Identifier STACKED_SPEED = MMCR.id("test_stacked_speed");
+
     private GameTestRegistry() {
     }
 
@@ -643,10 +645,19 @@ public final class GameTestRegistry {
     }
 
     public static void registerMachineDefinitions(RegisterMachineDefinitionsEvent event) {
+        if (ModList.get().isLoaded("mekanism")) StartupRegistryReferenceGameTest.registerPublicModifier(event);
         registerMachineDefinitions(RegistrationAdapters.core(event));
     }
 
     public static void registerMachineDefinitions(MachineDefinitionRegistration event) {
+        event.registerModifier(BUS_BLOCK_MODIFIER,
+                ModifierDefinition.of("duration", "input", 1.0F, "add", false));
+        event.registerModifier(STACKED_SPEED, ModifierDefinition.of("duration", "input", -0.1, "add_ratio", false),
+                ModifierStacking.ADD);
+        Identifier upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
+        event.registerModifier(upgradeBusModifierId,
+                ModifierDefinition.of("duration", "input", 1.0F, "add", false));
+        event.registerModifierItem(Identifier.withDefaultNamespace("nether_star"), upgradeBusModifierId);
         event.registerMachine(MachineBuilder.machine(StatusBlockGameTest.DECORATIVE_MACHINE).build());
         event.registerMachine(MachineBuilder.machine(ControllerPlacementGameTest.REQUIRED_VERTICAL_MACHINE)
                 .displayNameKey("machine.mmcr_test.controller_placement_required_vertical")
@@ -680,7 +691,7 @@ public final class GameTestRegistry {
                 builder.controller(controller -> controller.allowVerticalFacing());
             }
             if (name.equals("upgrade_bus_test")) {
-                builder.allowModifiers();
+                builder.allowModifier(upgradeBusModifierId).allowModifier(BUS_BLOCK_MODIFIER).allowModifier(STACKED_SPEED);
             }
             if (name.equals("smart_interface_test")) {
                 builder.smartInterface(new SmartInterfaceType("temperature", 12F, 20F, 0));
@@ -691,7 +702,7 @@ public final class GameTestRegistry {
                 definition = new MachineDefinition(definition.id(), definition.recipePoolId(), definition.displayNameKey(), definition.controller(),
                         definition.appearance(), definition.factory(), definition.role(), definition.acceptedModuleIds(),
                         definition.maxParallelism(), definition.parallelizable(), definition.failureAction(),
-                        definition.allowModifiers(), definition.allowMultithreading(), definition.maxParallelAmount(), true,
+                        definition.allowedModifierIds(), definition.allowMultithreading(), definition.maxParallelAmount(), true,
                         definition.smartInterfaceTypes(), definition.shareSmartInterfaces(), definition.smartInterfaceModifiers(),
                         definition.runningSoundId(), definition.finishSoundId(), definition.pattern());
             }
@@ -735,16 +746,6 @@ public final class GameTestRegistry {
                         .where('F', BlockPredicate.blockState(Blocks.WATER.defaultBlockState()
                                 .setValue(LiquidBlock.LEVEL, 1)))
                         .controller('C'))));
-        Identifier upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
-        event.registerModifier(upgradeBusBlockModifierId,
-                ModifierDefinition.of("duration", "input", 1.0F, "add", false));
-        Identifier stackedBlockId = MMCR.id("test_stacked_speed");
-        event.registerModifier(stackedBlockId, ModifierDefinition.of("duration", "input", -0.1, "add_ratio", false),
-                ModifierStacking.ADD);
-        Identifier upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
-        event.registerModifier(upgradeBusModifierId,
-                ModifierDefinition.of("duration", "input", 1.0F, "add", false));
-        event.registerModifierItem(new ItemStack(Items.NETHER_STAR), upgradeBusModifierId);
         for (String name : List.of("test_cube", "controller_tick", "task7_tick_io", "task7_recipe_snapshot", "data_storage_tick", "upgrade_bus_test", "iron_compressor",
                 "distillation_tower_test", "expandable_structure_stages", "expandable_structure_vertical_roll", "falling_block_structure")) {
             Identifier id = MMCR.id(name);
@@ -759,8 +760,8 @@ public final class GameTestRegistry {
                             .where('C', controller)
                             .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_output_bus").get()))
                             .controller('C'))
-                            .modifier('B', ModifierUse.of(stackedBlockId, BlockPredicate.block(Blocks.DIAMOND_BLOCK)))
-                            .modifier('B', ModifierUse.of(upgradeBusBlockModifierId,
+                            .modifier('B', ModifierUse.of(STACKED_SPEED, BlockPredicate.block(Blocks.DIAMOND_BLOCK)))
+                            .modifier('B', ModifierUse.of(BUS_BLOCK_MODIFIER,
                                     BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("upgrade_bus_normal").get()))));
                     return structure;
                 }

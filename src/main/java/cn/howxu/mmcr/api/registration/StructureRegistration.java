@@ -2,22 +2,15 @@ package cn.howxu.mmcr.api.registration;
 
 import cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.definition.MachineStructureBuilder;
-import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
-import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.registration.ApiRegistrationException;
-import cn.howxu.mmcr.api.recipe.modifier.ModifierItemKey;
 import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
@@ -33,12 +26,6 @@ public final class StructureRegistration {
     protected final Map<Identifier, LevelType> levelTypes = new LinkedHashMap<>();
     protected final Map<Identifier, MachineLevel> levels = new LinkedHashMap<>();
     private final Map<Identifier, cn.howxu.mmcr.api.machine.definition.MachineLevel> levelDeclarations = new LinkedHashMap<>();
-    protected final Map<Identifier, ModifierDefinition> modifiers = new LinkedHashMap<>();
-    protected final Map<Identifier, List<ItemStack>> modifierItems = new LinkedHashMap<>();
-    private final Map<Identifier, ModifierStacking> stacking = new LinkedHashMap<>();
-    private final Map<Identifier, Integer> modifierItemLimits = new LinkedHashMap<>();
-    private final Map<ModifierItemKey, Identifier> modifierItemKeys = new LinkedHashMap<>();
-    private final Map<Identifier, Identifier> modifierItemIds = new LinkedHashMap<>();
     private boolean frozen;
     private Snapshot snapshot;
 
@@ -52,12 +39,6 @@ public final class StructureRegistration {
             prepared.levelTypes.putAll(current.levelTypes);
             prepared.levels.putAll(current.levels);
             prepared.levelDeclarations.putAll(current.levelDeclarations);
-            prepared.modifiers.putAll(current.modifiers);
-            prepared.stacking.putAll(current.stacking);
-            prepared.modifierItemLimits.putAll(current.modifierItemLimits);
-            current.modifierItems().forEach((modifierId, stacks) -> stacks.forEach(stack ->
-                    prepared.registerModifierItem(stack, modifierId)));
-            prepared.modifierItemIds.putAll(current.modifierItemIds);
         }
         current = prepared;
         return prepared;
@@ -131,53 +112,6 @@ public final class StructureRegistration {
         }
     }
 
-    public void registerModifier(Identifier id, ModifierDefinition definition) {
-        registerModifier(id, definition, ModifierStacking.LEGACY);
-    }
-
-    public void registerModifier(Identifier id, ModifierDefinition definition, ModifierStacking policy) {
-        requireOpen();
-        require(policy, "modifier stacking");
-        require(id, "modifier id");
-        require(definition, "modifier definition");
-        if (modifiers.putIfAbsent(id, definition) != null) {
-            throw new ApiRegistrationException("Duplicate machine modifier: " + id);
-        }
-        if (policy != ModifierStacking.LEGACY) stacking.put(id, policy);
-    }
-
-    public void registerModifierItem(ItemStack stack, Identifier modifierId) {
-        requireOpen();
-        require(stack, "modifier item");
-        require(modifierId, "modifier id");
-        ItemStack normalized = stack.copyWithCount(1);
-        ModifierItemKey key = ModifierItemKey.of(normalized);
-        if (modifierItemKeys.putIfAbsent(key, modifierId) != null) {
-            throw new ApiRegistrationException("Duplicate machine modifier item binding");
-        }
-        modifierItems.computeIfAbsent(modifierId, ignored -> new ArrayList<>()).add(normalized);
-    }
-
-    /** Records an item ID without constructing a stack before default components are bound. */
-    public void registerModifierItem(Identifier itemId, Identifier modifierId) {
-        requireOpen();
-        require(itemId, "modifier item id");
-        require(modifierId, "modifier id");
-        if (modifierItemIds.putIfAbsent(itemId, modifierId) != null) {
-            throw new ApiRegistrationException("Duplicate machine modifier item binding: " + itemId);
-        }
-    }
-
-    public void limitModifierItems(Identifier modifierId, int maxCount) {
-        requireOpen();
-        require(modifierId, "modifier id");
-        if (maxCount < 1) throw new ApiRegistrationException(
-                "Modifier item limit for " + modifierId + " must be positive: " + maxCount);
-        if (modifierItemLimits.putIfAbsent(modifierId, maxCount) != null) {
-            throw new ApiRegistrationException("Duplicate modifier item limit: " + modifierId);
-        }
-    }
-
     public Map<Identifier, MachineStructureDefinition> structures() {
         return snapshot == null ? immutable(structures) : snapshot.structures();
     }
@@ -195,18 +129,6 @@ public final class StructureRegistration {
         return immutable(levelDeclarations);
     }
 
-    public Map<Identifier, ModifierDefinition> modifiers() {
-        return snapshot == null ? immutable(modifiers) : snapshot.modifiers();
-    }
-
-    public Map<Identifier, List<ItemStack>> modifierItems() {
-        return snapshot == null ? immutableItemBindings(modifierItems) : snapshot.modifierItems();
-    }
-
-    public Map<Identifier, Identifier> modifierItemIds() {
-        return snapshot == null ? immutable(modifierItemIds) : snapshot.modifierItemIds();
-    }
-
     public Snapshot freeze() {
         if (frozen) return snapshot;
         levels.values().forEach(level -> {
@@ -222,25 +144,7 @@ public final class StructureRegistration {
                 if (!levelTypes.containsKey(typeId)) throw new ApiRegistrationException(
                         "Structure " + structure.machineId() + " refers to unknown machine level type " + typeId);
             });
-            stage.requirements().modifierReplacements().values().stream().flatMap(Collection::stream)
-                    .forEach(replacement -> {
-                        if (!modifiers.containsKey(replacement.modifierId())) throw new ApiRegistrationException(
-                                "Structure " + structure.machineId() + " refers to unknown machine modifier "
-                                        + replacement.modifierId());
-                });
         }));
-        modifierItems.keySet().forEach(modifierId -> {
-            if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
-                    "Modifier item binding refers to unknown machine modifier " + modifierId);
-        });
-        modifierItemIds.forEach((itemId, modifierId) -> {
-            if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
-                    "Modifier item " + itemId + " refers to unknown machine modifier " + modifierId);
-        });
-        modifierItemLimits.keySet().forEach(modifierId -> {
-            if (!modifiers.containsKey(modifierId)) throw new ApiRegistrationException(
-                    "Modifier item limit refers to unknown machine modifier " + modifierId);
-        });
         Map<Identifier, MachineLevel> resolvedLevels = new LinkedHashMap<>(levels);
         levelDeclarations.forEach((id, declaration) -> {
             try {
@@ -252,8 +156,7 @@ public final class StructureRegistration {
         levels.putAll(resolvedLevels);
         levelDeclarations.clear();
         frozen = true;
-        snapshot = new Snapshot(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds,
-                stacking, modifierItemLimits);
+        snapshot = new Snapshot(structures, levelTypes, levels);
         return snapshot;
     }
 
@@ -270,75 +173,12 @@ public final class StructureRegistration {
         return Collections.unmodifiableMap(new LinkedHashMap<>(source));
     }
 
-    private static Map<Identifier, List<ItemStack>> immutableItemBindings(
-            Map<Identifier, List<ItemStack>> source) {
-        Map<Identifier, List<ItemStack>> copy = new LinkedHashMap<>();
-        source.forEach((modifierId, stacks) -> copy.put(modifierId,
-                List.copyOf(stacks.stream().map(ItemStack::copy).toList())));
-        return Collections.unmodifiableMap(copy);
-    }
-
     public record Snapshot(Map<Identifier, MachineStructureDefinition> structures,
-            Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
-            Map<Identifier, ModifierDefinition> modifiers,
-            Map<Identifier, List<ItemStack>> modifierItems,
-            Map<Identifier, Identifier> modifierItemIds, Map<Identifier, ModifierStacking> stacking,
-            Map<Identifier, Integer> modifierItemLimits) {
-        public Snapshot(Map<Identifier, MachineStructureDefinition> structures, Map<Identifier, LevelType> levelTypes,
-                        Map<Identifier, MachineLevel> levels, Map<Identifier, ModifierDefinition> modifiers,
-                        Map<Identifier, List<ItemStack>> modifierItems, Map<Identifier, Identifier> modifierItemIds,
-                        Map<Identifier, ModifierStacking> stacking) {
-            this(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds, stacking, Map.of());
-        }
-
-        public Snapshot(Map<Identifier, MachineStructureDefinition> structures, Map<Identifier, LevelType> levelTypes,
-                        Map<Identifier, MachineLevel> levels, Map<Identifier, ModifierDefinition> modifiers,
-                        Map<Identifier, List<ItemStack>> modifierItems, Map<Identifier, Identifier> modifierItemIds) {
-            this(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds, Map.of());
-        }
-
-        public Snapshot(Map<Identifier, MachineStructureDefinition> structures,
-                Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
-                Map<Identifier, ModifierDefinition> modifiers) {
-            this(structures, levelTypes, levels, modifiers, Map.of());
-        }
-
-        public Snapshot(Map<Identifier, MachineStructureDefinition> structures,
-                Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels,
-                Map<Identifier, ModifierDefinition> modifiers, Map<Identifier, List<ItemStack>> modifierItems) {
-            this(structures, levelTypes, levels, modifiers, modifierItems, Map.of());
-        }
-
+            Map<Identifier, LevelType> levelTypes, Map<Identifier, MachineLevel> levels) {
         public Snapshot {
             structures = immutable(structures);
             levelTypes = immutable(levelTypes);
             levels = immutable(levels);
-            modifiers = immutable(modifiers);
-            modifierItems = immutableItemBindings(modifierItems);
-            modifierItemIds = immutable(modifierItemIds);
-            stacking = immutable(stacking);
-            modifierItemLimits = immutable(modifierItemLimits);
-        }
-
-        @Override
-        public Map<Identifier, List<ItemStack>> modifierItems() {
-            return immutableItemBindings(modifierItems);
-        }
-
-        /** Must only be called once item default components have been bound. */
-        public Map<Identifier, List<ItemStack>> resolveModifierItems() {
-            Map<Identifier, List<ItemStack>> resolved = new LinkedHashMap<>();
-            modifierItems().forEach((id, stacks) -> resolved.put(id, new ArrayList<>(stacks)));
-            modifierItemIds.forEach((itemId, modifierId) -> {
-                var item = BuiltInRegistries.ITEM.getOptional(itemId).orElseThrow(() ->
-                        new ApiRegistrationException("Machine modifier " + modifierId
-                                + " refers to unknown item " + itemId));
-                ItemStack stack = new ItemStack(item);
-                if (stack.isEmpty()) throw new ApiRegistrationException(
-                        "Machine modifier " + modifierId + " cannot bind empty item " + itemId);
-                resolved.computeIfAbsent(modifierId, ignored -> new ArrayList<>()).add(stack);
-            });
-            return immutableItemBindings(resolved);
         }
     }
 }

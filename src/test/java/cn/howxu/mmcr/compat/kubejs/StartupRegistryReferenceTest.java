@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import cn.howxu.mmcr.internal.registration.MachineDefinitionConverter;
+import cn.howxu.mmcr.api.registration.MachineDefinitionRegistration;
+import cn.howxu.mmcr.publicapi.event.RegisterMachineDefinitionsEvent;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.MachineRegistration;
 import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
@@ -155,20 +158,19 @@ class StartupRegistryReferenceTest {
         event.registerModifierItem("minecraft:diamond", MODIFIER.toString());
         assertThatThrownBy(() -> event.registerModifierItem("minecraft:diamond", "test:another_modifier"))
                 .hasMessageContaining("Duplicate").hasMessageContaining("minecraft:diamond");
-        assertThatThrownBy(() -> StructureRegistration.current().freeze())
+        assertThatThrownBy(() -> ContentRegistrationCoordinator.startupDefinitions().modifierSnapshot())
                 .hasMessageContaining("unknown machine modifier").hasMessageContaining(MODIFIER.toString());
     }
 
     @Test
     void pending_and_java_stack_bindings_cannot_claim_the_same_item() {
-        var collector = StructureRegistration.current();
+        var collector = ContentRegistrationCoordinator.startupDefinitions();
         var javaModifier = Identifier.parse("test:java_stack_modifier");
         collector.registerModifier(MODIFIER, ModifierDefinition.EMPTY);
         collector.registerModifier(javaModifier, ModifierDefinition.EMPTY);
         collector.registerModifierItem(new ItemStack(Items.DIAMOND), javaModifier);
         collector.registerModifierItem(Identifier.parse("minecraft:diamond"), MODIFIER);
         ContentRegistrationCoordinator.beginStartup();
-        ContentRegistrationCoordinator.collectStructures(collector);
         ContentRegistrationCoordinator.commitStructures();
 
         assertThat(ModifierRegistry.modifierFor(new ItemStack(Items.DIAMOND))).isNull();
@@ -181,12 +183,11 @@ class StartupRegistryReferenceTest {
 
     @Test
     void missing_item_cannot_publish_the_valid_java_stack_subset() {
-        var collector = StructureRegistration.current();
+        var collector = ContentRegistrationCoordinator.startupDefinitions();
         collector.registerModifier(MODIFIER, ModifierDefinition.EMPTY);
         collector.registerModifierItem(new ItemStack(Items.DIAMOND), MODIFIER);
         collector.registerModifierItem(Identifier.parse("missing_mod:upgrade"), MODIFIER);
         ContentRegistrationCoordinator.beginStartup();
-        ContentRegistrationCoordinator.collectStructures(collector);
         ContentRegistrationCoordinator.commitStructures();
 
         assertThat(ModifierRegistry.modifierFor(new ItemStack(Items.DIAMOND))).isNull();
@@ -200,8 +201,8 @@ class StartupRegistryReferenceTest {
         var event = new MMCRStartupEventJS();
         event.registerModifier(MODIFIER.toString(), ModifierDefinition.EMPTY);
         event.registerModifierItem("minecraft:diamond", MODIFIER.toString());
-        var snapshot = StructureRegistration.current().freeze();
-        StructureRegistration.prepare(Set.of()).registerModifierItem(Identifier.parse("minecraft:emerald"), MODIFIER);
+        var snapshot = ContentRegistrationCoordinator.startupDefinitions().modifierSnapshot();
+        ContentRegistrationCoordinator.startupDefinitions().registerModifierItem(Identifier.parse("minecraft:emerald"), MODIFIER);
 
         assertThat(snapshot.resolveModifierItems().get(MODIFIER)).singleElement()
                 .satisfies(stack -> assertThat(stack.getItem()).isSameAs(Items.DIAMOND));
@@ -268,8 +269,9 @@ class StartupRegistryReferenceTest {
         var snapshot = StructureRegistration.current().freeze();
         assertThat(snapshot.levels().get(levelId).typeId()).isEqualTo(typeId);
         assertThat(snapshot.levels().get(levelId).statePredicate().matches(Blocks.COPPER_BLOCK.defaultBlockState())).isTrue();
-        assertThat(snapshot.modifiers()).containsEntry(MODIFIER, ModifierDefinition.EMPTY);
-        assertThat(snapshot.resolveModifierItems().get(MODIFIER)).singleElement()
+        var modifiers = ContentRegistrationCoordinator.startupDefinitions().modifierSnapshot();
+        assertThat(modifiers.modifiers()).containsEntry(MODIFIER, ModifierDefinition.EMPTY);
+        assertThat(modifiers.resolveModifierItems().get(MODIFIER)).singleElement()
                 .satisfies(stack -> assertThat(stack.getItem()).isSameAs(Items.DIAMOND));
     }
 
@@ -284,16 +286,16 @@ class StartupRegistryReferenceTest {
         collector.registerStructure(machineId, builder -> builder.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockPredicate.block(Blocks.FURNACE)).controller('F'))
                 .modifier('F', use)));
-        assertThatThrownBy(collector::freeze).hasMessageContaining(machineId.toString())
-                .hasMessageContaining(MODIFIER.toString());
-        var empty = new StructureRegistration(Set.of()).freeze();
-        assertThatThrownBy(() -> MachineRecipeConverter.toRecipe(recipe, empty))
+        var structure = MachineDefinitionConverter.toStructureDefinition(collector.freeze().structures().get(machineId));
+        var definitions = new MachineDefinitionRegistration();
+        assertThatThrownBy(() -> structure.validateModifiers(Set.of(MODIFIER), definitions.modifiers().keySet()))
+                .hasMessageContaining(machineId.toString()).hasMessageContaining(MODIFIER.toString());
+        assertThatThrownBy(() -> MachineRecipeConverter.toRecipe(recipe, Map.of(), definitions.modifiers()))
                 .hasMessageContaining(recipeId.toString()).hasMessageContaining(MODIFIER.toString());
 
-        collector.registerModifier(MODIFIER, ModifierDefinition.EMPTY);
-        var snapshot = collector.freeze();
-        assertThat(snapshot.structures()).containsKey(machineId);
-        assertThat(MachineRecipeConverter.toRecipe(recipe, snapshot).id()).isEqualTo(recipeId);
+        definitions.registerModifier(MODIFIER, ModifierDefinition.EMPTY);
+        structure.validateModifiers(Set.of(MODIFIER), definitions.modifiers().keySet());
+        assertThat(MachineRecipeConverter.toRecipe(recipe, Map.of(), definitions.modifiers()).id()).isEqualTo(recipeId);
     }
 
     @Test
@@ -314,12 +316,13 @@ class StartupRegistryReferenceTest {
 
     @Test
     void public_modifier_item_ids_use_the_same_deferred_snapshot() {
-        var event = new RegisterMachineStructuresEvent(Set.of());
+        var event = new RegisterMachineDefinitionsEvent();
         var itemId = Identifier.parse("missing_mod:public_upgrade");
         event.registerModifier(MODIFIER, Modifiers.bundle());
         event.registerModifierItem(itemId, MODIFIER);
 
-        var snapshot = RegistrationAdapters.freeze(event);
+        RegistrationAdapters.freeze(event);
+        var snapshot = RegistrationAdapters.core(event).modifierSnapshot();
         assertThat(event.modifierItemIds()).containsEntry(itemId, MODIFIER);
         assertThat(snapshot.modifierItems()).isEmpty();
         assertThatThrownBy(snapshot::resolveModifierItems)

@@ -9,7 +9,8 @@ MMCREvents.startup(event => {
         .displayNameKey("machine.mmcr_kubejs.kubejs_alloy_furnace") // Translation key for the display name.
         .recipePool("mmcr_kubejs:kubejs_alloy_furnace") // Bind the recipe pool.
         .appearance('minecraft:bricks') // Set the controller's base appearance.
-        .allowModifiers() // Allow the machine to use modifiers.
+        .allowModifier("mmcr_kubejs:alloy_furnace_emerald_speedup")
+        .allowModifier("mmcr_kubejs:alloy_furnace_lapis_doubling")
 
     builder.register()
 

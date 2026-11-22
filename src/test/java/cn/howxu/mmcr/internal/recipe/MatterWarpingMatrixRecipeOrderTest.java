@@ -10,7 +10,6 @@ import cn.howxu.mmcr.api.compat.ae2lt.LightningTier;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.recipe.CraftingContext;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
@@ -285,7 +284,7 @@ class MatterWarpingMatrixRecipeOrderTest {
         var definition = builder.duration(20).inputEnergy(20_000L).lightningOutput(HIGH, high)
                 .lightningOutput(EXTREME, extreme, chance).build();
         return MachineRecipeConverter.toRecipe(definition,
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
     }
 
     private static CapabilitySnapshot capabilities(List<Item> inventory, Layout layout, Environment environment) {

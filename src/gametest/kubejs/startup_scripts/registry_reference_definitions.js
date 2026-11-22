@@ -13,7 +13,7 @@ MMCREvents.startup(event => {
 
 MMCREvents.startup(event => {
     const api = event.getAPI()
-    const registry = Java.loadClass('cn.howxu.mmcr.api.registration.StructureRegistration').current()
+    const registry = Java.loadClass('cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator').startupDefinitions()
     if (!api.id('mmcr_test:kubejs_reference_speed').equals(
         registry.modifierItemIds().get(api.id('kubejs:mmcr_reference_upgrade')))) {
         throw new Error('The item binding must be collected before its modifier definition')

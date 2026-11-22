@@ -735,8 +735,8 @@ public final class MachineControllerRuntime {
         publishSnapshot();
     }
 
-    void setModifiersAllowed(boolean allowed) {
-        components.setModifiersAllowed(allowed);
+    void setAllowedModifierIds(Set<Identifier> ids) {
+        components.setAllowedModifierIds(ids);
         publishSnapshot();
     }
 

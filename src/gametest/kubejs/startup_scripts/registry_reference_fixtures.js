@@ -5,8 +5,9 @@ StartupEvents.registry('block', event => event.create('mmcr_reference_coil'))
 MMCREvents.startup(event => {
     const api = event.getAPI()
     const registry = Java.loadClass('cn.howxu.mmcr.api.registration.StructureRegistration').current()
+    const definitions = Java.loadClass('cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator').startupDefinitions()
     if (registry.levelTypes().containsKey(api.id('mmcr_test:kubejs_reference_coil')) ||
-        registry.modifiers().containsKey(api.id('mmcr_test:kubejs_reference_speed'))) {
+        definitions.modifiers().containsKey(api.id('mmcr_test:kubejs_reference_speed'))) {
         throw new Error('Forward references must execute before their definitions')
     }
     event.levelSlot('mmcr_test:kubejs_reference_coil')
@@ -22,6 +23,7 @@ MMCREvents.startup(event => {
 
     const scope = api.screenScope().CONTROLLER
     event.createMachine(api.id('mmcr_test:kubejs_identifier_overloads'))
+        .allowModifier(api.id('mmcr_test:kubejs_reference_speed'))
         .recipePool('mmcr_test:identifier_pool', 'mmcr_test:identifier_other_pool')
         .recipePool(api.id('mmcr_test:identifier_pool'), api.id('mmcr_test:identifier_other_pool'))
         .controllerTextures('minecraft:block/stone', 'minecraft:block/dirt',

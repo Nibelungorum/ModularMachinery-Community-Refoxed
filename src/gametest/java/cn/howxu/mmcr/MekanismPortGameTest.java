@@ -21,7 +21,6 @@ import cn.howxu.mmcr.api.recipe.CustomRecipeIo;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -887,7 +886,7 @@ public class MekanismPortGameTest {
             helper.assertValueEqual(0.5F, chemicalOutput.payload().getAsJsonObject().get("chance").getAsFloat(), "Chemical output chance survives");
             helper.assertValueEqual(120D, heatOutput.payload().getAsJsonObject().get("value").getAsDouble(), "Heat output value survives");
             var recipe = MachineRecipeConverter.toRecipe(declaration,
-                    new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                    Map.of(), Map.of());
             helper.assertValueEqual(2, recipe.machineOutputs().size(), "Converter retains both custom outputs");
             for (int index = 0; index < customOutputs.size(); index++) {
                 var converted = recipe.machineOutputs().get(index);

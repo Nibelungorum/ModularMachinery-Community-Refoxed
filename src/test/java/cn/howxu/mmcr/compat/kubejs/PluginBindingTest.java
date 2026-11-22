@@ -1,5 +1,8 @@
 package cn.howxu.mmcr.compat.kubejs;
 
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.ParameterizedTest;
+import cn.howxu.mmcr.internal.registration.ContentRegistrationCoordinator;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier.IOType;
 
 import cn.howxu.mmcr.MMCR;
@@ -12,7 +15,6 @@ import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.publicapi.Machines;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
@@ -597,7 +599,7 @@ class PluginBindingTest {
     @Test
     void startup_event_registers_modifier_definition_and_item_binding() {
         var modifierId = MMCR.id("kubejs_startup_modifier");
-        StructureRegistration.resetCollector();
+        ContentRegistrationCoordinator.clearForTesting();
         try {
             var event = new MMCRStartupEventJS();
             var definition = new ModifierDefinition(List.of());
@@ -605,21 +607,23 @@ class PluginBindingTest {
             event.registerModifier(modifierId.toString(), definition);
             event.registerModifierItem("minecraft:diamond", modifierId.toString());
 
-            var snapshot = StructureRegistration.current().freeze();
+            var snapshot = ContentRegistrationCoordinator.startupDefinitions().modifierSnapshot();
             assertThat(snapshot.modifiers()).containsEntry(modifierId, definition);
             assertThat(snapshot.modifierItems()).isEmpty();
             assertThat(snapshot.resolveModifierItems().get(modifierId)).singleElement()
                     .satisfies(stack -> assertThat(stack.getItem()).isSameAs(Items.DIAMOND));
         } finally {
-            StructureRegistration.resetCollector();
+            ContentRegistrationCoordinator.clearForTesting();
         }
     }
 
-    @Test
-    void unknown_kubejs_modifier_rejects_entire_server_reload() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void unknown_or_unauthorized_modifier_rejects_entire_server_reload(boolean registered) {
         var oldMachineId = MMCR.id("test_machine_name");
         var validMachineId = MMCR.id("cracker");
-        var unknownModifierId = MMCR.id("kubejs_unknown_modifier");
+        var modifierId = MMCR.id("kubejs_unsupported_modifier");
+        if (registered) ModifierRegistry.installSnapshot(Map.of(modifierId, ModifierDefinition.EMPTY));
 
         var previous = new KubeJSContentReloadTransaction();
         previous.registerStructure(structure(oldMachineId));
@@ -632,14 +636,15 @@ class PluginBindingTest {
         KubeJSContentReloadTransaction.active().registerStructure(new MachineStructureBuilderJS(oldMachineId)
                 .pattern("M")
                 .set("M", Blocks.IRON_BLOCK)
-                .modifier("M", new KubeJSApi().modifierUse(unknownModifierId.toString(),
+                .modifier("M", new KubeJSApi().modifierUse(modifierId.toString(),
                         new KubeJSApi().block("minecraft:diamond_block")))
                 .createObject());
 
         assertThatThrownBy(() -> Plugin.completeServerReload(reload, 0))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(oldMachineId.toString())
-                .hasMessageContaining(unknownModifierId.toString());
+                .hasMessageContaining(modifierId.toString()).hasMessageContaining("symbol M")
+                .hasMessageContaining(registered ? "not allowed" : "unknown");
         assertThat(MachineStructureRegistry.dynamicSnapshot()).containsExactlyInAnyOrderEntriesOf(previousStructures);
         assertThat(MachineStructureRegistry.dynamicSnapshot()).doesNotContainKey(validMachineId);
     }

@@ -1,7 +1,7 @@
 package cn.howxu.mmcr.publicapi.event;
 
+import cn.howxu.mmcr.api.registration.ApiRegistrationException;
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.publicapi.recipe.modifier.BlockStackingMode;
@@ -40,7 +40,6 @@ class StructureRegistrationCollectorTest {
         var machine = MMCR.id("shared_collector_machine");
         var type = MMCR.id("shared_collector_type");
         var level = MMCR.id("shared_collector_level");
-        var modifier = MMCR.id("shared_collector_modifier");
         var event = RegistrationAdapters.prepare(Set.of(machine));
         event.registerLevel(Levels.level(level, type, 1, BlockConditions.state("minecraft:furnace"),
                 Modifiers.bundle()));
@@ -48,26 +47,24 @@ class StructureRegistrationCollectorTest {
         assertThatThrownBy(() -> event.levels().clear()).isInstanceOf(UnsupportedOperationException.class);
         event.registerStructure(machine, draft -> draft.fullStructure(stage -> stage
                 .pattern(pattern -> pattern.layer("F").where('F', BlockConditions.block(Blocks.FURNACE)).controller('F'))
-                .requirements(requirements -> requirements.levelSlot('F', type).modifier('F', modifier))));
+                .requirements(requirements -> requirements.levelSlot('F', type))));
         // Models KJS writing dependencies after Java event subscribers have returned.
         StructureRegistration.current().registerLevelType(new LevelType(type, Component.translatable("test.mmcr.coil")));
-        StructureRegistration.current().registerModifier(modifier, ModifierDefinition.EMPTY);
         var snapshot = RegistrationAdapters.freeze(event);
         assertThat(snapshot.levels().get(level).statePredicate().matches(Blocks.FURNACE.defaultBlockState())).isTrue();
         assertThat(snapshot.levelTypes()).containsKey(type);
         assertThat(snapshot.levels()).containsKey(level);
-        assertThat(snapshot.modifiers()).containsKey(modifier);
         assertThat(RegistrationAdapters.freeze(RegistrationAdapters.current())).isSameAs(snapshot);
         assertThat(event.levels().get(level).id()).isEqualTo(level);
-        assertThatThrownBy(() -> StructureRegistration.current().registerModifier(MMCR.id("late"), ModifierDefinition.EMPTY))
+        assertThatThrownBy(() -> StructureRegistration.current().registerLevelType(new LevelType(type, Component.literal("late"))))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> event.registerModifier(MMCR.id("late"), Modifiers.bundle()))
+        assertThatThrownBy(() -> event.registerLevelType(Levels.type(type, Component.literal("late"))))
                 .isInstanceOf(RegistrationException.class);
     }
 
     @Test
     void typed_overloads_attach_policy_to_the_id_not_the_shared_bundle() {
-        var event = RegistrationAdapters.prepare(Set.of());
+        var event = new RegisterMachineDefinitionsEvent();
         var legacy = MMCR.id("legacy");
         var unique = MMCR.id("unique");
         var linear = MMCR.id("linear");
@@ -77,7 +74,8 @@ class StructureRegistrationCollectorTest {
         event.registerModifier(unique, shared, false);
         event.registerModifier(linear, shared, true);
         event.registerModifier(product, shared, true, BlockStackingMode.MULTIPLY);
-        var snapshot = RegistrationAdapters.freeze(event);
+        RegistrationAdapters.freeze(event);
+        var snapshot = RegistrationAdapters.core(event).modifierSnapshot();
         assertThat(snapshot.stacking()).doesNotContainKey(legacy).containsEntry(unique, ModifierStacking.UNIQUE)
                 .containsEntry(linear, ModifierStacking.ADD).containsEntry(product, ModifierStacking.MULTIPLY);
         assertThat(snapshot.modifiers().get(legacy)).isSameAs(snapshot.modifiers().get(unique));
@@ -100,33 +98,35 @@ class StructureRegistrationCollectorTest {
     @Test
     void item_limit_allows_a_forward_reference_but_not_an_invalid_or_duplicate_declaration() {
         var speed = MMCR.id("limited_speed");
-        var event = new RegisterMachineStructuresEvent(Set.of());
+        var event = new RegisterMachineDefinitionsEvent();
         assertThatThrownBy(() -> event.limitModifierItems(speed, 0))
                 .isInstanceOf(RegistrationException.class).hasMessageContaining("positive");
         event.limitModifierItems(speed, 4);
         assertThatThrownBy(() -> event.limitModifierItems(speed, 8))
                 .isInstanceOf(RegistrationException.class).hasMessageContaining("Duplicate")
                 .hasMessageContaining(speed.toString());
-        assertThatThrownBy(() -> RegistrationAdapters.freeze(event))
-                .isInstanceOf(RegistrationException.class).hasMessageContaining("unknown machine modifier")
+        assertThatThrownBy(() -> RegistrationAdapters.core(event).modifierSnapshot())
+                .isInstanceOf(ApiRegistrationException.class).hasMessageContaining("unknown machine modifier")
                 .hasMessageContaining(speed.toString());
 
         event.registerModifier(speed, Modifiers.bundle());
-        assertThat(RegistrationAdapters.freeze(event).modifierItemLimits()).containsEntry(speed, 4);
+        RegistrationAdapters.freeze(event);
+        assertThat(RegistrationAdapters.core(event).modifierSnapshot().modifierItemLimits()).containsEntry(speed, 4);
         assertThatThrownBy(() -> event.limitModifierItems(speed, 2))
                 .isInstanceOf(RegistrationException.class).hasMessageContaining("frozen");
     }
 
     @Test
-    void unresolved_modifier_binding_rejects_freeze_without_closing_collector() {
+    void unresolved_modifier_binding_is_rejected_at_link_time() {
         var modifier = MMCR.id("unresolved_public_modifier");
-        var event = new RegisterMachineStructuresEvent(Set.of());
+        var event = new RegisterMachineDefinitionsEvent();
         var itemId = Identifier.parse("minecraft:emerald");
         event.registerModifierItem(itemId, modifier);
-        assertThatThrownBy(() -> RegistrationAdapters.freeze(event)).isInstanceOf(RegistrationException.class)
+        assertThatThrownBy(() -> RegistrationAdapters.core(event).modifierSnapshot()).isInstanceOf(ApiRegistrationException.class)
                 .hasMessageContaining(modifier.toString());
         event.registerModifier(modifier, Modifiers.bundle());
-        var snapshot = RegistrationAdapters.freeze(event);
+        RegistrationAdapters.freeze(event);
+        var snapshot = RegistrationAdapters.core(event).modifierSnapshot();
         assertThat(snapshot.modifierItemIds()).containsEntry(itemId, modifier);
         assertThat(event.modifierItemIds()).containsEntry(itemId, modifier);
         assertThatThrownBy(() -> event.modifierItemIds().clear()).isInstanceOf(UnsupportedOperationException.class);

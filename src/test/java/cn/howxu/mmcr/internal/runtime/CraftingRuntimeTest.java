@@ -1758,6 +1758,7 @@ class CraftingRuntimeTest {
         controller.setMachine(new DynamicMachine(machineId, machineId.toString(), new BlockArray(Map.of()),
                 MachineControllerSpec.defaultsFor(machineId), MachineAppearanceSpec.defaults(), PortRequirementSpec.none(),
                 PortTierRequirementSpec.none(), List.of(), Map.of(), 4L, true, false, 1));
+        controller.componentRuntime().setAllowedModifierIds(Set.of(Identifier.parse("parallelism"), Identifier.parse("current")));
         controller.componentRuntime().replaceModifiers(Map.of("parallelism", List.of(
                 MachineModifier.numeric("parallelism", "machine", 3D, "add", false))));
         RuntimeTestFixtures.republish(controller);
@@ -3571,6 +3572,7 @@ class CraftingRuntimeTest {
                         callbackFailure.compareAndSet(null, "legacy restore did not expose the effective snapshot");
                     }
                 }).build()));
+        controller.componentRuntime().setAllowedModifierIds(Set.of(Identifier.parse("runtime")));
         controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
                 MachineModifier.numeric("duration", "input", 2D, "multiply", false),
                 MachineModifier.numeric("output", "output", 2D, "multiply", false))));

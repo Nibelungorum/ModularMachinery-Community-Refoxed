@@ -955,7 +955,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (!bindingRestoredMachine) stopFactoryController();
         invalidateStructureScan(StructureMatcher.InvalidationReason.PATTERN);
         clearFoundModifiers();
-        runtime.setModifiersAllowed(allowsModifiers(m));
+        runtime.setAllowedModifierIds(allowedModifierIds(m));
         current = currentStructureSnapshot();
         runtime.publishStructureState(isStructureAreaLoaded(current), current.formed(), m, current.matchedStage());
         runtime.publishComponentState(runtime.components(), runtime.componentRuntime().foundModifiers(), Map.of(),
@@ -3200,9 +3200,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
             long previousCapabilityVersion = previousSnapshot.capabilityVersion();
             refreshModuleConnectionState();
-            boolean modifiersAllowed = allowsModifiers(matchedMachine);
-            runtime.setModifiersAllowed(modifiersAllowed);
-            Map<String, List<MachineModifier>> foundModifiers = collectFoundModifiers(replacements);
+            Set<Identifier> allowedIds = allowedModifierIds(matchedMachine);
+            runtime.setAllowedModifierIds(allowedIds);
+            Map<String, List<MachineModifier>> foundModifiers = collectFoundModifiers(replacements, allowedIds);
             runtime.publishComponentState(runtime.components(), foundModifiers, levels, previousLinkedPortPositions);
             refreshCriticalStructureChunks(rotatedPattern, compiledPattern, facing);
             if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
@@ -3270,7 +3270,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private Map<String, List<MachineModifier>> collectFoundModifiers(
-            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements, Set<Identifier> allowedIds) {
+        if (allowedIds.isEmpty()) return Map.of();
         Map<String, List<MachineModifier>> nextModifiers = new LinkedHashMap<>();
         Map<Identifier, Long> counts = new LinkedHashMap<>();
         if (level != null) {
@@ -3280,13 +3281,11 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 for (SingleBlockModifierReplacement replacement : entry.getValue()) {
                     if (!replacement.getReplacement().matches(actual)) continue;
                     Identifier id = replacement.getModifierId();
+                    if (!allowedIds.contains(id)) continue;
+                    var definition = ModifierRegistry.get(id);
+                    if (definition == null) continue;
                     ModifierStacking policy = ModifierRegistry.stacking(id);
-                    String key = policy == ModifierStacking.LEGACY ? replacement.getModifierName() : id.toString();
-                    nextModifiers.computeIfAbsent(key, ignored -> {
-                        var definition = ModifierRegistry.get(id);
-                        return replacement.getModifiers().isEmpty() && definition != null
-                                ? definition.modifiers() : replacement.getModifiers();
-                    });
+                    nextModifiers.putIfAbsent(id.toString(), definition.modifiers());
                     if (policy.countsBlocks()) {
                         if (countedHere == null) countedHere = new HashSet<>();
                         if (countedHere.add(id)) counts.merge(id, 1L, Long::sum);
@@ -3299,10 +3298,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return nextModifiers;
     }
 
-    private static boolean allowsModifiers(@Nullable Machine machine) {
-        if (machine == null) return false;
+    private static Set<Identifier> allowedModifierIds(@Nullable Machine machine) {
+        if (machine == null) return Set.of();
         MachineRegistration registration = MachineDefinitions.getRegistration(machine.registryName());
-        return registration != null && registration.allowModifiers();
+        return registration == null ? Set.of() : registration.allowedModifierIds();
     }
 
     private void clearFoundModifiers() {

@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.FluidRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.internal.api.facade.recipe.RecipeAdapters;
 import cn.howxu.mmcr.internal.registration.MachineRecipeConverter;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -80,7 +79,7 @@ class CoreRecipeDefinitionTest {
                 .isEqualTo(Component.literal("canonical output"));
         assertThat(definition.fluidOutputs().getFirst().stack().getAmount()).isEqualTo(250);
         var recipe = MachineRecipeConverter.toRecipe(definition,
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
         assertThat(recipe.requirements()).extracting(value -> MachineRequirement.CODEC.encodeStart(JsonOps.INSTANCE, value).getOrThrow())
                 .containsExactlyElementsOf(encoded);
         assertThat(RecipeAdapters.wrap(definition).itemOutputs().getFirst().chance()).isEqualTo(0.5F);
@@ -108,7 +107,7 @@ class CoreRecipeDefinitionTest {
         assertThat(view.energyOutputs().getFirst().fePerTick()).isZero();
         assertThat(definition.requirements()).allSatisfy(value -> assertThat(value.tags()).containsExactly("zero"));
         var compiled = MachineRecipeConverter.toRecipe(definition,
-                new StructureRegistration.Snapshot(Map.of(), Map.of(), Map.of(), Map.of()));
+                Map.of(), Map.of());
         assertThat(compiled.requirements()).extracting(MachineRequirement::io)
                 .containsExactly(IOType.INPUT, IOType.OUTPUT, IOType.INPUT, IOType.OUTPUT, IOType.INPUT, IOType.OUTPUT);
         assertThatThrownBy(() -> builder.inputEnergy(0)).isInstanceOf(IllegalArgumentException.class);

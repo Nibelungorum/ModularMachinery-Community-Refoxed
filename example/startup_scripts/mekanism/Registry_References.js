@@ -7,7 +7,8 @@ MMCREvents.startup(event => {
         .displayNameKey('machine.mmcr_kubejs.mekanism_registry_demo')
         .recipePool('mmcr_kubejs:mekanism_registry_demo')
         .appearance('mekanism:steel_casing')
-        .allowModifiers()
+        .allowModifier('mmcr_kubejs:mek_speed')
+        .allowModifier('mmcr_kubejs:mek_energy')
         .register()
 
     event.registerModifier('mmcr_kubejs:mek_speed', api.modifierDefinition([

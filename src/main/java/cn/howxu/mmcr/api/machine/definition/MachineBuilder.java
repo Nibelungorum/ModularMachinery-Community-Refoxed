@@ -45,7 +45,7 @@ public final class MachineBuilder {
     private long maxParallelism = 1L;
     private boolean parallelizable;
     private RecipeFailureActions failureAction = RecipeFailureActions.getDefaultAction();
-    private boolean allowModifiers;
+    private final Set<Identifier> allowedModifierIds = new LinkedHashSet<>();
     private boolean allowMultithreading;
     private int maxParallelAmount = 1;
     private final Map<String, SmartInterfaceType> smartInterfaceTypes = new LinkedHashMap<>();
@@ -170,10 +170,8 @@ public final class MachineBuilder {
         return this;
     }
 
-    public MachineBuilder allowModifiers() { return allowModifiers(true); }
-
-    public MachineBuilder allowModifiers(boolean allow) {
-        allowModifiers = allow;
+    public MachineBuilder allowModifier(Identifier id) {
+        allowedModifierIds.add(Objects.requireNonNull(id, "modifier id"));
         return this;
     }
 
@@ -282,7 +280,7 @@ public final class MachineBuilder {
             resolvedBehavior = builder.build();
         }
         return new MachineDefinition(id, recipePoolIds, displayNameKey, controller, appearance, factory, role,
-                acceptedModuleIds, networkInterface, maxParallelism, parallelizable, failureAction, allowModifiers,
+                acceptedModuleIds, networkInterface, maxParallelism, parallelizable, failureAction, allowedModifierIds,
                 allowMultithreading, maxParallelAmount, false, smartInterfaceTypes,
                 shareSmartInterfaces, smartInterfaceModifiers, runningSoundId, finishSoundId, null, resolvedBehavior,
                 requestProcessors, requestFailures);

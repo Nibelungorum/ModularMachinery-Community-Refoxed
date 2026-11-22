@@ -653,6 +653,7 @@ class PatternStartReservationTest {
                     beforeStart.incrementAndGet();
                     context.setDuration(1);
                 }).build(), List.of());
+        fixture.controller.componentRuntime().setAllowedModifierIds(Set.of(Identifier.parse("effective")));
         fixture.controller.componentRuntime().replaceModifiers(Map.of("effective", List.of(
                 MachineModifier.numeric("parallelism", "machine", 9D, "add", false),
                 MachineModifier.numeric("duration", "input", 0.2D, "multiply", false))));
@@ -792,6 +793,7 @@ class PatternStartReservationTest {
     void output_matching_uses_the_runtime_modifier_context() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         formForPattern(controller, true);
+        controller.componentRuntime().setAllowedModifierIds(Set.of(Identifier.parse("runtime")));
         controller.componentRuntime().replaceModifiers(Map.of("runtime", List.of(
                 MachineModifier.numeric("output", "output", 2D, "multiply", false))));
         MachineRecipe recipe = recipeWithOutputs("reservation_output_context",
@@ -1561,6 +1563,7 @@ class PatternStartReservationTest {
                 @Override public boolean parallelizable() { return true; }
                 @Override public long maxParallelism() { return maxParallelism; }
             });
+            controller.componentRuntime().setAllowedModifierIds(Set.of(Identifier.parse("parallelism")));
             controller.componentRuntime().replaceModifiers(Map.of("parallelism", List.of(
                     MachineModifier.numeric("parallelism", "machine", maxParallelism - 1D, "add", false))));
             energy.energyStorage().setAmount(3L);
