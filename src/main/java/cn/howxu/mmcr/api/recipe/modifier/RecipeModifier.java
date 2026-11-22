@@ -4,9 +4,12 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import com.mojang.serialization.codecs.PrimitiveCodec;
 import net.minecraft.nbt.CompoundTag;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 
 public final class RecipeModifier {
@@ -41,7 +44,8 @@ public final class RecipeModifier {
         ADD(0),
         MULTIPLY(1),
         SUBTRACT(2),
-        DIVIDE(3);
+        DIVIDE(3),
+        ADD_RATIO(4);
 
         private final int id;
 
@@ -59,6 +63,7 @@ public final class RecipeModifier {
                 case 1 -> MULTIPLY;
                 case 2 -> SUBTRACT;
                 case 3 -> DIVIDE;
+                case 4 -> ADD_RATIO;
                 default -> throw new IllegalArgumentException("Unknown modifier operation: " + id);
             };
         }
@@ -84,24 +89,44 @@ public final class RecipeModifier {
                 }
             }, op -> DataResult.success(op.getId()));
 
+    // Preserve old float encodings; relative operands must survive a double-precision round trip.
+    private static final PrimitiveCodec<Number> OPERAND = new PrimitiveCodec<>() {
+        @Override public <T> DataResult<Number> read(DynamicOps<T> ops, T input) { return ops.getNumberValue(input); }
+        @Override public <T> T write(DynamicOps<T> ops, Number value) {
+            return value instanceof Float f ? ops.createFloat(f) : ops.createDouble(value.doubleValue());
+        }
+    };
+
     public static final Codec<RecipeModifier> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.STRING.optionalFieldOf("target", "").forGetter(RecipeModifier::getTarget),
             IO_TYPE_CODEC.fieldOf("io").forGetter(RecipeModifier::getIOTarget),
-            Codec.FLOAT.fieldOf("multiplier").forGetter(RecipeModifier::getModifier),
+            OPERAND.fieldOf("multiplier").forGetter(RecipeModifier::encodedOperand),
             OPERATION_CODEC.fieldOf("operation").forGetter(RecipeModifier::getOperation),
             Codec.BOOL.optionalFieldOf("affectChance", false).forGetter(RecipeModifier::affectsChance)
-    ).apply(instance, RecipeModifier::new));
+    ).apply(instance, (target, io, v, op, chance) -> new RecipeModifier(target, io, v.doubleValue(), op, chance, null)));
 
     private final String target;
     private final IOType ioTarget;
-    private final float modifier;
+    private final double modifier;
+    private final Preference condition;
     private final Operation operation;
     private final boolean affectsChance;
 
     public RecipeModifier(String target, IOType ioTarget, float modifier, Operation operation, boolean affectsChance) {
+        this(target, ioTarget, operation == Operation.ADD_RATIO ? Double.parseDouble(Float.toString(modifier)) : modifier,
+                operation, affectsChance, null);
+    }
+
+    public RecipeModifier(String target, IOType ioTarget, double modifier, Operation operation, boolean affectsChance) {
+        this(target, ioTarget, modifier, operation, affectsChance, null);
+    }
+
+    private RecipeModifier(String target, IOType ioTarget, double modifier, Operation operation, boolean affectsChance,
+                           Preference condition) {
+        this.condition = condition;
         this.target = target == null ? "" : target;
         this.ioTarget = ioTarget == null ? IOType.INPUT : ioTarget;
-        this.modifier = modifier;
+        this.modifier = operation == Operation.ADD_RATIO ? modifier : (float) modifier;
         this.operation = operation == null ? Operation.ADD : operation;
         this.affectsChance = affectsChance;
     }
@@ -114,8 +139,14 @@ public final class RecipeModifier {
         return ioTarget;
     }
 
+    private Number encodedOperand() {
+        if (condition != null) throw new IllegalStateException("Cannot serialize a runtime modifier selection");
+        if (operation == Operation.ADD_RATIO) return modifier;
+        return (float) modifier;
+    }
+
     public float getModifier() {
-        return modifier;
+        return (float) modifier;
     }
 
     public Operation getOperation() {
@@ -127,48 +158,98 @@ public final class RecipeModifier {
     }
 
     public RecipeModifier multiply(float value) {
-        return new RecipeModifier(target, ioTarget, modifier * value, operation, affectsChance);
+        return new RecipeModifier(target, ioTarget, modifier * value, operation, affectsChance, condition);
     }
 
     public RecipeModifier add(float value) {
-        return new RecipeModifier(target, ioTarget, modifier + value, operation, affectsChance);
+        return new RecipeModifier(target, ioTarget, modifier + value, operation, affectsChance, condition);
     }
 
-    public static float applyModifiers(Collection<RecipeModifier> modifiers, String target, IOType ioType, float value, boolean isChance) {
+    /** Compare with the consumer's precision, not the raw machine doubles.
+     * @author HowXu {@literal <dev@howxu.cn>}
+     */
+    private record Preference(List<RecipeModifier> block, List<RecipeModifier> item, boolean lower, boolean useBlock) {
+        boolean test(float value) {
+            RecipeModifier key = block.getFirst();
+            float a = applyModifiers(block, key.target, key.ioTarget, value, key.affectsChance);
+            float b = applyModifiers(item, key.target, key.ioTarget, value, key.affectsChance);
+            return useBlock == (lower ? a <= b : a >= b);
+        }
+
+        boolean test(double value) {
+            RecipeModifier key = block.getFirst();
+            double a = applyModifiers(block, key.target, key.ioTarget, value, key.affectsChance);
+            double b = applyModifiers(item, key.target, key.ioTarget, value, key.affectsChance);
+            return useBlock == (lower ? a <= b : a >= b);
+        }
+    }
+
+    /** Both lists describe the same property of two different sources. */
+    public static List<RecipeModifier> bestOf(List<RecipeModifier> block, List<RecipeModifier> item, boolean lower) {
+        if (block.isEmpty() || item.isEmpty()) return block.isEmpty() ? item : block;
+        var first = new Preference(List.copyOf(block), List.copyOf(item), lower, true);
+        var second = new Preference(first.block(), first.item(), lower, false);
+        List<RecipeModifier> result = new ArrayList<>();
+        for (var group : List.of(first, second)) {
+            for (RecipeModifier m : group.useBlock() ? group.block() : group.item()) {
+                result.add(new RecipeModifier(m.target, m.ioTarget, m.modifier, m.operation, m.affectsChance, group));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    public static float applyModifiers(Collection<RecipeModifier> modifiers, String target, IOType ioType,
+                                       float value, boolean isChance) {
         if (modifiers == null || modifiers.isEmpty()) return value;
-        float add = 0F;
-        float mul = 1F;
+        float add = 0F, mul = 1F;
+        double ratio = 0D;
+        Preference previous = null;
+        boolean selected = false;
         for (RecipeModifier mod : modifiers) {
             if (!mod.matches(target, ioType, isChance)) continue;
+            if (mod.condition != null) {
+                if (previous != mod.condition) selected = (previous = mod.condition).test(value);
+                if (!selected) continue;
+            }
             switch (mod.operation) {
-                case ADD -> add += mod.modifier;
-                case SUBTRACT -> add -= mod.modifier;
-                case MULTIPLY -> mul *= mod.modifier;
+                case ADD -> add += (float) mod.modifier;
+                case SUBTRACT -> add -= (float) mod.modifier;
+                case ADD_RATIO -> ratio = ModifierMath.add(ratio, mod.modifier);
+                case MULTIPLY -> mul *= (float) mod.modifier;
                 case DIVIDE -> {
-                    if (mod.modifier != 0F) mul /= mod.modifier;
+                    if (mod.modifier != 0F) mul /= (float) mod.modifier;
                 }
             }
         }
-        return (value + add) * mul;
+        if (ratio == 0D) return (value + add) * mul;
+        return (float) (ModifierMath.relative(value, (double) value + add, ratio) * mul);
     }
 
     public static double applyModifiers(Collection<RecipeModifier> modifiers, String target, IOType ioType,
-                                        double value, boolean isChance) {
+                                       double value, boolean isChance) {
         if (modifiers == null || modifiers.isEmpty()) return value;
-        double add = 0D;
-        double mul = 1D;
+        double add = 0D, mul = 1D;
+        double ratio = 0D;
+        Preference previous = null;
+        boolean selected = false;
         for (RecipeModifier mod : modifiers) {
             if (!mod.matches(target, ioType, isChance)) continue;
+            if (mod.condition != null) {
+                if (previous != mod.condition) selected = (previous = mod.condition).test(value);
+                if (!selected) continue;
+            }
             switch (mod.operation) {
                 case ADD -> add += mod.modifier;
                 case SUBTRACT -> add -= mod.modifier;
+                case ADD_RATIO -> ratio = ModifierMath.add(ratio, mod.modifier);
                 case MULTIPLY -> mul *= mod.modifier;
                 case DIVIDE -> {
-                    if (mod.modifier != 0F) mul /= mod.modifier;
+                    if (mod.modifier != 0D) mul /= mod.modifier;
                 }
             }
         }
-        return (value + add) * mul;
+        if (ratio == 0D) return (value + add) * mul;
+        return ModifierMath.relative(value, value + add, ratio) * mul;
     }
 
     private boolean matches(String target, IOType ioType, boolean isChance) {
@@ -182,7 +263,8 @@ public final class RecipeModifier {
         tag.putString("target", target);
         tag.putString("ioTarget", ioTarget.getKey());
         tag.putInt("operation", operation.getId());
-        tag.putFloat("value", modifier);
+        if (operation == Operation.ADD_RATIO) tag.putDouble("value", encodedOperand().doubleValue());
+        else tag.putFloat("value", encodedOperand().floatValue());
         tag.putBoolean("chance", affectsChance);
         return tag;
     }
@@ -191,16 +273,16 @@ public final class RecipeModifier {
         String target = tag.getString("target");
         IOType io = IOType.byKey(tag.contains("ioTarget") ? tag.getString("ioTarget") : IO_INPUT);
         Operation op = Operation.byId(tag.getInt("operation"));
-        float value = tag.getFloat("value");
+        double value = op == Operation.ADD_RATIO ? tag.getDouble("value") : tag.getFloat("value");
         boolean chance = tag.getBoolean("chance");
-        return new RecipeModifier(target, io, value, op, chance);
+        return new RecipeModifier(target, io, value, op, chance, null);
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof RecipeModifier that)) return false;
-        return Float.compare(that.modifier, modifier) == 0
+        return Double.compare(that.modifier, modifier) == 0 && Objects.equals(condition, that.condition)
                 && affectsChance == that.affectsChance
                 && Objects.equals(target, that.target)
                 && ioTarget == that.ioTarget
@@ -209,7 +291,7 @@ public final class RecipeModifier {
 
     @Override
     public int hashCode() {
-        return Objects.hash(target, ioTarget, modifier, operation, affectsChance);
+        return Objects.hash(target, ioTarget, modifier, operation, affectsChance, condition);
     }
 
     public static class ModifierApplier {
@@ -220,37 +302,55 @@ public final class RecipeModifier {
         public float outputAdd = 0;
         public float outputMul = 1;
 
+        private double inputRatio, outputRatio;
+        private List<RecipeModifier> conditional;
+
         public float apply(float value, IOType ioType) {
-            if (ioType == IOType.OUTPUT) {
-                return (value + outputAdd) * outputMul;
+            boolean output = ioType == IOType.OUTPUT;
+            float add = output ? outputAdd : inputAdd;
+            float mul = output ? outputMul : inputMul;
+            double ratio = output ? outputRatio : inputRatio;
+            if (conditional != null) {
+                var selected = new ModifierApplier();
+                selected.inputAdd = add;
+                selected.inputMul = mul;
+                selected.inputRatio = ratio;
+                for (RecipeModifier mod : conditional) {
+                    if ((mod.ioTarget == IOType.OUTPUT) == output && mod.condition.test(value)) selected.accept(mod, false);
+                }
+                return selected.apply(value, IOType.INPUT);
             }
-            return (value + inputAdd) * inputMul;
+            return ratio == 0D ? (value + add) * mul : (float) (ModifierMath.relative(value, (double) value + add, ratio) * mul);
         }
 
         public boolean isDefault() {
-            return inputAdd == 0 && inputMul == 1 && outputAdd == 0 && outputMul == 1;
+            return inputAdd == 0 && inputMul == 1 && outputAdd == 0 && outputMul == 1
+                    && inputRatio == 0D && outputRatio == 0D && conditional == null;
+        }
+
+        private void accept(RecipeModifier mod, boolean output) {
+            switch (mod.operation) {
+                case ADD -> { if (output) outputAdd += (float) mod.modifier; else inputAdd += (float) mod.modifier; }
+                case SUBTRACT -> { if (output) outputAdd -= (float) mod.modifier; else inputAdd -= (float) mod.modifier; }
+                case ADD_RATIO -> {
+                    if (output) outputRatio = ModifierMath.add(outputRatio, mod.modifier);
+                    else inputRatio = ModifierMath.add(inputRatio, mod.modifier);
+                }
+                case MULTIPLY -> { if (output) outputMul *= (float) mod.modifier; else inputMul *= (float) mod.modifier; }
+                case DIVIDE -> {
+                    if (mod.modifier != 0F) {
+                        if (output) outputMul /= (float) mod.modifier; else inputMul /= (float) mod.modifier;
+                    }
+                }
+            }
         }
     }
 
     public static void applyValueToApplier(ModifierApplier applier, RecipeModifier mod) {
-        switch (mod.operation) {
-            case ADD -> {
-                if (mod.ioTarget == IOType.OUTPUT) applier.outputAdd += mod.modifier;
-                else applier.inputAdd += mod.modifier;
-            }
-            case SUBTRACT -> {
-                if (mod.ioTarget == IOType.OUTPUT) applier.outputAdd -= mod.modifier;
-                else applier.inputAdd -= mod.modifier;
-            }
-            case MULTIPLY -> {
-                if (mod.ioTarget == IOType.OUTPUT) applier.outputMul *= mod.modifier;
-                else applier.inputMul *= mod.modifier;
-            }
-            case DIVIDE -> {
-                if (mod.modifier == 0F) return;
-                if (mod.ioTarget == IOType.OUTPUT) applier.outputMul /= mod.modifier;
-                else applier.inputMul /= mod.modifier;
-            }
+        if (mod.condition == null) applier.accept(mod, mod.ioTarget == IOType.OUTPUT);
+        else {
+            if (applier.conditional == null) applier.conditional = new ArrayList<>();
+            applier.conditional.add(mod);
         }
     }
 }

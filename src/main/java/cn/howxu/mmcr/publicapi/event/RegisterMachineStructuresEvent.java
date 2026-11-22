@@ -5,6 +5,7 @@ import cn.howxu.mmcr.publicapi.structure.StructureDraft;
 import cn.howxu.mmcr.publicapi.structure.StructureSpec;
 import cn.howxu.mmcr.publicapi.structure.level.LevelTypeSpec;
 import cn.howxu.mmcr.publicapi.structure.level.MachineLevelSpec;
+import cn.howxu.mmcr.publicapi.recipe.modifier.BlockStackingMode;
 import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierBundle;
 import cn.howxu.mmcr.publicapi.registration.StructureRegistrar;
 import java.util.Collection;
@@ -35,6 +36,12 @@ public final class RegisterMachineStructuresEvent extends Event {
     public void registerLevelType(LevelTypeSpec type) { registrar.registerLevelType(type); }
     public void registerLevel(MachineLevelSpec level) { registrar.registerLevel(level); }
     public void registerModifier(ResourceLocation id, ModifierBundle modifier) { registrar.registerModifier(id, modifier); }
+    public void registerModifier(ResourceLocation id, ModifierBundle modifier, boolean stackable) {
+        registrar.registerModifier(id, modifier, stackable);
+    }
+    public void registerModifier(ResourceLocation id, ModifierBundle modifier, boolean stackable, BlockStackingMode mode) {
+        registrar.registerModifier(id, modifier, stackable, mode);
+    }
     public void registerModifierItem(ResourceLocation itemId, ResourceLocation id) { registrar.registerModifierItem(itemId, id); }
     public Map<ResourceLocation, StructureSpec> structures() { return registrar.structures(); }
     public Map<ResourceLocation, LevelTypeSpec> levelTypes() { return registrar.levelTypes(); }

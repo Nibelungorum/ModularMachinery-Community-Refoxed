@@ -23,6 +23,9 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
+import cn.howxu.mmcr.api.machine.SmartInterfaceModifier;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.machine.definition.MachineIoView;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
@@ -1551,6 +1554,22 @@ class ComponentRuntimeTest {
     }
 
     @Test
+    void stacked_parallelism_uses_controller_base_then_clamps_to_machine_cap() {
+        var id = ResourceLocation.parse("test:parallel_upgrade");
+        var block = ModBlocks.BLOCKS.get("parallel_controller_ultimate").get();
+        var parallel = new ParallelControllerBlockEntity(ParallelTier.ULTIMATE, BlockPos.ZERO, block.defaultBlockState());
+        parallel.setCurrentParallelism(8);
+        var components = new ComponentRuntime();
+        components.replaceComponents(List.of(component(parallel, "parallel")));
+        var bonus = ModifierDefinition.of("parallelism", "machine", 0.25, "add_ratio", false);
+        components.replaceModifiers(Map.of(id.toString(), ModifierStacking.ADD.blocks(bonus.modifiers(), 2)));
+        assertThat(components.maxParallelism(parallelizableMachine(id, 20))).isEqualTo(12);
+        assertThat(components.maxParallelism(parallelizableMachine(id, 10))).isEqualTo(10);
+        parallel.setCurrentParallelism(4);
+        assertThat(components.maxParallelism(parallelizableMachine(id, 10))).isEqualTo(6);
+    }
+
+    @Test
     void parallelism_saturating_add_clamps_both_long_overflow_directions() throws Exception {
         Method saturatingAdd = ComponentRuntime.class.getDeclaredMethod("saturatingAdd", long.class, long.class);
         saturatingAdd.setAccessible(true);
@@ -1646,6 +1665,99 @@ class ComponentRuntimeTest {
         assertThat(snapshot.installedModuleCount()).isEqualTo(2);
         assertThatThrownBy(() -> snapshot.foundModifiers().put("x", List.of()))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void four_modifier_sources_share_relative_math_but_keep_their_own_gates_and_counts() {
+        ResourceLocation id = ResourceLocation.parse("test:relative_duration");
+        var definition = ModifierDefinition.of("duration", "input", -0.1, "add_ratio", false);
+        var item = new ItemStack(Items.DIAMOND);
+        ModifierRegistry.installSnapshot(Map.of(id, definition), Map.of(id, List.of(item)));
+        var runtime = new ComponentRuntime();
+        try {
+            runtime.replaceModifiers(Map.of(id.toString(), definition.modifiers()));
+            assertThat(duration(runtime, 100)).isEqualTo(90);
+            runtime.replaceModifiers(Map.of());
+            runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(item))));
+            assertThat(duration(runtime, 100)).isEqualTo(90);
+            runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(item.copyWithCount(2)))));
+            assertThat(duration(runtime, 100)).isEqualTo(80);
+            runtime.setModifiersAllowed(false);
+            assertThat(duration(runtime, 100)).isEqualTo(100);
+            runtime.replaceLevels(Map.of(id, new MachineLevel(id, id, 1, new BlockPredicate.Any(), ItemStack.EMPTY, definition)));
+            assertThat(duration(runtime, 100)).isEqualTo(90);
+            var mapping = SmartInterfaceModifier.duration("signal", value -> -value / 10, RecipeModifier.Operation.ADD_RATIO);
+            runtime.replaceSmartInterfaceModifiers(List.of(mapping.toModifier(1)));
+            assertThat(duration(runtime, 100)).isEqualTo(80);
+            runtime.replaceLevels(Map.of());
+            assertThat(duration(runtime, 100)).isEqualTo(90);
+        } finally {
+            ModifierRegistry.installSnapshot(Map.of());
+        }
+    }
+
+    @Test
+    void old_registration_and_explicit_no_stack_remain_distinct_when_blocks_and_items_share_an_id() {
+        var id = ResourceLocation.parse("minecraft:mixed_sources");
+        var stack = new ItemStack(Items.DIAMOND, 2);
+        var multiplier = ModifierDefinition.of("duration", "input", 0.1, "multiply", false);
+        var ratio = ModifierDefinition.of("duration", "input", -0.1, "add_ratio", false);
+        var bindings = Map.of(id, List.of(stack));
+        try {
+            ModifierRegistry.installSnapshot(Map.of(id, multiplier), bindings);
+            var legacy = new ComponentRuntime();
+            legacy.replaceModifiers(Map.of(id.toString(), ModifierRegistry.stacking(id).blocks(multiplier.modifiers(), 2)));
+            assertThat(duration(legacy, 1000)).isEqualTo(100);
+            legacy.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(stack))));
+            assertThat(duration(legacy, 1000)).isEqualTo(1);
+            legacy.replaceModifiers(Map.of());
+            assertThat(duration(legacy, 1000)).isEqualTo(10);
+
+            ModifierRegistry.installSnapshot(Map.of(id, ratio), bindings, Map.of(id, ModifierStacking.UNIQUE));
+            var unique = new ComponentRuntime();
+            unique.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(stack.copyWithCount(8)))));
+            unique.replaceModifiers(Map.of(id.getPath(), ModifierRegistry.stacking(id).blocks(ratio.modifiers(), 2)));
+            assertThat(duration(unique, 100)).isEqualTo(90);
+            unique.replaceModifiers(Map.of());
+            assertThat(duration(unique, 100)).isEqualTo(90);
+            assertThat(unique.upgradeItems()).singleElement().satisfies(item -> assertThat(item.getCount()).isEqualTo(8));
+            ModifierRegistry.installSnapshot(Map.of(id, multiplier), bindings);
+            assertThat(ModifierRegistry.stacking(id)).isEqualTo(ModifierStacking.LEGACY);
+        } finally {
+            ModifierRegistry.installSnapshot(Map.of());
+        }
+    }
+
+    @Test
+    void unique_modifier_chooses_per_property_at_actual_base_and_does_not_mutate_worker_snapshots() {
+        ResourceLocation id = ResourceLocation.parse("test:unique");
+        var item = new ItemStack(Items.DIAMOND, 8);
+        var itemEffects = new ModifierDefinition(List.of(
+                MachineModifier.numeric("duration", "input", 0.5, "multiply", false),
+                MachineModifier.numeric("output", "output", 2, "multiply", false)));
+        ModifierRegistry.installSnapshot(Map.of(id, itemEffects), Map.of(id, List.of(item)), Map.of(id, ModifierStacking.UNIQUE));
+        var runtime = new ComponentRuntime();
+        try {
+            runtime.replaceUpgradeBuses(List.of(new ComponentRuntime.UpgradeBusSnapshot(BlockPos.ZERO, List.of(item))));
+            runtime.replaceModifiers(Map.of(id.toString(), List.of(
+                    MachineModifier.numeric("duration", "input", -10, "add", false),
+                    MachineModifier.numeric("output", "output", 1.2, "multiply", false))));
+            var captured = runtime.modifierList();
+            assertThat(duration(runtime, 12)).isEqualTo(2);
+            assertThat(duration(runtime, 100)).isEqualTo(50);
+            assertThat(IntegrationTypeHelper.applyItemOutput(MachineModifier.recipeModifiers(captured), 10)).isEqualTo(20);
+            assertThat(runtime.upgradeModifierUnits()).containsEntry(id, 8L);
+
+            runtime.replaceModifiers(Map.of());
+            assertThat(duration(runtime, 12)).isEqualTo(6);
+            assertThat(IntegrationTypeHelper.applyDuration(MachineModifier.recipeModifiers(captured), 12)).isEqualTo(2);
+        } finally {
+            ModifierRegistry.installSnapshot(Map.of());
+        }
+    }
+
+    private static float duration(ComponentRuntime runtime, int base) {
+        return IntegrationTypeHelper.applyDuration(MachineModifier.recipeModifiers(runtime.modifierList()), base);
     }
 
     @Test

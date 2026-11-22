@@ -8,6 +8,8 @@ import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.machine.PortTierRequirementSpec;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
@@ -57,6 +59,28 @@ class MachineControllerModifierTest {
 
         assertThat(replacement.getModifiers()).isEmpty();
         assertThat(found).containsEntry(modifierId.toString(), List.of(modifier));
+    }
+
+    @Test
+    void block_folding_counts_distinct_matching_positions_only_for_opted_in_ids() throws Exception {
+        var id = MMCR.id("stacked_speed");
+        var effect = ModifierDefinition.of("duration", "input", 0.9, "multiply", false);
+        var pos = BlockPos.ZERO.east();
+        var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        controller.setLevel(LevelStub.create(Map.of(BlockPos.ZERO, Blocks.DIAMOND_BLOCK, pos, Blocks.DIAMOND_BLOCK)));
+        var replacement = new SingleBlockModifierReplacement(id, new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK));
+        var positions = Map.of(BlockPos.ZERO, List.of(replacement, replacement), pos, List.of(replacement));
+        try {
+            for (var policy : List.of(ModifierStacking.LEGACY, ModifierStacking.ADD, ModifierStacking.MULTIPLY)) {
+                ModifierRegistry.installSnapshot(Map.of(id, effect), Map.of(), Map.of(id, policy));
+                var found = collectFoundModifiers(controller, positions).get(id.toString());
+                float ticks = IntegrationTypeHelper.applyDuration(MachineModifier.recipeModifiers(found), 100);
+                assertThat(Math.round(ticks)).isEqualTo(policy == ModifierStacking.LEGACY ? 90
+                        : policy == ModifierStacking.ADD ? 80 : 81);
+            }
+        } finally {
+            ModifierRegistry.installSnapshot(Map.of());
+        }
     }
 
     @Test

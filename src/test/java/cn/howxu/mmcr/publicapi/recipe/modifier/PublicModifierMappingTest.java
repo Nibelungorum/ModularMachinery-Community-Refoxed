@@ -26,7 +26,7 @@ class PublicModifierMappingTest {
                 case INPUT -> "input"; case OUTPUT -> "output"; case MACHINE -> "machine"; case RECIPE -> "recipe";
             });
             for (var operation : ModifierOperation.values()) {
-                double expected = switch (operation) { case ADD -> 14D; case MULTIPLY -> 40D; case SUBTRACT -> 6D; case DIVIDE -> 2.5D; };
+                double expected = switch (operation) { case ADD -> 14D; case ADD_RATIO -> 50D; case MULTIPLY -> 40D; case SUBTRACT -> 6D; case DIVIDE -> 2.5D; };
                 var numeric = Modifiers.numeric(target, scope, 4D, operation, false);
                 var smart = Modifiers.smart("test", target, scope, false, value -> 2D + value * value * 0.08D, operation);
                 assertEquals(scope, smart.scope());

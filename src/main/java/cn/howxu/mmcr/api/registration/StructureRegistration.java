@@ -2,6 +2,7 @@ package cn.howxu.mmcr.api.registration;
 
 import cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition;
 import cn.howxu.mmcr.api.machine.definition.MachineStructureBuilder;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.registration.ApiRegistrationException;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierItemKey;
@@ -34,6 +35,7 @@ public final class StructureRegistration {
     private final Map<ResourceLocation, cn.howxu.mmcr.api.machine.definition.MachineLevel> levelDeclarations = new LinkedHashMap<>();
     protected final Map<ResourceLocation, ModifierDefinition> modifiers = new LinkedHashMap<>();
     protected final Map<ResourceLocation, List<ItemStack>> modifierItems = new LinkedHashMap<>();
+    private final Map<ResourceLocation, ModifierStacking> stacking = new LinkedHashMap<>();
     private final Map<ModifierItemKey, ResourceLocation> modifierItemKeys = new LinkedHashMap<>();
     private final Map<ResourceLocation, ResourceLocation> modifierItemIds = new LinkedHashMap<>();
     private boolean frozen;
@@ -50,6 +52,7 @@ public final class StructureRegistration {
             prepared.levels.putAll(current.levels);
             prepared.levelDeclarations.putAll(current.levelDeclarations);
             prepared.modifiers.putAll(current.modifiers);
+            prepared.stacking.putAll(current.stacking);
             current.modifierItems().forEach((modifierId, stacks) -> stacks.forEach(stack ->
                     prepared.registerModifierItem(stack, modifierId)));
             prepared.modifierItemIds.putAll(current.modifierItemIds);
@@ -127,12 +130,18 @@ public final class StructureRegistration {
     }
 
     public void registerModifier(ResourceLocation id, ModifierDefinition definition) {
+        registerModifier(id, definition, ModifierStacking.LEGACY);
+    }
+
+    public void registerModifier(ResourceLocation id, ModifierDefinition definition, ModifierStacking policy) {
         requireOpen();
+        require(policy, "modifier stacking");
         require(id, "modifier id");
         require(definition, "modifier definition");
         if (modifiers.putIfAbsent(id, definition) != null) {
             throw new ApiRegistrationException("Duplicate machine modifier: " + id);
         }
+        if (policy != ModifierStacking.LEGACY) stacking.put(id, policy);
     }
 
     public void registerModifierItem(ItemStack stack, ResourceLocation modifierId) {
@@ -227,7 +236,7 @@ public final class StructureRegistration {
         levels.putAll(resolvedLevels);
         levelDeclarations.clear();
         frozen = true;
-        snapshot = new Snapshot(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds);
+        snapshot = new Snapshot(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds, stacking);
         return snapshot;
     }
 
@@ -256,7 +265,13 @@ public final class StructureRegistration {
             Map<ResourceLocation, LevelType> levelTypes, Map<ResourceLocation, MachineLevel> levels,
             Map<ResourceLocation, ModifierDefinition> modifiers,
             Map<ResourceLocation, List<ItemStack>> modifierItems,
-            Map<ResourceLocation, ResourceLocation> modifierItemIds) {
+            Map<ResourceLocation, ResourceLocation> modifierItemIds, Map<ResourceLocation, ModifierStacking> stacking) {
+        public Snapshot(Map<ResourceLocation, MachineStructureDefinition> structures, Map<ResourceLocation, LevelType> levelTypes,
+                        Map<ResourceLocation, MachineLevel> levels, Map<ResourceLocation, ModifierDefinition> modifiers,
+                        Map<ResourceLocation, List<ItemStack>> modifierItems, Map<ResourceLocation, ResourceLocation> modifierItemIds) {
+            this(structures, levelTypes, levels, modifiers, modifierItems, modifierItemIds, Map.of());
+        }
+
         public Snapshot(Map<ResourceLocation, MachineStructureDefinition> structures,
                 Map<ResourceLocation, LevelType> levelTypes, Map<ResourceLocation, MachineLevel> levels,
                 Map<ResourceLocation, ModifierDefinition> modifiers) {
@@ -276,6 +291,7 @@ public final class StructureRegistration {
             modifiers = immutable(modifiers);
             modifierItems = immutableItemBindings(modifierItems);
             modifierItemIds = immutable(modifierItemIds);
+            stacking = immutable(stacking);
         }
 
         @Override

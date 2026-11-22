@@ -25,6 +25,7 @@ import cn.howxu.mmcr.api.network.MachineReference;
 import cn.howxu.mmcr.api.machine.level.LevelMismatch;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.api.machine.modifier.ModifierTarget;
 import cn.howxu.mmcr.api.capability.status.BuiltinFailureReasons;
 import cn.howxu.mmcr.api.capability.MachineCapability;
@@ -3426,22 +3427,30 @@ public class MachineControllerBlockEntity extends BlockEntity {
     private Map<String, List<MachineModifier>> collectFoundModifiers(
             Map<BlockPos, List<SingleBlockModifierReplacement>> replacements) {
         Map<String, List<MachineModifier>> nextModifiers = new LinkedHashMap<>();
+        Map<ResourceLocation, Long> counts = new LinkedHashMap<>();
         if (level != null) {
             for (var entry : replacements.entrySet()) {
+                Set<ResourceLocation> countedHere = null;
                 BlockState actual = level.getBlockState(getBlockPos().offset(entry.getKey()));
                 for (SingleBlockModifierReplacement replacement : entry.getValue()) {
-                    boolean matched = replacement.getReplacement().matches(actual);
-                    var registeredDefinition = ModifierRegistry.get(replacement.getModifierId());
-                    List<MachineModifier> modifiers = replacement.getModifiers();
-                    if (modifiers.isEmpty() && registeredDefinition != null) {
-                        modifiers = registeredDefinition.modifiers();
-                    }
-                    if (matched) {
-                        nextModifiers.putIfAbsent(replacement.getModifierName(), modifiers);
+                    if (!replacement.getReplacement().matches(actual)) continue;
+                    ResourceLocation id = replacement.getModifierId();
+                    ModifierStacking policy = ModifierRegistry.stacking(id);
+                    String key = policy == ModifierStacking.LEGACY ? replacement.getModifierName() : id.toString();
+                    nextModifiers.computeIfAbsent(key, ignored -> {
+                        var definition = ModifierRegistry.get(id);
+                        return replacement.getModifiers().isEmpty() && definition != null
+                                ? definition.modifiers() : replacement.getModifiers();
+                    });
+                    if (policy.countsBlocks()) {
+                        if (countedHere == null) countedHere = new HashSet<>();
+                        if (countedHere.add(id)) counts.merge(id, 1L, Long::sum);
                     }
                 }
             }
         }
+        counts.forEach((id, count) -> nextModifiers.computeIfPresent(id.toString(),
+                (ignored, effects) -> ModifierRegistry.stacking(id).blocks(effects, count)));
         return nextModifiers;
     }
 

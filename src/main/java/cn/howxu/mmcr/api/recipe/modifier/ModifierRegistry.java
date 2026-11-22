@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.api.recipe.modifier;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.registration.ApiRegistrationException;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -19,6 +20,7 @@ public final class ModifierRegistry {
 
     private static final Map<String, AbstractModifierReplacement> REPLACEMENTS = new HashMap<>();
     private static Map<ResourceLocation, ModifierDefinition> DEFINITIONS = Map.of();
+    private static Map<ResourceLocation, ModifierStacking> STACKING = Map.of();
     private static Map<ModifierItemKey, ResourceLocation> ITEM_BINDINGS = Map.of();
     private static Map<ResourceLocation, List<ItemStack>> ITEM_BINDING_SNAPSHOT = Map.of();
 
@@ -41,6 +43,7 @@ public final class ModifierRegistry {
     static void clear() {
         REPLACEMENTS.clear();
         DEFINITIONS = Map.of();
+        STACKING = Map.of();
         ITEM_BINDINGS = Map.of();
         ITEM_BINDING_SNAPSHOT = Map.of();
     }
@@ -51,6 +54,15 @@ public final class ModifierRegistry {
 
     public static void installSnapshot(Map<ResourceLocation, ModifierDefinition> definitions,
             Map<ResourceLocation, List<ItemStack>> itemBindings) {
+        installSnapshot(definitions, itemBindings, Map.of());
+    }
+
+    public static ModifierStacking stacking(ResourceLocation id) {
+        return STACKING.getOrDefault(id, ModifierStacking.LEGACY);
+    }
+
+    public static void installSnapshot(Map<ResourceLocation, ModifierDefinition> definitions,
+            Map<ResourceLocation, List<ItemStack>> itemBindings, Map<ResourceLocation, ModifierStacking> policies) {
         Map<ResourceLocation, ModifierDefinition> nextDefinitions = Map.copyOf(
                 definitions == null ? Map.of() : definitions);
         Map<ModifierItemKey, ResourceLocation> nextBindings = new LinkedHashMap<>();
@@ -75,6 +87,7 @@ public final class ModifierRegistry {
                 nextSnapshot.put(modifierId, List.copyOf(copies));
             });
         }
+        STACKING = Map.copyOf(policies);
         DEFINITIONS = nextDefinitions;
         ITEM_BINDINGS = Collections.unmodifiableMap(new LinkedHashMap<>(nextBindings));
         ITEM_BINDING_SNAPSHOT = immutableItemBindings(nextSnapshot);

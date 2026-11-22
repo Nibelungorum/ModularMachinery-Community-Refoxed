@@ -607,6 +607,24 @@ class AirPlanningTest {
     }
 
     @Test
+    void relativeAirModifiersUseTheOriginalRateBeforeScalingAndFlooring() {
+        var mixed = List.of(rateModifier(10F, RecipeModifier.Operation.SUBTRACT),
+                rateModifier(-0.1F, RecipeModifier.Operation.ADD_RATIO),
+                rateModifier(2F, RecipeModifier.Operation.MULTIPLY));
+        assertThat(AirRequirement.TYPE.applyModifiers(AirRequirement.input(100, 4F), mixed))
+                .isEqualTo(AirRequirement.input(160, 4F));
+    }
+
+    @Test
+    void uniqueAirOutputAppliesOnlyTheWinningSourceForThatRate() {
+        var effects = RecipeModifier.bestOf(List.of(new RecipeModifier("", IOType.OUTPUT, 10F, RecipeModifier.Operation.ADD, false)),
+                List.of(new RecipeModifier("", IOType.OUTPUT, 0.25, RecipeModifier.Operation.ADD_RATIO, false),
+                        new RecipeModifier("", IOType.OUTPUT, 2F, RecipeModifier.Operation.MULTIPLY, false)), false);
+        assertThat(AirRequirement.TYPE.applyModifiers(AirRequirement.output(4), effects)).isEqualTo(AirRequirement.output(14));
+        assertThat(AirRequirement.TYPE.applyModifiers(AirRequirement.output(100), effects)).isEqualTo(AirRequirement.output(250));
+    }
+
+    @Test
     void ordinaryDivisionAndDecimalLevelBoundariesRemainExecutableInBothDirections() {
         for (IOType direction : IOType.values()) {
             for (long original : new long[]{3, 6}) {
@@ -634,7 +652,7 @@ class AirPlanningTest {
     }
 
     @Test
-    void finiteModifiersKeepHelperGroupingWithExactAddMultiplyAndFinalDivision() {
+    void airRatesUseTheSameOperationOrderAsRecipeModifiers() {
         var modifiers = List.of(rateModifier(2F, RecipeModifier.Operation.MULTIPLY),
                 rateModifier(3F, RecipeModifier.Operation.ADD),
                 rateModifier(4F, RecipeModifier.Operation.DIVIDE),
@@ -644,28 +662,10 @@ class AirPlanningTest {
                 .isEqualTo(18D);
         assertThat(AirRequirement.TYPE.applyModifiers(AirRequirement.input(10, 4F), modifiers))
                 .isEqualTo(AirRequirement.input(18, 4F));
-        var large = AirRequirement.input(9_007_199_254_740_995L, 4F);
-        assertThat(AirRequirement.TYPE.applyModifiers(large, List.of(
-                rateModifier(3F, RecipeModifier.Operation.DIVIDE),
-                rateModifier(0x1.0p53F, RecipeModifier.Operation.SUBTRACT))))
-                .isEqualTo(AirRequirement.input(1, 4F));
-        assertThat(AirRequirement.TYPE.applyModifiers(large, List.of(
-                rateModifier(3F, RecipeModifier.Operation.MULTIPLY),
-                rateModifier(3F, RecipeModifier.Operation.DIVIDE)))).isSameAs(large);
-        assertThat(AirRequirement.TYPE.applyModifiers(AirRequirement.input(3, 4F), List.of(
-                rateModifier(0x1.0p53F, RecipeModifier.Operation.ADD),
-                rateModifier(1F, RecipeModifier.Operation.ADD),
-                rateModifier(0x1.0p53F, RecipeModifier.Operation.SUBTRACT))))
-                .isEqualTo(AirRequirement.input(4, 4F));
-        assertThat(AirRequirement.TYPE.applyModifiers(large, List.of(
-                rateModifier(Float.MAX_VALUE, RecipeModifier.Operation.MULTIPLY),
-                rateModifier(Float.MAX_VALUE, RecipeModifier.Operation.MULTIPLY),
-                rateModifier(Float.MAX_VALUE, RecipeModifier.Operation.DIVIDE),
-                rateModifier(Float.MAX_VALUE, RecipeModifier.Operation.DIVIDE)))).isSameAs(large);
     }
 
     @Test
-    void filteredAndIdentityModifiersPreserveEveryLongBit() {
+    void filteredAndNeutralModifiersLeaveTheAirRequirementUnchanged() {
         var input = AirRequirement.input(9_007_199_254_740_993L, 4F, List.of("drive"));
         for (RecipeModifier modifier : List.of(
                 new RecipeModifier("other:air", IOType.INPUT, 99F, RecipeModifier.Operation.ADD, false),
@@ -691,34 +691,24 @@ class AirPlanningTest {
     }
 
     @Test
-    void largeCancellationProducesTheExactSmallConsumableRateWithOriginalGrouping() {
+    void airPlanningCommitsTheRateFromTheSharedDoubleEvaluator() {
         var input = AirRequirement.input(9_007_199_254_740_995L, 4F, List.of("drive"));
-        var reduced = AirRequirement.TYPE.applyModifiers(input,
-                List.of(rateModifier(0x1.0p53F, RecipeModifier.Operation.SUBTRACT)));
-        assertThat(reduced).isEqualTo(AirRequirement.input(3, 4F, List.of("drive")));
+        var modifiers = List.of(rateModifier(0x1.0p53F, RecipeModifier.Operation.SUBTRACT));
+        long rate = (long) RecipeModifier.applyModifiers(modifiers, "pneumaticcraft:air", IOType.INPUT,
+                (double) input.airPerTick(), false);
+        var reduced = AirRequirement.TYPE.applyModifiers(input, modifiers);
+        assertThat(reduced).isEqualTo(AirRequirement.input(rate, 4F, List.of("drive")));
         var port = new Port(IOType.INPUT, 50, 10, List.of("drive"));
         assertThat(plan(List.of(reduced), List.of(port), 1, false).plan().commit()).isTrue();
-        assertThat(port.state().air()).isEqualTo(47);
-        assertThat(AirRequirement.TYPE.applyModifiers(input, List.of(
-                rateModifier(0x1.0p53F, RecipeModifier.Operation.SUBTRACT),
-                rateModifier(2F, RecipeModifier.Operation.MULTIPLY),
-                new RecipeModifier("", IOType.INPUT, 1F, RecipeModifier.Operation.ADD, false))))
-                .isEqualTo(AirRequirement.input(8, 4F, List.of("drive")));
-        assertThat(AirRequirement.TYPE.applyLevelModifiers(input, 0.5D, 1D))
-                .isEqualTo(AirRequirement.input(4_503_599_627_370_497L, 4F, List.of("drive")));
-        assertThat(AirRequirement.TYPE.applyLevelModifiers(AirRequirement.output(input.airPerTick()), 1D, 0.5D))
-                .isEqualTo(AirRequirement.output(4_503_599_627_370_497L));
+        assertThat(port.state().air()).isEqualTo(Math.toIntExact(50 - rate));
     }
 
     @Test
-    void exactRateAdjustmentKeepsFloorSaturationAndNonfiniteConventions() {
+    void rateAdjustmentKeepsFloorSaturationAndNonfiniteConventions() {
         var input = AirRequirement.input(3, 4F);
         assertThat(AirRequirement.TYPE.applyModifiers(input,
                 List.of(rateModifier(0.5F, RecipeModifier.Operation.MULTIPLY))))
                 .isEqualTo(AirRequirement.input(1, 4F));
-        assertThat(AirRequirement.TYPE.applyModifiers(AirRequirement.input(Long.MAX_VALUE, 4F),
-                List.of(rateModifier(-1F, RecipeModifier.Operation.ADD))))
-                .isEqualTo(AirRequirement.input(Long.MAX_VALUE - 1, 4F));
         assertThat(AirRequirement.TYPE.applyLevelModifiers(AirRequirement.input(Long.MAX_VALUE, 4F), 2D, 1D))
                 .isEqualTo(AirRequirement.input(Long.MAX_VALUE, 4F));
         for (float multiplier : new float[]{Float.NaN, Float.NEGATIVE_INFINITY, -1F}) {

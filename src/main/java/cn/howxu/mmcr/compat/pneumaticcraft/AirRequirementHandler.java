@@ -19,7 +19,6 @@ import cn.howxu.mmcr.api.recipe.requirement.OutputExpectation;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandler;
 import cn.howxu.mmcr.api.recipe.requirement.RequirementHandlerSupport;
 import cn.howxu.mmcr.util.IOType;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -35,8 +34,8 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
         if (modifiers == null || modifiers.isEmpty()) return requirement;
         float probability = requirement.io() == RecipeModifier.IOType.INPUT
                 ? requirement.consumeChance() : requirement.chance();
-        float adjustedChance = RecipeModifier.applyModifiers(modifiers, PneumaticIds.AIR.toString(),
-                requirement.io(), probability, true);
+        String target = PneumaticIds.AIR.toString();
+        float adjustedChance = RecipeModifier.applyModifiers(modifiers, target, requirement.io(), probability, true);
         adjustedChance = Float.isNaN(adjustedChance) ? 0F : Math.clamp(adjustedChance, 0F, 1F);
         if (adjustedChance != probability) {
             requirement = new AirRequirement(requirement.io(), requirement.airPerTick(), requirement.minPressure(),
@@ -44,57 +43,20 @@ public final class AirRequirementHandler implements RequirementHandler<AirRequir
                     requirement.io() == RecipeModifier.IOType.INPUT ? adjustedChance : requirement.consumeChance(),
                     requirement.tags());
         }
-        BigDecimal add = BigDecimal.ZERO;
-        BigDecimal mul = BigDecimal.ONE;
-        BigDecimal divisor = BigDecimal.ONE;
-        for (RecipeModifier modifier : modifiers) {
-            if (!modifier.getTarget().isEmpty() && !modifier.getTarget().equals(PneumaticIds.AIR.toString())
-                    || modifier.getIOTarget() != requirement.io() || modifier.affectsChance()) continue;
-            if (!Float.isFinite(modifier.getModifier())) {
-                return withRate(requirement, floorNonNegative(RecipeModifier.applyModifiers(modifiers,
-                        PneumaticIds.AIR.toString(), requirement.io(), (double) requirement.airPerTick(), false)));
-            }
-            BigDecimal value = new BigDecimal((double) modifier.getModifier());
-            switch (modifier.getOperation()) {
-                case ADD -> add = add.add(value);
-                case SUBTRACT -> add = add.subtract(value);
-                case MULTIPLY -> mul = mul.multiply(value);
-                case DIVIDE -> {
-                    if (value.signum() != 0) divisor = divisor.multiply(value);
-                }
-            }
-        }
-        return adjustedRate(requirement, add, mul, divisor);
+        return withRate(requirement, RecipeModifier.applyModifiers(modifiers, target, requirement.io(),
+                (double) requirement.airPerTick(), false));
     }
 
     @Override
     public AirRequirement applyLevelModifiers(AirRequirement requirement, double energyMultiplier,
                                                double outputMultiplier) {
         double multiplier = requirement.io() == RecipeModifier.IOType.INPUT ? energyMultiplier : outputMultiplier;
-        if (!Double.isFinite(multiplier)) {
-            return withRate(requirement, floorNonNegative(requirement.airPerTick() * multiplier));
-        }
-        return adjustedRate(requirement, BigDecimal.ZERO, BigDecimal.valueOf(multiplier), BigDecimal.ONE);
+        return withRate(requirement, requirement.airPerTick() * multiplier);
     }
 
-    private static AirRequirement adjustedRate(AirRequirement requirement, BigDecimal add, BigDecimal mul,
-                                               BigDecimal divisor) {
-        if (add.signum() == 0 && mul.compareTo(divisor) == 0) return requirement;
-        // Keep the helper's grouping; retain finite divisors until the final integer quotient.
-        BigDecimal numerator = BigDecimal.valueOf(requirement.airPerTick()).add(add).multiply(mul);
-        if (divisor.signum() < 0) {
-            numerator = numerator.negate();
-            divisor = divisor.negate();
-        }
-        long rate = numerator.signum() <= 0 ? 0L
-                : numerator.compareTo(divisor.multiply(BigDecimal.valueOf(Long.MAX_VALUE))) >= 0 ? Long.MAX_VALUE
-                : numerator.divideToIntegralValue(divisor).longValueExact();
-        return withRate(requirement, rate);
-    }
-
-    private static AirRequirement withRate(AirRequirement requirement, long rate) {
+    private static AirRequirement withRate(AirRequirement requirement, double rate) {
         if (rate == requirement.airPerTick()) return requirement;
-        return new AirRequirement(requirement.io(), rate,
+        return new AirRequirement(requirement.io(), floorNonNegative(rate),
                 requirement.minPressure(), requirement.chance(), requirement.consumeChance(), requirement.tags());
     }
 

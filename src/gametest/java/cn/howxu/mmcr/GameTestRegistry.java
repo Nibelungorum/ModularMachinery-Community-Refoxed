@@ -42,6 +42,7 @@ import cn.howxu.mmcr.api.machine.definition.MachineLevel;
 import cn.howxu.mmcr.api.machine.level.LevelType;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.definition.ModifierUse;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
 import cn.howxu.mmcr.api.machine.definition.MachineDefinition;
@@ -289,6 +290,8 @@ public final class GameTestRegistry {
                 helper -> new ControllerTickGameTest().formedControllerCanBeBroken(helper, true));
         register(event, "upgrade_bus_invalidation", 100,
                 helper -> new UpgradeBusGameTest().optionalBusesPreserveActiveRecipe(helper));
+        register(event, "stacked_modifier_block_refresh", 100,
+                helper -> new UpgradeBusGameTest().stackedBlocksRefresh(helper));
         // The fixture aligns its controller to X=240..255 and places casing in the next chunk.
         register(event, "controller_tick_recipe_hooks", 100, "mmcr:empty",
                 helper -> new ControllerTickGameTest().recipeMachineHooksPublishTextAndRespectRedstone(helper));
@@ -1146,6 +1149,9 @@ public final class GameTestRegistry {
         ResourceLocation upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
         event.registerModifier(upgradeBusBlockModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
+        ResourceLocation stackedBlockId = MMCR.id("test_stacked_speed");
+        event.registerModifier(stackedBlockId, ModifierDefinition.of("duration", "input", -0.1, "add_ratio", false),
+                ModifierStacking.ADD);
         ResourceLocation upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
         event.registerModifier(upgradeBusModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
@@ -1164,6 +1170,7 @@ public final class GameTestRegistry {
                             .where('C', controller)
                             .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_output_bus").get()))
                             .controller('C'))
+                            .modifier('B', ModifierUse.of(stackedBlockId, BlockPredicate.block(Blocks.DIAMOND_BLOCK)))
                             .modifier('B', ModifierUse.of(upgradeBusBlockModifierId,
                                     BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("upgrade_bus_normal").get()))));
                     return structure;
