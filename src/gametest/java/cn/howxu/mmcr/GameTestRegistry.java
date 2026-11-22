@@ -18,6 +18,7 @@ import cn.howxu.mmcr.api.data.view.DataValue;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextScope;
 import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.api.machine.definition.ModifierUse;
 import cn.howxu.mmcr.api.recipe.MachineRecipeBuilder;
 import cn.howxu.mmcr.api.machine.definition.MachineBuilder;
@@ -637,6 +638,8 @@ public final class GameTestRegistry {
                 helper -> new AppliedFluxInterfaceGameTest().fluxCapabilitiesBelongToEnergyFamilyWithoutTransferFacet(helper));
         register(event, "appflux_me_flux_output_interface", 100,
                 helper -> new AppliedFluxInterfaceGameTest().controllerFormsWithFluxPortsAndResolvesEnergyFamily(helper));
+        register(event, "stacked_modifier_block_refresh", 100,
+                helper -> new UpgradeBusGameTest().stackedBlocksRefresh(helper));
     }
 
     public static void registerMachineDefinitions(RegisterMachineDefinitionsEvent event) {
@@ -735,6 +738,9 @@ public final class GameTestRegistry {
         Identifier upgradeBusBlockModifierId = MMCR.id("upgrade_bus_test_block_modifier");
         event.registerModifier(upgradeBusBlockModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
+        Identifier stackedBlockId = MMCR.id("test_stacked_speed");
+        event.registerModifier(stackedBlockId, ModifierDefinition.of("duration", "input", -0.1, "add_ratio", false),
+                ModifierStacking.ADD);
         Identifier upgradeBusModifierId = MMCR.id("upgrade_bus_test_modifier");
         event.registerModifier(upgradeBusModifierId,
                 ModifierDefinition.of("duration", "input", 1.0F, "add", false));
@@ -753,6 +759,7 @@ public final class GameTestRegistry {
                             .where('C', controller)
                             .where('O', BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("item_output_bus").get()))
                             .controller('C'))
+                            .modifier('B', ModifierUse.of(stackedBlockId, BlockPredicate.block(Blocks.DIAMOND_BLOCK)))
                             .modifier('B', ModifierUse.of(upgradeBusBlockModifierId,
                                     BlockPredicate.deferredBlock(() -> ModBlocks.BLOCKS.get("upgrade_bus_normal").get()))));
                     return structure;

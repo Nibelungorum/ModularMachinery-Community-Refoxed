@@ -4,6 +4,7 @@ import cn.howxu.mmcr.api.machine.level.LevelSlot;
 import cn.howxu.mmcr.api.controller.ControllerScreenTextRegistry;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.api.jei.JeiWorkstationRegistration;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import dev.latvian.mods.kubejs.event.KubeEvent;
 import net.minecraft.resources.Identifier;
@@ -73,6 +74,27 @@ public final class MMCRStartupEventJS implements KubeEvent {
 
     public void registerModifier(Identifier id, ModifierDefinition definition) {
         StructureRegistration.current().registerModifier(id, definition);
+    }
+
+    public void registerModifier(String id, ModifierDefinition definition, boolean stackable) {
+        registerModifier(parseIdentifier(id, "modifierId"), definition, stackable);
+    }
+
+    public void registerModifier(Identifier id, ModifierDefinition definition, boolean stackable) {
+        registerModifier(id, definition, stackable, "add");
+    }
+
+    public void registerModifier(String id, ModifierDefinition definition, boolean stackable, String blockMode) {
+        registerModifier(parseIdentifier(id, "modifierId"), definition, stackable, blockMode);
+    }
+
+    public void registerModifier(Identifier id, ModifierDefinition definition, boolean stackable, String blockMode) {
+        ModifierStacking policy = switch (blockMode) {
+            case "add" -> ModifierStacking.ADD;
+            case "multiply" -> ModifierStacking.MULTIPLY;
+            default -> throw new IllegalArgumentException("Unknown block stacking mode: " + blockMode);
+        };
+        StructureRegistration.current().registerModifier(id, definition, stackable ? policy : ModifierStacking.UNIQUE);
     }
 
     public void registerModifierItem(String itemId, String modifierId) {

@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.recipe.IntegrationTypeHelper;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.api.machine.definition.RecipeBehavior;
@@ -26,6 +27,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
@@ -39,6 +41,33 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author howxu <dev@howxu.cn>
  */
 public class UpgradeBusGameTest {
+    public void stackedBlocksRefresh(GameTestHelper helper) {
+        Identifier id = MMCR.id("upgrade_bus_test");
+        BlockPos pos = new BlockPos(2, 1, 2);
+        helper.setBlock(pos, ModBlocks.controllerFor(id).get().defaultBlockState()
+                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
+        helper.setBlock(pos.west(), ModBlocks.BLOCKS.get("item_input_bus").get().defaultBlockState());
+        helper.setBlock(pos.east(), ModBlocks.BLOCKS.get("item_output_bus").get().defaultBlockState());
+        helper.setBlock(pos.east(2), Blocks.DIAMOND_BLOCK);
+        helper.setBlock(pos.west(2), Blocks.DIAMOND_BLOCK);
+        var controller = helper.getBlockEntity(pos, MachineControllerBlockEntity.class);
+        controller.setMachine(MachineRegistry.getMachine(id));
+        helper.startSequence().thenWaitUntil(() -> assertDuration(helper, controller, 80))
+                .thenExecute(() -> {
+                    helper.setBlock(pos.east(2), ModBlocks.CASING.get().defaultBlockState());
+                    controller.onStructureBlockChanged(helper.absolutePos(pos.east(2)));
+                })
+                .thenWaitUntil(() -> assertDuration(helper, controller, 90))
+                .thenSucceed();
+    }
+
+    private static void assertDuration(GameTestHelper helper, MachineControllerBlockEntity controller, int expected) {
+        helper.assertTrue(controller.structureSnapshot().formed(), "Structure must form");
+        float actual = IntegrationTypeHelper.applyDuration(
+                MachineModifier.recipeModifiers(controller.componentRuntime().modifierList()), 100);
+        helper.assertTrue(actual == expected, "Expected effective duration " + expected + ", got " + actual);
+    }
+
     public void optionalBusesPreserveActiveRecipe(GameTestHelper helper) {
         ServerConfig.MACHINE_WORK_MODE.clearCache();
         ServerConfig.MACHINE_WORK_MODE.set(MachineWorkMode.SYNC);

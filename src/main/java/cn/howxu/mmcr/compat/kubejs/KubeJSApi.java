@@ -122,6 +122,7 @@ public final class KubeJSApi {
      */
     public static final class ModifierOperationValues {
         public final RecipeModifier.Operation ADD = RecipeModifier.Operation.ADD;
+        public final RecipeModifier.Operation ADD_RATIO = RecipeModifier.Operation.ADD_RATIO;
         public final RecipeModifier.Operation MULTIPLY = RecipeModifier.Operation.MULTIPLY;
         public final RecipeModifier.Operation SUBTRACT = RecipeModifier.Operation.SUBTRACT;
         public final RecipeModifier.Operation DIVIDE = RecipeModifier.Operation.DIVIDE;
@@ -659,6 +660,7 @@ public final class KubeJSApi {
     private static RecipeModifier.Operation operation(String operation) {
         return switch (operation) {
             case "add" -> RecipeModifier.Operation.ADD;
+            case "add_ratio" -> RecipeModifier.Operation.ADD_RATIO;
             case "multiply" -> RecipeModifier.Operation.MULTIPLY;
             case "subtract" -> RecipeModifier.Operation.SUBTRACT;
             case "divide" -> RecipeModifier.Operation.DIVIDE;

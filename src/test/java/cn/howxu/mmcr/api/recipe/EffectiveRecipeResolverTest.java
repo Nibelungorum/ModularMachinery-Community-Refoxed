@@ -72,6 +72,23 @@ class EffectiveRecipeResolverTest {
     }
 
     @Test
+    void recipe_thread_ratio_is_re_evaluated_on_new_versions_without_scaling_parallelism_again() {
+        var recipe = MachineRecipe.fromCanonical(MMCR.id("thread_ratio"), MMCR.id("pool"), 100,
+                List.of(), List.of(), List.of(), 0, 10, false, true, false, Set.of());
+        var cache = new EffectiveRecipeSet.Cache();
+        List<MachineModifier> old = List.of(MachineModifier.numeric("recipe_threads", "recipe", -2, "add", false),
+                MachineModifier.numeric("recipe_threads", "recipe", -0.2, "add_ratio", false),
+                MachineModifier.numeric("parallelism", "machine", 0.5, "add_ratio", false));
+        var first = cache.resolve(snapshot(3), 1, List.of(recipe), old).recipes().getFirst();
+        var next = cache.resolve(snapshot(4), 1, List.of(recipe), List.of(MachineModifier.parallelized(false)))
+                .recipes().getFirst();
+        assertThat(first.recipeThreadLimit()).isEqualTo(6);
+        assertThat(first.parallelismLimit()).isEqualTo(16);
+        assertThat(next.recipeThreadLimit()).isEqualTo(10);
+        assertThat(next.parallelismLimit()).isOne();
+    }
+
+    @Test
     void controller_cache_reuses_one_effective_set_until_a_version_changes() {
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("cached_effective_recipe"), MMCR.id("pool"), 20,
                 List.of(), List.of(), List.of(), 0, 1, false, true, false, Set.of());

@@ -15,9 +15,9 @@ public final class ModifierAdapters {
     private ModifierAdapters() {}
     public static RecipeModifier.IOType io(IoDirection value) { return value == null ? null : switch (value) { case INPUT -> RecipeModifier.IOType.INPUT; case OUTPUT -> RecipeModifier.IOType.OUTPUT; }; }
     public static IoDirection io(RecipeModifier.IOType value) { return value == null ? null : switch (value) { case INPUT -> IoDirection.INPUT; case OUTPUT -> IoDirection.OUTPUT; }; }
-    public static RecipeModifier.Operation operation(ModifierOperation value) { return value == null ? null : switch (value) { case ADD -> RecipeModifier.Operation.ADD; case MULTIPLY -> RecipeModifier.Operation.MULTIPLY; case SUBTRACT -> RecipeModifier.Operation.SUBTRACT; case DIVIDE -> RecipeModifier.Operation.DIVIDE; }; }
-    public static ModifierOperation operation(RecipeModifier.Operation value) { return switch (value) { case ADD -> ModifierOperation.ADD; case MULTIPLY -> ModifierOperation.MULTIPLY; case SUBTRACT -> ModifierOperation.SUBTRACT; case DIVIDE -> ModifierOperation.DIVIDE; }; }
-    public static ModifierSpec wrap(MachineModifier value) { return switch (value) { case MachineModifier.Numeric v -> new Numeric(v); case MachineModifier.Parallelized v -> new Flag(v); }; }
+    public static RecipeModifier.Operation operation(ModifierOperation value) { return value == null ? null : switch (value) { case ADD -> RecipeModifier.Operation.ADD; case ADD_RATIO -> RecipeModifier.Operation.ADD_RATIO; case MULTIPLY -> RecipeModifier.Operation.MULTIPLY; case SUBTRACT -> RecipeModifier.Operation.SUBTRACT; case DIVIDE -> RecipeModifier.Operation.DIVIDE; }; }
+    public static ModifierOperation operation(RecipeModifier.Operation value) { return switch (value) { case ADD -> ModifierOperation.ADD; case ADD_RATIO -> ModifierOperation.ADD_RATIO; case MULTIPLY -> ModifierOperation.MULTIPLY; case SUBTRACT -> ModifierOperation.SUBTRACT; case DIVIDE -> ModifierOperation.DIVIDE; }; }
+    public static ModifierSpec wrap(MachineModifier value) { return switch (value) { case MachineModifier.Numeric v -> new Numeric(v); case MachineModifier.Parallelized v -> new Flag(v); case MachineModifier.Candidates ignored -> throw new IllegalArgumentException("Runtime-only modifier selection"); }; }
     public static MachineModifier unwrap(ModifierSpec value) {
         if (value instanceof Numeric v) return v.delegate;
         if (value instanceof Flag v) return v.delegate;
@@ -50,7 +50,7 @@ public final class ModifierAdapters {
         };
     }
     private static String operationKey(ModifierOperation value) {
-        return switch (value) { case ADD -> "add"; case MULTIPLY -> "multiply"; case SUBTRACT -> "subtract"; case DIVIDE -> "divide"; };
+        return switch (value) { case ADD -> "add"; case ADD_RATIO -> "add_ratio"; case MULTIPLY -> "multiply"; case SUBTRACT -> "subtract"; case DIVIDE -> "divide"; };
     }
     public static SmartModifierSpec smart(String type, String target, IoDirection io, boolean chance, DoubleUnaryOperator mapping, ModifierOperation op) { return wrap(new SmartInterfaceModifier(type, target, io(io), chance, mapping, operation(op))); }
     private static ModifierScope scope(MachineModifier.Numeric value) {

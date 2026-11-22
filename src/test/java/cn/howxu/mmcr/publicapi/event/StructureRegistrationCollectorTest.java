@@ -3,6 +3,8 @@ package cn.howxu.mmcr.publicapi.event;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.api.machine.level.LevelType;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
+import cn.howxu.mmcr.publicapi.recipe.modifier.BlockStackingMode;
 import cn.howxu.mmcr.api.registration.StructureRegistration;
 import cn.howxu.mmcr.internal.api.facade.registration.RegistrationAdapters;
 import cn.howxu.mmcr.publicapi.recipe.modifier.Modifiers;
@@ -61,6 +63,24 @@ class StructureRegistrationCollectorTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> event.registerModifier(MMCR.id("late"), Modifiers.bundle()))
                 .isInstanceOf(RegistrationException.class);
+    }
+
+    @Test
+    void typed_overloads_attach_policy_to_the_id_not_the_shared_bundle() {
+        var event = RegistrationAdapters.prepare(Set.of());
+        var legacy = MMCR.id("legacy");
+        var unique = MMCR.id("unique");
+        var linear = MMCR.id("linear");
+        var product = MMCR.id("product");
+        var shared = Modifiers.bundle();
+        event.registerModifier(legacy, shared);
+        event.registerModifier(unique, shared, false);
+        event.registerModifier(linear, shared, true);
+        event.registerModifier(product, shared, true, BlockStackingMode.MULTIPLY);
+        var snapshot = RegistrationAdapters.freeze(event);
+        assertThat(snapshot.stacking()).doesNotContainKey(legacy).containsEntry(unique, ModifierStacking.UNIQUE)
+                .containsEntry(linear, ModifierStacking.ADD).containsEntry(product, ModifierStacking.MULTIPLY);
+        assertThat(snapshot.modifiers().get(legacy)).isSameAs(snapshot.modifiers().get(unique));
     }
 
     @Test

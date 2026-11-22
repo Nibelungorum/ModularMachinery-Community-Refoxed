@@ -110,7 +110,7 @@ public final class ContentRegistrationCoordinator {
 
         Map<Identifier, MachineRegistration> registrations = validateAndConvertMachines();
         Map<Identifier, MachineStructureDefinition> structures = validateAndConvertStructures(registrations);
-        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers());
+        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), Map.of(), STRUCTURE_SNAPSHOT.stacking());
         registrations.values().forEach(registration -> {
             if (MachineDefinitions.containsStatic(registration.id())) {
                 MachineDefinitions.replace(registration);
@@ -124,7 +124,8 @@ public final class ContentRegistrationCoordinator {
     /** Resolves startup item IDs only after their default data components are available. */
     public static synchronized void commitModifierItemsAfterComponentsBound() {
         requireCollecting();
-        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.resolveModifierItems());
+        ModifierRegistry.installSnapshot(STRUCTURE_SNAPSHOT.modifiers(), STRUCTURE_SNAPSHOT.resolveModifierItems(),
+                STRUCTURE_SNAPSHOT.stacking());
     }
 
     /**

@@ -24,6 +24,7 @@ import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.level.MachineLevel;
 import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
 import cn.howxu.mmcr.api.machine.modifier.ModifierTarget;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.internal.capability.CapabilityFactories;
 import cn.howxu.mmcr.internal.capability.FixedExecutionFacets;
@@ -112,7 +113,7 @@ public final class ComponentRuntime {
     private List<UpgradeBusSnapshot> upgradeBuses = List.of();
     private List<ItemStack> upgradeItems = List.of();
     private Map<Identifier, Long> upgradeModifierUnits = Map.of();
-    private List<MachineModifier> upgradeModifiers = List.of();
+    private Map<Identifier, List<MachineModifier>> upgradeModifiers = Map.of();
     private List<MachineModifier> smartInterfaceModifiers = List.of();
     private long upgradeContentRevision;
     private boolean modifiersAllowed = true;
@@ -738,16 +739,14 @@ public final class ComponentRuntime {
         return true;
     }
 
-    private List<MachineModifier> upgradeModifiers(Map<Identifier, Long> units) {
-        List<MachineModifier> result = new ArrayList<>();
+    private Map<Identifier, List<MachineModifier>> upgradeModifiers(Map<Identifier, Long> units) {
+        Map<Identifier, List<MachineModifier>> result = new LinkedHashMap<>();
         for (Map.Entry<Identifier, Long> entry : units.entrySet()) {
             ModifierDefinition definition = ModifierRegistry.get(entry.getKey());
             if (definition == null) continue;
-            for (MachineModifier modifier : definition.modifiers()) {
-                result.add(withUnitCount(modifier, entry.getValue()));
-            }
+            result.put(entry.getKey(), ModifierRegistry.stacking(entry.getKey()).items(definition.modifiers(), entry.getValue()));
         }
-        return List.copyOf(result);
+        return immutableMap(result);
     }
 
     private void rebuildModifierList() {
@@ -758,38 +757,22 @@ public final class ComponentRuntime {
                 .map(MachineLevel::modifier)
                 .forEach(definition -> modifiers.addAll(definition.modifiers()));
         if (modifiersAllowed) {
-            foundModifiers.values().forEach(modifiers::addAll);
-            modifiers.addAll(upgradeModifiers);
+            Map<Identifier, List<MachineModifier>> remaining = upgradeModifiers;
+            for (var block : foundModifiers.entrySet()) {
+                Identifier id = remaining.isEmpty() ? null : Identifier.tryParse(block.getKey());
+                List<MachineModifier> item = id == null ? null : remaining.get(id);
+                if (item != null && ModifierRegistry.stacking(id) == ModifierStacking.UNIQUE) {
+                    modifiers.addAll(MachineModifier.bestOf(block.getValue(), item));
+                    if (remaining == upgradeModifiers) remaining = new LinkedHashMap<>(upgradeModifiers);
+                    remaining.remove(id);
+                } else {
+                    modifiers.addAll(block.getValue());
+                }
+            }
+            remaining.values().forEach(modifiers::addAll);
         }
         modifiers.addAll(smartInterfaceModifiers);
         flattenedModifiers = List.copyOf(modifiers);
-    }
-
-    private static MachineModifier withUnitCount(MachineModifier modifier, long count) {
-        if (count <= 1L || !(modifier instanceof MachineModifier.Numeric numeric)) return modifier;
-        double value = switch (numeric.operation()) {
-            case ADD, SUBTRACT -> saturatingMultiply(numeric.value(), count);
-            case MULTIPLY, DIVIDE -> power(numeric.value(), count);
-        };
-        return new MachineModifier.Numeric(numeric.target(), value, numeric.operation(), numeric.affectsChance());
-    }
-
-    private static double power(double base, long exponent) {
-        double result = 1D;
-        double factor = base;
-        long remaining = exponent;
-        while (remaining > 0L) {
-            if ((remaining & 1L) != 0L) result = saturatingMultiply(result, factor);
-            remaining >>>= 1;
-            if (remaining > 0L) factor = saturatingMultiply(factor, factor);
-        }
-        return result;
-    }
-
-    private static double saturatingMultiply(double first, double second) {
-        double result = first * second;
-        if (Double.isFinite(result)) return result;
-        return Math.copySign(Double.MAX_VALUE, first * Math.signum(second));
     }
 
     private static long boundedLong(double value, long minimum, long maximum) {

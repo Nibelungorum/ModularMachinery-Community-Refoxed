@@ -42,6 +42,7 @@ import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.api.machine.definition.RecipeStartContext;
+import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
 import cn.howxu.mmcr.internal.api.facade.machine.MachineAdapters;
 import cn.howxu.mmcr.publicapi.behavior.RecipeTickContext;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
@@ -57,6 +58,8 @@ import cn.howxu.mmcr.api.capability.facet.CapabilityFacet;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
+import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
+import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.StageRequirement;
 import cn.howxu.mmcr.internal.capability.ItemBusCapability;
@@ -68,6 +71,9 @@ import cn.howxu.mmcr.internal.event.LevelTickFireEvents;
 import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
+import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
+import cn.howxu.mmcr.internal.tile.UpgradeBusBlockEntity;
+import cn.howxu.mmcr.internal.port.UpgradeBusSize;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.EnergyInputHatchBlockEntity;
 import cn.howxu.mmcr.internal.tile.ExtendedItemBusBlockEntity;
@@ -229,6 +235,90 @@ class FactoryRuntimeTest {
         assertThat(snapshot.laneLimit()).isEqualTo(3);
         assertThat(snapshot.presentationLanes()).hasSize(3).isUnmodifiable();
         assertThat(snapshot.lanes()).isUnmodifiable();
+    }
+
+    @ParameterizedTest
+    @EnumSource(MachineWorkMode.class)
+    void ratio_upgrades_change_lane_admission_and_batch_size_only_for_new_jobs(MachineWorkMode mode) throws Exception {
+        ConfigTestSupport.setMachineWorkMode(mode);
+        var id = MMCR.id("scheduling_upgrade_factory");
+        if (MachineDefinitions.getRegistration(id) == null) {
+            MachineDefinitions.beginRegistryPhase();
+            MachineDefinitions.register(MachineRegistration.builder(id).allowModifiers(true).build());
+        }
+        var controller = RuntimeTestFixtures.controllerEntity(MMCR.id("test_cube"), BlockPos.ZERO);
+        var scheduler = new FactorySchedulerBlockEntity(BlockPos.ZERO.west(),
+                ModBlocks.BLOCKS.get("factory_controller").get().defaultBlockState());
+        var bus = new UpgradeBusBlockEntity(UpgradeBusSize.NORMAL, BlockPos.ZERO.east(),
+                ModBlocks.BLOCKS.get("upgrade_bus_normal").get().defaultBlockState());
+        var parallel = new ParallelControllerBlockEntity(ParallelTier.NORMAL, BlockPos.ZERO.above(),
+                ModBlocks.BLOCKS.get("parallel_controller_normal").get().defaultBlockState());
+        parallel.setCurrentParallelism(4);
+        var input = RuntimeTestFixtures.itemInput(BlockPos.ZERO.below());
+        setItem(input.itemStorage(), 0, new ItemStack(Items.IRON_INGOT, 32));
+        var pattern = new BlockArray(Map.of(
+                BlockPos.ZERO.east(), new BlockPredicate.OfBlock(scheduler.getBlockState().getBlock()),
+                BlockPos.ZERO.west(), new BlockPredicate.OfBlock(bus.getBlockState().getBlock()),
+                BlockPos.ZERO.above(), new BlockPredicate.OfBlock(parallel.getBlockState().getBlock()),
+                BlockPos.ZERO.below(), new BlockPredicate.OfBlock(input.getBlockState().getBlock())));
+        var machine = new DynamicMachine(id, id.toString(), pattern, MachineControllerSpec.defaultsFor(id),
+                PortRequirementSpec.none(), List.of(), Map.of(), 5, true, true, 1);
+        RuntimeTestFixtures.formStructureWithComponents(controller, machine, scheduler, bus, parallel, input);
+        var level = (ServerLevel) controller.getLevel();
+        installInlineFactoryCoordinator(level);
+        var upgrade = MMCR.id("scheduling_upgrade");
+        var item = new ItemStack(Items.DIAMOND);
+        var effects = new ModifierDefinition(List.of(
+                MachineModifier.numeric("parallelism", "machine", 0.5, "add_ratio", false),
+                MachineModifier.numeric("factory_threads", "machine", 3, "add_ratio", false),
+                MachineModifier.numeric("recipe_threads", "recipe", -0.25, "add_ratio", false),
+                MachineModifier.numeric("duration", "input", -0.25, "add_ratio", false)));
+        var veto = MMCR.id("scheduling_veto");
+        var vetoItem = new ItemStack(Items.REDSTONE);
+        var singleBatch = new ModifierDefinition(List.of(MachineModifier.parallelized(false),
+                MachineModifier.numeric("factory_threads", "machine", 3, "add_ratio", false)));
+        ModifierRegistry.installSnapshot(Map.of(upgrade, effects, veto, singleBatch),
+                Map.of(upgrade, List.of(item), veto, List.of(vetoItem)));
+        try {
+            var recipe = MachineRecipe.fromCanonical(MMCR.id("ratio_lane_admission"), id, 100,
+                    List.of(new ItemRequirement(RecipeModifier.IOType.INPUT, Ingredient.of(Items.IRON_INGOT), 1, ItemStack.EMPTY)),
+                    List.of(), List.of(), 0, 4, false, true, false, Set.of());
+            RecipeRegistry.registerStatic(recipe);
+            var factory = controllerFactoryRuntime(controller);
+            assertThat(controller.getFactoryController()).isSameAs(scheduler);
+            assertThat(controller.getMaxParallelism()).isEqualTo(4);
+            assertThat(controller.recipesForMachine()).contains(recipe);
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRuntimes()).as("%s", factory.snapshot()).hasSize(1);
+            var original = factory.activeRuntimes().getFirst();
+            assertThat(original.parallelism()).isEqualTo(4);
+
+            setItem(bus.itemStorage(), 0, item);
+            tickAttachedFactory(controller);
+            assertThat(factory.laneLimit()).isEqualTo(4);
+            assertThat(factory.activeRuntimes()).hasSize(3).contains(original).filteredOn(job -> job != original)
+                    .allSatisfy(job -> {
+                        assertThat(job.totalTick()).isEqualTo(75);
+                        assertThat(job.parallelism()).isEqualTo(5);
+                    });
+            assertThat(original.totalTick()).isEqualTo(100);
+            assertThat(original.parallelism()).isEqualTo(4);
+            assertThat(input.itemStorage().amount(0)).isEqualTo(32 - 4 - 2 * 5);
+
+            setItem(bus.itemStorage(), 0, ItemStack.EMPTY);
+            tickAttachedFactory(controller);
+            assertThat(factory.laneLimit()).isOne();
+            var running = List.copyOf(factory.activeRuntimes());
+            assertThat(running).hasSize(3);
+            setItem(bus.itemStorage(), 0, vetoItem);
+            tickAttachedFactory(controller);
+            assertThat(factory.activeRuntimes()).hasSize(4).containsAll(running).filteredOn(job -> !running.contains(job))
+                    .singleElement().satisfies(job -> assertThat(job.parallelism()).isOne());
+            assertThat(input.itemStorage().amount(0)).isEqualTo(32 - 4 - 2 * 5 - 1);
+        } finally {
+            ModifierRegistry.installSnapshot(Map.of());
+            LevelTickFireEvents.onLevelUnload(new LevelEvent.Unload(level));
+        }
     }
 
     @Test

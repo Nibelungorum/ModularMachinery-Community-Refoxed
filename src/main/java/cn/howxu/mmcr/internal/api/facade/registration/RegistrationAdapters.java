@@ -14,6 +14,8 @@ import cn.howxu.mmcr.publicapi.machine.MachineDraft;
 import cn.howxu.mmcr.publicapi.machine.MachineSpec;
 import cn.howxu.mmcr.publicapi.recipe.RecipeDraft;
 import cn.howxu.mmcr.publicapi.recipe.RecipeSpec;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
+import cn.howxu.mmcr.publicapi.recipe.modifier.BlockStackingMode;
 import cn.howxu.mmcr.publicapi.recipe.modifier.ModifierBundle;
 import cn.howxu.mmcr.publicapi.registration.MachineRegistrar;
 import cn.howxu.mmcr.publicapi.registration.RecipeRegistrar;
@@ -138,6 +140,14 @@ public final class RegistrationAdapters {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(modifier, "modifier");
             registration(() -> core.registerModifier(id, ModifierAdapters.unwrap(modifier)));
+        }
+        @Override public void registerModifier(Identifier id, ModifierBundle modifier, boolean stackable, BlockStackingMode mode) {
+            ModifierStacking policy = switch (mode) {
+                case ADD -> ModifierStacking.ADD;
+                case MULTIPLY -> ModifierStacking.MULTIPLY;
+            };
+            registration(() -> core.registerModifier(id, ModifierAdapters.unwrap(modifier),
+                    stackable ? policy : ModifierStacking.UNIQUE));
         }
         @Override public void registerModifierItem(Identifier itemId, Identifier id) {
             Objects.requireNonNull(itemId, "itemId");

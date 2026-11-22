@@ -1,6 +1,10 @@
 package cn.howxu.mmcr.compat.kubejs;
 
 import cn.howxu.mmcr.api.machine.definition.ModifierDefinition;
+import cn.howxu.mmcr.api.machine.MachineRegistration;
+import cn.howxu.mmcr.api.machine.modifier.ModifierStacking;
+import cn.howxu.mmcr.api.machine.modifier.MachineModifier;
+import cn.howxu.mmcr.api.machine.modifier.ModifierTarget;
 import cn.howxu.mmcr.api.machine.definition.BlockPredicate;
 import cn.howxu.mmcr.api.machine.level.MachineLevelRegistry;
 import cn.howxu.mmcr.api.recipe.modifier.ModifierRegistry;
@@ -14,6 +18,9 @@ import cn.howxu.mmcr.publicapi.event.RegisterMachineStructuresEvent;
 import cn.howxu.mmcr.publicapi.recipe.modifier.Modifiers;
 import cn.howxu.mmcr.publicapi.structure.BlockConditions;
 import cn.howxu.mmcr.publicapi.structure.level.Levels;
+import dev.latvian.mods.rhino.ContextFactory;
+import dev.latvian.mods.rhino.ScriptableObject;
+import dev.latvian.mods.rhino.Wrapper;
 import net.minecraft.IdentifierException;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
@@ -56,6 +63,38 @@ class StartupRegistryReferenceTest {
     void cleanup() {
         ContentRegistrationCoordinator.resetForTesting();
         ModifierRegistry.installSnapshot(Map.of());
+    }
+
+    @Test
+    void rhino_overloads_preserve_legacy_registration_and_publish_independent_policies() {
+        var context = new ContextFactory().enter();
+        var scope = context.initStandardObjects();
+        ScriptableObject.putProperty(scope, "event", new MMCRStartupEventJS(), context);
+        Object machine = context.evaluateString(scope, """
+                let api = event.getAPI()
+                let fx = api.modifierDefinition([api.modifier("duration", "input", -0.1, "add_ratio", false)])
+                event.registerModifier("test:old", fx)
+                event.registerModifierItem("minecraft:diamond", "test:old")
+                event.registerModifier(api.id("test:unique"), fx, false)
+                event.registerModifier("test:stack", fx, true, "multiply")
+                event.createLevelType("test:coil").register()
+                event.createLevel("test:copper").type("test:coil").state("minecraft:copper_block").modifier(fx).register()
+                event.createMachine("test:smart").durationByInterface("signal", v => -v / 10, api.modifierOperation().ADD_RATIO).createObject()
+                """, "modifier-registration", 1, null);
+        assertThatThrownBy(() -> new MMCRStartupEventJS().registerModifier("test:bad", ModifierDefinition.EMPTY, true, "typo"))
+                .isInstanceOf(IllegalArgumentException.class);
+        ContentRegistrationCoordinator.beginStartup();
+        ContentRegistrationCoordinator.collectStructures(StructureRegistration.prepare(Set.of()));
+        ContentRegistrationCoordinator.commitStructures();
+        var smart = ((MachineRegistration) Wrapper.unwrapped(machine)).smartInterfaceModifiers().getFirst();
+        var level = MachineLevelRegistry.getLevel(Identifier.parse("test:copper"));
+        List<MachineModifier> both = List.of(level.modifier().modifiers().getFirst(), smart.toModifier(1));
+        assertThat(MachineModifier.apply(both, ModifierTarget.DURATION, 100, false)).isEqualTo(80);
+        assertThat(ModifierRegistry.stacking(Identifier.parse("test:unique"))).isEqualTo(ModifierStacking.UNIQUE);
+        ContentRegistrationCoordinator.commitModifierItemsAfterComponentsBound();
+        assertThat(ModifierRegistry.stacking(Identifier.parse("test:stack"))).isEqualTo(ModifierStacking.MULTIPLY);
+        assertThat(ModifierRegistry.stacking(Identifier.parse("test:old"))).isEqualTo(ModifierStacking.LEGACY);
+        assertThat(ModifierRegistry.modifierFor(new ItemStack(Items.DIAMOND))).isEqualTo(Identifier.parse("test:old"));
     }
 
     @Test
