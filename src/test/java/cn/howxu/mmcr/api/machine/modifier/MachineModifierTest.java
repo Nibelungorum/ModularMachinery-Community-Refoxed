@@ -7,6 +7,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.NbtOps;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -74,6 +76,31 @@ class MachineModifierTest {
             assertThat(applier.apply(base, RecipeModifier.IOType.OUTPUT)).isEqualTo(expected);
             assertThat(IntegrationTypeHelper.applyItemOutput(adjustments, base)).isEqualTo(expected);
             assertThat(MachineModifier.apply(best, ModifierTarget.OUTPUT, base, false)).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void zero_cancels_an_overflowed_product_in_direct_and_cached_recipe_modifiers() {
+        for (var io : RecipeModifier.IOType.values()) {
+            var huge = new RecipeModifier("", io, Float.MAX_VALUE, RecipeModifier.Operation.MULTIPLY, false);
+            // Nine finite float factors overflow even the double evaluator.
+            var modifiers = new ArrayList<>(Collections.nCopies(9, huge));
+            var applier = new RecipeModifier.ModifierApplier();
+            modifiers.forEach(mod -> RecipeModifier.applyValueToApplier(applier, mod));
+
+            assertThat(RecipeModifier.applyModifiers(modifiers, "", io, 0F, false)).isZero();
+            assertThat(RecipeModifier.applyModifiers(modifiers, "", io, 0D, false)).isZero();
+            assertThat(applier.apply(0F, io)).isZero();
+
+            var zero = new RecipeModifier("", io, 0F, RecipeModifier.Operation.MULTIPLY, false);
+            modifiers.add(zero);
+            RecipeModifier.applyValueToApplier(applier, zero);
+            assertThat(RecipeModifier.applyModifiers(modifiers, "", io, 100F, false)).isZero();
+            assertThat(RecipeModifier.applyModifiers(modifiers, "", io, 100D, false)).isZero();
+            assertThat(applier.apply(100F, io)).isZero();
+
+            var scaled = huge.multiply(Float.MAX_VALUE).multiply(0F);
+            assertThat(RecipeModifier.applyModifiers(List.of(scaled), "", io, 100F, false)).isZero();
         }
     }
 

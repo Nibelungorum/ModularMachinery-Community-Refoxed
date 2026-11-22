@@ -51,6 +51,20 @@ class EffectiveRecipeResolverTest {
     }
 
     @Test
+    void a_zero_duration_factor_cancels_overflow_regardless_of_modifier_order() {
+        var recipe = MachineRecipe.fromCanonical(MMCR.id("duration_overflow"), MMCR.id("pool"), 100,
+                List.of(), List.of(), List.of(), 0, 1, false, false, false, Set.of());
+        var resolver = new EffectiveRecipeResolver();
+        var snapshot = snapshot(3L);
+        var huge = MachineModifier.numeric("duration", "input", Float.MAX_VALUE, "multiply", false);
+        var zero = MachineModifier.numeric("duration", "input", 0, "multiply", false);
+
+        assertThat(resolver.resolve(recipe, snapshot, List.of(huge, huge)).duration()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(resolver.resolve(recipe, snapshot, List.of(huge, huge, zero)).duration()).isOne();
+        assertThat(resolver.resolve(recipe, snapshot, List.of(zero, huge, huge)).duration()).isOne();
+    }
+
+    @Test
     void zero_recipe_thread_limit_remains_unbounded_before_modifiers_are_applied() {
         MachineRecipe recipe = MachineRecipe.fromCanonical(MMCR.id("unbounded_recipe_threads"), MMCR.id("pool"), 20,
                 List.of(), List.of(), List.of(), 0, 0, false, true, false, Set.of());

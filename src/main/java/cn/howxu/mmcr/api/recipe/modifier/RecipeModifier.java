@@ -158,7 +158,7 @@ public final class RecipeModifier {
     }
 
     public RecipeModifier multiply(float value) {
-        return new RecipeModifier(target, ioTarget, modifier * value, operation, affectsChance, condition);
+        return new RecipeModifier(target, ioTarget, product(modifier, value), operation, affectsChance, condition);
     }
 
     public RecipeModifier add(float value) {
@@ -215,14 +215,13 @@ public final class RecipeModifier {
                 case ADD -> add += (float) mod.modifier;
                 case SUBTRACT -> add -= (float) mod.modifier;
                 case ADD_RATIO -> ratio = ModifierMath.add(ratio, mod.modifier);
-                case MULTIPLY -> mul *= (float) mod.modifier;
+                case MULTIPLY -> mul = (float) product(mul, mod.modifier);
                 case DIVIDE -> {
                     if (mod.modifier != 0F) mul /= (float) mod.modifier;
                 }
             }
         }
-        if (ratio == 0D) return (value + add) * mul;
-        return (float) (ModifierMath.relative(value, (double) value + add, ratio) * mul);
+        return applyFloat(value, add, ratio, mul);
     }
 
     public static double applyModifiers(Collection<RecipeModifier> modifiers, String target, IOType ioType,
@@ -242,14 +241,24 @@ public final class RecipeModifier {
                 case ADD -> add += mod.modifier;
                 case SUBTRACT -> add -= mod.modifier;
                 case ADD_RATIO -> ratio = ModifierMath.add(ratio, mod.modifier);
-                case MULTIPLY -> mul *= mod.modifier;
+                case MULTIPLY -> mul = product(mul, mod.modifier);
                 case DIVIDE -> {
                     if (mod.modifier != 0D) mul /= mod.modifier;
                 }
             }
         }
-        if (ratio == 0D) return (value + add) * mul;
-        return ModifierMath.relative(value, value + add, ratio) * mul;
+        return product(ModifierMath.relative(value, value + add, ratio), mul);
+    }
+
+    private static float applyFloat(float value, float add, double ratio, float mul) {
+        double adjusted = ratio == 0D ? value + add : ModifierMath.relative(value, (double) value + add, ratio);
+        return (float) product(adjusted, mul);
+    }
+
+    private static double product(double left, double right) {
+        // Zero cancels even an overflowed factor; leave nonzero overflow for the target's own bounds.
+        if ((left == 0D && Double.isInfinite(right)) || (right == 0D && Double.isInfinite(left))) return 0D;
+        return left * right;
     }
 
     private boolean matches(String target, IOType ioType, boolean isChance) {
@@ -320,7 +329,7 @@ public final class RecipeModifier {
                 }
                 return selected.apply(value, IOType.INPUT);
             }
-            return ratio == 0D ? (value + add) * mul : (float) (ModifierMath.relative(value, (double) value + add, ratio) * mul);
+            return applyFloat(value, add, ratio, mul);
         }
 
         public boolean isDefault() {
@@ -336,7 +345,10 @@ public final class RecipeModifier {
                     if (output) outputRatio = ModifierMath.add(outputRatio, mod.modifier);
                     else inputRatio = ModifierMath.add(inputRatio, mod.modifier);
                 }
-                case MULTIPLY -> { if (output) outputMul *= (float) mod.modifier; else inputMul *= (float) mod.modifier; }
+                case MULTIPLY -> {
+                    if (output) outputMul = (float) product(outputMul, mod.modifier);
+                    else inputMul = (float) product(inputMul, mod.modifier);
+                }
                 case DIVIDE -> {
                     if (mod.modifier != 0F) {
                         if (output) outputMul /= (float) mod.modifier; else inputMul /= (float) mod.modifier;
