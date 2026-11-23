@@ -89,6 +89,22 @@ class BlueprintScreenTest {
     }
 
     @Test
+    void bothScrollbarsAcceptClicksUpToTheEdgesOfTheirTracks() {
+        BlueprintLayout layout = BlueprintScreen.layoutFor(640, 480, true);
+        assertScrollbarEdges(layout.materials(), BlueprintScreen.materialScrollbarRect(layout));
+        assertScrollbarEdges(layout.candidates(), BlueprintScreen.candidateScrollbarRect(layout));
+    }
+
+    private static void assertScrollbarEdges(BlueprintRect list, BlueprintRect track) {
+        int top = list.y() + 4;
+        int bottom = list.y() + list.height() - 4;
+        assertThat(track.contains(track.x(), top - 1)).isFalse();
+        assertThat(track.contains(track.x(), top)).isTrue();
+        assertThat(track.contains(track.x(), bottom - 1)).isTrue();
+        assertThat(track.contains(track.x(), bottom)).isFalse();
+    }
+
+    @Test
     void scrollbarDragMapsToClampedRowOffsets() {
         assertThat(BlueprintScreen.clampScrollOffset(8, 6, 3)).isEqualTo(3);
         assertThat(BlueprintScreen.scrollbarHandleY(3, 6, 3, 10, 60, 12)).isEqualTo(58);

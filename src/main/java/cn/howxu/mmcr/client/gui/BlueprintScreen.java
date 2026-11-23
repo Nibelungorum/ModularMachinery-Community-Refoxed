@@ -50,10 +50,10 @@ public final class BlueprintScreen extends Screen {
     private static final int SCROLLBAR_WIDTH = 12;
     private static final int SCROLLBAR_HANDLE_HEIGHT = 32;
     private static final int MATERIAL_SCROLLBAR_LEFT_OFFSET = 4;
-    private static final int MATERIAL_SCROLLBAR_TOP_OFFSET = 6;
-    private static final int MATERIAL_SCROLLBAR_BOTTOM_INSET = 10;
+    private static final int MATERIAL_SCROLLBAR_TOP_OFFSET = 4;
+    private static final int MATERIAL_SCROLLBAR_BOTTOM_INSET = 4;
     private static final int CANDIDATE_SCROLLBAR_LEFT_OFFSET = 4;
-    private static final int CANDIDATE_SCROLLBAR_TOP_OFFSET = -6;
+    private static final int CANDIDATE_SCROLLBAR_TOP_OFFSET = -8;
     private static final int CANDIDATE_SCROLLBAR_BOTTOM_INSET = 4;
     private static final int CANDIDATE_COLUMNS = 4;
     private static final int CANDIDATE_SLOT_SIZE = MATERIAL_SLOT_SIZE - 2;
@@ -689,17 +689,18 @@ public final class BlueprintScreen extends Screen {
                 CANDIDATE_SLOT_SIZE, CANDIDATE_SLOT_SIZE, currentLayout.scale());
     }
 
-    private static BlueprintRect materialScrollbarRect(BlueprintLayout currentLayout) {
+    static BlueprintRect materialScrollbarRect(BlueprintLayout currentLayout) {
         BlueprintRect materials = currentLayout.materials();
         return scaledRect(currentLayout.left(), currentLayout.top(),
                 slotX(currentLayout, materials) + (int) Math.round(localMouse(materials.width(), 0, currentLayout.scale()))
                         - SCROLLBAR_WIDTH - MATERIAL_SCROLLBAR_LEFT_OFFSET,
                 slotY(currentLayout, materials) + MATERIAL_SCROLLBAR_TOP_OFFSET, SCROLLBAR_WIDTH,
-                (int) Math.round(localMouse(materials.height(), 0, currentLayout.scale())) - MATERIAL_SCROLLBAR_BOTTOM_INSET,
+                (int) Math.round(localMouse(materials.height(), 0, currentLayout.scale()))
+                        - MATERIAL_SCROLLBAR_TOP_OFFSET - MATERIAL_SCROLLBAR_BOTTOM_INSET,
                 currentLayout.scale());
     }
 
-    private static BlueprintRect candidateScrollbarRect(BlueprintLayout currentLayout) {
+    static BlueprintRect candidateScrollbarRect(BlueprintLayout currentLayout) {
         BlueprintRect candidates = currentLayout.candidates();
         return scaledRect(currentLayout.left(), currentLayout.top(),
                 slotX(currentLayout, candidates) + (int) Math.round(localMouse(candidates.width(), 0, currentLayout.scale()))
