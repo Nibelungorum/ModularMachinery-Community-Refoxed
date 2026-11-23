@@ -1,101 +1,107 @@
 package cn.howxu.mmcr.compat.jei;
 
-import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
+import cn.howxu.mmcr.MMCR;
+import com.mojang.blaze3d.platform.InputConstants;
 import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
-import mezz.jei.api.gui.widgets.IRecipeWidget;
+import mezz.jei.api.gui.inputs.IJeiInputHandler;
+import mezz.jei.api.gui.inputs.IJeiUserInput;
+import mezz.jei.api.gui.inputs.RecipeSlotUnderMouse;
+import mezz.jei.api.gui.widgets.ISlottedRecipeWidget;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenPosition;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.function.LongSupplier;
 
 /**
- * Displays the default-stage structure materials in a nine-slot rotating page.
+ * Displays one manually selected page of the default-stage structure materials.
  *
  * @author howxu <dev@howxu.cn>
  */
-public final class StructureMaterialWidget implements IRecipeWidget {
-    public static final int SLOT_COUNT = 9;
-    public static final int SLOT_STEP = 19;
-    public static final long PAGE_DURATION_MILLIS = 8_000L;
+public final class StructureMaterialWidget implements ISlottedRecipeWidget, IJeiInputHandler {
+    private static final int SLOTS_PER_PAGE = 9;
+    private static final int SLOT_STEP = 17;
+    private static final int BUTTON_X = SLOTS_PER_PAGE * SLOT_STEP;
+    private static final int BUTTON_SIZE = 8;
+    private static final int PREVIOUS_BUTTON_Y = 1;
+    private static final int NEXT_BUTTON_Y = PREVIOUS_BUTTON_Y + BUTTON_SIZE;
+    private static final Identifier BUTTON = MMCR.id("textures/gui/jei/preview/material_list_button.png");
+    private static final Identifier ACTIVE_BUTTON = MMCR.id("textures/gui/jei/preview/material_list_button_enable.png");
 
-    private final StructureMaterialSummary summary;
     private final List<IRecipeSlotDrawable> slots;
-    private final int x;
-    private final int y;
-    private final LongSupplier clock;
-    private int displayedPage = -1;
+    private final ScreenRectangle area;
+    private int firstSlot;
+    private int pressedStep;
 
-    public StructureMaterialWidget(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots,
-            int x, int y) {
-        this(summary, slots, x, y, System::currentTimeMillis);
-    }
-
-    StructureMaterialWidget(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots,
-            int x, int y, LongSupplier clock) {
-        if (slots.size() != SLOT_COUNT) throw new IllegalArgumentException("nine material slots required");
-        this.summary = summary;
+    public StructureMaterialWidget(List<IRecipeSlotDrawable> slots, ScreenPosition origin) {
         this.slots = List.copyOf(slots);
-        this.x = x;
-        this.y = y;
-        this.clock = clock;
-        applyPage(pageFor(clock.getAsLong(), summary.entries().size()));
+        this.area = new ScreenRectangle(origin, BUTTON_X + BUTTON_SIZE, NEXT_BUTTON_Y + BUTTON_SIZE);
+        for (int i = 0; i < slots.size(); i++) {
+            slots.get(i).setPosition(i % SLOTS_PER_PAGE * SLOT_STEP, 1);
+        }
     }
 
-    @Override
-    public ScreenPosition getPosition() {
-        return new ScreenPosition(x, y);
-    }
+    @Override public ScreenPosition getPosition() { return area.position(); }
+    @Override public ScreenRectangle getArea() { return area; }
 
-    @Override
-    public void tick() {
-        int page = pageFor(clock.getAsLong(), summary.entries().size());
-        if (page != displayedPage) applyPage(page);
-    }
-
-    static void refreshPage(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots, long timeMillis) {
-        if (slots.size() != SLOT_COUNT) throw new IllegalArgumentException("nine material slots required");
-        int page = pageFor(timeMillis, summary.entries().size());
-        applyPage(summary, slots, page);
+    private int endSlot() {
+        return Math.min(firstSlot + SLOTS_PER_PAGE, slots.size());
     }
 
     @Override
     public void drawWidget(GuiGraphicsExtractor graphics, double mouseX, double mouseY) {
-        int first = displayedPage * SLOT_COUNT;
-        for (int slotIndex = 0; slotIndex < SLOT_COUNT; slotIndex++) {
-            int entryIndex = first + slotIndex;
-            if (entryIndex >= summary.entries().size()) continue;
-            String quantity = MachineRecipeCategory.itemQuantityText(summary.entries().get(entryIndex).count());
-            if (!quantity.isEmpty()) {
-                new JeiSlotOverlayDrawable("", quantity).draw(graphics,
-                        slotIndex * SLOT_STEP, 0);
-            }
+        for (int i = firstSlot; i < endSlot(); i++) {
+            IRecipeSlotDrawable slot = slots.get(i);
+            slot.draw(graphics, slot.isMouseOver(mouseX, mouseY));
         }
-    }
-
-    static int pageFor(long timeMillis, int materialCount) {
-        int pageCount = (materialCount + SLOT_COUNT - 1) / SLOT_COUNT;
-        return pageCount == 0 ? 0 : (int) Math.floorDiv(timeMillis, PAGE_DURATION_MILLIS) % pageCount;
-    }
-
-    private void applyPage(int page) {
-        displayedPage = page;
-        applyPage(summary, slots, page);
-    }
-
-    private static void applyPage(StructureMaterialSummary summary, List<IRecipeSlotDrawable> slots, int page) {
-        int first = page * SLOT_COUNT;
-        for (int slotIndex = 0; slotIndex < SLOT_COUNT; slotIndex++) {
-            int entryIndex = first + slotIndex;
-            IRecipeSlotDrawable slot = slots.get(slotIndex);
-            slot.clearDisplayOverrides();
-            var overrides = slot.createDisplayOverrides();
-            if (entryIndex < summary.entries().size()) {
-                overrides.add(summary.entries().get(entryIndex).stack().copyWithCount(1));
-            } else {
-                overrides.addOptionalTypedIngredients(List.of(Optional.empty()));
-            }
+        int hovered = pageStepAt(mouseX, mouseY);
+        // JEI does not deliver a release outside the recipe.
+        if (pressedStep != 0 && GLFW.glfwGetMouseButton(
+                Minecraft.getInstance().getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_RELEASE) {
+            pressedStep = 0;
         }
+        drawButton(graphics, PREVIOUS_BUTTON_Y, 0, hovered == -1 || pressedStep == -1);
+        drawButton(graphics, NEXT_BUTTON_Y, BUTTON_SIZE, hovered == 1 || pressedStep == 1);
+    }
+
+    private static void drawButton(GuiGraphicsExtractor graphics, int y, int v, boolean active) {
+        graphics.blit(RenderPipelines.GUI_TEXTURED, active ? ACTIVE_BUTTON : BUTTON, BUTTON_X, y, 0, v,
+                BUTTON_SIZE, BUTTON_SIZE, BUTTON_SIZE, 2 * BUTTON_SIZE);
+    }
+
+    @Override
+    public Optional<RecipeSlotUnderMouse> getSlotUnderMouse(double mouseX, double mouseY) {
+        for (int i = firstSlot; i < endSlot(); i++) {
+            IRecipeSlotDrawable slot = slots.get(i);
+            if (slot.isMouseOver(mouseX, mouseY)) return Optional.of(new RecipeSlotUnderMouse(slot, getPosition()));
+        }
+        return Optional.empty();
+    }
+
+    private int pageStepAt(double mouseX, double mouseY) {
+        if (mouseX < BUTTON_X || mouseX >= BUTTON_X + BUTTON_SIZE) return 0;
+        if (firstSlot > 0 && mouseY >= PREVIOUS_BUTTON_Y && mouseY < NEXT_BUTTON_Y) return -1;
+        if (endSlot() < slots.size() && mouseY >= NEXT_BUTTON_Y && mouseY < NEXT_BUTTON_Y + BUTTON_SIZE) return 1;
+        return 0;
+    }
+
+    @Override
+    public boolean handleInput(double mouseX, double mouseY, IJeiUserInput input) {
+        if (input.getKey().getType() != InputConstants.Type.MOUSE
+                || input.getKey().getValue() != InputConstants.MOUSE_BUTTON_LEFT) return false;
+        int step = pageStepAt(mouseX, mouseY);
+        if (input.isSimulate()) {
+            pressedStep = step;
+            return step != 0;
+        }
+        boolean turnPage = step != 0 && step == pressedStep;
+        pressedStep = 0;
+        if (turnPage) firstSlot += step * SLOTS_PER_PAGE;
+        return turnPage;
     }
 }

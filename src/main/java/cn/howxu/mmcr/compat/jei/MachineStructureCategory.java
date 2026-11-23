@@ -18,6 +18,7 @@ import mezz.jei.api.recipe.types.IRecipeType;
 import mezz.jei.api.runtime.IIngredientManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -31,25 +32,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 public final class MachineStructureCategory implements IRecipeCategory<MachineStructureDisplay> {
-    private static final int MACHINE_NAME_X = 5;
-    private static final int MACHINE_NAME_Y = 5;
-    private static final int MACHINE_NAME_WIDTH = 160;
-    private static final int MACHINE_NAME_HEIGHT = 16;
     private static final float MACHINE_NAME_SCALE = 1.1F;
-    private static final int PREVIEW_X = 4;
-    private static final int PREVIEW_Y = 23;
-    private static final int MATERIAL_X = 0;
-    private static final int MATERIAL_Y_4X = 131;
-    private static final int MATERIAL_Y_3X = 201;
-    private static final int MATERIAL_Y_2X = 261;
-    private static final int MATERIAL_Y_1X = 281;
-    private static final int MATERIAL_STEP = 19;
-    private static final int MATERIAL_SLOT_COUNT = 9;
-    static final int TRANSFER_BUTTON_X = 152;
-    private static final int TRANSFER_BUTTON_Y = 258;
-    private static final int TRANSFER_BUTTON_Y_2X = 241;
-    private static final int TRANSFER_BUTTON_Y_3X = 181;
-    private static final int TRANSFER_BUTTON_Y_4X = 111;
 
     private final IDrawable icon;
     private final IIngredientManager ingredientManager;
@@ -60,73 +43,42 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override public IRecipeType<MachineStructureDisplay> getRecipeType() { return JeiMachineRecipeTypes.STRUCTURE; }
     @Override public Component getTitle() { return Component.translatable("jei.mmcr.multiblock_structure"); }
-    @Override
-    public int getWidth() {
-        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 168;
-            case 2 -> 168;
-            case 3 -> 168;
-            default -> 168;
-        };
-    }
-
+    @Override public int getWidth() { return StructurePreviewLayout.WIDTH; }
     @Override
     public int getHeight() {
-        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 300;
-            case 2 -> 280;
-            case 3 -> 220;
-            default -> 150;
-        };
+        return StructurePreviewLayout.heightForScale(Minecraft.getInstance().getWindow().getGuiScale());
     }
     @Override public IDrawable getIcon() { return icon; }
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
         StructureMaterialSummary summary = display.materials();
-        int materialY = materialY();
-        for (int slotIndex = 0; slotIndex < MATERIAL_SLOT_COUNT; slotIndex++) {
-            int entryIndex = slotIndex;
-            IRecipeSlotBuilder slot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY,
-                            MATERIAL_X + slotIndex * MATERIAL_STEP, materialY);
-            if (entryIndex < summary.entries().size()) {
-                slot.add(summary.entries().get(entryIndex).stack());
-            }
-            slot.addRichTooltipCallback((view, tooltip) -> {
-                int page = StructureMaterialWidget.pageFor(System.currentTimeMillis(), summary.entries().size());
-                int pageEntry = page * StructureMaterialWidget.SLOT_COUNT + entryIndex;
-                if (pageEntry < summary.entries().size()) {
-                    summary.entries().get(pageEntry).tooltipLines().forEach(tooltip::add);
-                }
-            });
+        for (var entry : summary.entries()) {
+            IRecipeSlotBuilder slot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY).add(entry.stack());
+            MachineRecipeCategory.setItemOverlay(slot, "", MachineRecipeCategory.itemQuantityText(entry.count()));
+            slot.addRichTooltipCallback((view, tooltip) -> entry.tooltipLines().forEach(tooltip::add));
         }
 
         for (ItemStack stack : summary.transferStacks()) {
             builder.addInputSlot(-1000, -1000).add(stack);
         }
         builder.addOutputSlot(-1000, -1000).add(structureOutput(display));
-        builder.moveRecipeTransferButton(TRANSFER_BUTTON_X, transferButtonY());
+        var sideButton = StructurePreviewLayout.sideButtonOrigin(StructurePreviewLayout.viewport(getHeight()));
+        builder.moveRecipeTransferButton(sideButton.x(), sideButton.y());
     }
 
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
-        JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(display.machine(), PREVIEW_X, PREVIEW_Y,
-                previewWidth(), previewHeight(), ingredientManager);
+        ScreenRectangle viewport = StructurePreviewLayout.viewport(getHeight());
+        JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(display.machine(), viewport.left(), viewport.top(),
+                viewport.width(), viewport.height(), ingredientManager);
         JeiPreviewLifecycle.registerActive(preview);
         builder.addWidget(preview);
         builder.addInputHandler(preview);
-        builder.addWidget(new StructureMaterialWidget(display.materials(),
-                builder.getRecipeSlots().getSlots(RecipeIngredientRole.RENDER_ONLY),
-                MATERIAL_X, materialY()));
-    }
-
-    @Override
-    public void onDisplayedIngredientsUpdate(MachineStructureDisplay display,
-            List<IRecipeSlotDrawable> recipeSlots, IFocusGroup focuses) {
-        List<IRecipeSlotDrawable> materialSlots = recipeSlots.stream()
-                .filter(slot -> slot.getRole() == RecipeIngredientRole.RENDER_ONLY)
-                .toList();
-        StructureMaterialWidget.refreshPage(display.materials(), materialSlots, System.currentTimeMillis());
+        List<IRecipeSlotDrawable> slots = builder.getRecipeSlots().getSlots(RecipeIngredientRole.RENDER_ONLY);
+        var materials = new StructureMaterialWidget(slots, StructurePreviewLayout.materialOrigin(viewport));
+        builder.addSlottedWidget(materials, slots);
+        builder.addInputHandler(materials);
     }
 
     @Override
@@ -137,15 +89,12 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
         int textWidth = font.width(machineName);
         if (textWidth <= 0) return;
 
+        ScreenRectangle title = StructurePreviewLayout.TITLE;
         float scale = Math.min(MACHINE_NAME_SCALE, Math.min(
-                (float) MACHINE_NAME_WIDTH / textWidth,
-                (float) MACHINE_NAME_HEIGHT / font.lineHeight));
-        float scaledWidth = textWidth * scale;
-        float scaledHeight = font.lineHeight * scale;
+                (float) title.width() / textWidth, (float) title.height() / font.lineHeight));
         graphics.pose().pushMatrix();
-        graphics.pose().translate(
-                MACHINE_NAME_X + MACHINE_NAME_WIDTH / 2.0F - scaledWidth / 2.0F,
-                MACHINE_NAME_Y + MACHINE_NAME_HEIGHT / 2.0F - scaledHeight);
+        graphics.pose().translate(title.left() + (title.width() - textWidth * scale) / 2.0F,
+                title.top() + (title.height() - font.lineHeight * scale) / 2.0F);
         graphics.pose().scale(scale, scale);
         graphics.text(font, machineName, 0, 0, 0xFFFFFFFF, false);
         graphics.pose().popMatrix();
@@ -161,36 +110,5 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
         ItemStack output = new ItemStack(ModItems.BLUEPRINT.get());
         output.set(DataComponents.CUSTOM_NAME, display.machine().displayName());
         return output;
-    }
-
-    private static int materialY() {
-        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> MATERIAL_Y_1X;
-            case 2 -> MATERIAL_Y_2X;
-            case 3 -> MATERIAL_Y_3X;
-            default -> MATERIAL_Y_4X;
-        };
-    }
-
-    private static int transferButtonY() {
-        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> TRANSFER_BUTTON_Y;
-            case 2 -> TRANSFER_BUTTON_Y_2X;
-            case 3 -> TRANSFER_BUTTON_Y_3X;
-            default -> TRANSFER_BUTTON_Y_4X;
-        };
-    }
-
-    private static int previewWidth() {
-        return 161;
-    }
-
-    private static int previewHeight() {
-        return switch (Minecraft.getInstance().getWindow().getGuiScale()) {
-            case 1 -> 253;
-            case 2 -> 233;
-            case 3 -> 173;
-            default -> 103;
-        };
     }
 }
