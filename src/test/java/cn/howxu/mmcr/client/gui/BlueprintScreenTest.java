@@ -91,17 +91,21 @@ class BlueprintScreenTest {
     @Test
     void bothScrollbarsAcceptClicksUpToTheEdgesOfTheirTracks() {
         BlueprintLayout layout = BlueprintScreen.layoutFor(640, 480, true);
-        assertScrollbarEdges(layout.materials(), BlueprintScreen.materialScrollbarRect(layout));
-        assertScrollbarEdges(layout.candidates(), BlueprintScreen.candidateScrollbarRect(layout));
+        assertScrollbarEdges(layout.materials(), BlueprintScreen.materialScrollbarRect(layout), 4);
+        assertScrollbarEdges(layout.candidates(), BlueprintScreen.candidateScrollbarRect(layout), 5);
     }
 
-    private static void assertScrollbarEdges(BlueprintRect list, BlueprintRect track) {
+    private static void assertScrollbarEdges(BlueprintRect list, BlueprintRect track, int rightInset) {
+        int right = list.x() + list.width() - rightInset;
+        int left = right - 12;
         int top = list.y() + 4;
         int bottom = list.y() + list.height() - 4;
-        assertThat(track.contains(track.x(), top - 1)).isFalse();
-        assertThat(track.contains(track.x(), top)).isTrue();
-        assertThat(track.contains(track.x(), bottom - 1)).isTrue();
-        assertThat(track.contains(track.x(), bottom)).isFalse();
+        assertThat(track.contains(left - 1, top)).isFalse();
+        assertThat(track.contains(left, top - 1)).isFalse();
+        assertThat(track.contains(left, top)).isTrue();
+        assertThat(track.contains(right - 1, bottom - 1)).isTrue();
+        assertThat(track.contains(right, bottom - 1)).isFalse();
+        assertThat(track.contains(right - 1, bottom)).isFalse();
     }
 
     @Test

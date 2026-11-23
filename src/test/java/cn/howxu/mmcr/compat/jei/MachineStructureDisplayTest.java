@@ -5,23 +5,36 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
+import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
+import mezz.jei.api.gui.ingredient.IRecipeSlotView;
+import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
+import mezz.jei.api.gui.inputs.RecipeSlotUnderMouse;
+import mezz.jei.api.recipe.RecipeIngredientRole;
+import mezz.jei.library.gui.helpers.GuiHelper;
+import net.minecraft.client.gui.navigation.ScreenPosition;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 /**
  * Verifies JEI structure displays retain only registration-safe metadata.
@@ -46,6 +59,69 @@ class MachineStructureDisplayTest {
         assertThat(materials.entries()).extracting(entry -> entry.stack().getItem())
                 .containsExactly(Blocks.STONE.asItem(), Blocks.COBBLESTONE.asItem());
         assertThat(display.ingredients()).allSatisfy(stack -> assertThat(stack.getCount()).isGreaterThan(0));
+    }
+
+    @Test
+    void switchingStageReplacesMaterialAndTransferSlotsIncludingSharedItemCounts() {
+        Machine machine = new Machine() {
+            @Override public Identifier registryName() { return MMCR.id("staged_materials"); }
+            @Override public BlockArray pattern() {
+                return new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE)));
+            }
+            @Override public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(registryName()); }
+            @Override public List<MachineStructureStage> structureStages() {
+                var base = Machine.super.structureStages().getFirst();
+                var expanded = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.STONE),
+                        BlockPos.ZERO.east(), new BlockPredicate.OfBlock(Blocks.STONE),
+                        BlockPos.ZERO.above(), new BlockPredicate.OfBlock(Blocks.GLASS)));
+                return List.of(base, new MachineStructureStage(7, expanded, portRequirements(), portTierRequirements(),
+                        dynamicPatterns(), base.requirements()));
+            }
+        };
+        var display = MachineStructureDisplay.from(machine);
+
+        var expanded = display.materialsByStage().get(7).entries();
+        assertThat(expanded).extracting(entry -> entry.stack().getItem()).containsExactly(Items.STONE, Items.GLASS);
+        assertThat(expanded).extracting(StructureMaterialSummary.Entry::count).containsExactly(2, 1);
+
+        var guiHelper = new GuiHelper(JeiTestIngredients.manager(), ContextMap.EMPTY);
+        List<IRecipeSlotDrawable> slots = new ArrayList<>();
+        for (var summary : display.materialsByStage().values()) {
+            for (var entry : summary.entries()) {
+                slots.add(guiHelper.createRecipeSlotDrawable(RecipeIngredientRole.RENDER_ONLY,
+                        slot -> slot.add(entry.stack()), Set.of(), 0));
+            }
+        }
+        display.ingredients().forEach(stack -> slots.add(guiHelper.createRecipeSlotDrawable(
+                RecipeIngredientRole.INPUT, slot -> slot.add(stack), Set.of(), 0)));
+        var output = guiHelper.createRecipeSlotDrawable(RecipeIngredientRole.OUTPUT,
+                slot -> slot.add(MachineStructureCategory.structureOutput(display)), Set.of(), 0);
+        slots.add(output);
+        var stage = new AtomicInteger(1);
+        var view = new StructureStageSlots(display, () -> slots, guiHelper, stage::get);
+        var row = new StructureMaterialWidget(view::materials, new ScreenPosition(3, 197));
+        var otherPreview = new StructureStageSlots(display, () -> slots, guiHelper, () -> 1);
+
+        assertThat(transferInputs(view)).extracting(ItemStack::getItem, ItemStack::getCount)
+                .containsExactly(tuple(Items.STONE, 1));
+        assertThat(row.getSlotUnderMouse(17, 1)).isEmpty();
+        stage.set(7);
+        assertThat(transferInputs(view)).extracting(ItemStack::getItem, ItemStack::getCount)
+                .containsExactly(tuple(Items.STONE, 2), tuple(Items.GLASS, 1));
+        assertThat(transferInputs(otherPreview)).extracting(ItemStack::getItem, ItemStack::getCount)
+                .containsExactly(tuple(Items.STONE, 1));
+        assertThat(view.getSlotViews(RecipeIngredientRole.OUTPUT)).containsExactly(output);
+        assertThat(row.getSlotUnderMouse(0, 1)).map(RecipeSlotUnderMouse::slot).contains(slots.get(1));
+        assertThat(row.getSlotUnderMouse(17, 1)).map(RecipeSlotUnderMouse::slot).contains(slots.get(2));
+        stage.set(1);
+        assertThat(transferInputs(view)).extracting(ItemStack::getItem, ItemStack::getCount)
+                .containsExactly(tuple(Items.STONE, 1));
+        assertThat(row.getSlotUnderMouse(0, 1)).map(RecipeSlotUnderMouse::slot).contains(slots.getFirst());
+        assertThat(row.getSlotUnderMouse(17, 1)).isEmpty();
+    }
+
+    private static List<ItemStack> transferInputs(IRecipeSlotsView view) {
+        return view.getSlotViews(RecipeIngredientRole.INPUT).stream().flatMap(IRecipeSlotView::getItemStacks).toList();
     }
 
     @Test

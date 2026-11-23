@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.compat.jei;
 
-import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.client.preview.StructurePreviewPanel;
 import cn.howxu.mmcr.client.preview.StructurePreviewSchema;
 import cn.howxu.mmcr.mixin.client.preview.GuiGraphicsExtractorAccessor;
@@ -51,10 +50,10 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private int previewDragButton = -1;
     private boolean closed;
 
-    public JeiStructurePreviewWidget(Machine machine, int x, int y, int width, int height,
+    public JeiStructurePreviewWidget(StructurePreviewPanel panel, int x, int y, int width, int height,
             IIngredientManager ingredientManager) {
         this.ingredientManager = ingredientManager;
-        this.panel = new StructurePreviewPanel(machine);
+        this.panel = panel;
         this.testingPreview = null;
         this.mouseButtonDown = button -> GLFW.glfwGetMouseButton(
                 Minecraft.getInstance().getWindow().handle(), button) == GLFW.GLFW_PRESS;

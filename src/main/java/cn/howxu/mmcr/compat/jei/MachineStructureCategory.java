@@ -1,13 +1,13 @@
 package cn.howxu.mmcr.compat.jei;
 
 import cn.howxu.mmcr.MMCR;
-import cn.howxu.mmcr.client.preview.StructureMaterialSummary;
+import cn.howxu.mmcr.client.preview.StructurePreviewPanel;
+import cn.howxu.mmcr.mixin.compat.jei.RecipeLayoutAccessor;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.registry.ModItems;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.builder.IRecipeSlotBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
-import mezz.jei.api.gui.ingredient.IRecipeSlotDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.gui.widgets.IRecipeExtrasBuilder;
 import mezz.jei.api.helpers.IGuiHelper;
@@ -24,8 +24,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.List;
-
 /**
  * Shared JEI category for multiblock structure previews.
  *
@@ -35,8 +33,10 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     private static final float MACHINE_NAME_SCALE = 1.1F;
 
     private final IDrawable icon;
+    private final IGuiHelper guiHelper;
     private final IIngredientManager ingredientManager;
     public MachineStructureCategory(IGuiHelper guiHelper, IIngredientManager ingredientManager) {
+        this.guiHelper = guiHelper;
         this.ingredientManager = ingredientManager;
         icon = guiHelper.createDrawableItemLike(ModBlocks.BASIC_CASING.get());
     }
@@ -52,14 +52,16 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
-        StructureMaterialSummary summary = display.materials();
-        for (var entry : summary.entries()) {
-            IRecipeSlotBuilder slot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY).add(entry.stack());
-            MachineRecipeCategory.setItemOverlay(slot, "", MachineRecipeCategory.itemQuantityText(entry.count()));
-            slot.addRichTooltipCallback((view, tooltip) -> entry.tooltipLines().forEach(tooltip::add));
+        for (var summary : display.materialsByStage().values()) {
+            for (var entry : summary.entries()) {
+                IRecipeSlotBuilder slot = builder.addSlot(RecipeIngredientRole.RENDER_ONLY).add(entry.stack());
+                MachineRecipeCategory.setItemOverlay(slot, "", MachineRecipeCategory.itemQuantityText(entry.count()));
+                slot.addRichTooltipCallback((view, tooltip) -> entry.tooltipLines().forEach(tooltip::add));
+            }
         }
 
-        for (ItemStack stack : summary.transferStacks()) {
+        // JEI also calls setRecipe for indexing, before there is a selected preview stage.
+        for (ItemStack stack : display.ingredients()) {
             builder.addInputSlot(-1000, -1000).add(stack);
         }
         builder.addOutputSlot(-1000, -1000).add(structureOutput(display));
@@ -70,14 +72,19 @@ public final class MachineStructureCategory implements IRecipeCategory<MachineSt
     @Override
     public void createRecipeExtras(IRecipeExtrasBuilder builder, MachineStructureDisplay display, IFocusGroup focuses) {
         ScreenRectangle viewport = StructurePreviewLayout.viewport(getHeight());
-        JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(display.machine(), viewport.left(), viewport.top(),
+        var panel = new StructurePreviewPanel(display.machine());
+        JeiStructurePreviewWidget preview = new JeiStructurePreviewWidget(panel, viewport.left(), viewport.top(),
                 viewport.width(), viewport.height(), ingredientManager);
         JeiPreviewLifecycle.registerActive(preview);
         builder.addWidget(preview);
         builder.addInputHandler(preview);
-        List<IRecipeSlotDrawable> slots = builder.getRecipeSlots().getSlots(RecipeIngredientRole.RENDER_ONLY);
-        var materials = new StructureMaterialWidget(slots, StructurePreviewLayout.materialOrigin(viewport));
-        builder.addSlottedWidget(materials, slots);
+        var layoutSlots = builder.getRecipeSlots();
+        var stageSlots = new StructureStageSlots(display, layoutSlots, guiHelper, panel::stageNumber);
+        if (panel.hasMultipleStages()) {
+            ((RecipeLayoutAccessor) builder).mmcr$setRecipeSlotsView(stageSlots);
+        }
+        var materials = new StructureMaterialWidget(stageSlots::materials, StructurePreviewLayout.materialOrigin(viewport));
+        builder.addSlottedWidget(materials, layoutSlots.getSlots(RecipeIngredientRole.RENDER_ONLY));
         builder.addInputHandler(materials);
     }
 
