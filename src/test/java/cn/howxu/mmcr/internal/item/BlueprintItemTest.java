@@ -5,6 +5,9 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
+import cn.howxu.mmcr.api.machine.MachineStructureDefinition.Declaration;
+import cn.howxu.mmcr.api.machine.MachineStructureRegistry;
 import cn.howxu.mmcr.api.machine.MachineStructureRequirements;
 import cn.howxu.mmcr.api.machine.MachineStructureStage;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -17,6 +20,7 @@ import cn.howxu.mmcr.api.machine.MachineRegistry;
 import cn.howxu.mmcr.registry.ModDataComponents;
 import cn.howxu.mmcr.registry.ModItems;
 import cn.howxu.mmcr.test.TestBootstrap;
+import com.mojang.serialization.Codec;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -29,11 +33,13 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.block.Blocks;
+import net.neoforged.neoforge.client.ClientTooltipFlag;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +58,7 @@ class BlueprintItemTest {
         TestBootstrap.bootstrap();
         bind(ModDataComponents.BLUEPRINT_MACHINE, DataComponentType.<ResourceLocation>builder()
                 .persistent(ResourceLocation.CODEC).networkSynchronized(ResourceLocation.STREAM_CODEC).build());
+        bind(ModDataComponents.BLUEPRINT_STAGE, DataComponentType.<Integer>builder().persistent(Codec.INT).build());
     }
 
     @Test
@@ -84,26 +91,37 @@ class BlueprintItemTest {
     }
 
     @Test
-    void requirementsUseLowestStructureStage() throws Exception {
+    void expandedTooltipFollowsTheStageSavedOnEachBlueprint() {
         BlockPos baseBlock = new BlockPos(1, 0, 0);
         BlockArray basePattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                 baseBlock, new BlockPredicate.OfBlock(Blocks.COPPER_BLOCK)), Map.of(),
                 Map.of(BlockPos.ZERO, 'C', baseBlock, 'B'));
-        MachineStructureStage baseStage = new MachineStructureStage(1, basePattern, PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
         BlockPos extensionBlock = new BlockPos(2, 0, 0);
         BlockArray extensionPattern = new BlockArray(Map.of(
                 BlockPos.ZERO, new BlockPredicate.OfBlock(Blocks.GOLD_BLOCK),
                 extensionBlock, new BlockPredicate.OfBlock(Blocks.DIAMOND_BLOCK)), Map.of(),
                 Map.of(BlockPos.ZERO, 'C', extensionBlock, 'E'));
-        MachineStructureStage extensionStage = new MachineStructureStage(2, extensionPattern, PortRequirementSpec.none(),
-                PortTierRequirementSpec.none(), List.of(), MachineStructureRequirements.EMPTY);
+        ResourceLocation id = MMCR.id("expandable_structure_stages");
+        var previous = MachineStructureRegistry.effectiveSnapshot();
+        try {
+            MachineRegistry.installStructures(Map.of(id, new MachineStructureDefinition(id,
+                    List.of(Declaration.full(basePattern), Declaration.extension(extensionPattern)))));
+            ItemStack base = new ItemStack(ModItems.BLUEPRINT.get());
+            base.set(ModDataComponents.BLUEPRINT_MACHINE.get(), id);
+            ItemStack upgraded = base.copy();
+            upgraded.set(ModDataComponents.BLUEPRINT_STAGE.get(), 2);
 
-        List<ItemStack> requirements = requirements(new TestMachine(List.of(baseStage, extensionStage)));
-
-        assertThat(requirements).singleElement().satisfies(stack ->
-                assertThat(stack.is(Blocks.COPPER_BLOCK.asItem())).isTrue());
+            String copper = "1 " + Blocks.COPPER_BLOCK.getName().getString();
+            String diamond = "1 " + Blocks.DIAMOND_BLOCK.getName().getString();
+            assertThat(tooltipMaterials(base)).containsExactly(copper);
+            assertThat(tooltipMaterials(upgraded)).containsExactlyInAnyOrder(copper, diamond);
+            assertThat(tooltipMaterials(base)).containsExactly(copper);
+            upgraded.set(ModDataComponents.BLUEPRINT_STAGE.get(), 99);
+            assertThat(tooltipMaterials(upgraded)).containsExactly(copper);
+        } finally {
+            MachineRegistry.installStructures(previous);
+        }
     }
 
     @Test
@@ -134,6 +152,13 @@ class BlueprintItemTest {
         assertThat(tooltip.getFirst().getStyle().getColor().getValue()).isEqualTo(ChatFormatting.AQUA.getColor());
     }
 
+    private static List<String> tooltipMaterials(ItemStack blueprint) {
+        List<Component> tooltip = new ArrayList<>();
+        ModItems.BLUEPRINT.get().appendHoverText(blueprint, Item.TooltipContext.EMPTY,
+                tooltip, new ClientTooltipFlag(false, false, true, false, false));
+        return tooltip.stream().skip(1).map(Component::getString).toList();
+    }
+
     private static MachineLevel level(ResourceLocation id, ResourceLocation type, int priority, net.minecraft.world.level.block.Block block) {
         return new MachineLevel(id, type, priority, new BlockPredicate.OfBlockState(block.defaultBlockState()),
                 ItemStack.EMPTY, ModifierDefinition.EMPTY);
@@ -154,9 +179,9 @@ class BlueprintItemTest {
 
     @SuppressWarnings("unchecked")
     private static List<ItemStack> requirements(Machine machine) throws Exception {
-        Method method = BlueprintItem.class.getDeclaredMethod("requirements", Machine.class);
+        Method method = BlueprintItem.class.getDeclaredMethod("requirements", Machine.class, int.class);
         method.setAccessible(true);
-        return (List<ItemStack>) method.invoke(null, machine);
+        return (List<ItemStack>) method.invoke(null, machine, 0);
     }
 
     private record TestMachine(List<MachineStructureStage> stages) implements Machine {

@@ -84,27 +84,31 @@ public class BlueprintItem extends Item {
         tooltip.add(Component.translatable(showRequirements
                 ? "tooltip.mmcr.blueprint.recipe_list"
                 : "tooltip.mmcr.blueprint.recipe_list_collapsed").withStyle(ChatFormatting.AQUA));
-        if (showRequirements) tooltip.addAll(requirementText(machine));
+        if (showRequirements) {
+            int stageNumber = stack.getOrDefault(ModDataComponents.BLUEPRINT_STAGE.get(), 0);
+            tooltip.addAll(requirementText(machine, stageNumber));
+        }
     }
 
-    private static List<Component> requirementText(Machine machine) {
+    private static List<Component> requirementText(Machine machine, int stageNumber) {
         ResourceLocation machineId = machine.registryName();
         CachedRequirements cached = REQUIREMENT_TEXT_CACHE.get(machineId);
-        if (cached != null && cached.machine() == machine) return cached.lines();
-        List<Component> lines = requirements(machine).stream()
+        if (cached != null && cached.machine() == machine && cached.stageNumber() == stageNumber) return cached.lines();
+        List<Component> lines = requirements(machine, stageNumber).stream()
                 .map(requirement -> (Component) Component.literal(ReadableNumber.formatExact(requirement.getCount()) + " ")
                         .append(requirement.getHoverName()))
                 .toList();
-        REQUIREMENT_TEXT_CACHE.put(machineId, new CachedRequirements(machine, lines));
+        REQUIREMENT_TEXT_CACHE.put(machineId, new CachedRequirements(machine, stageNumber, lines));
         return lines;
     }
 
-    private static List<ItemStack> requirements(Machine machine) {
-        return machine.structureStages().stream()
-                .min(Comparator.comparingInt(stage -> stage.number()))
-                .map(stage -> MultiblockAssemblyService.aggregateRequirements(
-                        MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, defaultLevelPattern(stage))))
-                .orElseGet(List::of);
+    private static List<ItemStack> requirements(Machine machine, int stageNumber) {
+        List<MachineStructureStage> stages = machine.structureStages();
+        if (stages.isEmpty()) return List.of();
+        MachineStructureStage stage = stages.stream().filter(candidate -> candidate.number() == stageNumber)
+                .findFirst().orElse(stages.getFirst());
+        return MultiblockAssemblyService.aggregateRequirements(
+                MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, defaultLevelPattern(stage)));
     }
 
     private static BlockArray defaultLevelPattern(MachineStructureStage stage) {
@@ -115,6 +119,6 @@ public class BlueprintItem extends Item {
         return new BlockArray(pattern, stage.pattern().tagsByPosition(), stage.pattern().symbolsByPosition());
     }
 
-    private record CachedRequirements(Machine machine, List<Component> lines) {
+    private record CachedRequirements(Machine machine, int stageNumber, List<Component> lines) {
     }
 }
