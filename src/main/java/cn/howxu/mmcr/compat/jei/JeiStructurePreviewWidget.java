@@ -32,13 +32,12 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     private static final float CONTROL_SCALE = 0.9F;
     private static final int CONTROL_SIZE = Math.round(15 * CONTROL_SCALE);
     private static final int CONTROL_STEP = CONTROL_SIZE + 4;
-    private static final int UI_X_OFFSET = -3;
-    private static final int CONTROL_Y_OFFSET = -13;
+    private static final int UI_X_OFFSET = StructurePreviewLayout.CONTROL_INSET;
+    private static final int CONTROL_Y_OFFSET = -StructurePreviewLayout.CONTROL_INSET - CONTROL_SIZE;
     private static final float LAYER_TEXT_SCALE = 0.9F;
-    private static final int LAYER_TEXT_Y_OFFSET = -24;
+    private static final int LAYER_TEXT_Y_OFFSET = CONTROL_Y_OFFSET - 11;
     private static final int CANDIDATE_SIZE = 16;
     private static final int CANDIDATE_STEP = 18;
-    private static final int LAYOUT_WIDTH = 168;
     private static final int PREVIEW_INPUT_TARGET = 1;
     private static final int CONTROL_INPUT_TARGET_BASE = 100;
     private static final int CANDIDATE_INPUT_TARGET_BASE = 200;
@@ -91,7 +90,7 @@ public final class JeiStructurePreviewWidget implements IRecipeWidget, IJeiInput
     }
 
     @Override public ScreenPosition getPosition() { return new ScreenPosition(x, y); }
-    @Override public ScreenRectangle getScreenRectangle() { return new ScreenRectangle(x, y, LAYOUT_WIDTH, height + 54); }
+    @Override public ScreenRectangle getScreenRectangle() { return new ScreenRectangle(x, y, width, height); }
     @Override public ScreenRectangle getArea() { return getScreenRectangle(); }
 
     @Override

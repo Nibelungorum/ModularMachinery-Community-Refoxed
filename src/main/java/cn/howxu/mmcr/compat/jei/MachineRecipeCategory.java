@@ -701,7 +701,7 @@ public final class MachineRecipeCategory implements IRecipeCategory<MachineRecip
                 ? "en_us" : minecraft.getLanguageManager().getSelected();
     }
 
-    private static void setItemOverlay(IRecipeSlotBuilder jeiSlot, String chanceText, String quantityText) {
+    static void setItemOverlay(IRecipeSlotBuilder jeiSlot, String chanceText, String quantityText) {
         if (!chanceText.isEmpty() || !quantityText.isEmpty()) {
             jeiSlot.setOverlay(new JeiSlotOverlayDrawable(chanceText, quantityText), ITEM_OVERLAY_X, ITEM_OVERLAY_Y);
         }

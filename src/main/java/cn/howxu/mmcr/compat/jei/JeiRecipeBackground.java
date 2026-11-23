@@ -4,6 +4,7 @@ import cn.howxu.mmcr.MMCR;
 import mezz.jei.api.gui.drawable.IScalableDrawable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -26,6 +27,17 @@ public final class JeiRecipeBackground implements IScalableDrawable {
         int scale = (int) Math.round(Minecraft.getInstance().getWindow().getGuiScale());
         scale = Math.max(1, Math.min(4, scale));
         ResourceLocation texture = MMCR.id("textures/gui/jei/" + textureDirectory + "/" + scale + "x.png");
-        guiGraphics.blit(texture, x, y, 0.0F, 0.0F, width, height, width, height);
+        ScreenRectangle area = textureArea(scale, x, y, width, height);
+        guiGraphics.blit(texture, area.left(), area.top(), 0.0F, 0.0F,
+                area.width(), area.height(), area.width(), area.height());
+    }
+
+    ScreenRectangle textureArea(int scale, int x, int y, int width, int height) {
+        if (this != PREVIEW) return new ScreenRectangle(x, y, width, height);
+        // JEI passes getRectWithBorder(); preview artwork is authored in recipe content coordinates.
+        int contentWidth = StructurePreviewLayout.WIDTH;
+        int contentHeight = StructurePreviewLayout.heightForScale(scale);
+        return new ScreenRectangle(x + (width - contentWidth) / 2, y + (height - contentHeight) / 2,
+                contentWidth, contentHeight);
     }
 }

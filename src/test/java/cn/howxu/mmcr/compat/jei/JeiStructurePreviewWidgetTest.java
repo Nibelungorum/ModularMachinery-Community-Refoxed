@@ -7,6 +7,7 @@ import net.minecraft.client.KeyMapping;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class JeiStructurePreviewWidgetTest {
 
     @ParameterizedTest
-    @CsvSource({"false, 69", "true, 87"})
+    @CsvSource({"false, 74", "true, 92"})
     void last_control_consumes_simulation_and_toggles_only_on_real_click(boolean multipleStages, int highlightX) {
         RecordingPreview preview = new RecordingPreview();
         preview.multipleStages = multipleStages;
@@ -37,17 +38,43 @@ class JeiStructurePreviewWidgetTest {
         assertThat(preview.releases).isZero();
         assertThat(preview.stageChanges).isZero();
 
-        assertThat(widget.handleInput(highlightX + 13, 100, input(true))).isTrue();
+        assertThat(widget.handleInput(highlightX + 13, 97, input(true))).isTrue();
         assertThat(preview.highlightsEnabled).isTrue();
-        assertThat(widget.handleInput(highlightX + 13, 100, input(false))).isTrue();
+        assertThat(widget.handleInput(highlightX + 13, 97, input(false))).isTrue();
         assertThat(preview.highlightsEnabled).isFalse();
         assertThat(preview.highlightToggles).isEqualTo(2);
         assertThat(preview.clicks).isZero();
 
-        // The gap after H must not become another control or begin a preview drag.
+        // Below the viewport neither a control nor the preview should claim the click.
+        assertThat(widget.handleInput(highlightX + 14, 100, input(true))).isFalse();
         assertThat(widget.handleInput(highlightX + 14, 100, input(false))).isFalse();
+        assertThat(widget.handleInput(highlightX + 18, 100, input(true))).isFalse();
         assertThat(widget.handleInput(highlightX + 18, 100, input(false))).isFalse();
         assertThat(preview.highlightToggles).isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4})
+    void leftControlsAndJeiSideButtonsShareTheBottomOfTheViewport(int scale) {
+        var viewport = StructurePreviewLayout.viewport(StructurePreviewLayout.heightForScale(scale));
+        var sideButton = StructurePreviewLayout.sideButtonOrigin(viewport);
+        var preview = new RecordingPreview();
+        var widget = JeiStructurePreviewWidget.forTesting(preview, viewport.left(), viewport.top(),
+                viewport.width(), viewport.height());
+        assertThat(widget.getArea()).isEqualTo(viewport);
+        assertThat(widget.getScreenRectangle()).isEqualTo(viewport);
+        assertThat(viewport.containsPoint(sideButton.x() + 12, sideButton.y() + 12)).isTrue();
+        assertThat(viewport.containsPoint(sideButton.x(), sideButton.y() - 15)).isTrue(); // stacked bookmark
+
+        int lastButtonPixelY = sideButton.y() + 12 - viewport.top();
+        assertThat(widget.handleInput(74, lastButtonPixelY, input(true))).isTrue();
+        assertThat(widget.handleInput(74, lastButtonPixelY, input(false))).isTrue();
+        assertThat(preview.highlightToggles).isOne();
+        int below = lastButtonPixelY + 1;
+        assertThat(widget.handleInput(74, below, input(true))).isTrue();
+        assertThat(widget.handleMouseDragged(75, below, InputConstants.Type.MOUSE.getOrCreate(0), 1, 0)).isTrue();
+        assertThat(widget.handleInput(75, below, input(false))).isTrue();
+        assertThat(preview.clicks).isOne(); // inside the viewport but below the controls
     }
 
     @Test
@@ -56,12 +83,12 @@ class JeiStructurePreviewWidgetTest {
         preview.multipleStages = true;
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 168, 100);
 
-        assertThat(widget.handleInput(70, 88, input(true))).isTrue();
+        assertThat(widget.handleInput(75, 88, input(true))).isTrue();
         assertThat(preview.stageChanges).isZero();
-        assertThat(widget.handleInput(70, 88, input(false))).isTrue();
+        assertThat(widget.handleInput(75, 88, input(false))).isTrue();
         assertThat(preview.stageChanges).isEqualTo(1);
-        assertThat(widget.handleInput(52, 88, input(true))).isTrue();
-        assertThat(widget.handleInput(52, 88, input(false))).isTrue();
+        assertThat(widget.handleInput(57, 88, input(true))).isTrue();
+        assertThat(widget.handleInput(57, 88, input(false))).isTrue();
         assertThat(preview.resets).isEqualTo(1);
         assertThat(preview.highlightToggles).isZero();
         assertThat(preview.clicks).isZero();
@@ -146,10 +173,10 @@ class JeiStructurePreviewWidgetTest {
         RecordingPreview preview = new RecordingPreview();
         JeiStructurePreviewWidget widget = JeiStructurePreviewWidget.forTesting(preview, 0, 0, 168, 100);
 
-        assertThat(widget.handleInput(70, 88, input(button, true))).isEqualTo(button == 0);
-        assertThat(widget.handleMouseDragged(70, 84,
-                InputConstants.Type.MOUSE.getOrCreate(button), 0, -4)).isFalse();
-        assertThat(widget.handleInput(70, 84, input(button, false))).isFalse();
+        assertThat(widget.handleInput(75, 88, input(button, true))).isEqualTo(button == 0);
+        assertThat(widget.handleMouseDragged(75, 83,
+                InputConstants.Type.MOUSE.getOrCreate(button), 0, -5)).isFalse();
+        assertThat(widget.handleInput(75, 83, input(button, false))).isFalse();
         assertThat(preview.clicks).isZero();
         assertThat(preview.drags).isZero();
         assertThat(preview.highlightToggles).isZero();
@@ -193,8 +220,8 @@ class JeiStructurePreviewWidgetTest {
         assertThat(preview.releases).isEqualTo(1);
         assertThat(preview.lastButton).isEqualTo(button);
 
-        assertThat(widget.handleInput(52, 88, input(button, true))).isFalse();
-        assertThat(widget.handleInput(52, 88, input(button, false))).isFalse();
+        assertThat(widget.handleInput(57, 88, input(button, true))).isFalse();
+        assertThat(widget.handleInput(57, 88, input(button, false))).isFalse();
         assertThat(preview.resets).isZero();
     }
 
@@ -207,8 +234,8 @@ class JeiStructurePreviewWidgetTest {
 
         assertThat(widget.handleInput(20, 20, input(button, true))).isTrue();
         assertThat(widget.handleMouseDragged(24, 25, mouse, 4, 5)).isTrue();
-        assertThat(widget.handleInput(52, 88, input(otherButton, true))).isFalse();
-        assertThat(widget.handleInput(52, 88, input(otherButton, false))).isFalse();
+        assertThat(widget.handleInput(57, 88, input(otherButton, true))).isFalse();
+        assertThat(widget.handleInput(57, 88, input(otherButton, false))).isFalse();
         assertThat(widget.handleInput(22, 22, input(otherButton, true))).isFalse();
         assertThat(widget.handleInput(22, 22, input(otherButton, false))).isFalse();
         assertThat(widget.handleMouseDragged(24, 25,
