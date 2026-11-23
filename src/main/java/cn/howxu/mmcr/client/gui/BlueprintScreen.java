@@ -50,7 +50,7 @@ public final class BlueprintScreen extends Screen {
     private static final int MATERIAL_SCROLLBAR_LEFT_OFFSET = 4;
     private static final int MATERIAL_SCROLLBAR_TOP_OFFSET = 4;
     private static final int MATERIAL_SCROLLBAR_BOTTOM_INSET = 4;
-    private static final int CANDIDATE_SCROLLBAR_LEFT_OFFSET = 4;
+    private static final int CANDIDATE_SCROLLBAR_LEFT_OFFSET = 5;
     private static final int CANDIDATE_SCROLLBAR_TOP_OFFSET = -8;
     private static final int CANDIDATE_SCROLLBAR_BOTTOM_INSET = 4;
     private static final int CANDIDATE_COLUMNS = 4;

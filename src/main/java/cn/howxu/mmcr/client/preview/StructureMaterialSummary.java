@@ -48,7 +48,10 @@ public final class StructureMaterialSummary {
         List<MachineStructureStage> stages = machine.structureStages();
         if (stages.isEmpty()) throw new IllegalArgumentException("machine structure stages empty");
 
-        MachineStructureStage stage = stages.getFirst();
+        return from(stages.getFirst());
+    }
+
+    public static StructureMaterialSummary from(MachineStructureStage stage) {
         List<BlockState> states = new ArrayList<>();
         stage.pattern().pattern().forEach((position, predicate) -> {
             ResourceLocation levelSlot = stage.levelSlots().get(position);

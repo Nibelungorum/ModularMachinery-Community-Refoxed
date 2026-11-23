@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,7 +51,7 @@ class StructureMaterialWidgetTest {
         assertThat(painted.width()).isEqualTo(texture.getWidth());
         assertThat(painted.height()).isEqualTo(texture.getHeight());
         var viewport = StructurePreviewLayout.viewport(content.height());
-        var widget = new StructureMaterialWidget(List.of(), StructurePreviewLayout.materialOrigin(viewport));
+        var widget = new StructureMaterialWidget(List::of, StructurePreviewLayout.materialOrigin(viewport));
         assertThat(new ScreenPosition(painted.left() + 3, painted.bottom() - 23))
                 .isEqualTo(new ScreenPosition(content.left() + widget.getPosition().x(), content.top() + widget.getPosition().y()));
         assertThat(JeiRecipeBackground.INSTANCE.textureArea(scale, x, y, width, height))
@@ -61,7 +62,7 @@ class StructureMaterialWidgetTest {
     void pagesOnLeftReleaseAndKeepsOnlyTheCurrentMaterialsUnderTheMouse() {
         var slots = slots(10);
         var origin = new ScreenPosition(3, 197);
-        var widget = new StructureMaterialWidget(slots, origin);
+        var widget = new StructureMaterialWidget(() -> slots, origin);
         assertThat(widget.getSlotUnderMouse(0, 0)).isEmpty();
         assertThat(widget.getSlotUnderMouse(0, 1)).contains(new RecipeSlotUnderMouse(slots.getFirst(), origin));
         assertThat(widget.getSlotUnderMouse(16, 1)).isEmpty();
@@ -81,7 +82,7 @@ class StructureMaterialWidgetTest {
         assertThat(widget.getSlotUnderMouse(0, 1)).contains(new RecipeSlotUnderMouse(slots.getLast(), origin));
         assertThat(widget.getSlotUnderMouse(17, 1)).isEmpty();
         assertThat(widget.getSlotUnderMouse(136, 1)).isEmpty();
-        var anotherPreview = new StructureMaterialWidget(slots, origin);
+        var anotherPreview = new StructureMaterialWidget(() -> slots, origin);
         assertThat(anotherPreview.getSlotUnderMouse(0, 1)).contains(new RecipeSlotUnderMouse(slots.getFirst(), origin));
         assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.PRESS))).isFalse();
         assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.RELEASE))).isFalse();
@@ -91,9 +92,33 @@ class StructureMaterialWidgetTest {
     }
 
     @Test
+    void changingStageResetsThePageAndDiscardsAnUnreleasedPageTurn() {
+        var first = slots(19);
+        var second = slots(10);
+        var selected = new AtomicReference<>(first);
+        var origin = new ScreenPosition(3, 197);
+        var widget = new StructureMaterialWidget(selected::get, origin);
+        assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.PRESS))).isTrue();
+        assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.RELEASE))).isTrue();
+        assertThat(widget.getSlotUnderMouse(0, 1)).contains(new RecipeSlotUnderMouse(first.get(9), origin));
+        assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.PRESS))).isTrue();
+
+        selected.set(second);
+        assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.RELEASE))).isFalse();
+        assertThat(widget.getSlotUnderMouse(0, 1)).contains(new RecipeSlotUnderMouse(second.getFirst(), origin));
+        assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.PRESS))).isTrue();
+        assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.RELEASE))).isTrue();
+        assertThat(widget.getSlotUnderMouse(0, 1)).contains(new RecipeSlotUnderMouse(second.getLast(), origin));
+        assertThat(widget.getSlotUnderMouse(17, 1)).isEmpty();
+
+        selected.set(first);
+        assertThat(widget.getSlotUnderMouse(0, 1)).contains(new RecipeSlotUnderMouse(first.getFirst(), origin));
+    }
+
+    @Test
     void gapsOtherButtonsAndReleasingOverTheOppositeArrowDoNotTurnThePage() {
         var slots = slots(19);
-        var widget = new StructureMaterialWidget(slots, new ScreenPosition(3, 197));
+        var widget = new StructureMaterialWidget(() -> slots, new ScreenPosition(3, 197));
         assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.PRESS))).isTrue();
         assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.RELEASE))).isTrue();
 
@@ -111,7 +136,8 @@ class StructureMaterialWidgetTest {
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 9})
     void neitherArrowAcceptsInputWithoutASecondPage(int count) {
-        var widget = new StructureMaterialWidget(slots(count), new ScreenPosition(3, 197));
+        var slots = slots(count);
+        var widget = new StructureMaterialWidget(() -> slots, new ScreenPosition(3, 197));
         assertThat(widget.handleInput(153, 1, mouse(0, InputPhase.PRESS))).isFalse();
         assertThat(widget.handleInput(153, 9, mouse(0, InputPhase.PRESS))).isFalse();
     }

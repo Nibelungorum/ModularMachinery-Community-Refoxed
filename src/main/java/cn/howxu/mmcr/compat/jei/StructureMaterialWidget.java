@@ -16,9 +16,10 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
- * Displays one manually selected page of the default-stage structure materials.
+ * Displays one manually selected page of the current preview stage's materials.
  *
  * @author howxu <dev@howxu.cn>
  */
@@ -32,14 +33,23 @@ public final class StructureMaterialWidget implements ISlottedRecipeWidget, IJei
     private static final ResourceLocation BUTTON = MMCR.id("textures/gui/jei/preview/material_list_button.png");
     private static final ResourceLocation ACTIVE_BUTTON = MMCR.id("textures/gui/jei/preview/material_list_button_enable.png");
 
-    private final List<IRecipeSlotDrawable> slots;
+    private final Supplier<List<IRecipeSlotDrawable>> stageSlots;
     private final ScreenRectangle area;
+    private List<IRecipeSlotDrawable> slots = List.of();
     private int firstSlot;
     private int pressedStep;
 
-    public StructureMaterialWidget(List<IRecipeSlotDrawable> slots, ScreenPosition origin) {
-        this.slots = List.copyOf(slots);
+    public StructureMaterialWidget(Supplier<List<IRecipeSlotDrawable>> stageSlots, ScreenPosition origin) {
+        this.stageSlots = stageSlots;
         this.area = new ScreenRectangle(origin, BUTTON_X + BUTTON_SIZE, NEXT_BUTTON_Y + BUTTON_SIZE);
+    }
+
+    private void syncStage() {
+        var current = stageSlots.get();
+        if (slots == current) return;
+        slots = current;
+        firstSlot = 0;
+        pressedStep = 0;
         for (int i = 0; i < slots.size(); i++) {
             slots.get(i).setPosition(i % SLOTS_PER_PAGE * SLOT_STEP, 1);
         }
@@ -55,6 +65,7 @@ public final class StructureMaterialWidget implements ISlottedRecipeWidget, IJei
 
     @Override
     public void drawWidget(GuiGraphics graphics, double mouseX, double mouseY) {
+        syncStage();
         for (int i = firstSlot; i < endSlot(); i++) {
             IRecipeSlotDrawable slot = slots.get(i);
             slot.draw(graphics, slot.isMouseOver(mouseX, mouseY));
@@ -76,6 +87,7 @@ public final class StructureMaterialWidget implements ISlottedRecipeWidget, IJei
 
     @Override
     public Optional<RecipeSlotUnderMouse> getSlotUnderMouse(double mouseX, double mouseY) {
+        syncStage();
         for (int i = firstSlot; i < endSlot(); i++) {
             IRecipeSlotDrawable slot = slots.get(i);
             if (slot.isMouseOver(mouseX, mouseY)) return Optional.of(new RecipeSlotUnderMouse(slot, getPosition()));
@@ -94,6 +106,7 @@ public final class StructureMaterialWidget implements ISlottedRecipeWidget, IJei
     public boolean handleInput(double mouseX, double mouseY, IJeiUserInput input) {
         if (input.getKey().getType() != InputConstants.Type.MOUSE
                 || input.getKey().getValue() != InputConstants.MOUSE_BUTTON_LEFT) return false;
+        syncStage();
         int step = pageStepAt(mouseX, mouseY);
         if (input.isSimulate()) {
             pressedStep = step;
