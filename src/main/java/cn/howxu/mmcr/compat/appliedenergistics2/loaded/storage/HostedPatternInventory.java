@@ -131,6 +131,8 @@ public final class HostedPatternInventory {
         else groups.put(group.definition, group.withMaterials(next));
     }
 
+    public void retireAll() { retire(groups.keySet()); }
+
     public void retire(Set<AEItemKey> removed) {
         for (Group group : groups()) {
             if (group.gate != Gate.REFUND && removed.contains(group.definition)) {

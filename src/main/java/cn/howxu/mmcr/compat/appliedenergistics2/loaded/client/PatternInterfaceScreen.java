@@ -15,7 +15,8 @@ import net.minecraft.world.entity.player.Inventory;
  */
 public final class PatternInterfaceScreen extends PatternProviderScreen<PatternInterfaceMenu> {
     private final InputIsolationButton isolationButton;
-    private int isolationGestureButton = -1;
+    private final PatternRefundButton refundButton;
+    private int toolbarGestureButton = -1;
     public PatternInterfaceScreen(PatternInterfaceMenu menu, Inventory inventory, Component title, ScreenStyle style) {
         super(menu, inventory, title, style);
         isolationButton = addToLeftToolbar(new InputIsolationButton(enabled -> {
@@ -23,24 +24,31 @@ public final class PatternInterfaceScreen extends PatternProviderScreen<PatternI
                     enabled ? InputIsolationMenuState.ENABLE : InputIsolationMenuState.DISABLE);
             setFocused(null);
         }));
+        refundButton = addToLeftToolbar(new PatternRefundButton(() -> {
+            if (minecraft.gameMode != null) minecraft.gameMode.handleInventoryButtonClick(menu.containerId, PatternInterfaceMenu.REFUND_HOSTED);
+            setFocused(null);
+        }));
+        refundButton.updateState(menu.hasHostedMaterials());
         isolationButton.updateState(menu.inputIsolation());
         setTextContent(TEXT_ID_DIALOG_TITLE, InterfaceScreenTitles.titleFor(menu.getTarget(), title));
     }
 
     @Override
     protected void init() {
-        isolationGestureButton = -1;
+        toolbarGestureButton = -1;
         super.init();
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        isolationGestureButton = -1;
-        boolean isolationClick = (button == 0 || button == 1)
+        toolbarGestureButton = -1;
+        boolean refund = refundButton.isMouseOver(mouseX, mouseY);
+        boolean toolbar = refund || (button == 0 || button == 1)
                 && isolationButton.isMouseOver(mouseX, mouseY);
-        boolean handled = super.mouseClicked(mouseX, mouseY, button);
-        if (isolationClick && handled) {
-            isolationGestureButton = button;
+        // AE normally translates a right click to a left click. Only primary clicks request refunds.
+        boolean handled = refund && button != 0 || super.mouseClicked(mouseX, mouseY, button);
+        if (toolbar && handled) {
+            toolbarGestureButton = button;
             setFocused(null);
             setDragging(false);
         }
@@ -49,14 +57,14 @@ public final class PatternInterfaceScreen extends PatternProviderScreen<PatternI
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (button == isolationGestureButton) return true;
+        if (button == toolbarGestureButton) return true;
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == isolationGestureButton) {
-            isolationGestureButton = -1;
+        if (button == toolbarGestureButton) {
+            toolbarGestureButton = -1;
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
@@ -65,6 +73,7 @@ public final class PatternInterfaceScreen extends PatternProviderScreen<PatternI
     @Override
     protected void updateBeforeRender() {
         super.updateBeforeRender();
+        refundButton.updateState(menu.hasHostedMaterials());
         isolationButton.updateState(menu.inputIsolation());
     }
 }

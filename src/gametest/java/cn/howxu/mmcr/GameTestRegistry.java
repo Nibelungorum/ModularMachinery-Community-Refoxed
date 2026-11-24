@@ -130,6 +130,7 @@ public final class GameTestRegistry {
             register(event, "hosted_pattern_reload_offline", 600, HostedPatternLifecycleGameTest::reloadPaidAndUnpaidOwners);
             register(event, "hosted_pattern_break_online", 600, h -> HostedPatternLifecycleGameTest.dismantle(h, true));
             register(event, "hosted_pattern_break_offline", 600, h -> HostedPatternLifecycleGameTest.dismantle(h, false));
+            register(event, "hosted_pattern_refund_paid", 600, HostedPatternLifecycleGameTest::refundUnpaidWhileRunning);
             register(event, "hosted_pattern_refund", 600, HostedPatternNativeCpuGameTest::retireAndRefund);
             register(event, "pattern_batch_exact_normal_runtime", 40,
                     PatternBatchRuntimeGameTest::exactNormalBatchRejectsPrefixAndFinishesOnce);
@@ -854,6 +855,8 @@ public final class GameTestRegistry {
                         helper -> new MirrorPatternInterfaceGameTest().nativeCpuUsesMirrorCapacityAndTail(helper));
                 register(event, "eaep_mirror_master_chunk_not_loaded", 200,
                         helper -> new MirrorPatternInterfaceGameTest().unavailableMasterChunkIsNeverForceLoaded(helper));
+                register(event, "eaep_mirror_group_refund", 600,
+                        helper -> new MirrorPatternInterfaceGameTest().refundBoundGroup(helper));
                 register(event, "eaep_pattern_upload_identity", 100,
                         helper -> new PatternUploadGameTest().interfacesKeepOwnUploadIdentity(helper));
             }

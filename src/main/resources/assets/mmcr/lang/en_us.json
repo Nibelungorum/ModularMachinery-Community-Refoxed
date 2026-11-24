@@ -1,4 +1,7 @@
 {
+  "mmcr.pattern_refund.action": "Return cached contents to the ME network",
+  "mmcr.pattern_refund.has_contents": "This interface has cached contents",
+  "mmcr.pattern_refund.empty": "This interface has no cached contents",
   "mmcr.input_isolation.button": "I",
   "mmcr.input_isolation.enabled": "Enabled",
   "mmcr.input_isolation.disabled": "Disabled",

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.Registries;
@@ -84,6 +85,7 @@ public final class MirrorPatternInterfaceLogic extends PatternProviderLogic {
 
         boolean changed = !Objects.equals(master, target);
         master = target;
+        publishRefundMaster();
         resetSyncState();
         if (source != null) changed |= syncFromMaster(source);
         if (changed) saveChanges();
@@ -94,11 +96,18 @@ public final class MirrorPatternInterfaceLogic extends PatternProviderLogic {
     public boolean unbindFromMaster() {
         if (!(host.getBlockEntity().getLevel() instanceof ServerLevel) || !hasMasterBinding()) return false;
         master = null;
+        publishRefundMaster();
         resetSyncState();
         clearMirroredPatterns();
         resetMirroredSettings();
         saveChanges();
         return true;
+    }
+
+    private void publishRefundMaster() {
+        if (host.getBlockEntity() instanceof PatternInterfaceBlockEntity mirror) {
+            mirror.setRefundMaster(master == null ? null : GlobalPos.of(master.dimension(), master.pos()));
+        }
     }
 
     public boolean hasMasterBinding() {
@@ -287,6 +296,7 @@ public final class MirrorPatternInterfaceLogic extends PatternProviderLogic {
                         ResourceLocation.parse(binding.getString("dimension"))), BlockPos.of(binding.getLong("pos")), null);
             }
         }
+        publishRefundMaster();
         if (master == null) {
             clearMirroredPatterns();
             resetMirroredSettings();
