@@ -4942,20 +4942,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public boolean patternOutputsMatch(MachineRecipe recipe, ControllerRuntimeSnapshot snapshot,
                                         List<MachineOutput> patternOutputs) {
-        List<MachineOutput> remaining = new ArrayList<>(runtime.craftingRuntime()
-                .runtimeMachineOutputs(recipe, snapshot));
-        for (MachineOutput expected : patternOutputs) {
-            int match = -1;
-            for (int index = 0; index < remaining.size(); index++) {
-                if (expected.matchesPatternOutput(remaining.get(index))) {
-                    match = index;
-                    break;
-                }
-            }
-            if (match < 0) return false;
-            remaining.remove(match);
-        }
-        return remaining.isEmpty();
+        return patternOutputsMatch(runtime.craftingRuntime().runtimeMachineOutputs(recipe, snapshot), patternOutputs);
+    }
+
+    public static boolean patternOutputsMatch(List<MachineOutput> actual, List<MachineOutput> hints) {
+        if (hints.isEmpty()) return actual.isEmpty();
+        return hints.stream().allMatch(hint -> actual.stream().anyMatch(hint::matchesPatternResource));
     }
 
     private void clearCandidateCache() {

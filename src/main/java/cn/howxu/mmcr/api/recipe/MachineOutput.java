@@ -66,7 +66,11 @@ public interface MachineOutput {
     default Object resourceIdentity() { return null; }
 
     default boolean matchesPatternOutput(MachineOutput other) {
-        if (other == null || other.outputType() != outputType() || scaledAmount(this) != scaledAmount(other)) return false;
+        return matchesPatternResource(other) && scaledAmount(this) == scaledAmount(other);
+    }
+
+    default boolean matchesPatternResource(MachineOutput other) {
+        if (other == null || other.outputType() != outputType()) return false;
         Object identity = resourceIdentity();
         return identity != null && identity.equals(other.resourceIdentity());
     }
