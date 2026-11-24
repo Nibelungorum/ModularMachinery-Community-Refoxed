@@ -89,6 +89,7 @@ public final class GameTestRegistry {
         register(event, "input_isolation_paid_ordinary_reload", 20, InputIsolationGameTest::paidOrdinaryScopeSurvivesReload);
         register(event, "input_isolation_paid_isolated_reload", 20, InputIsolationGameTest::paidIsolatedScopeSurvivesReload);
         if (ModList.get().isLoaded("ae2")) {
+            register(event, "hosted_pattern_inventory", 20, HostedPatternInventoryGameTest::atomicGatePaymentAndReload);
             register(event, "pattern_batch_definition_roundtrip", 20,
                     PatternBatchCodecGameTest::batchDefinitionRoundTripsDistinctMultipliers);
             register(event, "pattern_batch_invalid_definition", 20,
