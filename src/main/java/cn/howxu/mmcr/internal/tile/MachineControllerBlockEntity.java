@@ -403,11 +403,56 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 effectiveFactoryThreadLimit());
     }
 
+    /** One controller's current offer, never a reservation or a promise to another controller.
+     * @author HowXu {@literal <dev@howxu.cn>}
+     */
+    public record PatternProbe(Identifier recipeId, long laneLimit, long payable) {}
+
+    public @Nullable PatternProbe probeHostedPattern(BlockPos port, List<MachineOutput> hints,
+            @Nullable List<MachineCapability> inputs, Set<Identifier> excluded) {
+        ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
+        if (isRemoved() || redstonePaused || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
+                || !snapshot.linkedPortPositions().contains(port)) return null;
+        boolean factory = hasFactoryController();
+        if (!factory && (runtime.craftingRuntime().active() || runtime.craftingRuntime().pendingPatternRecipeId() != null
+                || sharedStartPending || normalRecipeThread.isStartPending() || normalRecipeThread.hasPendingAsyncSearch())) return null;
+        if (factory) {
+            factoryScheduler().setThreadLimit(effectiveFactoryThreadLimit());
+            runtime.factoryRuntime().syncCoreLanesIfNeeded(this, snapshot.structure().machine(), recipesForMachine());
+        }
+        for (MachineRecipe recipe : recipesForMachine()) {
+            if (excluded.contains(recipe.id()) || !snapshot.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())
+                    || factory && !runtime.factoryRuntime().hasHostedPatternLane(recipe)) continue;
+            EffectiveRecipe effective = effectivePatternRecipe(recipe);
+            if (effective == null || !patternOutputsMatch(effective.outputs(), hints)) continue;
+            long payable = inputs == null ? 0 : runtime.craftingRuntime().probeHostedPattern(effective, inputs, port);
+            if (inputs == null || payable > 0) return new PatternProbe(recipe.id(), effective.parallelismLimit(), payable);
+        }
+        return null;
+    }
+
+    public PatternStartReservation reserveHostedPatternStart(BlockPos sourcePort, Identifier recipeId,
+            List<MachineOutput> hints, long parallelism, List<MachineCapability> inputs) {
+        var reservation = reserveSelectedPatternStart(sourcePort, recipeId, hints, parallelism, inputs, false);
+        if (reservation.status() == PatternStartReservation.Status.RESERVED
+                && !patternOutputsMatch(reservation.effectiveOutputs(), hints)) {
+            reservation.close();
+            return PatternStartReservation.unavailable();
+        }
+        return reservation;
+    }
+
     /** Exact external starts share runtime planning, but never split across lanes or reduce the request. */
     public PatternStartReservation reserveExactPatternStart(BlockPos sourcePort, Identifier recipeId,
                                                              List<MachineOutput> unitRecipeOutputs,
                                                              long recipeParallelism,
                                                              List<MachineCapability> requestCapabilities) {
+        return reserveSelectedPatternStart(sourcePort, recipeId, unitRecipeOutputs, recipeParallelism, requestCapabilities, true);
+    }
+
+    private PatternStartReservation reserveSelectedPatternStart(BlockPos sourcePort, Identifier recipeId,
+            List<MachineOutput> unitRecipeOutputs, long recipeParallelism, List<MachineCapability> requestCapabilities,
+            boolean exact) {
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
         if (sourcePort == null || recipeId == null || unitRecipeOutputs == null || requestCapabilities == null
                 || recipeParallelism <= 0L || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
@@ -430,12 +475,13 @@ public class MachineControllerBlockEntity extends BlockEntity {
         if (recipe == null || !supportsPatternRecipe(recipe)) return PatternStartReservation.unavailable();
         EffectiveRecipe effective = effectivePatternRecipe(recipe);
         if (effective == null || recipeParallelism > effective.parallelismLimit()
-                || !CraftingRuntime.samePromisedOutputs(unitRecipeOutputs, effective.outputs(), recipeParallelism)) {
+                || !(exact ? CraftingRuntime.samePromisedOutputs(unitRecipeOutputs, effective.outputs(), recipeParallelism)
+                : patternOutputsMatch(effective.outputs(), unitRecipeOutputs))) {
             return PatternStartReservation.unavailable();
         }
         if (hasFactoryController()) {
-            FactoryRuntime.PatternLane lane = factory.reserveExactPatternStart(recipe, recipeParallelism,
-                    requestCapabilities, sourcePort);
+            FactoryRuntime.PatternLane lane = factory.reserveSelectedPatternStart(recipe, recipeParallelism,
+                    requestCapabilities, sourcePort, exact);
             if (lane == null) return PatternStartReservation.unavailable();
             return PatternStartReservation.reserved(recipe, lane.laneId(), lane.runtime(), lane.preparedStart(),
                     () -> factory.releasePatternStart(lane)).withRecipeSelection(selection)
@@ -446,8 +492,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return PatternStartReservation.unavailable();
         }
         CraftingRuntime crafting = runtime.craftingRuntime();
-        CraftingRuntime.PreparedStart prepared = crafting.prepareExactPatternStart(recipe, recipeParallelism,
-                requestCapabilities, sourcePort);
+        CraftingRuntime.PreparedStart prepared = exact
+                ? crafting.prepareExactPatternStart(recipe, recipeParallelism, requestCapabilities, sourcePort)
+                : crafting.prepareHostedPatternStart(recipe, recipeParallelism, requestCapabilities, sourcePort);
         if (prepared == null) return PatternStartReservation.unavailable();
         if (!crafting.reservePatternStart()) {
             crafting.releasePatternStart(prepared);

@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.runtime;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import net.neoforged.neoforge.transfer.transaction.TransactionContext;
@@ -98,6 +99,10 @@ public final class PatternStartReservation implements AutoCloseable {
     /** The actual post-callback requirements used by this reservation. */
     public List<MachineRequirement> effectiveRequirements() {
         return preparedStart == null ? List.of() : MachineRequirement.copyList(preparedStart.effective().requirements());
+    }
+
+    public List<MachineOutput> effectiveOutputs() {
+        return preparedStart == null ? List.of() : MachineOutput.copyList(preparedStart.effective().outputs());
     }
 
     public boolean rolledBack() {

@@ -28,6 +28,7 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
     private final PatternRequestState state;
     private final List<AEKey> keys;
     private final long[] amounts;
+    private final long[] initialAmounts;
     private boolean active = true;
 
     public PatternRequestResourceStorage(KeyCounter[] inputHolders, AE2KeyAdapter<R> adapter) {
@@ -49,6 +50,15 @@ public final class PatternRequestResourceStorage<R> extends SnapshotJournal<Patt
         keys = List.copyOf(selectedKeys);
         amounts = new long[selectedAmounts.size()];
         for (int slot = 0; slot < amounts.length; slot++) amounts[slot] = selectedAmounts.get(slot);
+        initialAmounts = amounts.clone();
+    }
+
+    /** A hosted start debits actual extractions only; the remainder stays with its original owner. */
+    public void collectConsumed(KeyCounter target) {
+        for (int i = 0; i < amounts.length; i++) {
+            long debit = initialAmounts[i] - amounts[i];
+            if (debit > 0) target.add(keys.get(i), debit);
+        }
     }
 
     @Override

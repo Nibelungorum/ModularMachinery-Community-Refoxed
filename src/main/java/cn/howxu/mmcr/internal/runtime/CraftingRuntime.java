@@ -689,6 +689,32 @@ public final class CraftingRuntime {
         return preparePatternStart(recipe, requestedParallelism, requestCapabilities, null);
     }
 
+    /** Probe live, source-scoped inputs and output space without invoking hooks, reserving a lane or paying. */
+    public long probeHostedPattern(EffectiveRecipe recipe, List<MachineCapability> inputs, BlockPos source) {
+        var runtime = controller.currentRuntimeSnapshot();
+        if (AsyncRequirementPlanner.capturedRequirementFailure(runtime, recipe.requirements()) != null) return 0;
+        var context = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime))
+                .forPatternStart(inputs, source);
+        var planned = context.planStartRequirements(startRequirements(recipe.requirements(), prefetchFacets(inputs)),
+                recipe.parallelismLimit(), recipe.source().allowPartialOutputs());
+        if (!planned.successful() || planned.plan() == null) return 0;
+        return planned.plan().parallelism();
+    }
+
+    /** A hosted start uses the payable prefix but keeps the source and catalyst fences of an external start. */
+    public @Nullable PreparedStart prepareHostedPatternStart(MachineRecipe recipe, long parallelism,
+                                                             List<MachineCapability> inputs, BlockPos source) {
+        PreparedStart prepared = preparePatternStart(recipe, parallelism, inputs, source);
+        if (prepared != null) {
+            if (!exactPatternOutputsFit(prepared, prepared.plan().parallelism())) {
+                releasePatternStart(prepared);
+                return null;
+            }
+            pendingExactPatternStart = true;
+        }
+        return prepared;
+    }
+
     /** Plans the complete request on this runtime, never a prefix or a second lane. */
     public @Nullable PreparedStart prepareExactPatternStart(MachineRecipe recipe, long recipeParallelism,
                                                             List<MachineCapability> requestCapabilities,

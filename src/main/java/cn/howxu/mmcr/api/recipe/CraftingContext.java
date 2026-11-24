@@ -81,8 +81,9 @@ public final class CraftingContext {
 
     /** Binds transient pattern material views exclusively to the actual requesting input port. */
     public CraftingContext forPatternStart(List<MachineCapability> requestCapabilities, BlockPos requestSource) {
-        List<MachineCapability> combined = new ArrayList<>(capabilities);
-        combined.addAll(requestCapabilities);
+        // Pay from entrusted inputs before equivalent ordinary bus inputs.
+        List<MachineCapability> combined = new ArrayList<>(requestCapabilities);
+        combined.addAll(capabilities);
         if (inputRouting == null) return new CraftingContext(new CapabilitySnapshot(combined,
                 snapshot.additionalFacets()), modifiers, inputScope);
         InputRoutingFacet.Port host = inputRouting.inputPorts().stream()
@@ -92,11 +93,12 @@ public final class CraftingContext {
             if (source.capabilityIndex() >= capabilities.size()) continue;
             MachineCapability capability = capabilities.get(source.capabilityIndex());
             // Physical inputs may supplement the request within its scope; return-only views may not.
-            if (!capability.scopedMaterialEndpoint()
-                    || capability.view().directions().supports(IOType.INPUT)) sources.add(source);
+            if (!capability.scopedMaterialEndpoint() || capability.view().directions().supports(IOType.INPUT)) {
+                sources.add(new InputRoutingFacet.Source(requestCapabilities.size() + source.capabilityIndex(), source.position()));
+            }
         }
         if (host != null) {
-            for (int index = capabilities.size(); index < combined.size(); index++) {
+            for (int index = 0; index < requestCapabilities.size(); index++) {
                 if (combined.get(index).view().directions().supports(IOType.INPUT)) {
                     sources.add(new InputRoutingFacet.Source(index, requestSource));
                 }
