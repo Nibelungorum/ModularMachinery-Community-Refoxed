@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.command;
 
 import cn.howxu.mmcr.MMCR;
+import cn.howxu.mmcr.config.ServerConfig;
 import cn.howxu.mmcr.internal.export.MultiblockExportService;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorItem;
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
@@ -21,6 +22,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -33,8 +35,6 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class ExportCommand {
-
-    private static final int MAX_EXPORT_VOLUME = 3_276_800;
 
     private enum ExportFormat {
         JAVA,
@@ -97,8 +97,9 @@ public final class ExportCommand {
         }
 
         long volume = volume(min, max);
-        if (exceedsExportVolume(volume)) {
-            failure.accept(Component.translatable("command.mmcr.export.volume_exceeded", volume, MAX_EXPORT_VOLUME));
+        Component volumeError = exportVolumeError(volume);
+        if (volumeError != null) {
+            failure.accept(volumeError);
             return 0;
         }
 
@@ -169,8 +170,10 @@ public final class ExportCommand {
                 && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
     }
 
-    static boolean exceedsExportVolume(long volume) {
-        return volume > MAX_EXPORT_VOLUME;
+    @Nullable
+    static Component exportVolumeError(long volume) {
+        int maxVolume = ServerConfig.exportMaxVolume();
+        return volume > maxVolume ? Component.translatable("command.mmcr.export.volume_exceeded", volume, maxVolume) : null;
     }
 
     static long volume(BlockPos min, BlockPos max) {
