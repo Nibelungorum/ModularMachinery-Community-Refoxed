@@ -100,6 +100,9 @@ public final class GameTestRegistry {
             register(event, "hosted_pattern_reload_offline", 600, HostedPatternLifecycleGameTest::reloadPaidAndUnpaidOwners);
             register(event, "hosted_pattern_break_online", 600, h -> HostedPatternLifecycleGameTest.dismantle(h, true));
             register(event, "hosted_pattern_break_offline", 600, h -> HostedPatternLifecycleGameTest.dismantle(h, false));
+            register(event, "native_cpu_bulk_dispatch", 600, NativeCpuBulkDispatchGameTest::oneDispatch);
+            register(event, "native_cpu_bulk_limited_power", 600, NativeCpuBulkDispatchGameTest::limitedPowerAndCancel);
+            register(event, "native_cpu_bulk_fallback", 600, NativeCpuBulkDispatchGameTest::rejectedBatchFallsBack);
             register(event, "hosted_pattern_bulk_quote", 600, HostedPatternBulkQuoteGameTest::quoteAndDeliver);
             register(event, "hosted_pattern_bulk_open_refund", 600, HostedPatternBulkQuoteGameTest::openEscrowAndRefund);
             register(event, "hosted_pattern_bulk_fluid", 600, HostedPatternBulkQuoteGameTest::compressedFluidQuote);
