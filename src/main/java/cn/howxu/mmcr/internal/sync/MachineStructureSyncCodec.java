@@ -27,6 +27,8 @@ import net.minecraft.core.registries.Registries;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,35 +114,95 @@ public final class MachineStructureSyncCodec {
             BlockPatternLimit blockPatternLimit) {
         int blockCount = value.pattern().size();
         blockPatternLimit.add(blockCount);
-        buf.writeVarInt(value.pattern().size());
-        for (var entry : value.pattern().entrySet()) {
-            buf.writeBlockPos(entry.getKey());
-            writeBlockPredicate(buf, entry.getValue());
-        }
+        buf.writeVarInt(blockCount);
+
+        // Predicates are sent as a palette plus one entry per straight run. The palette preserves
+        // predicate identity, which the matcher's per-instance memo depends on.
+        List<BlockPredicate> palette = new ArrayList<>();
+        Map<BlockPredicate, Integer> paletteIndex = new IdentityHashMap<>();
+        int[] runCount = {0};
+        value.forRuns((start, step, length, predicate) -> {
+            runCount[0]++;
+            if (!paletteIndex.containsKey(predicate)) {
+                paletteIndex.put(predicate, palette.size());
+                palette.add(predicate);
+            }
+        });
+        buf.writeVarInt(runCount[0]);
+        checkSize(palette.size(), maxCollectionEntries(), "predicate palette");
+        buf.writeVarInt(palette.size());
+        for (BlockPredicate predicate : palette) writeBlockPredicate(buf, predicate);
+        value.forRuns((start, step, length, predicate) -> {
+            buf.writeBlockPos(start);
+            buf.writeEnum(step);
+            buf.writeVarInt(length);
+            buf.writeVarInt(paletteIndex.get(predicate));
+        });
+
         checkSize(value.tagsByPosition().size(), maxCollectionEntries(), "block tag position");
         buf.writeVarInt(value.tagsByPosition().size());
         for (var entry : value.tagsByPosition().entrySet()) {
             buf.writeBlockPos(entry.getKey());
             writeStringList(buf, entry.getValue());
         }
-        int symbolCount = value.symbolsByPosition().size();
-        if (symbolCount > blockPatternLimit.maxBlocks) {
-            logExceededBlockLimit(machineId, "block symbol position", symbolCount, blockPatternLimit.maxBlocks);
-            throw new IllegalArgumentException("Invalid block symbol position count: " + symbolCount);
+
+        // Symbols use the same run+palette shape: one character per run instead of per cell.
+        List<Character> symbolPalette = new ArrayList<>();
+        Map<Character, Integer> symbolIndex = new HashMap<>();
+        int[] symbolRunCount = {0};
+        value.forSymbolRuns((start, step, length, symbol) -> {
+            symbolRunCount[0]++;
+            if (!symbolIndex.containsKey(symbol)) {
+                symbolIndex.put(symbol, symbolPalette.size());
+                symbolPalette.add(symbol);
+            }
+        });
+        if (symbolRunCount[0] > blockPatternLimit.maxBlocks) {
+            logExceededBlockLimit(machineId, "block symbol run", symbolRunCount[0], blockPatternLimit.maxBlocks);
+            throw new IllegalArgumentException("Invalid block symbol run count: " + symbolRunCount[0]);
         }
-        buf.writeVarInt(value.symbolsByPosition().size());
-        for (var entry : value.symbolsByPosition().entrySet()) {
-            buf.writeBlockPos(entry.getKey());
-            buf.writeChar(entry.getValue());
-        }
+        buf.writeVarInt(symbolRunCount[0]);
+        checkSize(symbolPalette.size(), Character.MAX_VALUE, "symbol palette");
+        buf.writeVarInt(symbolPalette.size());
+        for (char symbol : symbolPalette) buf.writeChar(symbol);
+        value.forSymbolRuns((start, step, length, symbol) -> {
+            buf.writeBlockPos(start);
+            buf.writeEnum(step);
+            buf.writeVarInt(length);
+            buf.writeVarInt(symbolIndex.get(symbol));
+        });
     }
 
     private static BlockArray readBlockArray(RegistryFriendlyByteBuf buf, BlockPatternLimit blockPatternLimit) {
         int patternCount = buf.readVarInt();
         blockPatternLimit.add(patternCount);
         var input = new BlockArray.PositionInput();
-        for (int i = 0; i < patternCount; i++) {
-            input.predicate(buf.readBlockPos(), readBlockPredicate(buf));
+
+        int runCount = buf.readVarInt();
+        checkSize(runCount, blockPatternLimit.maxBlocks, "block run");
+        int paletteSize = buf.readVarInt();
+        checkSize(paletteSize, maxCollectionEntries(), "predicate palette");
+        BlockPredicate[] palette = new BlockPredicate[paletteSize];
+        for (int i = 0; i < paletteSize; i++) {
+            palette[i] = readBlockPredicate(buf);
+        }
+        int cells = 0;
+        for (int i = 0; i < runCount; i++) {
+            BlockPos start = buf.readBlockPos();
+            Direction step = buf.readEnum(Direction.class);
+            int length = buf.readVarInt();
+            int index = buf.readVarInt();
+            if (length <= 0 || index < 0 || index >= paletteSize) {
+                throw new IllegalArgumentException("Invalid run entry at " + i);
+            }
+            cells = Math.addExact(cells, length);
+            if (cells > blockPatternLimit.maxBlocks) {
+                throw new IllegalArgumentException("Block pattern exceeds its declared size: " + cells);
+            }
+            input.predicateRun(start, step, length, palette[index]);
+        }
+        if (cells != patternCount) {
+            throw new IllegalArgumentException("Block pattern run size mismatch: expected " + patternCount + " got " + cells);
         }
 
         int tagCount = buf.readVarInt();
@@ -149,10 +211,24 @@ public final class MachineStructureSyncCodec {
         for (int i = 0; i < tagCount; i++) {
             tags.put(buf.readBlockPos(), readStringList(buf, maxCollectionEntries(), "block tag"));
         }
-        int symbolCount = buf.readVarInt();
-        checkSize(symbolCount, blockPatternLimit.maxBlocks, "block symbol position");
-        for (int i = 0; i < symbolCount; i++) {
-            input.symbol(buf.readBlockPos(), buf.readChar());
+
+        int symbolRunCount = buf.readVarInt();
+        checkSize(symbolRunCount, blockPatternLimit.maxBlocks, "block symbol run");
+        int symbolPaletteSize = buf.readVarInt();
+        checkSize(symbolPaletteSize, Character.MAX_VALUE, "symbol palette");
+        char[] symbolPalette = new char[symbolPaletteSize];
+        for (int i = 0; i < symbolPaletteSize; i++) {
+            symbolPalette[i] = buf.readChar();
+        }
+        for (int i = 0; i < symbolRunCount; i++) {
+            BlockPos start = buf.readBlockPos();
+            Direction step = buf.readEnum(Direction.class);
+            int length = buf.readVarInt();
+            int index = buf.readVarInt();
+            if (length <= 0 || index < 0 || index >= symbolPaletteSize) {
+                throw new IllegalArgumentException("Invalid symbol run entry at " + i);
+            }
+            input.symbolRun(start, step, length, symbolPalette[index]);
         }
         return input.build(tags);
     }
@@ -168,7 +244,14 @@ public final class MachineStructureSyncCodec {
             }
             case BlockPredicate.DeferredBlock deferredBlock -> {
                 buf.writeEnum(PredicateKind.BLOCK);
-                ResourceLocation.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(deferredBlock.supplier().get()));
+                Block resolved = deferredBlock.supplier().get();
+                if (resolved == null) {
+                    // A structure referring to a block from a mod that is not installed must fail with a
+                    // readable reason; an NPE here used to abort the whole join.
+                    throw new IllegalArgumentException(
+                            "structure predicate refers to a block that does not exist (mod not installed?)");
+                }
+                ResourceLocation.STREAM_CODEC.encode(buf, BuiltInRegistries.BLOCK.getKey(resolved));
             }
             case BlockPredicate.OfBlockState ofState -> {
                 buf.writeEnum(PredicateKind.BLOCK_STATE);

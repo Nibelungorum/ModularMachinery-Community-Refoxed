@@ -204,18 +204,27 @@ public final class MachinePatternCompiler {
 
     private static boolean couldBeComponent(BlockPredicate predicate) {
         return switch (predicate) {
-            case BlockPredicate.OfBlock of -> of.block() instanceof MachinePort
-                    && !isNetworkInterfaceBlock(of.block())
-                    || of.block() instanceof ParallelControllerBlock
-                    || of.block() instanceof FactorySchedulerBlock
-                    || of.block() instanceof DataStorageBlock
-                    || of.block() instanceof UpgradeBusBlock;
+            case BlockPredicate.OfBlock of -> isComponentBlock(of.block());
             case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
-            case BlockPredicate.DeferredBlock deferred -> !couldBeNetworkInterface(deferred);
+            // Resolve the deferred block instead of assuming every deferred block is a component.
+            // Assuming otherwise made every position of a deferred-block structure a candidate, which
+            // both quadrupled the per-facing candidate lists and scanned them on every formation check.
+            case BlockPredicate.DeferredBlock deferred -> {
+                Block block = deferred.supplier().get();
+                yield isComponentBlock(block);
+            }
             case BlockPredicate.AnyOf anyOf -> anyOf.children().stream()
                     .anyMatch(MachinePatternCompiler::couldBeComponent);
             default -> true;
         };
+    }
+
+    private static boolean isComponentBlock(Block block) {
+        return block instanceof MachinePort && !isNetworkInterfaceBlock(block)
+                || block instanceof ParallelControllerBlock
+                || block instanceof FactorySchedulerBlock
+                || block instanceof DataStorageBlock
+                || block instanceof UpgradeBusBlock;
     }
 
     private static boolean couldBeCoupler(BlockPredicate predicate) {
@@ -231,7 +240,9 @@ public final class MachinePatternCompiler {
         return switch (predicate) {
             case BlockPredicate.OfBlock of -> of.block() instanceof MachinePort && !isNetworkInterfaceBlock(of.block());
             case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
-            case BlockPredicate.DeferredBlock deferred -> !couldBeNetworkInterface(deferred);
+            // Same reasoning as couldBeComponent: test the resolved block, not the predicate kind.
+            case BlockPredicate.DeferredBlock deferred -> deferred.supplier().get() instanceof MachinePort
+                    && !isNetworkInterfaceBlock(deferred.supplier().get());
             case BlockPredicate.AnyOf anyOf -> !couldBeNetworkInterface(anyOf);
             default -> true;
         };

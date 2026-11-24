@@ -38,6 +38,7 @@ import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
+import cn.howxu.mmcr.internal.network.PktStructureChunkPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
 import cn.howxu.mmcr.internal.network.PktTerminalStatePayload;
@@ -200,7 +201,7 @@ class ModEventRegistrationTest {
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
-                  PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
+                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
                    PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
                    PacketFlow.SERVERBOUND,
@@ -214,6 +215,7 @@ class ModEventRegistrationTest {
                 PktControllerScreenTextPayload.TYPE,
                 PktMachineAppearancePayload.TYPE,
                 PktRuntimeContentPayload.TYPE,
+                PktStructureChunkPayload.TYPE,
                 PktPortStorageSyncPayload.TYPE,
                  PktMultiblockMismatchHighlightPayload.TYPE,
                  PktMultiblockPreviewPayload.TYPE,

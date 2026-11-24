@@ -34,6 +34,7 @@ import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -149,35 +150,47 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
-    void legacy_air_run_bytes_keep_independent_symbol_order_and_logical_limits() {
+    void run_encoded_bytes_keep_independent_symbol_order_and_logical_limits() {
         var id = MMCR.id("wire_air");
         var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        var encoded = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         try {
             ResourceLocation.STREAM_CODEC.encode(wire, id);
             wire.writeVarInt(1); // declarations
             wire.writeEnum(MachineStructureDefinition.Declaration.Kind.FULL);
+            wire.writeVarInt(20); // logical cell count
+            wire.writeVarInt(1);  // predicate runs: one straight air run
+            wire.writeVarInt(1);  // predicate palette size
+            wire.writeVarInt(1);  // PredicateKind.AIR
+            wire.writeBlockPos(new BlockPos(-10, 0, 0));
+            wire.writeEnum(Direction.EAST);
             wire.writeVarInt(20);
-            for (int x = -10; x < 10; x++) {
-                wire.writeBlockPos(new BlockPos(x, 0, 0));
-                wire.writeVarInt(1); // original PredicateKind.AIR
-            }
+            wire.writeVarInt(0);
             wire.writeVarInt(0); // tag positions
-            wire.writeVarInt(20);
-            for (int x = 9; x >= -10; x--) {
-                wire.writeBlockPos(new BlockPos(x, 0, 0));
-                wire.writeChar(x < 0 ? ' ' : '空');
-            }
+            // Symbols arrive in their own palette/run stream, in reverse order, independent of predicates.
+            wire.writeVarInt(2); // symbol runs
+            wire.writeVarInt(2); // symbol palette size
+            wire.writeChar('空');
+            wire.writeChar(' ');
+            wire.writeBlockPos(new BlockPos(9, 0, 0));
+            wire.writeEnum(Direction.EAST);
+            wire.writeVarInt(10);
+            wire.writeVarInt(0);
+            wire.writeBlockPos(new BlockPos(-1, 0, 0));
+            wire.writeEnum(Direction.EAST);
+            wire.writeVarInt(10);
+            wire.writeVarInt(1);
             for (int i = 0; i < 5; i++) wire.writeVarInt(0); // ports, tiers, dynamics, modifiers, levels
             wire.writeBoolean(false);
             var decoded = MachineStructureSyncCodec.decode(wire, 20);
-            assertThat(decoded.pattern().get(BlockPos.ZERO)).isInstanceOf(BlockPredicate.Air.class);
-            MachineStructureSyncCodec.encode(encoded, decoded, 20);
+            BlockArray decodedPattern = decoded.declarations().getFirst().pattern();
+            assertThat(decodedPattern.pattern().get(BlockPos.ZERO)).isInstanceOf(BlockPredicate.Air.class);
+            assertThat(decodedPattern.pattern().size()).isEqualTo(20);
+            assertThat(decodedPattern.symbolsByPosition()).containsEntry(new BlockPos(9, 0, 0), '空')
+                    .containsEntry(new BlockPos(-1, 0, 0), ' ');
             wire.readerIndex(0);
-            assertThat(encoded.equals(wire)).isTrue();
-            assertThatThrownBy(() -> MachineStructureSyncCodec.decode(wire, 19)).hasMessageContaining("block pattern count");
+            assertThatThrownBy(() -> MachineStructureSyncCodec.decode(wire, 19))
+                    .hasMessageContaining("block pattern count");
         } finally {
-            encoded.release();
             wire.release();
         }
     }
@@ -300,7 +313,7 @@ class RuntimeContentSnapshotTest {
     void runtimeContentPayloadRejectsDuplicateStructureKeys() {
         ResourceLocation machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(4);
+        buf.writeVarInt(6);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(2);
         ResourceLocation.STREAM_CODEC.encode(buf, machineId);
@@ -318,7 +331,7 @@ class RuntimeContentSnapshotTest {
         ResourceLocation key = MMCR.id("runtime_test_machine");
         ResourceLocation structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(4);
+        buf.writeVarInt(6);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(1);
         ResourceLocation.STREAM_CODEC.encode(buf, key);
@@ -337,7 +350,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void runtimeContentPayloadRejectsUnknownPayloadVersion() {
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(5);
+        buf.writeVarInt(7);
 
         assertThatThrownBy(() -> PktRuntimeContentPayload.STREAM_CODEC.decode(buf))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -609,8 +622,12 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void structureSyncCodecUsesConfiguredDefaultBlockPatternLimit() {
-        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(524_288);
-        assertThat(MachineStructureSyncCodec.maximumBlockPatternCount()).isEqualTo(524_288);
+        // Structures ship deflated and chunked, so this value only bounds client-side memory. It must stay
+        // above real content: the largest lotus ritual has 558,517 cells, which the old 524,288 rejected.
+        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(1_048_576);
+        assertThat(MachineStructureSyncCodec.maximumBlockPatternCount())
+                .isEqualTo(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
+        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isGreaterThan(558_517);
     }
 
     @Test

@@ -48,6 +48,40 @@ public final class BlockRotator {
         return project(pos, xAxis, up, front);
     }
 
+    /**
+     * Allocation-free variant used by the structure scan cursor.
+     *
+     * <p>Rotating a per-entry position with the methods above allocates a {@link BlockPos} on every
+     * call. The scan walks up to hundreds of thousands of entries, so the cursor writes the result into
+     * a caller-owned scratch position instead. Semantics are identical to
+     * {@link #rotateSouthTo(BlockPos, Direction, Direction)}.
+     */
+    public static BlockPos.MutableBlockPos rotateSouthTo(BlockPos pos, Direction target, Direction rollFacing,
+                                                         BlockPos.MutableBlockPos out) {
+        if (!target.getAxis().isVertical()) {
+            int x = pos.getX();
+            int y = pos.getY();
+            int z = pos.getZ();
+            Direction current = Direction.SOUTH;
+            while (current != target) {
+                current = current.getCounterClockWise();
+                int rotatedX = z;
+                int rotatedZ = -x;
+                x = rotatedX;
+                z = rotatedZ;
+            }
+            return out.set(x, y, z);
+        }
+
+        Direction front = target;
+        Direction up = normalizedRoll(target, rollFacing);
+        Direction xAxis = cross(up, front);
+        return out.set(
+                xAxis.getStepX() * pos.getX() + up.getStepX() * pos.getY() + front.getStepX() * pos.getZ(),
+                xAxis.getStepY() * pos.getX() + up.getStepY() * pos.getY() + front.getStepY() * pos.getZ(),
+                xAxis.getStepZ() * pos.getX() + up.getStepZ() * pos.getY() + front.getStepZ() * pos.getZ());
+    }
+
     public static BlockPos normalizeFromFace(BlockPos offset, Direction sourceFace) {
         return normalizeFromFace(offset, sourceFace, Direction.SOUTH);
     }
