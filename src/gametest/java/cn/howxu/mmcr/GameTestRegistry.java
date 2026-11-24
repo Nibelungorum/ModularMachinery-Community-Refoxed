@@ -226,6 +226,7 @@ public final class GameTestRegistry {
                 helper -> new ItemOutputComponentGameTest().asyncOutputPreservesEnchantmentComponents(helper));
         register(event, "cached_item_output_enchantment_components", 20,
                 helper -> new ItemOutputComponentGameTest().cachedOutputSurvivesFinishReplacement(helper));
+        register(event, "block_array_required_air", 100, BlockArrayMatchGameTest::requiredAirIsNotPadding);
         register(event, "block_array_match", 100, helper -> new BlockArrayMatchGameTest().structureForms3x3Casing(helper));
         register(event, "controller_tick", 100, helper -> new ControllerTickGameTest().structureForms3x3Casing(helper));
         register(event, "upgrade_bus_invalidation", 100,

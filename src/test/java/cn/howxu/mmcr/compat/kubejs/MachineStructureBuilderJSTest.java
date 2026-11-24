@@ -55,6 +55,20 @@ class MachineStructureBuilderJSTest {
     }
 
     @Test
+    void rectangular_pattern_all_keeps_named_air_distinct_from_padding() {
+        var id = Identifier.parse("mmcr_test:iron_compressor");
+        var layers = List.of(List.of("    ", "  C "), List.of("    ", "空空 空"));
+        var top = new MachineStructureBuilderJS(id).patternAll(layers)
+                .set("空", new KubeJSApi().air()).controller("C").createObject().pattern();
+        var stage = new MachineStructureStageBuilderJS(id).patternAll(layers)
+                .set("空", new KubeJSApi().air()).controller("C").build().pattern();
+        assertThat(top.pattern()).containsExactlyEntriesOf(stage.pattern());
+        assertThat(top.get(new BlockPos(-2, 0, 1))).isInstanceOf(BlockPredicate.Air.class);
+        assertThat(top.get(new BlockPos(0, 0, 1))).isNull();
+        assertThat(top.symbolsByPosition()).containsEntry(BlockPos.ZERO, 'C');
+    }
+
+    @Test
     void server_structure_builder_declares_couplers_without_block_positions() {
         var structure = new MachineStructureBuilderJS("mmcr:space_elevator")
                 .pattern("XXX")

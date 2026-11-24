@@ -112,6 +112,19 @@ class PublicStructureFacadeTest {
     }
 
     @Test
+    void rectangular_rows_round_trip_with_padding_and_the_original_off_center_origin() {
+        String[] first = {"    ", "  C "};
+        var spec = Structures.structure().singlePattern(p -> p.layer(first).layer("    ", "中  中")
+                .where('中', BlockConditions.block(Blocks.STONE)).controller('C')).build(MACHINE);
+        first[1] = "oops";
+        var template = spec.stages().getFirst().pattern();
+        assertThat(template.layers()).containsExactly(List.of("    ", "  C "), List.of("    ", "中  中"));
+        var compiled = MachineDefinitionConverter.toBlockArray(StructureAdapters.unwrap(template));
+        assertThat(compiled.symbolsByPosition().keySet()).containsExactly(BlockPos.ZERO,
+                new BlockPos(-2, 0, 1), new BlockPos(1, 0, 1));
+    }
+
+    @Test
     void extension_merges_at_the_same_automatically_bound_controller() {
         var structure = Structures.structure().fullStructure(s -> s.pattern(p -> p.layer("BC")
                         .where('B', BlockConditions.block(Blocks.STONE)).controller('C')))

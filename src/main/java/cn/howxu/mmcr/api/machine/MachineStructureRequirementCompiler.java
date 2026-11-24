@@ -25,14 +25,15 @@ public final class MachineStructureRequirementCompiler {
         Objects.requireNonNull(requirements, "requirements").validate(pattern);
         Map<BlockPos, List<SingleBlockModifierReplacement>> modifiers = new LinkedHashMap<>();
         Map<BlockPos, Identifier> levelSlots = new LinkedHashMap<>();
-        for (var entry : pattern.symbolsByPosition().entrySet()) {
-            BlockPos pos = entry.getKey();
-            Character symbol = entry.getValue();
+        if (requirements.modifierReplacements().isEmpty() && requirements.levelSlots().isEmpty())
+            return new Compiled(Map.of(), Map.of());
+        pattern.forSymbols(symbol -> requirements.modifierReplacements().containsKey(symbol)
+                || requirements.levelSlots().containsKey(symbol), (pos, symbol) -> {
             List<SingleBlockModifierReplacement> replacements = requirements.modifierReplacements().get(symbol);
             if (replacements != null) modifiers.put(pos, new ArrayList<>(replacements));
             Identifier typeId = requirements.levelSlots().get(symbol);
             if (typeId != null) levelSlots.put(pos, typeId);
-        }
+        });
         return new Compiled(copyNestedMap(modifiers), Map.copyOf(levelSlots));
     }
 

@@ -19,7 +19,6 @@ import cn.howxu.mmcr.api.capability.external.ExternalPortHost;
 import cn.howxu.mmcr.api.capability.type.CapabilityBinding;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachinePatternCompiler;
 import cn.howxu.mmcr.api.machine.PortRequirementSpec;
@@ -133,14 +132,14 @@ public final class IndependentPortFixture {
         var compiled = MachinePatternCompiler.compile(new DynamicMachine(machineId, "probe", pattern));
         assertThat(compiled.portPositions(Direction.SOUTH)).containsExactly(pos);
         assertThat(compiled.componentPositions(Direction.SOUTH)).containsExactly(pos);
-        var count = MachineControllerBlockEntity.class.getDeclaredMethod("countPorts", BlockArray.class, CompiledMachinePattern.class, Direction.class);
-        var kinds = MachineControllerBlockEntity.class.getDeclaredMethod("portKinds", BlockArray.class, CompiledMachinePattern.class, Direction.class);
+        var count = MachineControllerBlockEntity.class.getDeclaredMethod("countPorts", List.class);
+        var kinds = MachineControllerBlockEntity.class.getDeclaredMethod("portKinds", List.class);
         count.setAccessible(true);
         kinds.setAccessible(true);
-        var counts = (PortRequirementSpec.PortCounts) count.invoke(controller, pattern, compiled, Direction.SOUTH);
+        var counts = (PortRequirementSpec.PortCounts) count.invoke(controller, compiled.portPositions(Direction.SOUTH));
         assertThat(counts.count(KIND.id())).isOne();
         assertThat(counts.count("item_input_bus")).isOne();
-        @SuppressWarnings("unchecked") var detected = (List<IOPortKind>) kinds.invoke(controller, pattern, compiled, Direction.SOUTH);
+        @SuppressWarnings("unchecked") var detected = (List<IOPortKind>) kinds.invoke(controller, compiled.portPositions(Direction.SOUTH));
         assertThat(PortTierRequirementSpec.builder().anyItemInput().build().validate(detected)).isEmpty();
 
         var routing = controller.componentRuntime();

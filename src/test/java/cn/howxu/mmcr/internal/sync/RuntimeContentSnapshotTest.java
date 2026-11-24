@@ -153,6 +153,40 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
+    void legacy_air_run_bytes_keep_independent_symbol_order_and_logical_limits() {
+        var id = MMCR.id("wire_air");
+        var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        var encoded = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            Identifier.STREAM_CODEC.encode(wire, id);
+            wire.writeVarInt(1); // declarations
+            wire.writeEnum(MachineStructureDefinition.Declaration.Kind.FULL);
+            wire.writeVarInt(20);
+            for (int x = -10; x < 10; x++) {
+                wire.writeBlockPos(new BlockPos(x, 0, 0));
+                wire.writeVarInt(1); // original PredicateKind.AIR
+            }
+            wire.writeVarInt(0); // tag positions
+            wire.writeVarInt(20);
+            for (int x = 9; x >= -10; x--) {
+                wire.writeBlockPos(new BlockPos(x, 0, 0));
+                wire.writeChar(x < 0 ? ' ' : '空');
+            }
+            for (int i = 0; i < 5; i++) wire.writeVarInt(0); // ports, tiers, dynamics, modifiers, levels
+            wire.writeBoolean(false);
+            var decoded = MachineStructureSyncCodec.decode(wire, 20);
+            assertThat(decoded.pattern().get(BlockPos.ZERO)).isInstanceOf(BlockPredicate.Air.class);
+            MachineStructureSyncCodec.encode(encoded, decoded, 20);
+            wire.readerIndex(0);
+            assertThat(encoded.equals(wire)).isTrue();
+            assertThatThrownBy(() -> MachineStructureSyncCodec.decode(wire, 19)).hasMessageContaining("block pattern count");
+        } finally {
+            encoded.release();
+            wire.release();
+        }
+    }
+
+    @Test
     void structure_sync_preserves_mixed_builtin_and_mekanism_port_constraints() {
         var tiers = PortTierRequirementSpec.builder().anyItemInput().anyFluidOutput().anyEnergyInput()
                 .minChemicalInput(PortTiers.ChemicalTier.ADVANCED).minChemicalOutput(PortTiers.ChemicalTier.ULTIMATE)

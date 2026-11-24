@@ -1,6 +1,7 @@
 package cn.howxu.mmcr.internal.registration;
 
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.internal.structure.PatternRows;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.FactoryThreadSpec;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -32,7 +33,6 @@ import cn.howxu.mmcr.api.network.view.RequestFailureReason;
 import cn.howxu.mmcr.api.network.view.RequestInfo;
 import cn.howxu.mmcr.api.registration.ApiRegistrationException;
 import java.util.stream.Collectors;
-import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 
 import java.util.List;
@@ -54,42 +54,12 @@ public final class MachineDefinitionConverter {
     }
 
     public static BlockArray toBlockArray(PatternDefinition pattern) {
-        LinkedHashMap<BlockPos, cn.howxu.mmcr.api.machine.BlockPredicate> entries = new LinkedHashMap<>();
-        LinkedHashMap<BlockPos, Character> symbolsByPosition = new LinkedHashMap<>();
-        BlockPos controller = null;
-        int xOrigin = pattern.width() / 2;
-        int yOrigin = pattern.height() / 2;
-        int zOrigin = pattern.depth() / 2;
-
-        for (int rowIndex = 0; rowIndex < pattern.height(); rowIndex++) {
-            int y = rowIndex - yOrigin;
-            for (int layerIndex = 0; layerIndex < pattern.depth(); layerIndex++) {
-                int z = layerIndex - zOrigin;
-                String row = pattern.layers().get(layerIndex).get(rowIndex);
-                for (int columnIndex = 0; columnIndex < pattern.width(); columnIndex++) {
-                    char symbol = row.charAt(columnIndex);
-                    if (symbol == ' ') continue;
-                    int x = columnIndex - xOrigin;
-                    BlockPos pos = new BlockPos(x, y, z);
-                    entries.put(pos, toBlockPredicate(pattern.predicates().get(symbol)));
-                    symbolsByPosition.put(pos, symbol);
-                    if (symbol == pattern.controllerSymbol()) controller = pos;
-                }
-            }
-        }
-
-        if (controller != null && !controller.equals(BlockPos.ZERO)) {
-            LinkedHashMap<BlockPos, cn.howxu.mmcr.api.machine.BlockPredicate> normalized = new LinkedHashMap<>();
-            LinkedHashMap<BlockPos, Character> normalizedSymbols = new LinkedHashMap<>();
-            for (var entry : entries.entrySet()) {
-                BlockPos normalizedPos = entry.getKey().subtract(controller);
-                normalized.put(normalizedPos, entry.getValue());
-                normalizedSymbols.put(normalizedPos, symbolsByPosition.get(entry.getKey()));
-            }
-            entries = normalized;
-            symbolsByPosition = normalizedSymbols;
-        }
-        return new BlockArray(entries, Map.of(), symbolsByPosition);
+        Map<Character, cn.howxu.mmcr.api.machine.BlockPredicate> symbols = new LinkedHashMap<>();
+        PatternRows rows = PatternRows.copyOf(pattern.layers());
+        pattern.predicates().forEach((symbol, predicate) -> {
+            if (symbol != ' ' && rows.hasSymbol(symbol)) symbols.put(symbol, toBlockPredicate(predicate));
+        });
+        return BlockArray.fromRows(rows, symbols, pattern.controllerSymbol());
     }
 
     public static DynamicMachine toDynamicMachine(MachineDefinition definition, cn.howxu.mmcr.api.machine.definition.MachineStructureDefinition structure) {

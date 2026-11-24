@@ -8,6 +8,7 @@ import java.util.function.Supplier;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -28,6 +29,21 @@ public sealed interface BlockPredicate {
     }
 
     boolean matches(BlockState state);
+
+    /** Conservative: do not resolve suppliers or tags to decide whether a position can host a component. */
+    default boolean onlyAir() {
+        return switch (this) {
+            case Air ignored -> true;
+            case OfBlock of -> vanillaAir(of.block());
+            case OfBlockState of -> vanillaAir(of.state().getBlock());
+            case AnyOf any -> !any.children().isEmpty() && any.children().stream().allMatch(child -> child != null && child.onlyAir());
+            default -> false;
+        };
+    }
+
+    private static boolean vanillaAir(Block block) {
+        return block == Blocks.AIR || block == Blocks.CAVE_AIR || block == Blocks.VOID_AIR;
+    }
 
     default boolean matches(BlockState state, boolean stateSensitive) {
         if (stateSensitive) return matches(state);

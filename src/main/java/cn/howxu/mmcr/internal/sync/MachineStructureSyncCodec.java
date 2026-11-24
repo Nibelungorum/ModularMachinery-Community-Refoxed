@@ -138,9 +138,9 @@ public final class MachineStructureSyncCodec {
     private static BlockArray readBlockArray(RegistryFriendlyByteBuf buf, BlockPatternLimit blockPatternLimit) {
         int patternCount = buf.readVarInt();
         blockPatternLimit.add(patternCount);
-        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>();
+        var input = new BlockArray.PositionInput();
         for (int i = 0; i < patternCount; i++) {
-            pattern.put(buf.readBlockPos(), readBlockPredicate(buf));
+            input.predicate(buf.readBlockPos(), readBlockPredicate(buf));
         }
 
         int tagCount = buf.readVarInt();
@@ -151,11 +151,10 @@ public final class MachineStructureSyncCodec {
         }
         int symbolCount = buf.readVarInt();
         checkSize(symbolCount, blockPatternLimit.maxBlocks, "block symbol position");
-        Map<BlockPos, Character> symbols = new LinkedHashMap<>();
         for (int i = 0; i < symbolCount; i++) {
-            symbols.put(buf.readBlockPos(), buf.readChar());
+            input.symbol(buf.readBlockPos(), buf.readChar());
         }
-        return new BlockArray(pattern, tags, symbols);
+        return input.build(tags);
     }
 
     private static void writeBlockPredicate(RegistryFriendlyByteBuf buf, BlockPredicate predicate) {

@@ -1,5 +1,7 @@
 package cn.howxu.mmcr.api.machine.definition;
 
+import cn.howxu.mmcr.internal.structure.PatternRows;
+
 import java.util.LinkedHashMap;
 
 import java.util.List;
@@ -28,40 +30,13 @@ public record PatternDefinition(List<List<String>> layers, Map<Character, BlockP
         if (controllerSymbol == ' ') {
             throw new IllegalArgumentException("Controller symbol must not be empty space");
         }
-        layers = layers.stream()
-                .map(layer -> {
-                    if (layer.size() != height) {
-                        throw new IllegalArgumentException("Pattern height must match each layer row count");
-                    }
-                    return layer.stream()
-                            .map(row -> {
-                                Objects.requireNonNull(row, "row");
-                                if (row.length() != width) {
-                                    throw new IllegalArgumentException("Pattern width must match each row");
-                                }
-                                return row;
-                            })
-                            .toList();
-                })
-                .toList();
+        PatternRows rows = PatternRows.copyOf(layers);
+        if (rows.height() != height || rows.width() != width) {
+            throw new IllegalArgumentException("Pattern dimensions must match layer rows");
+        }
         predicates = Map.copyOf(predicates);
-
-        int controllerCount = 0;
-        for (List<String> layer : layers) {
-            for (String row : layer) {
-                for (int i = 0; i < row.length(); i++) {
-                    char symbol = row.charAt(i);
-                    if (symbol == ' ') continue;
-                    if (!predicates.containsKey(symbol)) {
-                        throw new IllegalArgumentException("Unbound pattern symbol: " + symbol);
-                    }
-                    if (symbol == controllerSymbol) controllerCount++;
-                }
-            }
-        }
-        if (controllerCount != 1) {
-            throw new IllegalArgumentException("Pattern must contain exactly one controller symbol");
-        }
+        rows.validateBindings(predicates, controllerSymbol);
+        layers = rows;
     }
 
     PatternDefinition bindController(BlockPredicate controller) {

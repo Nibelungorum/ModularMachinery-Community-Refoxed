@@ -2364,8 +2364,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         } catch (IllegalArgumentException ignored) {
             return false;
         }
-        MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(),
-                applySelectedLevels(machine, stage, pattern, selectedLevels), PktMultiblockPreviewPayload.maxEntries());
+        MultiblockPreviewSnapshot snapshot = MultiblockPreviewBuilder.build(level, getBlockPos(), pattern,
+                selectedLevelOverrides(machine, stage, pattern, selectedLevels), PktMultiblockPreviewPayload.maxEntries());
         if (snapshot.isEmpty()) return false;
         PacketDistributor.sendToPlayer(player, new PktMultiblockPreviewPayload(snapshot.dimension(), snapshot.controllerPos(),
                 snapshot.entries(), PktMultiblockPreviewPayload.PERSISTENT_DURATION_TICKS));
@@ -2373,21 +2373,21 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return true;
     }
 
-    private static BlockArray applySelectedLevels(Machine machine, int stage, BlockArray pattern,
+    private static Map<BlockPos, BlockPredicate> selectedLevelOverrides(Machine machine, int stage, BlockArray pattern,
             Map<Identifier, Identifier> selectedLevels) {
         Map<Character, Identifier> levelTypes = machine.structureStages().stream()
                 .filter(structureStage -> structureStage.number() == stage)
                 .findFirst().map(structureStage -> structureStage.requirements().levelSlots()).orElse(Map.of());
-        if (levelTypes.isEmpty() || selectedLevels.isEmpty()) return pattern;
-        Map<BlockPos, BlockPredicate> selectedPattern = new LinkedHashMap<>(pattern.pattern());
-        pattern.symbolsByPosition().forEach((position, symbol) -> {
+        if (levelTypes.isEmpty() || selectedLevels.isEmpty()) return Map.of();
+        Map<BlockPos, BlockPredicate> overrides = new LinkedHashMap<>();
+        pattern.forSymbols(levelTypes::containsKey, (position, symbol) -> {
             Identifier levelId = selectedLevels.get(levelTypes.get(symbol));
             MachineLevel selectedLevel = levelId == null ? null : MachineLevelRegistry.getLevel(levelId);
             if (selectedLevel == null) return;
             selectedLevel.statePredicate().preferredState()
-                    .ifPresent(state -> selectedPattern.put(position, new BlockPredicate.OfBlockState(state)));
+                    .ifPresent(state -> overrides.put(position, new BlockPredicate.OfBlockState(state)));
         });
-        return new BlockArray(selectedPattern, pattern.tagsByPosition(), pattern.symbolsByPosition());
+        return overrides;
     }
 
     public void clearStructurePreview(ServerPlayer player) {
@@ -2849,21 +2849,26 @@ public class MachineControllerBlockEntity extends BlockEntity {
             return false;
         }
 
-        var failure = validationMachine.portRequirements().validate(countPorts(rotatedPattern, stageCompiled, facing));
+        boolean precompiled = hasCompiledFacing(stageCompiled, facing);
+        List<BlockPos> fallback = precompiled ? List.of() : MachinePatternCompiler.fallbackCandidates(
+                rotatedPattern, validationMachine, candidatePattern.stageNumber(), facing, candidatePattern.rollFacing());
+        List<BlockPos> ports = precompiled ? stageCompiled.portPositions(facing) : fallback;
+        List<BlockPos> components = precompiled ? stageCompiled.componentPositions(facing) : fallback;
+        var failure = validationMachine.portRequirements().validate(countPorts(ports));
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             sendRequestedStructureDiagnostic(null);
             return false;
         }
 
-        failure = validatePortTiers(validationMachine, rotatedPattern, stageCompiled, facing);
+        failure = validatePortTiers(validationMachine, ports);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             sendRequestedStructureDiagnostic(null);
             return false;
         }
 
-        failure = validateFactoryControllerCount(validationMachine, rotatedPattern, stageCompiled, facing);
+        failure = validateFactoryControllerCount(validationMachine, components);
         if (failure.isPresent()) {
             recordFormationFailure(candidate, failure.get());
             sendRequestedStructureDiagnostic(null);
@@ -2877,7 +2882,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 && !structureWorkSnapshot().componentRefreshRequired();
         if (level instanceof ServerLevel serverLevel && !stableFormation) {
             StructureClaimRegistry.ClaimResult result = StructureClaimRegistry.get(serverLevel)
-                    .claim(getBlockPos(), componentClaims(rotatedPattern, stageCompiled, facing));
+                    .claim(getBlockPos(), componentClaims(components));
             if (!result.accepted()) {
                 StructureClaimRegistry.Conflict conflict = result.conflict();
                 publishStructureWork(state -> state.withFormationFailure(new PortRequirementSpec.Failure(
@@ -3206,7 +3211,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             runtime.publishComponentState(runtime.components(), foundModifiers, levels, previousLinkedPortPositions);
             refreshCriticalStructureChunks(rotatedPattern, compiledPattern, facing);
             if (level instanceof ServerLevel serverLevel) ModuleConnectionCoordinator.enqueueCouplers(serverLevel, this);
-            boolean componentsChanged = componentsNeedRefresh(rotatedPattern, compiledPattern, facing);
+            boolean componentsChanged = componentsNeedRefresh();
             boolean modifiersChanged = !previousSnapshot.foundModifiers().equals(foundModifiers);
             boolean capabilityTopologyChanged = previousCapabilityVersion != currentRuntimeSnapshot().capabilityVersion();
             // A newly loaded controller has no component instances yet; bind them below without discarding paid lanes.
@@ -3248,12 +3253,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
     }
 
-    private List<StructureClaimRegistry.Claim> componentClaims(BlockArray pattern,
-                                                                 @Nullable CompiledMachinePattern compiled,
-                                                                 Direction facing) {
+    private List<StructureClaimRegistry.Claim> componentClaims(List<BlockPos> positions) {
         List<StructureClaimRegistry.Claim> claims = new ArrayList<>();
         if (level == null) return claims;
-        for (BlockPos relativePos : componentPositions(pattern, compiled, facing)) {
+        for (BlockPos relativePos : positions) {
             BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
             if (entity instanceof SmartInterfaceBlockEntity) {
                 claims.add(new StructureClaimRegistry.Claim(entity.getBlockPos(), ComponentClaimPolicy.SHARED_SERIALIZED));
@@ -3336,7 +3339,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         }
 
         unlinkLinkedPorts(previousStructure, previousLinkedPortPositions);
-        List<DataStorageBlockEntity> dataStorages = dataStorageComponents(matchedPattern, compiledPattern, facing);
+        List<DataStorageBlockEntity> dataStorages = dataStorageComponents(runtime.currentStructureSnapshot());
         DataStorageBindingCoordinator dataStorageCoordinator = new DataStorageBindingCoordinator();
         dataStorageCoordinator.unbindMissing(this, previousDataStorages, dataStorages);
         dataStorageCoordinator.reconcile(this, dataStorages);
@@ -3347,7 +3350,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
             }
         }
         runtime.publishDataStorages(boundDataStorages);
-        List<UpgradeBusBlockEntity> upgradeBuses = upgradeBusComponents(matchedPattern);
+        List<UpgradeBusBlockEntity> upgradeBuses = upgradeBusComponents(runtime.currentStructureSnapshot());
         bindUpgradeBuses(upgradeBuses);
         runtime.publishUpgradeBusState(upgradeBusSnapshots(upgradeBuses));
         MachineAppearanceSpec.TextureSource formedTexture = matchedMachine.appearance().formedPortTextureSource();
@@ -3356,7 +3359,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
         nextLinkedPortPositions.addAll(boundDataStorages.keySet());
 
         List<SmartInterfaceBlockEntity> smartInterfaces = new ArrayList<>();
-        for (BlockPos relativePos : componentPositions(matchedPattern, compiledPattern, facing)) {
+        for (BlockPos relativePos : componentPositions()) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof SmartInterfaceBlockEntity smartInterface) {
                 smartInterfaces.add(smartInterface);
             }
@@ -3395,7 +3398,7 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 .collect(Collectors.toSet()));
         activeNetworkInterfacePositions = Set.copyOf(nextNetworkInterfacePositions);
 
-        for (BlockPos relativePos : componentPositions(matchedPattern, compiledPattern, facing)) {
+        for (BlockPos relativePos : componentPositions()) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             BlockEntity container = level.getBlockEntity(worldPos);
             if (container instanceof UpgradeBusBlockEntity bus) {
@@ -3469,10 +3472,10 @@ public class MachineControllerBlockEntity extends BlockEntity {
         runtime.componentRuntime().replaceSmartInterfaceModifiers(modifiers);
     }
 
-    private List<UpgradeBusBlockEntity> upgradeBusComponents(BlockArray pattern) {
-        if (level == null || pattern == null) return List.of();
+    private List<UpgradeBusBlockEntity> upgradeBusComponents(StructureSnapshot structure) {
+        if (level == null || structure.pattern() == null) return List.of();
         List<UpgradeBusBlockEntity> buses = new ArrayList<>();
-        for (BlockPos relativePos : MachinePatternCompiler.positionsExcludingNetworkInterfaces(pattern)) {
+        for (BlockPos relativePos : fallbackCandidates(structure)) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof UpgradeBusBlockEntity bus) {
                 buses.add(bus);
             }
@@ -3507,13 +3510,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         syncRuntimeStateIfChanged();
     }
 
-    private boolean componentsNeedRefresh(BlockArray pattern, @Nullable CompiledMachinePattern compiled,
-                                          Direction facing) {
+    private boolean componentsNeedRefresh() {
         if (level == null) return false;
         Set<BlockPos> nextDataStoragePositions = new HashSet<>();
         Set<BlockPos> nextUpgradeBusPositions = new HashSet<>();
         List<BlockEntity> nextContainers = new ArrayList<>();
-        for (BlockPos relativePos : MachinePatternCompiler.positionsExcludingNetworkInterfaces(pattern)) {
+        for (BlockPos relativePos : fallbackCandidates(runtime.currentStructureSnapshot())) {
             BlockEntity entity = level.getBlockEntity(getBlockPos().offset(relativePos));
             if (entity instanceof DataStorageBlockEntity) nextDataStoragePositions.add(entity.getBlockPos().immutable());
             if (entity instanceof UpgradeBusBlockEntity) nextUpgradeBusPositions.add(relativePos.immutable());
@@ -3534,15 +3536,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     private List<DataStorageBlockEntity> dataStorageComponents(StructureSnapshot structure) {
         if (level == null || structure.pattern() == null || structure.facing() == null) return List.of();
-        return dataStorageComponents(structure.pattern(), structure.compiledPattern(), structure.facing());
-    }
-
-    private List<DataStorageBlockEntity> dataStorageComponents(BlockArray pattern,
-                                                               @Nullable CompiledMachinePattern compiled,
-                                                               Direction facing) {
-        if (level == null || pattern == null || facing == null) return List.of();
         List<DataStorageBlockEntity> storages = new ArrayList<>();
-        List<BlockPos> positions = componentPositions(pattern, compiled, facing);
+        List<BlockPos> positions = componentPositions(structure);
         for (BlockPos relativePos : positions) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof DataStorageBlockEntity storage) {
                 storages.add(storage);
@@ -3592,30 +3587,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private List<BlockPos> componentPositions() {
-        StructureSnapshot structure = runtime.currentStructureSnapshot();
-        if (hasCompiledFacing(structure.compiledPattern(), structure.facing())) {
-            return structure.compiledPattern().componentPositions(structure.facing());
-        }
-        return MachinePatternCompiler.positionsExcludingNetworkInterfaces(structure.pattern());
+        return componentPositions(runtime.currentStructureSnapshot());
+    }
+
+    private static List<BlockPos> fallbackCandidates(StructureSnapshot structure) {
+        return MachinePatternCompiler.fallbackCandidates(structure.pattern(), structure.machine(), structure.matchedStage(),
+                structure.facing(), structure.rollFacing());
     }
 
     private static List<BlockPos> componentPositions(StructureSnapshot structure) {
-        return componentPositions(structure.pattern(), structure.compiledPattern(), structure.facing());
+        return hasCompiledFacing(structure.compiledPattern(), structure.facing())
+                ? structure.compiledPattern().componentPositions(structure.facing()) : fallbackCandidates(structure);
     }
 
-    private static List<BlockPos> componentPositions(BlockArray pattern, @Nullable CompiledMachinePattern compiled, Direction facing) {
-        return hasCompiledFacing(compiled, facing)
-                ? compiled.componentPositions(facing)
-                : MachinePatternCompiler.positionsExcludingNetworkInterfaces(pattern);
-    }
-
-    private PortRequirementSpec.PortCounts countPorts(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
+    private PortRequirementSpec.PortCounts countPorts(List<BlockPos> positions) {
         Map<String, Integer> counts = new LinkedHashMap<>();
-        if (level == null || rotatedPattern == null) return PortRequirementSpec.PortCounts.empty();
-
-        List<BlockPos> positions = hasCompiledFacing(compiledPattern, facing)
-                ? compiledPattern.portPositions(facing)
-                : MachinePatternCompiler.positionsExcludingNetworkInterfaces(rotatedPattern);
+        if (level == null) return PortRequirementSpec.PortCounts.empty();
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
             if (!(level.getBlockEntity(worldPos) instanceof MachinePort port)) continue;
@@ -3635,12 +3622,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return PortRequirementSpec.PortCounts.of(counts);
     }
 
-    private List<IOPortKind> portKinds(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
-        if (level == null || rotatedPattern == null) return List.of();
-
-        List<BlockPos> positions = hasCompiledFacing(compiledPattern, facing)
-                ? compiledPattern.portPositions(facing)
-                : MachinePatternCompiler.positionsExcludingNetworkInterfaces(rotatedPattern);
+    private List<IOPortKind> portKinds(List<BlockPos> positions) {
+        if (level == null) return List.of();
         List<IOPortKind> kinds = new ArrayList<>();
         for (BlockPos relativePos : positions) {
             BlockPos worldPos = getBlockPos().offset(relativePos);
@@ -3651,10 +3634,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
         return List.copyOf(kinds);
     }
 
-    private Optional<PortRequirementSpec.Failure> validatePortTiers(Machine candidate, BlockArray rotatedPattern,
-                                                                              @Nullable CompiledMachinePattern compiledPattern,
-                                                                              Direction facing) {
-        return candidate.portTierRequirements().validate(portKinds(rotatedPattern, compiledPattern, facing))
+    private Optional<PortRequirementSpec.Failure> validatePortTiers(Machine candidate, List<BlockPos> ports) {
+        return candidate.portTierRequirements().validate(portKinds(ports))
                 .map(failure -> new PortRequirementSpec.Failure(
                         failure.requirement().id(),
                         failure.actualPortIds().size(),
@@ -3664,9 +3645,9 @@ public class MachineControllerBlockEntity extends BlockEntity {
     }
 
     private Optional<PortRequirementSpec.Failure> validateFactoryControllerCount(
-            Machine candidate, BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
+            Machine candidate, List<BlockPos> components) {
         if (candidate.behavior() instanceof TickBehavior) return Optional.empty();
-        int count = countFactoryControllers(rotatedPattern, compiledPattern, facing);
+        int count = countFactoryControllers(components);
         if (count == 0 || candidate.hasFactory()) return Optional.empty();
         return Optional.of(new PortRequirementSpec.Failure(
                 "factory_controller",
@@ -3676,10 +3657,8 @@ public class MachineControllerBlockEntity extends BlockEntity {
                 PortRequirementSpec.FailureReason.TOO_MANY));
     }
 
-    private int countFactoryControllers(BlockArray rotatedPattern, @Nullable CompiledMachinePattern compiledPattern, Direction facing) {
-        if (level == null || rotatedPattern == null) return 0;
-
-        List<BlockPos> positions = componentPositions(rotatedPattern, compiledPattern, facing);
+    private int countFactoryControllers(List<BlockPos> positions) {
+        if (level == null) return 0;
         int count = 0;
         for (BlockPos relativePos : positions) {
             if (level.getBlockEntity(getBlockPos().offset(relativePos)) instanceof FactorySchedulerBlockEntity && ++count > 1) {
