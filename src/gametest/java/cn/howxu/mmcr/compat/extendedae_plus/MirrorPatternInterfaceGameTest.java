@@ -35,6 +35,9 @@ import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.PatternInterfaceMenu;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.HostedPatternInventory;
 
 import cn.howxu.mmcr.compat.extendedae_plus.loaded.MirrorPatternInterfaceLogic;
 import cn.howxu.mmcr.compat.kubejs.KubeJSInterfaceHelpers;
@@ -89,6 +92,80 @@ public class MirrorPatternInterfaceGameTest {
     private static final String MIRROR = "eaep_me_mirror_pattern_interface";
     private static final String ORDINARY = "ae2_me_pattern_interface";
     private static final String EXTENDED = "eae_me_extended_pattern_interface";
+
+    public void refundBoundGroup(GameTestHelper helper) {
+        var main = new BlockPos(0, 1, 0);
+        var mirrorPos = new BlockPos(6, 1, 0);
+        placePort(helper, main, EXTENDED);
+        placePort(helper, mirrorPos, MIRROR);
+        for (var pos : List.of(main, mirrorPos)) {
+            helper.setBlock(pos.east(2), AEBlocks.CREATIVE_ENERGY_CELL.block());
+            helper.setBlock(pos.south(2), AEBlocks.ME_CHEST.block());
+            helper.getBlockEntity(pos.south(2), MEChestBlockEntity.class).setCell(AEItems.ITEM_CELL_1K.stack());
+        }
+        var source = port(helper, main);
+        var original = port(helper, mirrorPos);
+        var iron = AEItemKey.of(Items.IRON_INGOT);
+        var copper = AEItemKey.of(Items.COPPER_INGOT);
+        var level = helper.getLevel();
+        helper.startSequence().thenWaitUntil(() -> {
+            assertNodesReady(helper, main, mirrorPos);
+            for (var pos : List.of(main, mirrorPos)) helper.assertTrue(
+                    helper.getBlockEntity(pos.east(2), CreativeEnergyCellBlockEntity.class).getMainNode().getNode() != null
+                    && helper.getBlockEntity(pos.south(2), MEChestBlockEntity.class).getMainNode().getNode() != null, "Local storage ready");
+        }).thenExecute(() -> {
+            for (var pos : List.of(main, mirrorPos)) {
+                var node = port(helper, pos).getMainNode().getNode();
+                GridHelper.createConnection(node, helper.getBlockEntity(pos.east(2), CreativeEnergyCellBlockEntity.class).getMainNode().getNode());
+                GridHelper.createConnection(node, helper.getBlockEntity(pos.south(2), MEChestBlockEntity.class).getMainNode().getNode());
+            }
+        }).thenWaitUntil(() -> helper.assertTrue(source.hostedOnline() && original.hostedOnline(), "Two independent grids online"))
+                .thenExecute(() -> {
+                    source.getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
+                    helper.assertTrue(mirror(helper, mirrorPos).bindToMaster(master(helper, main)), "Bind the real mirror");
+                    var details = source.getLogic().getAvailablePatterns().getFirst();
+                    var request = new KeyCounter();
+                    request.add(iron, 7);
+                    try (var tx = Transaction.openRoot()) {
+                        original.hostedPatterns().accept(details, new KeyCounter[]{request}, level.getGameTime(), tx);
+                        tx.commit();
+                    }
+                    var player = helper.makeMockPlayer(GameType.SURVIVAL);
+                    var menu = new PatternInterfaceMenu(AE2MenuTypes.PATTERN, 1, player.getInventory(), source);
+                    helper.assertTrue(source.hostedPatterns().isEmpty() && menu.hasHostedMaterials(), "Empty master sees its mirror");
+                    helper.assertTrue(!menu.clickMenuButton(player, PatternInterfaceMenu.REFUND_HOSTED), "Stale menu cannot refund");
+                    var saved = original.saveWithFullMetadata(level.registryAccess());
+                    original.onChunkUnloaded();
+                    level.removeBlockEntity(original.getBlockPos());
+                    request.add(copper, 3);
+                    try (var tx = Transaction.openRoot()) {
+                        source.hostedPatterns().accept(details, new KeyCounter[]{request}, level.getGameTime(), tx);
+                        tx.commit();
+                    }
+                    player.containerMenu = menu;
+                    helper.assertTrue(menu.clickMenuButton(player, PatternInterfaceMenu.REFUND_HOSTED) && menu.hasHostedMaterials(),
+                            "Refund request remains pending while mirror is absent");
+                    menu.clickMenuButton(player, PatternInterfaceMenu.REFUND_HOSTED);
+                    var restored = (PatternInterfaceBlockEntity) original.getType().create(original.getBlockPos(), original.getBlockState());
+                    restored.setLevel(level);
+                    restored.loadWithComponents(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), saved));
+                    level.setBlockEntity(restored);
+                }).thenWaitUntil(() -> {
+                    var restored = port(helper, mirrorPos);
+                    helper.assertTrue(restored.getMainNode().getNode() != null && restored.hostedPatterns().groups().getFirst().gate()
+                                    == HostedPatternInventory.Gate.REFUND && !restored.hostedOnline(), "Offline reloaded mirror freezes old materials first");
+                }).thenExecute(() -> {
+                    var node = port(helper, mirrorPos).getMainNode().getNode();
+                    GridHelper.createConnection(node, helper.getBlockEntity(mirrorPos.east(2), CreativeEnergyCellBlockEntity.class).getMainNode().getNode());
+                    GridHelper.createConnection(node, helper.getBlockEntity(mirrorPos.south(2), MEChestBlockEntity.class).getMainNode().getNode());
+                }).thenWaitUntil(() -> {
+                    var primary = helper.getBlockEntity(main.south(2), MEChestBlockEntity.class).getInventory();
+                    var secondary = helper.getBlockEntity(mirrorPos.south(2), MEChestBlockEntity.class).getInventory();
+                    helper.assertTrue(!source.hasGroupHostedMaterials() && primary.extract(copper, 4, Actionable.SIMULATE, IActionSource.empty()) == 3
+                            && primary.extract(iron, 8, Actionable.SIMULATE, IActionSource.empty()) == 0
+                            && secondary.extract(iron, 8, Actionable.SIMULATE, IActionSource.empty()) == 7, "Each owner refunds exactly once into its own grid");
+                }).thenSucceed();
+    }
 
     public void syncAndPersistence(GameTestHelper helper) {
         BlockPos ordinaryPos = new BlockPos(0, 1, 0);

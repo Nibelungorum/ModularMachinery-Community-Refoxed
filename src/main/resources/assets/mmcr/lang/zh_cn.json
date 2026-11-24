@@ -1,4 +1,7 @@
 {
+  "mmcr.pattern_refund.action": "将缓存内容退还ME网络",
+  "mmcr.pattern_refund.has_contents": "该接口有缓存内容",
+  "mmcr.pattern_refund.empty": "该接口无缓存内容",
   "mmcr.input_isolation.button": "I",
   "mmcr.input_isolation.enabled": "已开启",
   "mmcr.input_isolation.disabled": "未开启",

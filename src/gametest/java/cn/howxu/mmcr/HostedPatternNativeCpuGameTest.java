@@ -153,8 +153,17 @@ public final class HostedPatternNativeCpuGameTest {
         var second = helper.getBlockEntity(pos, MachineControllerBlockEntity.class);
         second.setMachine(machine);
         second.setStructureCheckIntervalForTesting(1);
-        f.ready().thenWaitUntil(() -> helper.assertTrue(second.structureSnapshot().formed()
-                        && f.host.hostedControllers().size() == 2, "Two independent controllers share the actual interface"))
+        f.ready().thenWaitUntil(() -> {
+            helper.assertTrue(second.structureSnapshot().formed() && f.host.hostedControllers().size() == 2,
+                    "Two independent controllers share the actual interface");
+            var caps = AE2ResourceFamilies.ITEM.capabilityView(f.host,
+                    f.host.itemRequestStorage(new KeyCounter[]{counter(f, 64)}), IOType.INPUT, false);
+            var hints = List.<MachineOutput>of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F));
+            for (var controller : List.of(f.controller, second)) {
+                helper.assertTrue(controller.probeHostedPattern(f.host.getBlockPos(), hints, List.of(caps), Set.of()) != null,
+                        "Both controllers have a current execution permit before checking concurrent probes");
+            }
+        })
                 .thenExecute(() -> {
                     var pattern = f.host.getLogic().getAvailablePatterns().getFirst();
                     helper.assertTrue(f.host.getLogic().pushPattern(pattern, new KeyCounter[]{counter(f, 64)}), "Receive 64 iron once");

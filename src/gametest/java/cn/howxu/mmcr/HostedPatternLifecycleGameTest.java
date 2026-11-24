@@ -55,6 +55,28 @@ public final class HostedPatternLifecycleGameTest {
                         "Reconnection runs only the unpaid remainder and returns all three outputs once")).thenSucceed();
     }
 
+    public static void refundUnpaidWhileRunning(GameTestHelper helper) {
+        var f = fixture(helper, "refund_running");
+        f.ready().thenExecute(() -> {
+            payTwo(helper, f, 102);
+            f.storage.insertionLimit = f.total + 60;
+            f.host.markLocalHostedRefund();
+            f.host.tryLocalHostedRefund();
+            f.host.markLocalHostedRefund();
+            f.host.tryLocalHostedRefund();
+            var group = f.host.hostedPatterns().groups().getFirst();
+            helper.assertTrue(f.stored(f.input) == f.total + 60 && group.materials().get(f.input) == 40
+                            && !f.host.hostedPatterns().canAccept(group.definition()),
+                    "Only the sixty accepted iron return; retry cannot spend the forty remaining");
+        }).thenWaitUntil(() -> helper.assertTrue(f.stored(f.output) == 2
+                        && f.host.hostedPatterns().groups().getFirst().materials().get(f.input) == 40,
+                "Paid lanes finish but unpaid refund-only iron never starts"))
+                .thenExecute(() -> f.storage.insertionLimit = Long.MAX_VALUE)
+                .thenWaitUntil(() -> helper.assertTrue(f.host.hostedPatterns().isEmpty() && f.stored(f.input) == f.total + 100
+                                && !f.host.getLogic().getAvailablePatterns().isEmpty() && f.stored(f.output) == 2,
+                        "Space becoming available returns the rest without removing the pattern")).thenSucceed();
+    }
+
     public static void dismantle(GameTestHelper helper, boolean online) {
         var f = fixture(helper, online ? "break_online" : "break_offline");
         var bus = helper.getBlockEntity(NativePatternCpuFixture.BUS, ItemInputBusBlockEntity.class);

@@ -45,6 +45,9 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.util.IOType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.core.UUIDUtil;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRefundIndex;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.component.DataComponentGetter;
@@ -77,6 +80,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -107,6 +111,10 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     private final HostedPatternInventory hosted = new HostedPatternInventory(this::onHostedChange);
     private final HostedPatternDispatcher dispatcher = new HostedPatternDispatcher(this);
     private Set<AEItemKey> publishedDefinitions = Set.of();
+    private static final String REFUND_INSTANCE = "hosted_refund_instance";
+    private @Nullable UUID refundInstance;
+    private @Nullable GlobalPos refundMaster;
+    private boolean refundReady;
     private boolean dismantled;
     private @Nullable Component customName;
 
@@ -137,7 +145,77 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         return !dismantled && !isRemoved() && level instanceof ServerLevel && mainNode.isActive();
     }
 
-    public boolean acceptingHostedInputs() { return hostedOnline() && !dispatcher.working(); }
+    public boolean acceptingHostedInputs() { return hostedOnline() && refundInitialized() && !dispatcher.working(); }
+
+    private boolean isMirror() { return ((PatternLogicKind) kind).readOnlyPatterns(); }
+    private boolean refundInitialized() { return !isMirror() || refundReady; }
+    private GlobalPos location(ServerLevel server) { return GlobalPos.of(server.dimension(), worldPosition); }
+
+    public void setRefundMaster(@Nullable GlobalPos master) {
+        refundMaster = master;
+        if (refundReady && level instanceof ServerLevel server) restoreRefundMember(server);
+    }
+
+    private void restoreRefundMember(ServerLevel server) {
+        if (!isMirror() || dismantled || isRemoved()) return;
+        refundReady = false;
+        var index = server.getServer().getDataStorage().get(PatternRefundIndex.TYPE);
+        var pos = location(server);
+        var old = index == null ? null : index.member(pos);
+        if (old != null && old.requested() && old.instance().equals(refundInstance)) {
+            markLocalHostedRefund();
+            index.acknowledge(pos, old.instance());
+        }
+        refundReady = true;
+        publishRefundMember(server);
+    }
+
+    private void publishRefundMember(ServerLevel server) {
+        if (!refundReady || dismantled || isRemoved()) return;
+        var storage = server.getServer().getDataStorage();
+        var pos = location(server);
+        if (refundMaster != null && !hosted.isEmpty()) {
+            if (refundInstance == null) {
+                refundInstance = UUID.randomUUID();
+                setChanged();
+            }
+            storage.computeIfAbsent(PatternRefundIndex.TYPE).observe(pos, refundInstance, refundMaster, true);
+        } else {
+            var index = storage.get(PatternRefundIndex.TYPE);
+            var old = index == null ? null : index.member(pos);
+            if (old != null) index.forget(pos, old.instance());
+        }
+    }
+
+    public boolean hasGroupHostedMaterials() {
+        if (!hosted.isEmpty()) return true;
+        if (!(level instanceof ServerLevel server) || isMirror()) return false;
+        var index = server.getServer().getDataStorage().get(PatternRefundIndex.TYPE);
+        return index != null && index.hasMembers(location(server));
+    }
+
+    public void requestGroupHostedRefund() {
+        if (!(level instanceof ServerLevel server) || isRemoved() || dismantled || isMirror()) return;
+        var index = server.getServer().getDataStorage().get(PatternRefundIndex.TYPE);
+        var loaded = new ArrayList<PatternInterfaceBlockEntity>();
+        loaded.add(this);
+        if (index != null) {
+            for (var member : index.request(location(server))) {
+                var target = server.getServer().getLevel(member.mirror().dimension());
+                if (target == null || !target.hasChunkAt(member.mirror().pos())) continue;
+                if (target.getBlockEntity(member.mirror().pos()) instanceof PatternInterfaceBlockEntity mirror
+                        && mirror.refundReady && member.instance().equals(mirror.refundInstance)) {
+                    loaded.add(mirror);
+                }
+            }
+        }
+        // Inserting into an ME network can call back into another member. Freeze everyone first.
+        for (var host : loaded) {
+            host.markLocalHostedRefund();
+            if (index != null && host != this) index.acknowledge(host.location((ServerLevel) host.level), host.refundInstance);
+        }
+        for (var host : loaded) host.tryLocalHostedRefund();
+    }
 
     public List<MachineControllerBlockEntity> hostedControllers() {
         if (level == null) return List.of();
@@ -159,8 +237,14 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     }
 
     public void dispatchHostedPatterns() {
-        if (isRemoved() || dismantled || dispatcher.working() || hosted.isEmpty() || !(level instanceof ServerLevel)) return;
+        if (isRemoved() || dismantled || !refundInitialized() || dispatcher.working() || hosted.isEmpty() || !(level instanceof ServerLevel)) return;
         dispatcher.run(level.getGameTime());
+        tryLocalHostedRefund();
+    }
+
+    public void markLocalHostedRefund() { hosted.retireAll(); }
+
+    public void tryLocalHostedRefund() {
         if (hostedOnline()) hosted.refund(networkStorage(), IActionSource.ofMachine(this), false);
     }
 
@@ -168,7 +252,10 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         // Escrow is not an ordinary capability. Waking ordinary inputs here would invalidate
         // a controller's rejection merely because its own probe closed the admission gate.
         setChanged();
-        if (level instanceof ServerLevel server) HostedPatternDispatcher.enqueue(server, worldPosition);
+        if (level instanceof ServerLevel server) {
+            publishRefundMember(server);
+            HostedPatternDispatcher.enqueue(server, worldPosition);
+        }
     }
 
     public PatternInterfaceBlockEntity(BlockPos pos, BlockState state, IOPortKind kind) {
@@ -391,10 +478,13 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         mainNode.serialize(output);
         logic.writeToNBT(output);
         hosted.write(output, level == null ? 0L : level.getGameTime());
+        output.storeNullable(REFUND_INSTANCE, UUIDUtil.CODEC, refundInstance);
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
+        boolean live = refundReady;
+        refundReady = false;
         beginLoadingAdditional();
         try {
             super.loadAdditional(input);
@@ -403,9 +493,11 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
             mainNode.deserialize(input);
             logic.readFromNBT(input);
             hosted.read(input);
+            refundInstance = input.read(REFUND_INSTANCE, UUIDUtil.CODEC).orElse(null);
         } finally {
             endLoadingAdditional();
         }
+        if (live && level instanceof ServerLevel server) restoreRefundMember(server);
     }
 
     @Override
@@ -419,6 +511,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         super.removeComponentsFromTag(output);
         output.discard("CustomName");
         output.discard(HostedPatternInventory.SAVE_KEY);
+        output.discard(REFUND_INSTANCE);
     }
 
     @Override
@@ -436,6 +529,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
     public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = super.getUpdateTag(registries);
         tag.remove(HostedPatternInventory.SAVE_KEY);
+        tag.remove(REFUND_INSTANCE);
         return tag;
     }
 
@@ -444,6 +538,7 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         super.clearRemoved();
         GridHelper.onFirstTick(this, blockEntity -> {
             if (blockEntity.getLevel() != null && !blockEntity.isRemoved() && !blockEntity.dismantled) {
+                if (blockEntity.getLevel() instanceof ServerLevel server) blockEntity.restoreRefundMember(server);
                 blockEntity.mainNode.create(blockEntity.getLevel(), blockEntity.getBlockPos());
                 blockEntity.logic.updatePatterns();
             }
@@ -452,12 +547,14 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
 
     @Override
     public void onChunkUnloaded() {
+        refundReady = false;
         super.onChunkUnloaded();
         mainNode.destroy();
     }
 
     @Override
     public void setRemoved() {
+        refundReady = false;
         super.setRemoved();
         mainNode.destroy();
     }
@@ -467,6 +564,10 @@ public final class PatternInterfaceBlockEntity extends IOPortBlockEntity
         if (dismantled || level == null || level.isClientSide()) return;
         boolean online = hostedOnline();
         dismantled = true;
+        if (refundInstance != null && level instanceof ServerLevel server) {
+            var index = server.getServer().getDataStorage().get(PatternRefundIndex.TYPE);
+            if (index != null) index.forget(location(server), refundInstance);
+        }
         hosted.refund(online ? networkStorage() : NullInventory.of(), IActionSource.ofMachine(this), true);
         var inventory = logic.getReturnInv();
         var returns = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());

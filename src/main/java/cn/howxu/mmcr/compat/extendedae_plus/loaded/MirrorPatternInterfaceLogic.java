@@ -31,6 +31,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
@@ -83,6 +84,7 @@ public final class MirrorPatternInterfaceLogic extends PatternProviderLogic {
 
         boolean changed = !Objects.equals(master, target);
         master = target;
+        publishRefundMaster();
         resetSyncState();
         if (source != null) changed |= syncFromMaster(source);
         if (changed) saveChanges();
@@ -93,11 +95,18 @@ public final class MirrorPatternInterfaceLogic extends PatternProviderLogic {
     public boolean unbindFromMaster() {
         if (!(host.getBlockEntity().getLevel() instanceof ServerLevel) || !hasMasterBinding()) return false;
         master = null;
+        publishRefundMaster();
         resetSyncState();
         clearMirroredPatterns();
         resetMirroredSettings();
         saveChanges();
         return true;
+    }
+
+    private void publishRefundMaster() {
+        if (host.getBlockEntity() instanceof PatternInterfaceBlockEntity mirror) {
+            mirror.setRefundMaster(master == null ? null : GlobalPos.of(master.dimension(), master.pos()));
+        }
     }
 
     public boolean hasMasterBinding() {
@@ -287,6 +296,7 @@ public final class MirrorPatternInterfaceLogic extends PatternProviderLogic {
                         Identifier.parse(dimension)), BlockPos.of(position), null);
             }
         }
+        publishRefundMaster();
         if (master == null) {
             clearMirroredPatterns();
             resetMirroredSettings();

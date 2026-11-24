@@ -100,6 +100,7 @@ public final class GameTestRegistry {
             register(event, "hosted_pattern_reload_offline", 600, HostedPatternLifecycleGameTest::reloadPaidAndUnpaidOwners);
             register(event, "hosted_pattern_break_online", 600, h -> HostedPatternLifecycleGameTest.dismantle(h, true));
             register(event, "hosted_pattern_break_offline", 600, h -> HostedPatternLifecycleGameTest.dismantle(h, false));
+            register(event, "hosted_pattern_refund_paid", 600, HostedPatternLifecycleGameTest::refundUnpaidWhileRunning);
             register(event, "hosted_pattern_refund", 600, HostedPatternNativeCpuGameTest::retireAndRefund);
             register(event, "pattern_batch_exact_normal_runtime", 40,
                     PatternBatchRuntimeGameTest::exactNormalBatchRejectsPrefixAndFinishesOnce);
@@ -542,6 +543,7 @@ public final class GameTestRegistry {
                     helper -> new PatternUploadGameTest().interfacesKeepOwnUploadIdentity(helper));
             register(event, "eaep_channel_card_own_menu", 100, structure,
                     helper -> new ChannelCardMenuGameTest().channelCardsSurviveOwnMenusAndReconnect(helper));
+            register(event, "eaep_mirror_group_refund", 600, structure, helper -> new MirrorPatternInterfaceGameTest().refundBoundGroup(helper));
             register(event, "eaep_mirror_sync", 200, structure,
                     helper -> new MirrorPatternInterfaceGameTest().syncAndPersistence(helper));
             register(event, "eaep_mirror_tool", 100, structure,
