@@ -858,6 +858,8 @@ public final class GameTestRegistry {
                         helper -> new MirrorPatternInterfaceGameTest().nativeCpuUsesMirrorCapacityAndTail(helper));
                 register(event, "eaep_mirror_master_chunk_not_loaded", 200,
                         helper -> new MirrorPatternInterfaceGameTest().unavailableMasterChunkIsNeverForceLoaded(helper));
+                register(event, "eaep_cross_dimension_refund", 600,
+                        helper -> new MirrorPatternInterfaceGameTest().crossDimensionRefund(helper));
                 register(event, "eaep_mirror_group_refund", 600,
                         helper -> new MirrorPatternInterfaceGameTest().refundBoundGroup(helper));
                 register(event, "eaep_pattern_upload_identity", 100,
@@ -935,6 +937,7 @@ public final class GameTestRegistry {
                     || name.startsWith("mmcr:eae_pattern_rename_")
                     || name.equals("mmcr:eae_pending_pattern_carrier")
                     || name.equals("mmcr:eaep_pending_pattern_carrier")
+                    || name.equals("mmcr:eaep_cross_dimension_refund")
                     || name.equals("mmcr:eaep_pattern_upload_identity")
                     || name.startsWith("mmcr:eaep_mirror_")
                     || name.startsWith("mmcr:appmek_native_")

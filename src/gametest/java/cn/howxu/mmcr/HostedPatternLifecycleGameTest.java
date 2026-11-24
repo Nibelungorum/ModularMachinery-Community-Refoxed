@@ -8,6 +8,7 @@ import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.ParallelControllerBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -16,8 +17,7 @@ import net.minecraft.world.level.block.Blocks;
 public final class HostedPatternLifecycleGameTest {
     public static void reloadPaidAndUnpaidOwners(GameTestHelper helper) {
         var f = fixture(helper, "offline_reload");
-        f.ready().thenExecute(() -> {
-            payTwo(helper, f, 3);
+        payTwo(helper, f, 3).thenExecute(() -> {
             var access = helper.getLevel().registryAccess();
             var oldHost = f.host;
             var oldController = f.controller;
@@ -54,8 +54,7 @@ public final class HostedPatternLifecycleGameTest {
 
     public static void refundUnpaidWhileRunning(GameTestHelper helper) {
         var f = fixture(helper, "refund_running");
-        f.ready().thenExecute(() -> {
-            payTwo(helper, f, 102);
+        payTwo(helper, f, 102).thenExecute(() -> {
             f.storage.insertionLimit = f.total + 60;
             f.host.markLocalHostedRefund();
             f.host.tryLocalHostedRefund();
@@ -77,9 +76,8 @@ public final class HostedPatternLifecycleGameTest {
     public static void dismantle(GameTestHelper helper, boolean online) {
         var f = fixture(helper, online ? "break_online" : "break_offline");
         ItemInputBusBlockEntity bus = helper.getBlockEntity(NativePatternCpuFixture.BUS);
-        var sequence = f.ready().thenExecute(() -> {
+        var sequence = payTwo(helper, f, 7).thenExecute(() -> {
             bus.itemHandler().insertItem(0, new ItemStack(Items.REDSTONE, 3), false);
-            payTwo(helper, f, 7);
             f.storage.insertionLimit = f.total + 2;
             if (!online) f.disconnectHost();
         });
@@ -98,17 +96,23 @@ public final class HostedPatternLifecycleGameTest {
         return f;
     }
 
-    private static void payTwo(GameTestHelper helper, NativePatternCpuFixture f, long amount) {
-        var pattern = f.host.getLogic().getAvailablePatterns().getFirst();
-        var input = new KeyCounter();
-        input.add(f.input, amount);
-        helper.assertTrue(f.host.getLogic().pushPattern(pattern, new KeyCounter[]{input}) && input.isEmpty(), "Accept the actual delivery");
-        f.host.dispatchHostedPatterns();
-        helper.assertTrue(f.controller.runtimeSnapshot().factory().activeLaneCount() == 2
-                        && f.host.hostedPatterns().group(pattern.getDefinition()).materials().get(f.input) == amount - 2,
-                "The two running lanes have paid for one unit each; remaining inputs still belong to the interface");
-        input.add(f.input, 1);
-        helper.assertTrue(!f.host.getLogic().pushPattern(pattern, new KeyCounter[]{input}) && input.get(f.input) == 1,
-                "Recipe thread quota stops new deliveries, not existing paid threads");
+    private static GameTestSequence payTwo(GameTestHelper helper, NativePatternCpuFixture f, long amount) {
+        return f.ready().thenExecute(() -> {
+            var input = new KeyCounter();
+            input.add(f.input, amount);
+            helper.assertTrue(f.host.getLogic().pushPattern(f.host.getLogic().getAvailablePatterns().getFirst(), new KeyCounter[]{input})
+                    && input.isEmpty(), "Accept the actual delivery");
+        }).thenWaitUntil(() -> {
+            var pattern = f.host.getLogic().getAvailablePatterns().getFirst();
+            var group = f.host.hostedPatterns().group(pattern.getDefinition());
+            helper.assertTrue(f.controller.runtimeSnapshot().factory().activeLaneCount() == 2 && group != null
+                            && group.materials().get(f.input) == amount - 2,
+                    "The two running lanes have paid for one unit each; remaining inputs still belong to the interface");
+        }).thenExecute(() -> {
+            var input = new KeyCounter();
+            input.add(f.input, 1);
+            helper.assertTrue(!f.host.getLogic().pushPattern(f.host.getLogic().getAvailablePatterns().getFirst(), new KeyCounter[]{input})
+                    && input.get(f.input) == 1, "Recipe thread quota stops new deliveries, not existing paid threads");
+        });
     }
 }

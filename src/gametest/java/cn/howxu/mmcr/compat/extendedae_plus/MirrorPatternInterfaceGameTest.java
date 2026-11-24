@@ -19,6 +19,8 @@ import appeng.core.definitions.AEItems;
 import appeng.helpers.patternprovider.PatternProviderLogic;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
+import cn.howxu.mmcr.api.compat.appliedenergistics2.BulkPatternProvider;
+import appeng.api.networking.crafting.ICraftingProvider;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -54,6 +56,10 @@ import com.extendedae_plus.content.ae2.MirrorPatternProviderBlockEntity.MasterLo
 import com.extendedae_plus.init.ModItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.GlobalPos;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternRefundIndex;
+import net.minecraft.world.level.Level;
+import java.util.UUID;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -120,6 +126,10 @@ public class MirrorPatternInterfaceGameTest {
                     source.getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
                     helper.assertTrue(mirror(helper, mirrorPos).bindToMaster(master(helper, main)), "Bind the real mirror");
                     var details = source.getLogic().getAvailablePatterns().getFirst();
+                    for (var host : List.of(source, original)) {
+                        var view = BulkPatternProvider.find(host.getMainNode().getNode().getService(ICraftingProvider.class));
+                        helper.assertTrue(view.isPresent(), "Extended master and mirror expose their own node's query");
+                    }
                     var request = new KeyCounter();
                     request.add(iron, 7);
                     helper.assertTrue(original.hostedPatterns().accept(details, new KeyCounter[]{request}, level.getGameTime(), Actionable.MODULATE),
@@ -156,6 +166,68 @@ public class MirrorPatternInterfaceGameTest {
                     helper.assertTrue(!source.hasGroupHostedMaterials() && primary.extract(copper, 4, Actionable.SIMULATE, IActionSource.empty()) == 3
                             && primary.extract(iron, 8, Actionable.SIMULATE, IActionSource.empty()) == 0
                             && secondary.extract(iron, 8, Actionable.SIMULATE, IActionSource.empty()) == 7, "Each owner refunds exactly once into its own grid");
+                }).thenSucceed();
+    }
+
+    public void crossDimensionRefund(GameTestHelper helper) {
+        var mirrorPos = new BlockPos(2, 1, 0);
+        var localPos = new BlockPos(0, 1, 0);
+        placePort(helper, mirrorPos, MIRROR);
+        placePort(helper, localPos, ORDINARY);
+        helper.setBlock(mirrorPos.east(2), AEBlocks.CREATIVE_ENERGY_CELL.block());
+        helper.setBlock(mirrorPos.south(2), AEBlocks.ME_CHEST.block());
+        var energy = helper.<CreativeEnergyCellBlockEntity>getBlockEntity(mirrorPos.east(2));
+        var chest = helper.<MEChestBlockEntity>getBlockEntity(mirrorPos.south(2));
+        chest.setCell(AEItems.ITEM_CELL_1K.stack());
+        var mirror = port(helper, mirrorPos);
+        var local = port(helper, localPos);
+        var server = helper.getLevel().getServer();
+        var other = server.getLevel(Level.NETHER);
+        var remotePos = new BlockPos(8, other.getMaxBuildHeight() - 1, 8);
+        var absent = GlobalPos.of(Level.NETHER, new BlockPos(20_000_000, 64, 20_000_000));
+        helper.startSequence().thenWaitUntil(() -> {
+            assertNodesReady(helper, localPos, mirrorPos);
+            helper.assertTrue(energy.getMainNode().getNode() != null && chest.getMainNode().getNode() != null, "Mirror grid ready");
+        }).thenExecute(() -> {
+            GridHelper.createConnection(mirror.getMainNode().getNode(), energy.getMainNode().getNode());
+            GridHelper.createConnection(mirror.getMainNode().getNode(), chest.getMainNode().getNode());
+        }).thenWaitUntil(() -> helper.assertTrue(mirror.hostedOnline(), "Mirror is powered independently"))
+                .thenExecute(() -> {
+                    helper.assertTrue(other.getBlockState(remotePos).isAir(), "Isolated remote fixture site is empty");
+                    other.setBlockAndUpdate(remotePos, ModBlocks.BLOCKS.get(ORDINARY).get().defaultBlockState());
+                    try {
+                        var remote = (PatternInterfaceBlockEntity) other.getBlockEntity(remotePos);
+                        local.getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
+                        remote.getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
+                        var logic = mirror(helper, mirrorPos);
+                        helper.assertTrue(logic.bindToMaster(master(helper, localPos)), "Initial local binding");
+                        var details = local.getLogic().getAvailablePatterns().getFirst();
+                        var iron = AEItemKey.of(Items.IRON_INGOT);
+                        var raw = new KeyCounter();
+                        raw.add(iron, 7);
+                        helper.assertTrue(mirror.hostedPatterns().accept(details, new KeyCounter[]{raw},
+                                helper.getLevel().getGameTime(), Actionable.MODULATE), "The mirror owns its cross-dimensional delivery");
+                        helper.assertTrue(logic.bindToMaster(new MasterLocation(other.dimension(), remotePos, null)), "Rebind across dimensions");
+                        local.requestGroupHostedRefund();
+                        helper.assertTrue(!local.hasGroupHostedMaterials() && remote.hasGroupHostedMaterials()
+                                        && mirror.hostedPatterns().group(details.getDefinition()).materials().get(iron) == 7,
+                                "Former master cannot take the rebound mirror's escrow");
+                        var index = PatternRefundIndex.getOrCreate(other);
+                        var identity = UUID.randomUUID();
+                        index.observe(absent, identity, GlobalPos.of(other.dimension(), remotePos), true);
+                        try {
+                            helper.assertFalse(other.hasChunkAt(absent.pos()), "Absent mirror chunk starts unloaded");
+                            remote.requestGroupHostedRefund();
+                            helper.assertTrue(!other.hasChunkAt(absent.pos()) && index.member(absent).requested()
+                                            && remote.hasGroupHostedMaterials() && mirror.hostedPatterns().isEmpty()
+                                            && chest.getInventory().extract(iron, 8, Actionable.SIMULATE, IActionSource.empty()) == 7,
+                                    "Cross-dimensional request refunds the loaded mirror locally and never loads the absent one");
+                        } finally {
+                            index.forget(absent, identity);
+                        }
+                    } finally {
+                        other.removeBlock(remotePos, false);
+                    }
                 }).thenSucceed();
     }
 
