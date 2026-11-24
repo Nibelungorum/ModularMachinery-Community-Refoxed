@@ -12,15 +12,18 @@ public final class ConfigTestSupport {
     private ConfigTestSupport() {
     }
 
+    public static void ensureServerConfigLoaded() throws ReflectiveOperationException {
+        if (ServerConfig.SPEC.isLoaded()) return;
+        var config = CommentedConfig.inMemory();
+        ServerConfig.SPEC.correct(config);
+        var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
+    }
+
     public static WorkModeScope openMachineWorkMode(MachineWorkMode mode) throws ReflectiveOperationException {
         boolean loaded = ServerConfig.SPEC.isLoaded();
-        if (!loaded) {
-            var config = CommentedConfig.inMemory();
-            ServerConfig.SPEC.correct(config);
-            var constructor = Class.forName("net.neoforged.fml.config.LoadedConfig").getDeclaredConstructors()[0];
-            constructor.setAccessible(true);
-            ServerConfig.SPEC.acceptConfig((IConfigSpec.ILoadedConfig) constructor.newInstance(config, null, null));
-        }
+        ensureServerConfigLoaded();
         ServerConfig.MACHINE_WORK_MODE.clearCache();
         var previous = ServerConfig.MACHINE_WORK_MODE.get();
         setMachineWorkMode(mode);

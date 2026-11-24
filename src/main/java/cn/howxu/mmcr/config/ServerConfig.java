@@ -27,6 +27,7 @@ public final class ServerConfig {
     public static final int DEFAULT_AUTO_IO_MAX_DELAY_TICKS = 60;
     public static final int DEFAULT_AUTO_IO_SUCCESS_DELAY_STEP_TICKS = 5;
     public static final int DEFAULT_ASSEMBLY_MAX_BLOCKS_PER_OPERATION = MultiblockAssemblyService.MAX_BLOCKS_PER_OPERATION;
+    public static final int DEFAULT_EXPORT_MAX_VOLUME = 3_276_800;
     public static final int DEFAULT_ASYNC_WORKER_COUNT = Math.min(Math.max(Runtime.getRuntime().availableProcessors() / 4, 4), 8);
     public static final int DEFAULT_ASYNC_WORKER_PROGRESS_WAIT_MS = 10;
     public static final int DEFAULT_ASYNC_WORKER_QUEUE_CAPACITY = Math.max(256, DEFAULT_ASYNC_WORKER_COUNT * 64);
@@ -56,6 +57,7 @@ public final class ServerConfig {
     public static final ModConfigSpec.IntValue AUTO_IO_MAX_DELAY_TICKS;
     public static final ModConfigSpec.IntValue AUTO_IO_SUCCESS_DELAY_STEP_TICKS;
     public static final ModConfigSpec.IntValue ASSEMBLY_MAX_BLOCKS_PER_OPERATION;
+    public static final ModConfigSpec.IntValue EXPORT_MAX_VOLUME;
     public static final ModConfigSpec.EnumValue<MachineWorkMode> MACHINE_WORK_MODE;
     public static final ModConfigSpec.IntValue ASYNC_WORKER_COUNT;
     public static final ModConfigSpec.IntValue ASYNC_WORKER_PROGRESS_WAIT_MS;
@@ -216,6 +218,14 @@ public final class ServerConfig {
                 .defineInRange("max_blocks_per_operation", DEFAULT_ASSEMBLY_MAX_BLOCKS_PER_OPERATION, 1, 1_000_000);
         builder.pop();
 
+        builder.translation("mmcr.configuration.server.export").push("export");
+        EXPORT_MAX_VOLUME = builder
+                .translation("mmcr.configuration.server.export.max_volume")
+                .comment("Maximum number of block positions in a detector export selection, including air.",
+                        "Large selections can stall the server and consume substantial memory.")
+                .defineInRange("max_volume", DEFAULT_EXPORT_MAX_VOLUME, 1, Integer.MAX_VALUE);
+        builder.pop();
+
         builder.translation("mmcr.configuration.server.energy").push("energy");
         ENERGY_CONSUMPTION_MULTIPLIER = builder
                 .translation("mmcr.configuration.server.energy.consumption_multiplier")
@@ -284,6 +294,10 @@ public final class ServerConfig {
 
     public static int assemblyMaxBlocksPerOperation() {
         return valueOrDefault(ASSEMBLY_MAX_BLOCKS_PER_OPERATION, DEFAULT_ASSEMBLY_MAX_BLOCKS_PER_OPERATION);
+    }
+
+    public static int exportMaxVolume() {
+        return valueOrDefault(EXPORT_MAX_VOLUME, DEFAULT_EXPORT_MAX_VOLUME);
     }
 
     public static MachineWorkMode machineWorkMode() {
