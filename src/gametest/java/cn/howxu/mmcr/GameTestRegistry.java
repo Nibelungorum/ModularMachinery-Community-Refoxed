@@ -546,6 +546,7 @@ public final class GameTestRegistry {
                     helper -> new PatternUploadGameTest().interfacesKeepOwnUploadIdentity(helper));
             register(event, "eaep_channel_card_own_menu", 100, structure,
                     helper -> new ChannelCardMenuGameTest().channelCardsSurviveOwnMenusAndReconnect(helper));
+            register(event, "eaep_cross_dimension_refund", 600, structure, helper -> new MirrorPatternInterfaceGameTest().crossDimensionRefund(helper));
             register(event, "eaep_mirror_group_refund", 600, structure, helper -> new MirrorPatternInterfaceGameTest().refundBoundGroup(helper));
             register(event, "eaep_mirror_sync", 200, structure,
                     helper -> new MirrorPatternInterfaceGameTest().syncAndPersistence(helper));
