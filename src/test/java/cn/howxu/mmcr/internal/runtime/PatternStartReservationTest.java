@@ -1048,7 +1048,7 @@ class PatternStartReservationTest {
     }
 
     @Test
-    void output_matching_rejects_differences_in_amount_components_and_fluid() {
+    void output_matching_requires_components_and_fluid_identity_not_amount() {
         MachineControllerBlockEntity controller = RuntimeTestFixtures.controller(MMCR.id("test_cube"));
         formForPattern(controller, true);
         ItemStack componentOutput = stack(Items.IRON_NUGGET, 1);
@@ -1068,8 +1068,12 @@ class PatternStartReservationTest {
                 .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
         assertThat(controller.reservePatternStart(PATTERN_PORT,
                 List.of(new MachineOutput.ItemOutput(componentOutput, 1F),
-                        new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 500), 1F)), List.of()).status())
+                        new MachineOutput.FluidOutput(new FluidStack(Fluids.LAVA, 500), 1F)), List.of()).status())
                 .isEqualTo(PatternStartReservation.Status.UNAVAILABLE);
+        try (var reservation = controller.reservePatternStart(PATTERN_PORT,
+                List.of(new MachineOutput.FluidOutput(new FluidStack(Fluids.WATER, 500), 1F)), List.of())) {
+            assertThat(reservation.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+        }
     }
 
     @Test
@@ -1790,6 +1794,24 @@ class PatternStartReservationTest {
             assertThat(restored.activeRecipe().inputConsumptionPlan().isValidFor(restored.activeRecipe().effectiveRequirements())).isTrue();
             assertThat(materials.amount(0)).isZero();
         }
+    }
+
+    @Test
+    void hostedProbeIsReadOnlyAndActualStartRunsHookOnce() {
+        AtomicInteger hooks = new AtomicInteger();
+        var fixture = new PendingStartFixture("hosted_probe", RecipeBehavior.builder()
+                .beforeStart(context -> hooks.incrementAndGet()).build(), List.of(input(Items.IRON_INGOT, 1)));
+        var inputs = fixture.view(1, new ItemStack(Items.IRON_INGOT));
+        var probe = fixture.controller.probeHostedPattern(PATTERN_PORT, List.of(), inputs, Set.of());
+        assertThat(probe).isNotNull();
+        assertThat(probe.payable()).isOne();
+        assertThat(hooks).hasValue(0);
+        try (var start = fixture.controller.reserveHostedPatternStart(PATTERN_PORT, probe.recipeId(),
+                List.of(), probe.payable(), inputs)) {
+            assertThat(start.status()).isEqualTo(PatternStartReservation.Status.RESERVED);
+            assertThat(hooks).hasValue(1);
+        }
+        assertThat(fixture.views.getFirst().amount(0)).isOne();
     }
 
     /** Pending views use real input routing and a physical energy limit, never a mocked plan.

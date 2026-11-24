@@ -1088,20 +1088,36 @@ public final class FactoryRuntime {
     public @Nullable PatternLane reserveExactPatternStart(MachineRecipe recipe, long parallelism,
                                                            List<MachineCapability> requestCapabilities,
                                                            @Nullable BlockPos requestSource) {
-        if (recipe == null || controller == null || paused || parallelism <= 0L || !patternQuotaAvailable(recipe)) return null;
+        return reserveSelectedPatternStart(recipe, parallelism, requestCapabilities, requestSource, true);
+    }
+
+    private @Nullable FactoryRecipeThread availablePatternLane(MachineRecipe recipe) {
         FactoryRecipeThread selected = null;
         for (int index = 0; index < Math.min(laneLimit, lanes.size()); index++) {
             FactoryRecipeThread lane = lanes.get(index);
-            if (!lane.isIdle() || patternPreparations.containsKey(lane) || !lane.canStartPatternRecipe(recipe)) continue;
+            if (!lane.isIdle() || lane.isStartPending() || pendingAsyncSearches.containsKey(lane)
+                    || patternPreparations.containsKey(lane) || !lane.canStartPatternRecipe(recipe)) continue;
             if (selected == null) selected = lane;
             if (lane.cachedPatternRecipe(recipe.id()) != null) { selected = lane; break; }
         }
+        return selected;
+    }
+
+    public boolean hasHostedPatternLane(MachineRecipe recipe) {
+        return controller != null && !paused && patternQuotaAvailable(recipe)
+                && (lanes.size() < laneLimit || availablePatternLane(recipe) != null);
+    }
+
+    public @Nullable PatternLane reserveSelectedPatternStart(MachineRecipe recipe, long parallelism,
+            List<MachineCapability> requestCapabilities, @Nullable BlockPos requestSource, boolean exact) {
+        if (recipe == null || controller == null || paused || parallelism <= 0L || !patternQuotaAvailable(recipe)) return null;
+        FactoryRecipeThread selected = availablePatternLane(recipe);
         if (selected != null) return reservePatternStart(selected, recipe, parallelism,
-                requestCapabilities, requestSource, null, true);
+                requestCapabilities, requestSource, null, exact, !exact);
         if (lanes.size() >= laneLimit) return null;
         FactoryRecipeThread lane = FactoryRecipeThread.simple(controller, "factory-" + nextFactoryLaneId++);
         addLane(lane);
-        PatternLane reservation = reservePatternStart(lane, recipe, parallelism, requestCapabilities, requestSource, null, true);
+        PatternLane reservation = reservePatternStart(lane, recipe, parallelism, requestCapabilities, requestSource, null, exact, !exact);
         if (reservation == null) removeLane(lane);
         return reservation;
     }
@@ -1988,7 +2004,7 @@ public final class FactoryRuntime {
                                                         @Nullable BlockPos requestSource,
                                                         @Nullable LongFunction<List<MachineCapability>> capabilitiesForParallelism) {
         return reservePatternStart(lane, recipe, requestedParallelism, requestCapabilities, requestSource,
-                capabilitiesForParallelism, false);
+                capabilitiesForParallelism, false, false);
     }
 
     private @Nullable PatternLane reservePatternStart(FactoryRecipeThread lane, MachineRecipe recipe,
@@ -1996,7 +2012,7 @@ public final class FactoryRuntime {
                                                         List<MachineCapability> requestCapabilities,
                                                         @Nullable BlockPos requestSource,
                                                         @Nullable LongFunction<List<MachineCapability>> capabilitiesForParallelism,
-                                                        boolean exact) {
+                                                        boolean exact, boolean hosted) {
         if (patternStartReservations.contains(lane) || patternPreparations.containsKey(lane) || !lane.isIdle()
                 || !lane.canStartPatternRecipe(recipe)) return null;
         SharedIoCoordinator coordinator = controller.getLevel() instanceof ServerLevel level
@@ -2008,6 +2024,7 @@ public final class FactoryRuntime {
         patternPreparations.put(lane, recipe.id());
         try {
             prepared = exact ? lane.runtime().prepareExactPatternStart(recipe, requestedParallelism, requestCapabilities, requestSource)
+                    : hosted ? lane.runtime().prepareHostedPatternStart(recipe, requestedParallelism, requestCapabilities, requestSource)
                     : capabilitiesForParallelism == null
                     ? lane.runtime().preparePatternStart(recipe, requestedParallelism, requestCapabilities, requestSource)
                     : lane.runtime().preparePendingPatternStart(recipe, requestedParallelism, capabilitiesForParallelism, requestSource);
