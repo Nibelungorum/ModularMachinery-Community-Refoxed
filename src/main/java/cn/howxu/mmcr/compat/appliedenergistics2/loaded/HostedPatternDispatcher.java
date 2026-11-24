@@ -63,6 +63,29 @@ public final class HostedPatternDispatcher {
         return false;
     }
 
+    long suggestPatternCopies(AEItemKey definition, List<MachineOutput> hints, PatternBulkSizing sizing) {
+        long cap = sizing.maxCopies();
+        if (cap <= 0) return 0;
+        var maximum = new Request(host, sizing.projected(cap));
+        for (var controller : host.hostedControllers()) {
+            if (!controller.canPreviewHostedPatterns()) continue; // Even a rejection stamp reads the controller snapshot.
+            var skip = new HashSet<>(excluded(definition, controller, false));
+            MachineControllerBlockEntity.PatternProbe candidate;
+            while ((candidate = controller.previewHostedPattern(host.getBlockPos(), hints, maximum.capabilities, skip, null)) != null) {
+                var offer = candidate;
+                long copies = PatternBulkSizing.copiesForBest(cap, n -> {
+                    if (n == cap) return offer.payable();
+                    var request = new Request(host, sizing.projected(n));
+                    var probe = controller.previewHostedPattern(host.getBlockPos(), hints, request.capabilities, skip, offer.recipeId());
+                    return probe == null ? 0 : probe.payable();
+                });
+                if (copies > 0) return copies;
+                skip.add(offer.recipeId());
+            }
+        }
+        return 0;
+    }
+
     public void run(long now) {
         if (working) return;
         working = true;
@@ -128,13 +151,17 @@ public final class HostedPatternDispatcher {
     }
 
     private Set<Identifier> excluded(AEItemKey key, MachineControllerBlockEntity controller) {
+        return excluded(key, controller, true);
+    }
+
+    private Set<Identifier> excluded(AEItemKey key, MachineControllerBlockEntity controller, boolean clean) {
         var failures = rejected.get(key);
         if (failures == null) return Set.of();
         var last = failures.get(controller.getBlockPos());
         if (last == null) return Set.of();
         Group group = host.hostedPatterns().group(key);
         if (group != null && last.materials == group.materials() && last.stamp.equals(Stamp.of(controller))) return last.recipes;
-        failures.remove(controller.getBlockPos());
+        if (clean) failures.remove(controller.getBlockPos());
         return Set.of();
     }
 
@@ -164,8 +191,8 @@ public final class HostedPatternDispatcher {
     private static final class Request {
         final List<MachineCapability> capabilities = new ArrayList<>();
         final List<PatternRequestResourceStorage<?>> views = new ArrayList<>();
-        Request(PatternInterfaceBlockEntity host, Group group) {
-            var inputs = group.requestCounters();
+        Request(PatternInterfaceBlockEntity host, Group group) { this(host, group.requestCounters()); }
+        Request(PatternInterfaceBlockEntity host, KeyCounter[] inputs) {
             for (var family : AE2ResourceFamilies.all()) add(host, family, inputs);
         }
         private <R> void add(PatternInterfaceBlockEntity host, AE2ResourceFamily<R> family, KeyCounter[] inputs) {

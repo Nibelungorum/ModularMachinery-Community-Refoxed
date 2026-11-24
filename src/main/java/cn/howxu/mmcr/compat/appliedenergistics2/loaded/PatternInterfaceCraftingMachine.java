@@ -10,6 +10,8 @@ import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamili
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
+import java.util.Map;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 import java.util.ArrayList;
@@ -50,6 +52,17 @@ public final class PatternInterfaceCraftingMachine implements ICraftingMachine {
         } finally {
             accepting = false;
         }
+    }
+
+    public long suggestPatternCopies(IPatternDetails pattern, KeyCounter[] unit, long maxCopies) {
+        if (maxCopies <= 0 || accepting || !(host.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread()
+                || !host.acceptingHostedInputs() || !host.hostedPatterns().canAccept(pattern.getDefinition())
+                || !validInputs(pattern, unit, level)) return 0;
+        var hints = outputs(pattern.getOutputs());
+        if (hints.isEmpty()) return 0;
+        var group = host.hostedPatterns().group(pattern.getDefinition());
+        var sizing = PatternBulkSizing.from(unit, group == null ? Map.of() : group.materials(), maxCopies);
+        return host.hostedDispatcher().suggestPatternCopies(pattern.getDefinition(), hints, sizing);
     }
 
     static boolean validInputs(IPatternDetails pattern, KeyCounter[] inputs, Level level) {

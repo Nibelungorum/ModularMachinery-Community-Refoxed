@@ -190,6 +190,14 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
     }
 
     @Override
+    public long previewPrefetch(long requested, long alreadyPlanned) {
+        if (prefetchBridge == null || requested <= 0 || alreadyPlanned > buffer.storage().capacity() - buffer.amount() - requested)
+            return 0;
+        // This port's real bridge accepts exact amounts, not partial allocations.
+        return prefetchBridge.canPreviewExact(alreadyPlanned + requested) ? requested : 0;
+    }
+
+    @Override
     public Optional<PrefetchPlan> planPrefetch(long requestedAmount) {
         if (requestedAmount <= 0L || prefetchBridge == null
                 || requestedAmount > buffer.storage().capacity() - buffer.amount()) return Optional.empty();
@@ -270,5 +278,6 @@ public final class FluxEnergyInputCapability implements MachineCapability, Scala
     @FunctionalInterface
     public interface ExactPrefetchBridge {
         Optional<CapabilityOperation> planExactExtract(long requestedAmount);
+        default boolean canPreviewExact(long amount) { return false; }
     }
 }

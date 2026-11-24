@@ -51,8 +51,13 @@ public final class FluxEnergyNetwork extends SnapshotJournal<Long> implements Ex
     }
 
     @Override
+    public boolean canPreviewExact(long amount) {
+        return amount > 0 && energy != null && energy.extract(amount, true) == amount;
+    }
+
+    @Override
     public Optional<CapabilityOperation> planExactExtract(long requestedAmount) {
-        if (requestedAmount <= 0L || energy == null || energy.extract(requestedAmount, true) != requestedAmount) {
+        if (!canPreviewExact(requestedAmount)) {
             return Optional.empty();
         }
         return Optional.of(transaction -> extractExactly(requestedAmount, transaction));

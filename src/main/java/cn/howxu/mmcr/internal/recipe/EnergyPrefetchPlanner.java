@@ -7,6 +7,7 @@ import cn.howxu.mmcr.util.SaturatingLong;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -23,6 +24,34 @@ public final class EnergyPrefetchPlanner {
 
     public static List<MachineRequirement> startRequirements(List<MachineRequirement> requirements, boolean prefetch) {
         return prefetch ? requirements.stream().filter(r -> r.prefetchEnergyPerTick().isEmpty()).toList() : requirements;
+    }
+
+    /** Same requirement order as a real reservation, but all allocations are local to this calculation. */
+    public static boolean previewFits(List<MachineRequirement> requirements, int duration, long parallelism,
+                                      List<RecipeEnergyPrefetchFacet> facets) {
+        var planned = new HashMap<String, Long>();
+        for (var requirement : requirements) {
+            var energy = requirement.prefetchEnergyPerTick();
+            if (energy.isEmpty()) continue;
+            if (planned.isEmpty()) {
+                for (var facet : facets) {
+                    String key = facet.reservationKey();
+                    if (key == null || key.isBlank() || planned.put(key, 0L) != null) return false;
+                }
+            }
+            long needed = SaturatingLong.multiply(SaturatingLong.multiply(energy.getAsLong(), duration), parallelism);
+            for (var facet : facets) {
+                if (needed == 0) break;
+                String key = facet.reservationKey();
+                long used = planned.get(key);
+                long amount = facet.previewPrefetch(needed, used);
+                if (amount < 0 || amount > needed || amount > Long.MAX_VALUE - used) return false;
+                planned.put(key, used + amount);
+                needed -= amount;
+            }
+            if (needed > 0) return false;
+        }
+        return true;
     }
 
     public static Result reserve(List<MachineRequirement> requirements, int duration, long parallelism,

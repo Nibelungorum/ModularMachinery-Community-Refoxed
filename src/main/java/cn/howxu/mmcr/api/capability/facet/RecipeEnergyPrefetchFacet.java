@@ -36,6 +36,11 @@ public interface RecipeEnergyPrefetchFacet extends CapabilityFacet {
      */
     Optional<PrefetchPlan> planPrefetch(long requestedAmount);
 
+    /** Amount available for a read-only offer, after earlier requirements in the same offer.
+     * Do not reserve, mutate the network, or invoke commit/restore. Unknown endpoints contribute nothing.
+     */
+    default long previewPrefetch(long requested, long alreadyPlanned) { return 0; }
+
     /**
      * Restores a reservation when a candidate plan is discarded or rolled back.
      *

@@ -20,6 +20,7 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.helper.ProcessingComponent;
 import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.EnergyRequirement;
+import cn.howxu.mmcr.internal.recipe.EnergyPrefetchPlanner;
 import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability;
 import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.config.ServerConfig;
@@ -244,6 +245,14 @@ class FluxRuntimeBoundaryTest {
         Method method = CraftingRuntime.class.getDeclaredMethod("perTickRequirements");
         method.setAccessible(true);
         return (List<?>) method.invoke(runtime);
+    }
+
+    @Test
+    void readOnlyQuoteNeverAsksAnUnknownEnergyEndpointToReserveThenRestore() {
+        var energy = new ObservedFlux("single", 15);
+        assertThat(EnergyPrefetchPlanner.previewFits(List.of(new EnergyRequirement(5)), 3, 1, List.of(energy))).isFalse();
+        assertThat(energy.planCalls).isZero();
+        assertThat(energy.networkCommits).isZero();
     }
 
     private static void startSinglePrefetch(Fixture fixture, ObservedFlux energy, int duration) {
@@ -643,6 +652,7 @@ class FluxRuntimeBoundaryTest {
         private final FluxEnergyInputCapability delegate;
         private final FluxEnergyInputCapability missing = new FluxEnergyInputCapability(new FluxEnergyBuffer(), "missing");
         private int networkCommits;
+        private int planCalls;
         private int consumeCalls;
         private int releaseCalls;
         private long released;
@@ -672,6 +682,7 @@ class FluxRuntimeBoundaryTest {
         }
         @Override public String reservationKey() { return delegate.reservationKey(); }
         @Override public Optional<PrefetchPlan> planPrefetch(long amount) {
+            planCalls++;
             return missingPrefetchResult ? Optional.of(new PrefetchPlan(amount, transaction -> null))
                     : delegate.planPrefetch(amount);
         }

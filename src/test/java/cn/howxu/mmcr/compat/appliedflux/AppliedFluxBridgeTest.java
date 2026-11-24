@@ -80,6 +80,19 @@ class AppliedFluxBridgeTest {
     }
 
     @Test
+    void quoteChecksTheCombinedEnergyDemandWithoutModulatingTheNetwork() {
+        RecordingStorage storage = new RecordingStorage(100L, 100L);
+        FluxEnergyBuffer buffer = new FluxEnergyBuffer();
+        var capability = new FluxEnergyInputCapability(buffer, "offer", new FluxEnergyNetwork(storage));
+        assertThat(capability.previewPrefetch(60, 40)).isEqualTo(60);
+        assertThat(capability.previewPrefetch(61, 40)).isZero();
+        assertThat(storage.calls).containsExactly("extract:100:true", "extract:101:true");
+        assertThat(storage.amount).isEqualTo(100L);
+        assertThat(buffer.reserved()).isZero();
+        assertThat(buffer.amount()).isZero();
+    }
+
+    @Test
     void energyLostAfterPlanningIsReportedAsMissingEnergy() {
         RecordingStorage storage = new RecordingStorage(100L, 100L);
         FluxEnergyNetwork network = new FluxEnergyNetwork(storage);

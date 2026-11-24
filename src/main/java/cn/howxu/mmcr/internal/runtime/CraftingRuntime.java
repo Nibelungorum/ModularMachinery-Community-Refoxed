@@ -691,6 +691,14 @@ public final class CraftingRuntime {
 
     /** Probe live, source-scoped inputs and output space without invoking hooks, reserving a lane or paying. */
     public long probeHostedPattern(EffectiveRecipe recipe, List<MachineCapability> inputs, BlockPos source) {
+        return probeHostedPattern(recipe, inputs, source, false);
+    }
+
+    public long previewHostedPattern(EffectiveRecipe recipe, List<MachineCapability> inputs, BlockPos source) {
+        return probeHostedPattern(recipe, inputs, source, true);
+    }
+
+    private long probeHostedPattern(EffectiveRecipe recipe, List<MachineCapability> inputs, BlockPos source, boolean preview) {
         var runtime = controller.currentRuntimeSnapshot();
         if (AsyncRequirementPlanner.capturedRequirementFailure(runtime, recipe.requirements()) != null) return 0;
         var context = new CraftingContext(components.capabilitySnapshot(), contextModifiers(runtime))
@@ -700,17 +708,18 @@ public final class CraftingRuntime {
                 recipe.parallelismLimit(), false);
         if (!planned.successful() || planned.plan() == null) return 0;
         long limit = planned.plan().parallelism();
-        if (facets.isEmpty() || prefetchedEnergyFits(recipe, limit, facets)) return limit;
+        if (facets.isEmpty() || prefetchedEnergyFits(recipe, limit, facets, preview)) return limit;
         long low = 0, high = limit - 1;
         while (low < high) {
             long mid = low + (high - low + 1) / 2;
-            if (prefetchedEnergyFits(recipe, mid, facets)) low = mid;
+            if (prefetchedEnergyFits(recipe, mid, facets, preview)) low = mid;
             else high = mid - 1;
         }
         return low;
     }
 
-    private static boolean prefetchedEnergyFits(EffectiveRecipe recipe, long count, List<RecipeEnergyPrefetchFacet> facets) {
+    private static boolean prefetchedEnergyFits(EffectiveRecipe recipe, long count, List<RecipeEnergyPrefetchFacet> facets, boolean preview) {
+        if (preview) return EnergyPrefetchPlanner.previewFits(recipe.requirements(), recipe.duration(), count, facets);
         var reservations = planPrefetches(recipe.requirements(), recipe.duration(), count, facets);
         if (reservations == null) return false;
         EnergyPrefetchPlanner.discard(reservations);

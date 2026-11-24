@@ -5,6 +5,12 @@ import appeng.helpers.patternprovider.PatternProviderLogicHost;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import appeng.api.implementations.blockentities.ICraftingMachine;
 import appeng.api.crafting.IPatternDetails;
+import appeng.api.config.LockCraftingMode;
+import cn.howxu.mmcr.api.compat.appliedenergistics2.BulkPatternProvider;
+import cn.howxu.mmcr.compat.appliedenergistics2.loaded.BulkPatternProviderSource;
+import net.minecraft.server.level.ServerLevel;
+import org.jspecify.annotations.Nullable;
+import java.util.Set;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceHost;
@@ -31,7 +37,7 @@ import java.util.List;
  * @author howxu <dev@howxu.cn>
  */
 @Mixin(PatternProviderLogic.class)
-public abstract class PatternProviderLogicMixin {
+public abstract class PatternProviderLogicMixin implements BulkPatternProviderSource {
     @Shadow
     @Final
     private PatternProviderLogicHost host;
@@ -39,6 +45,21 @@ public abstract class PatternProviderLogicMixin {
     @Shadow
     @Final
     private List<IPatternDetails> patterns;
+
+    @Shadow public abstract boolean isBusy();
+    @Shadow public abstract LockCraftingMode getCraftingLockedReason();
+    @Shadow private Set<Direction> getActiveSides() { throw new AssertionError(); }
+
+    @Override
+    public @Nullable BulkPatternProvider mmcr$bulkPatternProvider() {
+        if (!(host instanceof PatternInterfaceBlockEntity owner)) return null;
+        return (pattern, inputs, max) -> {
+            if (!(owner.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread()
+                    || !owner.hostedOnline() || !patterns.contains(pattern) || isBusy()
+                    || getCraftingLockedReason() != LockCraftingMode.NONE || getActiveSides().isEmpty()) return 0;
+            return owner.craftingMachine().suggestPatternCopies(pattern, inputs, max);
+        };
+    }
 
     @Inject(method = "updatePatterns", at = @At(value = "INVOKE",
             target = "Lappeng/api/networking/crafting/ICraftingProvider;requestUpdate(Lappeng/api/networking/IManagedGridNode;)V"))
