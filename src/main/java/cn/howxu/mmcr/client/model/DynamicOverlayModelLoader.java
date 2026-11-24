@@ -30,6 +30,7 @@ import net.neoforged.neoforge.client.model.block.CustomUnbakedBlockStateModel;
 import net.neoforged.neoforge.client.model.pipeline.QuadBakingVertexConsumer;
 import net.neoforged.neoforge.model.data.ModelData;
 import org.joml.Vector3f;
+import org.joml.Vector3fc;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -49,6 +50,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     public static final MapCodec<Unbaked> PORT_CODEC = MapCodec.unit(() -> new Unbaked(DynamicOverlayBakedModel.Kind.PORT));
 
     private static final Material FALLBACK_PARTICLE = new Material(MMCR.id("block/ctm/basic_casing/particle"));
+    // Only item models grow overlays. World layers share the base quad's vertices.
     static final float OVERLAY_GROW = 0.0003f;
     private static final Set<Identifier> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
@@ -68,40 +70,42 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
                              List<BlockStateModelPart> parts) {
         ModelData modelData = level.getModelData(pos);
         DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
-        QuadCollection.Builder quads = new QuadCollection.Builder();
-
-        boolean ctmBase = false;
-        MachineAppearanceSpec.TextureSource ctmSource = ctmSource(kind, state, modelData);
-        var sourceState = DynamicOverlayBakedModel.sourceState(ctmSource, level, pos);
-        if (sourceState.isPresent()) {
-            BlockState appearance = sourceState.get();
-            BlockStateModel sourceModel = Minecraft.getInstance().getModelManager()
-                    .getBlockStateModelSet().get(appearance);
-            ctmBase = AthenaModelBridge.get().collectParts(sourceModel, level, pos, appearance, random, parts);
-        }
-
         Direction overlayFace = overlayFace(state);
         Direction rollFacing = rollFacing(state);
-        Identifier stateOverlay = null;
+        ImmutableList<Identifier> overlays = textures.overlays();
         if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER) {
             Identifier machineId = machineId(state, modelData);
             boolean easterEgg = ControllerIdleEasterEggManager.trackAndIsActive(level, pos, state, machineId);
-            stateOverlay = DynamicOverlayBakedModel.controllerStateOverlay(machineId,
+            var stateOverlay = DynamicOverlayBakedModel.controllerStateOverlay(machineId,
                     state.getValue(MachineControllerBlock.ACTIVE), easterEgg);
+            overlays = ImmutableList.<Identifier>builder().addAll(overlays).add(stateOverlay).build();
         }
-        ImmutableList<OverlayLayer> overlayLayers = overlayLayers(textures.overlays(), stateOverlay);
-        for (Direction direction : Direction.values()) {
-            if (!ctmBase) {
-                addFace(quads, direction, baseMaterial(textures.base().forFace(direction)), 0.0f, true);
-            }
-            if (direction == overlayFace || overlayFace == null) {
-                for (OverlayLayer layer : overlayLayers) {
-                    addFace(quads, direction, rollFacing, material(layer.texture()), layer.grow(), false);
-                }
+
+        int first = parts.size();
+        collectBaseParts(level, pos, state, modelData, random, parts, textures.base());
+        var materials = overlays.stream().map(runtimeMaterialGetter).toList();
+        for (int i = first; i < parts.size(); i++) {
+            parts.set(i, new LayeredFacePart(parts.get(i), overlayFace, rollFacing, materials));
+        }
+    }
+
+    private void collectBaseParts(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData,
+                                  RandomSource random, List<BlockStateModelPart> parts, DynamicOverlayBakedModel.FaceTextures textures) {
+        var bridge = AthenaModelBridge.get();
+        if (bridge.available()) {
+            var sourceState = DynamicOverlayBakedModel.sourceState(ctmSource(kind, state, modelData), level, pos);
+            if (sourceState.isPresent()) {
+                var appearance = sourceState.get();
+                BlockStateModel sourceModel = Minecraft.getInstance().getModelManager().getBlockStateModelSet().get(appearance);
+                if (bridge.collectParts(sourceModel, level, pos, appearance, random, parts)) return;
             }
         }
 
-        parts.add(new SimpleModelWrapper(quads.build(), true, material(textures.base().forFace(Direction.NORTH))));
+        var quads = new QuadCollection.Builder();
+        for (Direction direction : Direction.values()) {
+            addFace(quads, direction, baseMaterial(textures.forFace(direction)), 0.0f, true);
+        }
+        parts.add(new SimpleModelWrapper(quads.build(), true, material(textures.forFace(Direction.NORTH))));
     }
 
     @Override
@@ -111,7 +115,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
     @Override
     public int materialFlags() {
-        return BakedQuad.FLAG_TRANSLUCENT;
+        return BakedQuad.FLAG_TRANSLUCENT | BakedQuad.FLAG_ANIMATED;
     }
 
     private DynamicOverlayBakedModel.TextureSet textures(BlockState state, ModelData modelData) {
@@ -200,10 +204,8 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
     private Material.Baked baseMaterial(Identifier texture) {
         Material.Baked baked = material(texture);
-        try (var sprite = baked.sprite()) {
-            if (!sprite.contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
-                return baked;
-            }
+        if (!baked.sprite().contents().name().equals(MissingTextureAtlasSprite.getLocation())) {
+            return baked;
         }
         if (MISSING_BASE_TEXTURES.add(texture)) {
             MMCR.LOG.warn("Missing dynamic base texture {}; using fallback", texture);
@@ -242,12 +244,11 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
     private static void putVertex(QuadBakingVertexConsumer builder, Material.Baked material, Vec3i normal,
                                   float x, float y, float z, float u, float v) {
-        try (var sprite = material.sprite()) {
-            builder.addVertex(x, y, z);
-            builder.setColor(1.0f, 1.0f, 1.0f, 1.0f);
-            builder.setNormal(normal.getX(), normal.getY(), normal.getZ());
-            builder.setUv(sprite.getU(u), sprite.getV(v));
-        }
+        var sprite = material.sprite();
+        builder.addVertex(x, y, z);
+        builder.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+        builder.setNormal(normal.getX(), normal.getY(), normal.getZ());
+        builder.setUv(sprite.getU(u), sprite.getV(v));
     }
 
     private static List<Vector3f> vertices(Direction direction, float grow) {
@@ -263,7 +264,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         };
     }
 
-    static float[] uv(Direction direction, Direction rollFacing, Vector3f vertex) {
+    static float[] uv(Direction direction, Direction rollFacing, Vector3fc vertex) {
         if (direction.getAxis().isVertical()) {
             boolean upward = direction == Direction.UP;
             return switch (rollFacing) {
@@ -276,7 +277,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         return new float[]{u(direction, vertex), v(direction, vertex)};
     }
 
-    private static float u(Direction direction, Vector3f vertex) {
+    private static float u(Direction direction, Vector3fc vertex) {
         return switch (direction) {
             case EAST -> 1.0f - vertex.z();
             case WEST -> vertex.z();
@@ -285,7 +286,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         };
     }
 
-    private static float v(Direction direction, Vector3f vertex) {
+    private static float v(Direction direction, Vector3fc vertex) {
         return direction.getAxis().isVertical() ? vertex.z() : 1.0f - vertex.y();
     }
 

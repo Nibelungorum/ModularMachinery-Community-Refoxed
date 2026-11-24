@@ -18,6 +18,9 @@ import java.util.List;
  */
 public final class LoadedAthenaModelBridge implements AthenaModelBridge {
     @Override
+    public boolean available() { return true; }
+
+    @Override
     public boolean collectParts(BlockStateModel sourceModel, BlockAndTintGetter level, BlockPos pos,
                                 BlockState appearance, RandomSource random, List<BlockStateModelPart> parts) {
         if (!(sourceModel instanceof AthenaBakedModel athenaModel)) {

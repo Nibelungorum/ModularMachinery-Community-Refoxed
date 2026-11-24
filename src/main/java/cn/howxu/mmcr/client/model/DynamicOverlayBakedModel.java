@@ -219,8 +219,15 @@ public final class DynamicOverlayBakedModel {
         }
 
         List<BlockStateModelPart> parts = new ArrayList<>();
-        minecraft.getModelManager().getBlockStateModelSet().get(block.defaultBlockState())
-                .collectParts(RandomSource.create(0L), parts);
+        var model = minecraft.getModelManager().getBlockStateModelSet().get(block.defaultBlockState());
+        // A dynamic machine cannot provide a standalone base for another dynamic machine.
+        if (model instanceof DynamicOverlayModelLoader) return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
+        try {
+            model.collectParts(RandomSource.create(0L), parts);
+        } catch (RuntimeException exception) {
+            MMCR.LOG.warn("Appearance source {} has no standalone model; using fallback", source.blockId(), exception);
+            return FaceTextures.uniform(FALLBACK_BASE_TEXTURE);
+        }
         EnumMap<Direction, Identifier> textures = new EnumMap<>(Direction.class);
         for (Direction direction : Direction.values()) {
             Identifier texture = textureForFace(parts, direction);

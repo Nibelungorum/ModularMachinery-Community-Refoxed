@@ -19,6 +19,8 @@ public interface AthenaModelBridge {
         return AthenaModelBridgeBootstrap.bridge();
     }
 
+    default boolean available() { return false; }
+
     boolean collectParts(BlockStateModel sourceModel, BlockAndTintGetter level, BlockPos pos,
                          BlockState appearance, RandomSource random, List<BlockStateModelPart> parts);
 }
