@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -31,11 +32,16 @@ public final class MultiblockPreviewBuilder {
     }
 
     public static MultiblockPreviewSnapshot build(Level level, BlockPos controllerPos, BlockArray rotatedPattern, int maxEntries) {
-        if (level == null || rotatedPattern == null || rotatedPattern.isEmpty() || maxEntries <= 0) {
+        return build(level, controllerPos, rotatedPattern, Map.of(), maxEntries);
+    }
+
+    public static MultiblockPreviewSnapshot build(Level level, BlockPos controllerPos, BlockArray rotatedPattern,
+                                                  Map<BlockPos, BlockPredicate> levelOverrides, int maxEntries) {
+        if (level == null || rotatedPattern == null || maxEntries <= 0) {
             return new MultiblockPreviewSnapshot(level == null ? Level.OVERWORLD : level.dimension(), controllerPos, List.of());
         }
         List<MultiblockPreviewSnapshot.Entry> entries = new ArrayList<>();
-        for (var entry : rotatedPattern.pattern().entrySet()) {
+        for (var entry : rotatedPattern.entriesWithOverrides(levelOverrides)) {
             if (entries.size() >= maxEntries) break;
             BlockPos relativePos = entry.getKey();
             BlockPos worldPos = controllerPos.offset(relativePos);

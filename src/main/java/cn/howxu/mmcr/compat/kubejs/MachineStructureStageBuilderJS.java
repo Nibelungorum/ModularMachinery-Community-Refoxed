@@ -186,7 +186,7 @@ public class MachineStructureStageBuilderJS extends BuilderBase<MachineStructure
     public MachineStructureDefinition.Declaration build() {
         BlockArray pattern = sliceBuilder.build();
         MachineStructureRequirements requirements = MachineStructureRequirements.merge(
-                sliceBuilder.requirements(), stageRequirements.build(pattern), 0);
+                sliceBuilder.requirements(pattern), stageRequirements.build(pattern), 0);
         return new MachineStructureDefinition.Declaration(MachineStructureDefinition.Declaration.Kind.FULL,
                 pattern, portRequirements, portTierRequirements, dynamicPatterns, requirements);
     }

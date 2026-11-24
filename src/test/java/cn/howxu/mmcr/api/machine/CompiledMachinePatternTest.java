@@ -94,6 +94,10 @@ class CompiledMachinePatternTest {
         assertThat(forwardPlan).isNotSameAs(reversePlan);
         assertThat(forwardPlan.entryPositions()).containsExactly(first, second);
         assertThat(reversePlan.entryPositions()).containsExactly(second, first);
+        assertThat(BlockArrayCache.get(reversePattern, Direction.EAST).pattern().keySet())
+                .containsExactly(BlockRotator.rotateSouthTo(second, Direction.EAST), BlockPos.ZERO);
+        assertThat(BlockArrayCache.get(forwardPattern, Direction.EAST).pattern().keySet())
+                .containsExactly(BlockPos.ZERO, BlockRotator.rotateSouthTo(second, Direction.EAST));
         assertThat(forwardPlan.entryPredicates()).containsExactly(predicate, predicate);
         assertThat(reversePlan.entryPredicates()).containsExactly(predicate, predicate);
     }
@@ -140,6 +144,73 @@ class CompiledMachinePatternTest {
         assertThat(compiled.boundingBox(Direction.SOUTH).maxX()).isEqualTo(1);
         assertThat(compiled.boundingBox(Direction.SOUTH).minZ()).isEqualTo(0);
         assertThat(compiled.boundingBox(Direction.SOUTH).maxZ()).isEqualTo(1);
+    }
+
+    @Test
+    void required_air_is_geometry_but_not_a_port_or_component() {
+        var onlyAir = new BlockPredicate.Air();
+        var mixed = new BlockPredicate.AnyOf(List.of(onlyAir, new BlockPredicate.Any()));
+        var exact = new BlockPredicate.OfBlockState(Blocks.CAVE_AIR.defaultBlockState());
+        var alternatives = new BlockPredicate.AnyOf(List.of(onlyAir, exact));
+        var deferred = new BlockPredicate.DeferredBlock(() -> { throw new AssertionError("Premature block lookup"); });
+        assertThat(deferred.onlyAir()).isFalse();
+        var pattern = BlockArray.builder().noController().pattern("NA.P")
+                .set('N', alternatives).set('A', onlyAir).set('.', exact).set('P', mixed).build();
+        var machine = new DynamicMachine(MMCR.id("air_candidates"), "Air", pattern);
+        var compiled = MachinePatternCompiler.compile(machine);
+        for (Direction face : Direction.values()) {
+            var expected = BlockRotator.rotateSouthTo(new BlockPos(1, 0, 0), face, Direction.EAST);
+            var rotated = BlockArrayCache.get(pattern, face, Direction.EAST);
+            assertThat(rotated.pattern()).hasSize(4);
+            assertThat(MachinePatternCompiler.fallbackCandidates(rotated, machine, 1, face, Direction.EAST))
+                    .containsExactly(expected);
+            if (face.getAxis().isHorizontal()) {
+                assertThat(compiled.portPositions(face)).containsExactly(expected);
+                assertThat(compiled.componentPositions(face)).containsExactly(expected);
+            }
+        }
+    }
+
+    @Test
+    void an_air_slot_with_a_port_replacement_remains_a_candidate_among_packed_air() {
+        var pattern = BlockArray.builder().noController().pattern(".....").set('.', new BlockPredicate.Air()).build();
+        var slot = new BlockPos(1, 0, 0);
+        var id = MMCR.id("replace_air");
+        var port = new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("item_input_bus").get());
+        var replacement = new SingleBlockModifierReplacement("speed", port, List.of(), ItemStack.EMPTY);
+        Machine machine = new DynamicMachine(id, "Replace Air", pattern, MachineControllerSpec.defaultsFor(id),
+                PortRequirementSpec.none(), List.of(), Map.of(slot, List.of(replacement)));
+        var compiled = MachinePatternCompiler.compile(machine);
+        for (Direction face : Direction.values()) {
+            var rotated = BlockArrayCache.get(pattern, face, Direction.WEST);
+            var expected = BlockRotator.rotateSouthTo(slot, face, Direction.WEST);
+            assertThat(MachinePatternCompiler.fallbackCandidates(rotated, machine, 1, face, Direction.WEST))
+                    .containsExactly(expected);
+            if (face.getAxis().isHorizontal()) {
+                assertThat(compiled.portPositions(face)).containsExactly(expected);
+                assertThat(compiled.componentPositions(face)).containsExactly(expected);
+            }
+        }
+    }
+
+    @Test
+    void a_level_slot_in_a_required_air_run_retains_its_rotated_candidate_position() {
+        var pattern = BlockArray.builder().noController().pattern("...L.").set('.', new BlockPredicate.Air())
+                .set('L', new BlockPredicate.Air()).build();
+        var stage = new MachineStructureStage(1, pattern, PortRequirementSpec.none(), PortTierRequirementSpec.none(),
+                List.of(), MachineStructureRequirements.builder().levelSlot('L', MMCR.id("coil")).build());
+        var machine = new Machine() {
+            public ResourceLocation registryName() { return MMCR.id("level_in_air"); }
+            public BlockArray pattern() { return pattern; }
+            public MachineControllerSpec controller() { return MachineControllerSpec.defaultsFor(registryName()); }
+            public List<MachineStructureStage> structureStages() { return List.of(stage); }
+        };
+        var compiled = MachinePatternCompiler.compile(machine);
+        var slot = BlockPos.ZERO.east();
+        assertThat(compiled.portPositions(Direction.NORTH)).containsExactly(BlockRotator.rotateSouthTo(slot, Direction.NORTH));
+        var vertical = BlockArrayCache.get(pattern, Direction.UP, Direction.EAST);
+        assertThat(MachinePatternCompiler.fallbackCandidates(vertical, machine, 1, Direction.UP, Direction.EAST))
+                .containsExactly(BlockRotator.rotateSouthTo(slot, Direction.UP, Direction.EAST));
     }
 
     @Test

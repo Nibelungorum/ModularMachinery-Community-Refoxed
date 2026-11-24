@@ -205,13 +205,18 @@ public final class MultiblockAssemblyService {
     }
 
     public static List<Placement> createTemplatePlacements(BlockPos controllerPos, BlockArray rotatedPattern) {
-        return createTemplatePlacements(controllerPos, rotatedPattern, false);
+        return createTemplatePlacements(controllerPos, rotatedPattern.pattern().entrySet(), false);
     }
 
-    private static List<Placement> createTemplatePlacements(BlockPos controllerPos, BlockArray rotatedPattern,
-                                                           boolean includeFlowingFluids) {
+    public static List<Placement> createTemplatePlacements(BlockPos controllerPos, BlockArray rotatedPattern,
+                                                           Map<BlockPos, BlockPredicate> levelOverrides) {
+        return createTemplatePlacements(controllerPos, rotatedPattern.entriesWithOverrides(levelOverrides), false);
+    }
+
+    private static List<Placement> createTemplatePlacements(BlockPos controllerPos,
+            Iterable<Map.Entry<BlockPos, BlockPredicate>> entries, boolean includeFlowingFluids) {
         List<Placement> placements = new ArrayList<>();
-        for (var entry : rotatedPattern.pattern().entrySet()) {
+        for (var entry : entries) {
             if (entry.getKey().equals(BlockPos.ZERO)) continue;
             BlockPredicate predicate = entry.getValue();
             preferredState(predicate).ifPresent(state -> addPlacement(placements, controllerPos.offset(entry.getKey()),
@@ -388,7 +393,7 @@ public final class MultiblockAssemblyService {
         }
         BlockArray pattern = controller.assemblyPattern(machine.get(), stage);
         boolean stateSensitive = controller.assemblyStateSensitive(machine.get());
-        List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern, true);
+        List<Placement> template = createTemplatePlacements(controller.getBlockPos(), pattern.pattern().entrySet(), true);
         maxBlocks = Math.min(maxBlocks, ServerConfig.assemblyMaxBlocksPerOperation());
         List<Removal> removals = new ArrayList<>();
         for (Placement placement : template) {

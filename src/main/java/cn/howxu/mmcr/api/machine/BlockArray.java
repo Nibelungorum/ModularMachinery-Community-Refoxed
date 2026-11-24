@@ -1,6 +1,9 @@
 package cn.howxu.mmcr.api.machine;
 
+import cn.howxu.mmcr.internal.structure.PatternRows;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.jetbrains.annotations.Nullable;
 import cn.howxu.mmcr.api.machine.definition.ModifierUse;
 import cn.howxu.mmcr.api.recipe.modifier.SingleBlockModifierReplacement;
@@ -10,8 +13,11 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import java.util.function.ToIntFunction;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, List<String>> tagsByPosition,
                          Map<BlockPos, Character> symbolsByPosition) {
@@ -25,9 +31,19 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
     }
 
     public BlockArray {
-        pattern = Collections.unmodifiableMap(new LinkedHashMap<>(pattern));
-        tagsByPosition = tagsByPosition == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(tagsByPosition));
-        symbolsByPosition = symbolsByPosition == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(symbolsByPosition));
+        Objects.requireNonNull(pattern, "pattern");
+        var positions = PackedAirPositions.copy(pattern, (pos, predicate) -> packableAir(predicate));
+        pattern = positions;
+        if (tagsByPosition == null || tagsByPosition.isEmpty()) tagsByPosition = Map.of();
+        else {
+            Map<BlockPos, List<String>> tags = new LinkedHashMap<>();
+            tagsByPosition.forEach((pos, values) -> tags.put(pos.immutable(), List.copyOf(values)));
+            tagsByPosition = Collections.unmodifiableMap(tags);
+        }
+        symbolsByPosition = PackedAirPositions.copy(symbolsByPosition, (pos, symbol) -> {
+            BlockPredicate predicate = positions.get(pos);
+            return symbol != null && packableAir(predicate);
+        });
     }
 
     public @Nullable BlockPredicate get(BlockPos pos) {
@@ -42,29 +58,67 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         return pattern.isEmpty();
     }
 
-    public int width() {
-        return extent(BlockPos::getX);
+    public int width() { return isEmpty() ? 0 : bounds().getXSpan(); }
+    public int height() { return isEmpty() ? 0 : bounds().getYSpan(); }
+    public int length() { return isEmpty() ? 0 : bounds().getZSpan(); }
+
+    // AnyOf's children can be mutable. Two equal alternatives today need not still agree tomorrow.
+    private static boolean packableAir(BlockPredicate predicate) {
+        return predicate != null && !(predicate instanceof BlockPredicate.AnyOf) && predicate.onlyAir();
     }
 
-    public int height() {
-        return extent(BlockPos::getY);
+    PackedAirPositions<BlockPredicate> positions() { return (PackedAirPositions<BlockPredicate>) pattern; }
+    PackedAirPositions<Character> glyphs() { return (PackedAirPositions<Character>) symbolsByPosition; }
+
+    BoundingBox bounds() {
+        int[] b = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+        if (isEmpty()) return new BoundingBox(0, 0, 0, 0, 0, 0);
+        positions().visitBounds(p -> {
+            b[0] = Math.min(b[0], p.getX()); b[3] = Math.max(b[3], p.getX());
+            b[1] = Math.min(b[1], p.getY()); b[4] = Math.max(b[4], p.getY());
+            b[2] = Math.min(b[2], p.getZ()); b[5] = Math.max(b[5], p.getZ());
+        });
+        return new BoundingBox(b[0], b[1], b[2], b[3], b[4], b[5]);
     }
 
-    public int length() {
-        return extent(BlockPos::getZ);
+    public void forSymbols(Predicate<Character> select, BiConsumer<BlockPos, Character> consumer) {
+        glyphs().forValues(select, consumer);
     }
 
-    private int extent(ToIntFunction<BlockPos> axis) {
-        if (pattern.isEmpty()) return 0;
+    /** Applies display-only level choices in encounter order without rebuilding the underlying geometry. */
+    public Iterable<Map.Entry<BlockPos, BlockPredicate>> entriesWithOverrides(Map<BlockPos, BlockPredicate> overrides) {
+        if (overrides.isEmpty()) return pattern.entrySet();
+        return () -> Stream.concat(pattern.entrySet().stream().map(entry -> {
+            BlockPredicate replacement = overrides.get(entry.getKey());
+            return replacement == null ? entry : Map.entry(entry.getKey(), replacement);
+        }), overrides.entrySet().stream().filter(entry -> !pattern.containsKey(entry.getKey())).map(Map.Entry::copyOf)).iterator();
+    }
 
-        int min = Integer.MAX_VALUE;
-        int max = Integer.MIN_VALUE;
-        for (BlockPos pos : pattern.keySet()) {
-            int value = axis.applyAsInt(pos);
-            if (value < min) min = value;
-            if (value > max) max = value;
+    /** Streaming input for the wire format: predicates precede the independent symbol table.
+     * @author HowXu {@literal <dev@howxu.cn>}
+     */
+    public static final class PositionInput {
+        private final PackedAirPositions.Writer<BlockPredicate> predicates = new PackedAirPositions.Writer<>();
+        private final PackedAirPositions.Writer<Character> symbols = new PackedAirPositions.Writer<>();
+        private PackedAirPositions<BlockPredicate> positions;
+
+        public void predicate(BlockPos pos, BlockPredicate predicate) {
+            predicates.put(pos, predicate, packableAir(predicate));
         }
-        return max - min + 1;
+
+        private PackedAirPositions<BlockPredicate> positions() {
+            if (positions == null) positions = predicates.finish();
+            return positions;
+        }
+
+        public void symbol(BlockPos pos, char symbol) {
+            BlockPredicate predicate = positions().get(pos);
+            symbols.put(pos, symbol, packableAir(predicate));
+        }
+
+        public BlockArray build(Map<BlockPos, List<String>> tags) {
+            return new BlockArray(positions(), tags, symbols.finish());
+        }
     }
 
     public BlockArray tagged(BlockPos pos, String... tags) {
@@ -110,6 +164,27 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         return rotated;
     }
 
+    public static BlockArray fromRows(PatternRows rows, Map<Character, BlockPredicate> symbols, Character controller) {
+        BlockPos origin = rows.origin(controller != null && symbols.get(controller) != null ? controller : null);
+        var pattern = new PackedAirPositions.Writer<BlockPredicate>();
+        var glyphs = new PackedAirPositions.Writer<Character>();
+        rows.visit(symbols.get(' ') != null, (x, y, z, length, symbol) -> {
+            BlockPredicate predicate = symbols.get(symbol);
+            if (predicate == null) return;
+            BlockPos start = new BlockPos(x - origin.getX(), y - origin.getY(), z - origin.getZ());
+            Character glyph = symbol;
+            if (packableAir(predicate)) {
+                pattern.add(start, Direction.EAST, length, predicate, true);
+                glyphs.add(start, Direction.EAST, length, glyph, true);
+            } else for (int i = 0; i < length; i++) {
+                BlockPos pos = start.relative(Direction.EAST, i);
+                pattern.add(pos, Direction.EAST, 1, predicate, false);
+                glyphs.add(pos, Direction.EAST, 1, glyph, false);
+            }
+        });
+        return new BlockArray(pattern.finish(), Map.of(), glyphs.finish());
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -124,53 +199,26 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
      *     .set('X', casing)
      *     .set('I', ioPort)
      *     .set('C', controller)
-     *     .set(' ', new BlockPredicate.Air())
+     *     .air(new BlockPredicate.Air())
      *     .build();
      * </pre>
      * 每次 {@code pattern(...)} 调用表示一个 z 切片;切片内 row 映射到 y,字符列映射到 x。
      * 所有切片必须拥有相同宽度和高度。
-     * 字符 ' ' (空格) 或未通过 {@code set(...)} 绑定的字符视作空气(不放入 pattern)。
+     * 默认跳过空格和未绑定的符号；{@code air(...)} 可以给空格显式绑定匹配条件。
      */
     public static final class Builder {
-        private final LinkedHashMap<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
+        private final PatternRows.Builder rows = new PatternRows.Builder();
         private final Map<Character, BlockPredicate> symbols = new LinkedHashMap<>();
         private final MachineStructureRequirements.Builder requirements = MachineStructureRequirements.builder();
-        private List<List<String>> slices = List.of();
         private Character controllerSymbol = 'C';
-        private int width = -1;
-        private int height = -1;
 
-        public Builder pattern(String... rows) {
-            if (rows.length == 0) {
-                throw new IllegalArgumentException("pattern(...) must contain at least one row");
-            }
-            int sliceWidth = rows[0].length();
-            if (sliceWidth == 0) {
-                throw new IllegalArgumentException("pattern rows must not be empty");
-            }
-            for (String row : rows) {
-                if (row.length() != sliceWidth) {
-                    throw new IllegalArgumentException("All rows in a pattern slice must have the same width");
-                }
-            }
-            if (width != -1 && sliceWidth != width) {
-                throw new IllegalArgumentException("All pattern slices must have the same width");
-            }
-            if (height != -1 && rows.length != height) {
-                throw new IllegalArgumentException("All pattern slices must have the same height");
-            }
-
-            width = sliceWidth;
-            height = rows.length;
-            List<List<String>> built = new ArrayList<>(this.slices.size() + 1);
-            built.addAll(this.slices);
-            built.add(List.of(rows));
-            this.slices = List.copyOf(built);
+        public Builder pattern(String... slice) {
+            rows.add(slice);
             return this;
         }
 
         public boolean containsSymbol(char symbol) {
-            return slices.stream().flatMap(List::stream).anyMatch(row -> row.indexOf(symbol) >= 0);
+            return rows.contains(symbol);
         }
 
         public Builder set(char symbol, BlockPredicate predicate) {
@@ -202,7 +250,11 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         }
 
         public MachineStructureRequirements requirements() {
-            return requirements.build(build());
+            return requirements(build());
+        }
+
+        public MachineStructureRequirements requirements(BlockArray pattern) {
+            return requirements.build(pattern);
         }
 
         public Builder air(BlockPredicate airPredicate) {
@@ -224,47 +276,9 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         }
 
         public BlockArray build() {
-            entries.clear();
-            LinkedHashMap<BlockPos, Character> symbolsByPosition = new LinkedHashMap<>();
-            if (slices.isEmpty()) {
-                throw new IllegalStateException("pattern(...) must be provided before build()");
-            }
-            BlockPos controller = null;
-            int depth = slices.size();
-            int xOrigin = width / 2;
-            int yOrigin = height / 2;
-            int zOrigin = depth / 2;
-            for (int row = 0; row < height; row++) {
-                int y = row - yOrigin;
-                for (int slice = 0; slice < depth; slice++) {
-                    int z = slice - zOrigin;
-                    String chars = slices.get(slice).get(row);
-                    for (int col = 0; col < width; col++) {
-                        int x = col - xOrigin;
-                        char c = chars.charAt(col);
-                        BlockPredicate predicate = symbols.get(c);
-                        if (predicate == null) continue; // 空格 / 未注册字符 = 空气,跳过
-                        BlockPos pos = new BlockPos(x, y, z);
-                        if (controllerSymbol != null && c == controllerSymbol) controller = pos;
-                        entries.put(pos, predicate);
-                        symbolsByPosition.put(pos, c);
-                    }
-                }
-            }
-            if (controller != null && !controller.equals(BlockPos.ZERO)) {
-                LinkedHashMap<BlockPos, BlockPredicate> normalized = new LinkedHashMap<>();
-                LinkedHashMap<BlockPos, Character> normalizedSymbols = new LinkedHashMap<>();
-                for (var entry : entries.entrySet()) {
-                    BlockPos normalizedPos = entry.getKey().subtract(controller);
-                    normalized.put(normalizedPos, entry.getValue());
-                    normalizedSymbols.put(normalizedPos, symbolsByPosition.get(entry.getKey()));
-                }
-                entries.clear();
-                entries.putAll(normalized);
-                symbolsByPosition.clear();
-                symbolsByPosition.putAll(normalizedSymbols);
-            }
-            return new BlockArray(entries, Map.of(), symbolsByPosition);
+            PatternRows template = rows.freeze();
+            if (template.isEmpty()) throw new IllegalStateException("pattern(...) must be provided before build()");
+            return fromRows(template, symbols, controllerSymbol);
         }
 
         private static BlockPredicate toBlockPredicate(

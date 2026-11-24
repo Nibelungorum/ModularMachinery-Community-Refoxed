@@ -8,7 +8,6 @@ import cn.howxu.mmcr.api.data.DataStorage;
 import cn.howxu.mmcr.api.data.DataValue;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
-import cn.howxu.mmcr.api.machine.CompiledMachinePattern;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
@@ -3864,14 +3863,10 @@ class MachineControllerBlockEntityTest {
                 controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get(),
                 portPos, ModBlocks.BLOCKS.get("item_input_bus").get()), List.of(controller, port)));
 
-        var method = MachineControllerBlockEntity.class.getDeclaredMethod(
-                "countPorts", BlockArray.class, CompiledMachinePattern.class, Direction.class);
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod("countPorts", List.class);
         method.setAccessible(true);
         PortRequirementSpec.PortCounts counts = (PortRequirementSpec.PortCounts) method.invoke(
-                controller,
-                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
-                null,
-                Direction.SOUTH);
+                controller, List.of(new BlockPos(1, 0, 0)));
 
         assertThat(counts.count("combined_input_test")).isEqualTo(1);
         assertThat(counts.count("item_input_bus")).isEqualTo(1);
@@ -3888,14 +3883,10 @@ class MachineControllerBlockEntityTest {
                 controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get(),
                 portPos, ModBlocks.BLOCKS.get("item_input_bus").get()), List.of(controller, port)));
 
-        var method = MachineControllerBlockEntity.class.getDeclaredMethod(
-                "countPorts", BlockArray.class, CompiledMachinePattern.class, Direction.class);
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod("countPorts", List.class);
         method.setAccessible(true);
         PortRequirementSpec.PortCounts counts = (PortRequirementSpec.PortCounts) method.invoke(
-                controller,
-                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
-                null,
-                Direction.SOUTH);
+                controller, List.of(new BlockPos(1, 0, 0)));
 
         assertThat(counts.count("combined_output_test")).isEqualTo(1);
         assertThat(counts.count("item_output_bus")).isEqualTo(1);
@@ -3912,14 +3903,10 @@ class MachineControllerBlockEntityTest {
                 controllerPos, ModBlocks.controllerFor(MMCR.id("test_cube")).get(),
                 portPos, ModBlocks.BLOCKS.get("item_input_bus").get()), List.of(controller, port)));
 
-        var method = MachineControllerBlockEntity.class.getDeclaredMethod(
-                "countPorts", BlockArray.class, CompiledMachinePattern.class, Direction.class);
+        var method = MachineControllerBlockEntity.class.getDeclaredMethod("countPorts", List.class);
         method.setAccessible(true);
         PortRequirementSpec.PortCounts counts = (PortRequirementSpec.PortCounts) method.invoke(
-                controller,
-                new BlockArray(Map.of(new BlockPos(1, 0, 0), new BlockPredicate.Any())),
-                null,
-                Direction.SOUTH);
+                controller, List.of(new BlockPos(1, 0, 0)));
 
         assertThat(counts.count("item_input_bus")).isEqualTo(1);
         assertThat(counts.count("duplicate_item_input_bus")).isZero();

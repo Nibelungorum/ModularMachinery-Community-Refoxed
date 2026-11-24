@@ -1,6 +1,5 @@
 package cn.howxu.mmcr.internal.item;
 
-import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.Machine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
@@ -108,15 +107,15 @@ public class BlueprintItem extends Item {
         MachineStructureStage stage = stages.stream().filter(candidate -> candidate.number() == stageNumber)
                 .findFirst().orElse(stages.getFirst());
         return MultiblockAssemblyService.aggregateRequirements(
-                MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, defaultLevelPattern(stage)));
+                MultiblockAssemblyService.createTemplatePlacements(BlockPos.ZERO, stage.pattern(), defaultLevelOverrides(stage)));
     }
 
-    private static BlockArray defaultLevelPattern(MachineStructureStage stage) {
-        Map<BlockPos, BlockPredicate> pattern = new LinkedHashMap<>(stage.pattern().pattern());
+    private static Map<BlockPos, BlockPredicate> defaultLevelOverrides(MachineStructureStage stage) {
+        Map<BlockPos, BlockPredicate> overrides = new LinkedHashMap<>();
         stage.levelSlots().forEach((position, typeId) -> MachineLevelRegistry.levelsForType(typeId).stream()
                 .min(Comparator.comparingInt(level -> level.priority()))
-                .ifPresent(level -> pattern.put(position, level.statePredicate())));
-        return new BlockArray(pattern, stage.pattern().tagsByPosition(), stage.pattern().symbolsByPosition());
+                .ifPresent(level -> overrides.put(position, level.statePredicate())));
+        return overrides;
     }
 
     private record CachedRequirements(Machine machine, int stageNumber, List<Component> lines) {

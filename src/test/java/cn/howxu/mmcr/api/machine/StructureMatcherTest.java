@@ -389,6 +389,24 @@ class StructureMatcherTest {
     }
 
     @Test
+    void rolled_air_run_reports_the_same_middle_mismatch_in_bounded_and_direct_scans() {
+        var base = BlockArray.builder().noController().pattern(".".repeat(65)).set('.', new BlockPredicate.Air()).build();
+        var pattern = BlockArrayCache.get(base, Direction.DOWN, Direction.EAST);
+        BlockPos origin = new BlockPos(-24, 16, 9);
+        BlockPos hole = BlockRotator.rotateSouthTo(new BlockPos(7, 0, 0), Direction.DOWN, Direction.EAST);
+        Level wrong = LevelStub.create(Map.of(origin.offset(hole), Blocks.STONE));
+        var expected = StructureMatcher.firstMismatch(pattern, wrong, origin).orElseThrow();
+        var scan = StructureMatcher.beginScan(pattern, Map.of(), true, StructureMatcher.ScanOptions.of(6, true, 4));
+        StructureMatcher.ScanResult result;
+        do { result = scan.step(wrong, origin); } while (result.inProgress());
+        assertThat(result.mismatch().orElseThrow().relativePos()).isEqualTo(hole);
+        assertThat(result.mismatch().orElseThrow().worldPos()).isEqualTo(expected.worldPos());
+        Level fixed = LevelStub.create(Map.of());
+        do { result = scan.step(fixed, origin); } while (result.inProgress());
+        assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.VALID);
+    }
+
+    @Test
     void bounded_scan_uses_air_fast_path_and_sentinels() {
         Map<BlockPos, BlockPredicate> entries = new LinkedHashMap<>();
         for (int index = 0; index < 20; index++) {
@@ -405,6 +423,19 @@ class StructureMatcherTest {
         assertThat(result.status()).isEqualTo(StructureMatcher.ScanStatus.MISMATCH);
         assertThat(result.checkedEntries()).isLessThanOrEqualTo(scan.batchSize());
         assertThat(scan.cursor()).isZero();
+    }
+
+    @Test
+    void a_cached_plan_with_more_sentinels_than_batch_budget_still_checks_every_required_air() {
+        var pattern = BlockArray.builder().noController().pattern("........").set('.', new BlockPredicate.Air()).build();
+        var plan = CompiledMachinePattern.ScanPlan.forPattern(pattern, 8);
+        var scan = StructureMatcher.beginScan(1, Direction.SOUTH, Direction.SOUTH, 1, pattern, pattern, Map.of(), true,
+                StructureMatcher.ScanOptions.of(4, true, 8), null, plan, 0L);
+        var last = new BlockPos(3, 0, 0);
+        Level world = LevelStub.create(Map.of(last, Blocks.STONE));
+        StructureMatcher.ScanResult result;
+        do { result = scan.step(world, BlockPos.ZERO); } while (result.inProgress());
+        assertThat(result.mismatch().orElseThrow().relativePos()).isEqualTo(last);
     }
 
     @Test

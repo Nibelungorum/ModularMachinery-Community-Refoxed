@@ -73,7 +73,7 @@ public final class MachineStructureStage {
         Objects.requireNonNull(portTierRequirements, "portTierRequirements");
         this.number = number;
         this.kind = kind;
-        this.pattern = new BlockArray(pattern.pattern(), copyNestedMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
+        this.pattern = pattern;
         this.portRequirements = portRequirements;
         this.portTierRequirements = portTierRequirements;
         this.dynamicPatterns = List.copyOf(dynamicPatterns);
@@ -145,12 +145,6 @@ public final class MachineStructureStage {
     public int hashCode() {
         return Objects.hash(number, kind, pattern, portRequirements, portTierRequirements, dynamicPatterns,
                 requirements, stateSensitive, modifierReplacements, levelSlots);
-    }
-
-    private static <T> Map<BlockPos, List<T>> copyNestedMap(Map<BlockPos, List<T>> source) {
-        Map<BlockPos, List<T>> copy = new LinkedHashMap<>();
-        source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
-        return Collections.unmodifiableMap(copy);
     }
 
     private static Map<BlockPos, List<SingleBlockModifierReplacement>> mergeNestedMaps(

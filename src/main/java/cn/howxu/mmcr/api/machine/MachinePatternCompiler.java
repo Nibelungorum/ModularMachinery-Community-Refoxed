@@ -18,6 +18,8 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
+import java.util.HashSet;
+import java.util.function.Predicate;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -72,9 +74,10 @@ public final class MachinePatternCompiler {
             BlockArray rotated = cache == null ? BlockArrayCache.get(pattern, facing)
                     : BlockArrayCache.get(cache, pattern, facing);
             rotatedPatterns.put(facing, rotated);
-            boundingBoxes.put(facing, boundingBox(rotated));
-            componentPositions.put(facing, componentPositions(rotated));
-            portPositions.put(facing, portPositions(rotated));
+            boundingBoxes.put(facing, rotated.bounds());
+            Set<BlockPos> exceptions = airOverrides(stage, parent, facing, Direction.SOUTH);
+            componentPositions.put(facing, candidates(rotated, exceptions, MachinePatternCompiler::couldBeComponent));
+            portPositions.put(facing, candidates(rotated, exceptions, MachinePatternCompiler::couldBePort));
             modifierReplacements.put(facing, rotatedModifierReplacements(stage, facing));
             couplerPositions.put(facing, couplerPositions(rotated));
             interfacePositions.put(facing, interfacePositions(rotated));
@@ -119,25 +122,6 @@ public final class MachinePatternCompiler {
         return Map.copyOf(compiled);
     }
 
-    private static BoundingBox boundingBox(BlockArray pattern) {
-        if (pattern.isEmpty()) return new BoundingBox(0, 0, 0, 0, 0, 0);
-        int minX = Integer.MAX_VALUE;
-        int minY = Integer.MAX_VALUE;
-        int minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE;
-        int maxY = Integer.MIN_VALUE;
-        int maxZ = Integer.MIN_VALUE;
-        for (BlockPos pos : pattern.pattern().keySet()) {
-            minX = Math.min(minX, pos.getX());
-            minY = Math.min(minY, pos.getY());
-            minZ = Math.min(minZ, pos.getZ());
-            maxX = Math.max(maxX, pos.getX());
-            maxY = Math.max(maxY, pos.getY());
-            maxZ = Math.max(maxZ, pos.getZ());
-        }
-        return new BoundingBox(minX, minY, minZ, maxX, maxY, maxZ);
-    }
-
     public static List<BlockPos> positionsExcludingNetworkInterfaces(BlockArray pattern) {
         if (pattern == null) return List.of();
         ArrayList<BlockPos> positions = new ArrayList<>();
@@ -147,43 +131,74 @@ public final class MachinePatternCompiler {
         return List.copyOf(positions);
     }
 
-    private static List<BlockPos> componentPositions(BlockArray pattern) {
-        ArrayList<BlockPos> positions = new ArrayList<>();
-        for (var entry : pattern.pattern().entrySet()) {
-            if (couldBeComponent(entry.getValue())) positions.add(entry.getKey());
+    public static List<BlockPos> fallbackCandidates(BlockArray pattern, Machine machine, int stageNumber,
+                                                     Direction facing, Direction roll) {
+        if (pattern == null) return List.of();
+        Set<BlockPos> exceptions = Set.of();
+        if (machine != null) {
+            for (MachineStructureStage stage : machine.structureStages()) {
+                if (stage.number() == stageNumber) {
+                    exceptions = airOverrides(stage, machine, facing, roll);
+                    break;
+                }
+            }
         }
-        return List.copyOf(positions);
+        return candidates(pattern, exceptions, predicate -> !couldBeNetworkInterface(predicate));
     }
 
-    private static List<BlockPos> portPositions(BlockArray pattern) {
-        ArrayList<BlockPos> positions = new ArrayList<>();
-        for (var entry : pattern.pattern().entrySet()) {
-            if (couldBePort(entry.getValue())) positions.add(entry.getKey());
+    private static Set<BlockPos> airOverrides(MachineStructureStage stage, Machine machine, Direction facing, Direction roll) {
+        Set<BlockPos> positions = new HashSet<>();
+        for (BlockPos pos : stage.levelSlots().keySet()) {
+            BlockPredicate base = stage.pattern().get(pos);
+            if (base != null && base.onlyAir())
+                positions.add(BlockRotator.rotateSouthTo(pos, facing, roll));
         }
+        var replacements = stage.modifierReplacements();
+        if (stage.number() == 1 && machine instanceof DynamicMachine dynamic) {
+            addAirReplacements(positions, stage.pattern(), dynamic.modifierReplacements(), facing, roll);
+        }
+        addAirReplacements(positions, stage.pattern(), replacements, facing, roll);
+        return positions;
+    }
+
+    private static void addAirReplacements(Set<BlockPos> positions, BlockArray pattern,
+            Map<BlockPos, List<SingleBlockModifierReplacement>> replacements, Direction facing, Direction roll) {
+        replacements.forEach((pos, options) -> {
+            BlockPredicate base = pattern.get(pos);
+            if (base != null && base.onlyAir() && options.stream().anyMatch(option -> !option.getReplacement().onlyAir()))
+                positions.add(BlockRotator.rotateSouthTo(pos, facing, roll));
+        });
+    }
+
+    private static List<BlockPos> candidates(BlockArray pattern, Set<BlockPos> exceptions, Predicate<BlockPredicate> accepts) {
+        ArrayList<BlockPos> positions = new ArrayList<>();
+        pattern.positions().visitPointsAndExceptions(exceptions, (pos, predicate) -> {
+            if (predicate.onlyAir() ? exceptions.contains(pos) : accepts.test(predicate)) positions.add(pos);
+        });
         return List.copyOf(positions);
     }
 
     private static List<BlockPos> couplerPositions(BlockArray pattern) {
         ArrayList<BlockPos> positions = new ArrayList<>();
-        for (var entry : pattern.pattern().entrySet()) {
-            if (couldBeCoupler(entry.getValue())) positions.add(entry.getKey());
-        }
+        pattern.positions().visitPoints((pos, predicate) -> {
+            if (couldBeCoupler(predicate)) positions.add(pos);
+        });
         return List.copyOf(positions);
     }
 
     private static List<BlockPos> interfacePositions(BlockArray pattern) {
         ArrayList<BlockPos> positions = new ArrayList<>();
-        for (var entry : pattern.pattern().entrySet()) {
-            if (couldBeInterface(entry.getValue())) positions.add(entry.getKey());
-        }
+        pattern.positions().visitPoints((pos, predicate) -> {
+            if (couldBeInterface(predicate)) positions.add(pos);
+        });
         return List.copyOf(positions);
     }
 
     private static List<BlockPos> networkInterfacePositions(BlockArray pattern) {
         ArrayList<BlockPos> positions = new ArrayList<>();
-        for (var entry : pattern.pattern().entrySet()) {
-            if (couldBeNetworkInterface(entry.getValue())) positions.add(entry.getKey());
-        }
+        pattern.positions().visitPoints((pos, predicate) -> {
+            if (couldBeNetworkInterface(predicate)) positions.add(pos);
+        });
         return List.copyOf(positions);
     }
 

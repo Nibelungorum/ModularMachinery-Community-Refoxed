@@ -87,6 +87,43 @@ class MachineStructureFamilyTest {
     }
 
     @Test
+    void overlapping_air_runs_preserve_order_and_report_predicate_or_glyph_conflicts() {
+        var air = new BlockPredicate.Air();
+        var base = BlockArray.builder().noController().pattern(".....").set('.', air).build();
+        var extension = BlockArray.builder().noController().pattern(".......").set('.', air).build();
+        var full = Declaration.full(base);
+        var stages = MachineStructureFamily.of(definition("air_extension", full, Declaration.extension(extension))).stages();
+        var reference = new LinkedHashMap<>(base.pattern());
+        extension.pattern().forEach(reference::putIfAbsent);
+        assertThat(stages.getLast().pattern().pattern()).containsExactlyEntriesOf(reference);
+        assertThat(stages.getFirst().pattern().get(BlockPos.ZERO.east(3))).isNull();
+
+        var slot = BlockPos.ZERO.west();
+        assertThatThrownBy(() -> MachineStructureFamily.of(definition("exact_air", full,
+                Declaration.extension(characterArray(slot, '.', new BlockPredicate.OfBlock(Blocks.AIR))))))
+                .hasMessageContaining("stage 2").hasMessageContaining("predicate at -1, 0, 0");
+        assertThatThrownBy(() -> MachineStructureFamily.of(definition("air_glyph", full,
+                Declaration.extension(characterArray(slot, '空', air)))))
+                .hasMessageContaining("stage 2").hasMessageContaining("symbol at -1, 0, 0");
+    }
+
+    @Test
+    void extension_can_fill_a_null_glyph_without_moving_its_existing_key() {
+        var slot = BlockPos.ZERO.east();
+        Map<BlockPos, Character> glyphs = new LinkedHashMap<>();
+        glyphs.put(slot, null);
+        glyphs.put(BlockPos.ZERO, '.');
+        var air = new BlockPredicate.Air();
+        var base = new BlockArray(Map.of(slot, air, BlockPos.ZERO, air), Map.of(), glyphs);
+        var extension = characterArray(slot, '空', air);
+        var merged = MachineStructureFamily.of(definition("fill_glyph", Declaration.full(base),
+                Declaration.extension(extension))).stages().getLast().pattern();
+        glyphs.putIfAbsent(slot, '空');
+        assertThat(merged.symbolsByPosition()).containsExactlyEntriesOf(glyphs);
+        assertThat(base.symbolsByPosition().get(slot)).isNull();
+    }
+
+    @Test
     void extensionInheritsOmittedPortRequirementsAndReplacesExplicitOnes() {
         PortRequirementSpec basePorts = PortRequirementSpec.builder().min("item_input", 1).build();
         PortRequirementSpec replacementPorts = PortRequirementSpec.builder().min("energy_input", 2).build();

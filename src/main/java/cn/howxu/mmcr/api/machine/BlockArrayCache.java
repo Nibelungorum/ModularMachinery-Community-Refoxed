@@ -78,21 +78,16 @@ public final class BlockArrayCache {
     }
 
     private static BlockArray rotate(Key key) {
-        Map<BlockPos, BlockPredicate> rotated = new LinkedHashMap<>();
+        BlockArray pattern = key.pattern();
         Rotation rotation = rotationFor(key.facing());
-        for (var entry : key.pattern().pattern().entrySet()) {
-            rotated.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()),
-                    rotatePredicate(entry.getValue(), key.facing(), key.rollFacing(), rotation));
-        }
-        Map<BlockPos, List<String>> rotatedTags = new LinkedHashMap<>();
-        for (var entry : key.pattern().tagsByPosition().entrySet()) {
-            rotatedTags.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()), entry.getValue());
-        }
-        Map<BlockPos, Character> rotatedSymbols = new LinkedHashMap<>();
-        for (var entry : key.pattern().symbolsByPosition().entrySet()) {
-            rotatedSymbols.put(BlockRotator.rotateSouthTo(entry.getKey(), key.facing(), key.rollFacing()), entry.getValue());
-        }
-        return new BlockArray(rotated, rotatedTags, rotatedSymbols);
+        var predicates = pattern.positions().rotate(key.facing(), key.rollFacing(),
+                predicate -> rotatePredicate(predicate, key.facing(), key.rollFacing(), rotation));
+        Map<BlockPos, List<String>> tags = new LinkedHashMap<>();
+        pattern.tagsByPosition().forEach((pos, values) ->
+                tags.put(BlockRotator.rotateSouthTo(pos, key.facing(), key.rollFacing()), values));
+        if (key.facing() == Direction.SOUTH && predicates == pattern.positions()) return pattern;
+        return new BlockArray(predicates, tags, key.facing() == Direction.SOUTH ? pattern.glyphs()
+                : pattern.glyphs().rotate(key.facing(), key.rollFacing(), UnaryOperator.identity()));
     }
 
     private static Rotation rotationFor(Direction facing) {
@@ -180,5 +175,12 @@ public final class BlockArrayCache {
     }
 
     record Key(BlockArray pattern, Direction facing, Direction rollFacing) {
+        // Map equality ignores encounter order; rotations must retain it for diagnostics and sentinels.
+        @Override public boolean equals(Object other) {
+            return other instanceof Key key && key.pattern == pattern && key.facing == facing && key.rollFacing == rollFacing;
+        }
+        @Override public int hashCode() {
+            return (System.identityHashCode(pattern) * 31 + facing.ordinal()) * 31 + rollFacing.ordinal();
+        }
     }
 }

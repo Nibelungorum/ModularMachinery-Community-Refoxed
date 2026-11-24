@@ -31,9 +31,7 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
         }
 
         List<MachineStructureStage> stages = new ArrayList<>(declarations.size());
-        Map<BlockPos, BlockPredicate> pattern = Map.of();
-        Map<BlockPos, List<String>> tags = Map.of();
-        Map<BlockPos, Character> symbols = Map.of();
+        BlockArray pattern = null;
         PortRequirementSpec portRequirements = PortRequirementSpec.none();
         PortTierRequirementSpec portTierRequirements = PortTierRequirementSpec.none();
         List<DynamicPatternSpec> dynamicPatterns = List.of();
@@ -45,9 +43,7 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
             int stageNumber = index + 1;
             Declaration declaration = declarations.get(index);
             if (declaration.kind() == Declaration.Kind.FULL) {
-                pattern = new LinkedHashMap<>(declaration.pattern().pattern());
-                tags = copyNestedMap(declaration.pattern().tagsByPosition());
-                symbols = new LinkedHashMap<>(declaration.pattern().symbolsByPosition());
+                pattern = declaration.pattern();
                 portRequirements = defaultPorts(declaration.portRequirements());
                 portTierRequirements = defaultTiers(declaration.portTierRequirements());
                 dynamicPatterns = new ArrayList<>(declaration.dynamicPatterns());
@@ -55,21 +51,22 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
                 modifierReplacements = Map.of();
                 levelSlots = Map.of();
             } else {
-                pattern = mergeMap(pattern, declaration.pattern().pattern(), stageNumber, "predicate");
-                tags = mergeMap(tags, declaration.pattern().tagsByPosition(), stageNumber, "tags");
-                symbols = mergeMap(symbols, declaration.pattern().symbolsByPosition(), stageNumber, "symbol");
+                BlockArray extension = declaration.pattern();
+                pattern = new BlockArray(pattern.positions().union(extension.positions(), pos -> conflict(stageNumber, pos, "predicate")),
+                        mergeMap(pattern.tagsByPosition(), extension.tagsByPosition(), stageNumber, "tags"),
+                        pattern.glyphs().union(extension.glyphs(), pos -> conflict(stageNumber, pos, "symbol")));
                 if (declaration.portRequirements() != null) portRequirements = declaration.portRequirements();
                 if (declaration.portTierRequirements() != null) portTierRequirements = declaration.portTierRequirements();
                 dynamicPatterns = mergeList(dynamicPatterns, declaration.dynamicPatterns(), stageNumber, "dynamic pattern");
                 requirements = MachineStructureRequirements.merge(requirements, declaration.requirements(), stageNumber)
-                        .validate(new BlockArray(pattern, tags, symbols));
+                        .validate(pattern);
                 modifierReplacements = Map.of();
                 levelSlots = Map.of();
             }
 
             rejectMultipleControllers(pattern, stageNumber);
             stages.add(MachineStructureStage.withCompiledRequirements(stageNumber, declaration.kind(),
-                    new BlockArray(pattern, tags, symbols), portRequirements, portTierRequirements, dynamicPatterns,
+                    pattern, portRequirements, portTierRequirements, dynamicPatterns,
                     requirements, modifierReplacements, levelSlots, declaration.stateSensitive()));
         }
         return new MachineStructureFamily(stages);
@@ -83,11 +80,9 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
         return requirements == null ? PortTierRequirementSpec.none() : requirements;
     }
 
-    private static void rejectMultipleControllers(Map<BlockPos, BlockPredicate> pattern, int stageNumber) {
-        List<BlockPos> controllers = pattern.entrySet().stream()
-                .filter(entry -> isController(entry.getValue()))
-                .map(Map.Entry::getKey)
-                .toList();
+    private static void rejectMultipleControllers(BlockArray pattern, int stageNumber) {
+        List<BlockPos> controllers = new ArrayList<>();
+        pattern.positions().visitPoints((pos, predicate) -> { if (isController(predicate)) controllers.add(pos); });
         if (controllers.size() > 1) {
             throw new IllegalArgumentException("stage " + stageNumber + " contains multiple controllers at "
                     + controllers.stream().map(MachineStructureFamily::format).toList());
@@ -145,9 +140,4 @@ public record MachineStructureFamily(List<MachineStructureStage> stages) {
                 + position.getX() + ", " + position.getY() + ", " + position.getZ());
     }
 
-    private static <T> Map<BlockPos, List<T>> copyNestedMap(Map<BlockPos, List<T>> source) {
-        Map<BlockPos, List<T>> copy = new LinkedHashMap<>();
-        source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
-        return copy;
-    }
 }

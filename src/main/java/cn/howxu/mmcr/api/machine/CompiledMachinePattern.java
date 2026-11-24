@@ -7,7 +7,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import java.util.EnumMap;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -143,60 +143,33 @@ public record CompiledMachinePattern(
     }
 
     /**
-     * Immutable, allocation-free-per-scan lookup order for one rotated pattern.
+     * Immutable logical lookup order for one rotated pattern. Air positions are decoded on demand.
      *
      * @author howxu <dev@howxu.cn>
      */
     public static final class ScanPlan {
+        private final PackedAirPositions<BlockPredicate> positions;
         private final List<BlockPos> entryPositions;
         private final List<BlockPredicate> entryPredicates;
         private final List<Map.Entry<BlockPos, BlockPredicate>> entries;
-        private final int[] entryOrder;
         private final int[] sentinelIndexes;
-        private final boolean[] sentinelMembership;
         private final BoundingBox bounds;
 
-        private ScanPlan(List<BlockPos> entryPositions, List<BlockPredicate> entryPredicates,
-                         List<Map.Entry<BlockPos, BlockPredicate>> entries, int[] entryOrder,
-                         int[] sentinelIndexes, boolean[] sentinelMembership) {
-            this.entryPositions = entryPositions;
-            this.entryPredicates = entryPredicates;
-            this.entries = entries;
-            this.entryOrder = entryOrder;
-            this.sentinelIndexes = sentinelIndexes;
-            this.sentinelMembership = sentinelMembership;
-            this.bounds = BoundingBox.encapsulatingPositions(entryPositions)
-                    .orElseGet(() -> new BoundingBox(0, 0, 0, 0, 0, 0));
+        private ScanPlan(BlockArray pattern, int sentinelCount) {
+            positions = pattern.positions();
+            this.entryPositions = positions.positions();
+            this.entryPredicates = positions.orderedValues();
+            this.entries = positions.entries();
+            this.bounds = pattern.bounds();
+            this.sentinelIndexes = sentinelIndexes(positions.size(), sentinelCount);
         }
 
-        private static ScanPlan create(BlockArray pattern, int sentinelCount) {
-            ArrayList<BlockPos> positions = new ArrayList<>(pattern.pattern().size());
-            ArrayList<BlockPredicate> predicates = new ArrayList<>(pattern.pattern().size());
-            ArrayList<Map.Entry<BlockPos, BlockPredicate>> entries = new ArrayList<>(pattern.pattern().size());
-            for (var entry : pattern.pattern().entrySet()) {
-                positions.add(entry.getKey());
-                predicates.add(entry.getValue());
-                entries.add(Map.entry(entry.getKey(), entry.getValue()));
-            }
-            List<BlockPos> immutablePositions = List.copyOf(positions);
-            List<BlockPredicate> immutablePredicates = List.copyOf(predicates);
-            List<Map.Entry<BlockPos, BlockPredicate>> immutableEntries = List.copyOf(entries);
-            int[] order = new int[immutableEntries.size()];
-            for (int index = 0; index < order.length; index++) order[index] = index;
-            int[] sentinels = sentinelIndexes(order.length, sentinelCount);
-            boolean[] membership = new boolean[order.length];
-            for (int sentinel : sentinels) membership[sentinel] = true;
-            return new ScanPlan(immutablePositions, immutablePredicates, immutableEntries, order, sentinels, membership);
-        }
-
-        private static ScanPlan empty() {
-            return new ScanPlan(List.of(), List.of(), List.of(), new int[0], new int[0], new boolean[0]);
-        }
+        private static ScanPlan empty() { return new ScanPlan(new BlockArray(Map.of()), 0); }
 
         public static ScanPlan forPattern(BlockArray pattern, int sentinelCount) {
             int count = Math.max(0, sentinelCount);
             return SCAN_PLAN_CACHE.computeIfAbsent(pattern, ignored -> new ConcurrentHashMap<>())
-                    .computeIfAbsent(count, ignored -> create(pattern, count));
+                    .computeIfAbsent(count, ignored -> new ScanPlan(pattern, count));
         }
 
         /** Returns a defensive copy of the geometry retained with this pattern's scan plan. */
@@ -206,11 +179,21 @@ public record CompiledMachinePattern(
 
         public List<BlockPredicate> entryPredicates() { return entryPredicates; }
 
-        public int[] entryOrder() { return entryOrder.clone(); }
+        public int[] entryOrder() {
+            int[] order = new int[entryCount()];
+            Arrays.setAll(order, index -> index);
+            return order;
+        }
 
         public int[] sentinelIndexes() { return sentinelIndexes.clone(); }
 
-        public boolean[] sentinelMembership() { return sentinelMembership.clone(); }
+        public boolean[] sentinelMembership() {
+            boolean[] membership = new boolean[entryCount()];
+            for (int index : sentinelIndexes) membership[index] = true;
+            return membership;
+        }
+
+        PackedAirPositions<BlockPredicate>.Cursor cursor() { return positions.cursor(); }
 
         int entryCount() { return entries.size(); }
 
@@ -220,29 +203,29 @@ public record CompiledMachinePattern(
 
         int sentinelAt(int index) { return sentinelIndexes[index]; }
 
-        boolean isSentinel(int index) { return sentinelMembership[index]; }
+        int firstSentinelAtOrAfter(int index) {
+            int found = Arrays.binarySearch(sentinelIndexes, index);
+            return found < 0 ? -1 - found : found;
+        }
 
         private static int[] sentinelIndexes(int size, int count) {
             if (size == 0 || count == 0) return new int[0];
             int limit = Math.min(size, count);
-            boolean[] candidates = new boolean[size];
-            candidates[0] = true;
-            candidates[size - 1] = true;
-            candidates[size / 2] = true;
-            int slots = Math.min(size, count);
-            for (int slot = 0; slot < slots; slot++) {
-                int index = (int) ((long) slot * (size - 1) / Math.max(1, slots - 1));
-                candidates[index] = true;
-            }
             int[] result = new int[limit];
-            int length = 0;
-            for (int index = 0; index < size && length < limit; index++) {
-                if (candidates[index]) result[length++] = index;
+            int middle = size / 2;
+            int slot = 0;
+            for (int i = 0; i < limit; i++) {
+                int regular = (int) ((long) slot * (size - 1) / Math.max(1, limit - 1));
+                if (middle < regular) {
+                    result[i] = middle;
+                    middle = Integer.MAX_VALUE;
+                } else {
+                    result[i] = regular;
+                    if (middle == regular) middle = Integer.MAX_VALUE;
+                    slot++;
+                }
             }
-            if (length == result.length) return result;
-            int[] trimmed = new int[length];
-            System.arraycopy(result, 0, trimmed, 0, length);
-            return trimmed;
+            return result;
         }
     }
 

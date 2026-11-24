@@ -55,8 +55,7 @@ public final class StructureMatcher {
                                       Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                       boolean stateSensitive, ScanOptions options, @Nullable Mismatch previousMismatch,
                                       @Nullable CompiledMachinePattern.ScanPlan scanPlan, long chunkStateEpoch) {
-        int batchSize = pattern.isEmpty() ? 0
-                : (pattern.pattern().size() + options.batchCount() - 1) / options.batchCount();
+        int batchSize = Math.ceilDiv(pattern.pattern().size(), options.batchCount());
         CompiledMachinePattern.ScanPlan effectivePlan = scanPlan == null
                 ? CompiledMachinePattern.ScanPlan.forPattern(pattern, Math.min(options.sentinelCount(), batchSize)) : scanPlan;
         return new ScanState(structureVersion, frontFacing, rollFacing, stageNumber, patternIdentity,
@@ -134,7 +133,7 @@ public final class StructureMatcher {
         private final CompiledMachinePattern.ScanPlan scanPlan;
         private final @Nullable Mismatch previousMismatch;
         private final int[] entryIndexes;
-        private final BlockPos[] worldPositions;
+        private final BlockPos controllerPos;
         private final BlockState[] actualStates;
         private final BlockPredicate[] matchingExpected;
         private @Nullable List<BlockPredicate>[] replacementPredicates;
@@ -143,22 +142,21 @@ public final class StructureMatcher {
         private @Nullable List<ScanEntry> view;
 
         private CapturedEntries(ScanIdentity identity, CompiledMachinePattern.ScanPlan scanPlan,
-                                @Nullable Mismatch previousMismatch, int capacity) {
+                                @Nullable Mismatch previousMismatch, BlockPos controllerPos, int capacity) {
             this.identity = identity;
             this.scanPlan = scanPlan;
             this.previousMismatch = previousMismatch;
             entryIndexes = new int[capacity];
-            worldPositions = new BlockPos[capacity];
+            this.controllerPos = controllerPos.immutable();
             actualStates = new BlockState[capacity];
             matchingExpected = new BlockPredicate[capacity];
         }
 
         @SuppressWarnings("unchecked")
-        private void add(int entryIndex, BlockPos worldPos, BlockState actualState, BlockPredicate expected,
+        private void add(int entryIndex, BlockState actualState, BlockPredicate expected,
                          List<BlockPredicate> replacements) {
             int index = size++;
             entryIndexes[index] = entryIndex;
-            worldPositions[index] = worldPos;
             actualStates[index] = actualState;
             matchingExpected[index] = expected;
             if (!replacements.isEmpty()) {
@@ -189,7 +187,8 @@ public final class StructureMatcher {
             if (entries == null) entries = new ScanEntry[size];
             ScanEntry entry = entries[index];
             if (entry == null) {
-                Mismatch mismatch = new Mismatch(relativePosAt(index), worldPositions[index], expectedAt(index),
+                BlockPos pos = relativePosAt(index);
+                Mismatch mismatch = new Mismatch(pos, controllerPos.offset(pos), expectedAt(index),
                         actualStates[index], identity.structureVersion(), identity.frontFacing(), identity.rollFacing(),
                         identity.stageNumber(), identity.patternIdentity());
                 entries[index] = entry = new ScanEntry(mismatch, matchingExpected[index], replacementsAt(index));
@@ -263,6 +262,8 @@ public final class StructureMatcher {
         private final ScanOptions options;
         private final int activeSentinelCount;
         private final CapturePredicates capturePredicates = new CapturePredicates();
+        private final PackedAirPositions<BlockPredicate>.Cursor lookup;
+        private final BlockPos.MutableBlockPos worldPosition = new BlockPos.MutableBlockPos();
         private int sentinelCursor;
         private boolean sentinelsChecked;
         private int scanIndex;
@@ -282,6 +283,7 @@ public final class StructureMatcher {
             this.stageNumber = stageNumber;
             this.patternIdentity = patternIdentity;
             this.scanPlan = scanPlan;
+            this.lookup = scanPlan.cursor();
             this.replacements = Map.copyOf(replacements);
             this.stateSensitive = stateSensitive;
             this.options = options;
@@ -295,7 +297,7 @@ public final class StructureMatcher {
         private final long chunkStateEpoch;
 
         public int batchSize() {
-            return scanPlan.entryCount() == 0 ? 0 : (scanPlan.entryCount() + options.batchCount() - 1) / options.batchCount();
+            return Math.ceilDiv(scanPlan.entryCount(), options.batchCount());
         }
 
         public int cursor() { return scanIndex; }
@@ -332,7 +334,7 @@ public final class StructureMatcher {
                         ScanStatus.INVALIDATED, invalidated, stateSensitive);
             }
             int budget = batchSize();
-            CapturedEntries entries = new CapturedEntries(identity, scanPlan, previousMismatch,
+            CapturedEntries entries = new CapturedEntries(identity, scanPlan, previousMismatch, ctrlPos,
                     Math.max(budget, previousMismatch == null ? 0 : 1));
             CapturePredicates memo = capturePredicates;
             memo.beginBatch();
@@ -349,9 +351,12 @@ public final class StructureMatcher {
                 }
                 nextSentinelsChecked = nextSentinelCursor == activeSentinelCount;
             }
+            int sent = nextSentinelCursor == 0 ? 0 : scanPlan.firstSentinelAtOrAfter(nextScanIndex);
+            int skip = sent < nextSentinelCursor ? scanPlan.sentinelAt(sent) : -1;
             while (nextScanIndex < scanPlan.entryCount() && entries.size() < budget) {
-                if (sentinelWasChecked(nextScanIndex, nextSentinelCursor, nextSentinelsChecked)) {
+                if (nextScanIndex == skip) {
                     nextScanIndex++;
+                    skip = ++sent < nextSentinelCursor ? scanPlan.sentinelAt(sent) : -1;
                     continue;
                 }
                 int index = nextScanIndex++;
@@ -383,16 +388,17 @@ public final class StructureMatcher {
 
         private void entryAt(int entryIndex, Level level, BlockPos ctrlPos,
                              CapturePredicates memo, CapturedEntries entries) {
-            BlockPos relativePos = entryIndex < 0 ? previousMismatch.relativePos() : scanPlan.entryPositions().get(entryIndex);
-            BlockPredicate expected = entryIndex < 0 ? previousMismatch.expected() : scanPlan.entryPredicates().get(entryIndex);
-            BlockPos worldPos = ctrlPos.offset(relativePos);
-            BlockState actualState = level.getBlockState(worldPos);
-            List<SingleBlockModifierReplacement> entryReplacements = replacements.getOrDefault(relativePos, List.of());
+            if (entryIndex >= 0) lookup.seek(entryIndex);
+            BlockPos relativePos = entryIndex < 0 ? previousMismatch.relativePos() : lookup.position;
+            BlockPredicate expected = entryIndex < 0 ? previousMismatch.expected() : lookup.value;
+            BlockState actualState = level.getBlockState(worldPosition.setWithOffset(ctrlPos, relativePos));
+            List<SingleBlockModifierReplacement> entryReplacements = replacements.isEmpty() ? List.of()
+                    : replacements.getOrDefault(relativePos, List.of());
             List<BlockPredicate> replacementPredicates = entryReplacements.isEmpty() ? List.of() : entryReplacements.stream()
                     .map(SingleBlockModifierReplacement::getReplacement)
                     .map(predicate -> snapshotPredicate(predicate, memo))
                     .toList();
-            entries.add(entryIndex, worldPos, actualState, snapshotPredicate(expected, memo), replacementPredicates);
+            entries.add(entryIndex, actualState, snapshotPredicate(expected, memo), replacementPredicates);
         }
 
         private static BlockPredicate snapshotPredicate(BlockPredicate predicate,
@@ -480,11 +486,6 @@ public final class StructureMatcher {
                 this.batch = batch;
                 this.snapshot = snapshot;
             }
-        }
-
-        private boolean sentinelWasChecked(int index, int cursor, boolean checked) {
-            if (!options.sentinelEnabled() || cursor == 0 || !scanPlan.isSentinel(index)) return false;
-            return checked || cursor == activeSentinelCount || index < scanPlan.sentinelAt(cursor);
         }
 
     }
@@ -576,12 +577,23 @@ public final class StructureMatcher {
     public static Optional<Mismatch> firstMismatch(BlockArray pattern, Level level, BlockPos ctrlPos,
                                                    Map<BlockPos, List<SingleBlockModifierReplacement>> replacements,
                                                    boolean stateSensitive) {
-        for (var entry : pattern.pattern().entrySet()) {
-            BlockPos worldPos = ctrlPos.offset(entry.getKey());
-            BlockState actualState = level.getBlockState(worldPos);
-            if (!matchesEntry(entry.getValue(), actualState, replacements.getOrDefault(entry.getKey(), List.of()), stateSensitive)) {
-                return Optional.of(new Mismatch(entry.getKey(), worldPos, entry.getValue(), actualState,
-                        0L, Direction.SOUTH, Direction.SOUTH, 0, pattern));
+        var cursor = pattern.positions().cursor();
+        var worldPos = new BlockPos.MutableBlockPos();
+        for (int i = 0, size = pattern.pattern().size(); i < size;) {
+            cursor.seek(i);
+            worldPos.setWithOffset(ctrlPos, cursor.position);
+            int end = cursor.runEnd(i);
+            while (true) {
+                BlockState actual = level.getBlockState(worldPos);
+                if (!cursor.value.matches(actual, stateSensitive)) {
+                    BlockPos relative = worldPos.subtract(ctrlPos).immutable();
+                    if (!matchesAlternative(cursor.value, actual, replacements.getOrDefault(relative, List.of()), stateSensitive)) {
+                        return Optional.of(new Mismatch(relative, worldPos.immutable(), cursor.value, actual,
+                                0L, Direction.SOUTH, Direction.SOUTH, 0, pattern));
+                    }
+                }
+                if (++i == end) break;
+                worldPos.move(cursor.step());
             }
         }
         return Optional.empty();
@@ -613,7 +625,11 @@ public final class StructureMatcher {
             BlockState actual,
             List<SingleBlockModifierReplacement> replacements,
             boolean stateSensitive) {
-        if (expected.matches(actual, stateSensitive)) return true;
+        return expected.matches(actual, stateSensitive) || matchesAlternative(expected, actual, replacements, stateSensitive);
+    }
+
+    private static boolean matchesAlternative(BlockPredicate expected, BlockState actual,
+            List<SingleBlockModifierReplacement> replacements, boolean stateSensitive) {
         for (SingleBlockModifierReplacement replacement : replacements) {
             if (replacement.getReplacement() instanceof BlockPredicate.Air && actual.isAir()) return true;
             if (replacement.getReplacement().matches(actual, stateSensitive)) return true;

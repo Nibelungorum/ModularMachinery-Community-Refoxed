@@ -117,8 +117,7 @@ public record MachineStructureDefinition(ResourceLocation machineId, List<Declar
                                PortTierRequirementSpec portTierRequirements, List<DynamicPatternSpec> dynamicPatterns,
                                MachineStructureRequirements requirements, boolean stateSensitive) {
                 this.kind = Objects.requireNonNull(kind, "kind");
-                Objects.requireNonNull(pattern, "pattern");
-                this.pattern = new BlockArray(pattern.pattern(), copyStringMap(pattern.tagsByPosition()), pattern.symbolsByPosition());
+                this.pattern = Objects.requireNonNull(pattern, "pattern");
                 this.portRequirements = portRequirements;
                 this.portTierRequirements = portTierRequirements;
                 this.dynamicPatterns = List.copyOf(dynamicPatterns == null ? List.of() : dynamicPatterns);
@@ -146,12 +145,6 @@ public record MachineStructureDefinition(ResourceLocation machineId, List<Declar
 
             public static Declaration extension(BlockArray pattern) {
                 return new Declaration(Kind.EXTENSION, pattern, null, null, List.of(), MachineStructureRequirements.EMPTY);
-            }
-
-            private static Map<BlockPos, List<String>> copyStringMap(Map<BlockPos, List<String>> source) {
-                Map<BlockPos, List<String>> copy = new LinkedHashMap<>();
-                source.forEach((position, values) -> copy.put(position, List.copyOf(values)));
-                return Collections.unmodifiableMap(copy);
             }
 
             public enum Kind {

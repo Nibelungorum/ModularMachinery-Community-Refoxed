@@ -1,15 +1,32 @@
 package cn.howxu.mmcr;
 
+import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
+import cn.howxu.mmcr.api.machine.StructureMatcher;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.api.facade.behavior.BehaviorAdapters;
 import cn.howxu.mmcr.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Blocks;
 
 public class BlockArrayMatchGameTest {
+
+    public static void requiredAirIsNotPadding(GameTestHelper helper) {
+        BlockPos origin = helper.absolutePos(new BlockPos(1, 2, 1));
+        var level = helper.getLevel();
+        var pattern = BlockArray.builder().noController().pattern(" ..").set('.', new BlockPredicate.Air()).build();
+        level.setBlockAndUpdate(origin.west(), Blocks.STONE.defaultBlockState());
+        level.setBlockAndUpdate(origin, Blocks.AIR.defaultBlockState());
+        level.setBlockAndUpdate(origin.east(), Blocks.STONE.defaultBlockState());
+        var mismatch = StructureMatcher.firstMismatch(pattern, level, origin).orElseThrow();
+        helper.assertTrue(mismatch.worldPos().equals(origin.east()), "Only the required air slot must be empty");
+        level.setBlockAndUpdate(origin.east(), Blocks.AIR.defaultBlockState());
+        helper.assertTrue(StructureMatcher.matchesRotated(pattern, level, origin), "Padding accepts the remaining stone");
+        helper.succeed();
+    }
 
     public void structureForms3x3Casing(GameTestHelper helper) {
         for (int x = 0; x < 3; x++)

@@ -135,6 +135,75 @@ class BlockArrayTest {
         assertThat(arr.get(new BlockPos(0, 0, -1))).isNull();
     }
 
+    @Test void padding_survives_late_binding_without_mutating_an_earlier_build() {
+        var controller = new BlockPredicate.OfBlock(Blocks.DIRT);
+        String[] input = {"   ", "  中"};
+        var builder = BlockArray.builder().pattern(input).controller('中').set('中', controller);
+        input[1] = "bad";
+        var unbound = builder.build();
+        var bound = builder.air(new BlockPredicate.Air()).build();
+        assertThat(unbound.pattern()).containsOnlyKeys(BlockPos.ZERO);
+        assertThat(bound.get(new BlockPos(-2, -1, 0))).isInstanceOf(BlockPredicate.Air.class);
+        assertThat(bound.symbolsByPosition()).containsEntry(new BlockPos(-1, 0, 0), ' ');
+        assertThat(bound.get(BlockPos.ZERO)).isSameAs(controller);
+    }
+
+    @Test void packed_air_keeps_order_glyphs_and_exact_states_in_every_orientation() {
+        var allAir = new BlockPredicate.Air();
+        var exact = new BlockPredicate.OfBlock(Blocks.AIR);
+        var pattern = BlockArray.builder().noController().pattern("A".repeat(21) + " .. " + "A".repeat(17))
+                .set('A', allAir).set('.', exact).build();
+        assertThat(exact.matches(Blocks.CAVE_AIR.defaultBlockState())).isFalse();
+        assertThat(allAir.matches(Blocks.CAVE_AIR.defaultBlockState())).isTrue();
+        for (Direction face : Direction.values()) for (Direction roll : Direction.Plane.HORIZONTAL) {
+            BlockArray rotated = BlockArrayCache.get(pattern, face, roll);
+            Map<BlockPos, BlockPredicate> expected = new LinkedHashMap<>();
+            Map<BlockPos, Character> symbols = new LinkedHashMap<>();
+            String row = "A".repeat(21) + " .. " + "A".repeat(17);
+            for (int x = 0; x < row.length(); x++) {
+                char c = row.charAt(x);
+                if (c == ' ') continue;
+                var pos = BlockRotator.rotateSouthTo(new BlockPos(x - row.length() / 2, 0, 0), face, roll);
+                expected.put(pos, c == 'A' ? allAir : exact);
+                symbols.put(pos, c);
+            }
+            assertThat(rotated.pattern()).containsExactlyEntriesOf(expected);
+            assertThat(rotated.pattern().hashCode()).isEqualTo(expected.hashCode());
+            expected.forEach((pos, predicate) -> assertThat(rotated.get(pos)).isEqualTo(predicate));
+            assertThat(rotated.symbolsByPosition()).containsExactlyEntriesOf(symbols);
+            var override = new BlockPredicate.Any();
+            var extra = new BlockPos(123, 9, 0);
+            var replaced = expected.keySet().iterator().next();
+            expected.put(replaced, override);
+            expected.put(extra, override);
+            assertThat(rotated.entriesWithOverrides(Map.of(extra, override, replaced, override)))
+                    .containsExactlyElementsOf(expected.entrySet());
+            assertThat(rotated.get(replaced)).isSameAs(allAir);
+            assertThat(rotated.get(extra)).isNull();
+        }
+    }
+
+    @Test void sparse_air_groups_do_not_fill_a_large_gap_or_lose_duplicate_wire_updates() {
+        var source = new BlockArray.PositionInput();
+        var air = new BlockPredicate.Air();
+        var stone = new BlockPredicate.OfBlock(Blocks.STONE);
+        var first = new BlockPos(-32000, 0, 32000);
+        var remote = new BlockPos(32000, 0, -32000);
+        for (int i = 0; i < 22; i++) source.predicate(first.below(i), air);
+        source.predicate(first.below(3), stone); // update within the pending negative-Y run
+        source.predicate(remote, air);
+        source.predicate(first.below(5), stone); // update within the published section mask
+        source.symbol(first, '空');
+        source.symbol(remote, '.');
+        var result = source.build(Map.of());
+        assertThat(result.get(BlockPos.ZERO)).isNull();
+        assertThat(result.pattern().keySet()).startsWith(first, first.below()).endsWith(remote);
+        assertThat(result.get(first.below(3))).isSameAs(stone);
+        assertThat(result.get(first.below(5))).isSameAs(stone);
+        assertThat(result.get(first.below(16))).isSameAs(air);
+        assertThat(result.symbolsByPosition()).containsOnlyKeys(first, remote);
+    }
+
     @Test void builder_allows_explicit_controller_symbol() {
         var casing = new BlockPredicate.OfBlock(Blocks.STONE);
         var controller = new BlockPredicate.OfBlock(Blocks.DIRT);
