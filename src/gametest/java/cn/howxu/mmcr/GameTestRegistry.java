@@ -119,6 +119,7 @@ public final class GameTestRegistry {
         register(event, "input_isolation_paid_ordinary_reload", 20, InputIsolationGameTest::paidOrdinaryScopeSurvivesReload);
         register(event, "input_isolation_paid_isolated_reload", 20, InputIsolationGameTest::paidIsolatedScopeSurvivesReload);
         if (ModList.get().isLoaded("ae2")) {
+            register(event, "hosted_pattern_inventory", 20, HostedPatternInventoryGameTest::atomicGatePaymentAndReload);
             register(event, "pattern_batch_definition_roundtrip", 20,
                     PatternBatchCodecGameTest::batchDefinitionRoundTripsDistinctMultipliers);
             register(event, "pattern_batch_invalid_definition", 20,
@@ -938,7 +939,8 @@ public final class GameTestRegistry {
         // declarations above so stable/core and unrelated compatibility suites can be restored.
         event.removeIf(test -> {
             String name = test.testName();
-            return !(name.startsWith("mmcr:pattern_batch_")
+            return !(name.startsWith("mmcr:hosted_pattern_")
+                    || name.startsWith("mmcr:pattern_batch_")
                     || name.startsWith("mmcr:structure_material_")
                     || name.startsWith("mmcr:status_blocks_")
                     || name.equals("mmcr:decorative_casings_follow_recipe")
