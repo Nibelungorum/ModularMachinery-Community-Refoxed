@@ -805,12 +805,13 @@ public final class FactoryRuntime {
 
     public boolean syncCoreLanesIfNeeded(MachineControllerBlockEntity controller, Machine machine,
                                          List<MachineRecipe> candidates) {
-        long catalogVersion = RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version();
-        if (lanes.isEmpty() || syncedCoreMachine != machine || coreCatalogVersion != catalogVersion
-                || !Objects.equals(syncedCoreRecipePoolId, controller.currentRecipePoolId())) {
-            return syncCoreLanes(controller, machine, candidates);
-        }
-        return false;
+        return !hostedLanesCurrent(controller, machine) && syncCoreLanes(controller, machine, candidates);
+    }
+
+    public boolean hostedLanesCurrent(MachineControllerBlockEntity controller, Machine machine) {
+        return !lanes.isEmpty() && syncedCoreMachine == machine
+                && coreCatalogVersion == RecipeRegistry.catalogForPool(controller.currentRecipePoolId()).version()
+                && Objects.equals(syncedCoreRecipePoolId, controller.currentRecipePoolId());
     }
 
     public boolean ensureBaseLane(MachineControllerBlockEntity controller) {
@@ -1091,13 +1092,14 @@ public final class FactoryRuntime {
         return reserveSelectedPatternStart(recipe, parallelism, requestCapabilities, requestSource, true);
     }
 
-    private @Nullable FactoryRecipeThread availablePatternLane(MachineRecipe recipe) {
+    private @Nullable FactoryRecipeThread availablePatternLane(MachineRecipe recipe, boolean preferCached) {
         FactoryRecipeThread selected = null;
         for (int index = 0; index < Math.min(laneLimit, lanes.size()); index++) {
             FactoryRecipeThread lane = lanes.get(index);
             if (!lane.isIdle() || lane.isStartPending() || pendingAsyncSearches.containsKey(lane)
                     || patternStartReservations.contains(lane) || patternPreparations.containsKey(lane)
                     || !lane.canStartPatternRecipe(recipe)) continue;
+            if (!preferCached) return lane; // An availability query must not refresh or clear last-recipe memory.
             if (selected == null) selected = lane;
             if (lane.cachedPatternRecipe(recipe.id()) != null) { selected = lane; break; }
         }
@@ -1106,13 +1108,13 @@ public final class FactoryRuntime {
 
     public boolean hasHostedPatternLane(MachineRecipe recipe) {
         return controller != null && !paused && patternQuotaAvailable(recipe)
-                && (lanes.size() < laneLimit || availablePatternLane(recipe) != null);
+                && (lanes.size() < laneLimit || availablePatternLane(recipe, false) != null);
     }
 
     public @Nullable PatternLane reserveSelectedPatternStart(MachineRecipe recipe, long parallelism,
             List<MachineCapability> requestCapabilities, @Nullable BlockPos requestSource, boolean exact) {
         if (recipe == null || controller == null || paused || parallelism <= 0L || !patternQuotaAvailable(recipe)) return null;
-        FactoryRecipeThread selected = availablePatternLane(recipe);
+        FactoryRecipeThread selected = availablePatternLane(recipe, true);
         if (selected != null) return reservePatternStart(selected, recipe, parallelism,
                 requestCapabilities, requestSource, null, exact, !exact);
         if (lanes.size() >= laneLimit) return null;

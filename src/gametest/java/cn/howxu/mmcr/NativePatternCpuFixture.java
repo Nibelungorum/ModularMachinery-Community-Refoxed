@@ -84,6 +84,11 @@ final class NativePatternCpuFixture {
 
     NativePatternCpuFixture(GameTestHelper helper, String name, boolean fluid, int unitAmount,
                             long crafts, ParallelTier tier) {
+        this(helper, name, fluid, unitAmount, crafts, tier, true);
+    }
+
+    NativePatternCpuFixture(GameTestHelper helper, String name, boolean fluid, int unitAmount,
+                            long crafts, ParallelTier tier, boolean countPushes) {
         this.helper = helper;
         total = Math.multiplyExact(crafts, unitAmount);
         input = fluid ? AEFluidKey.of(Fluids.WATER) : AEItemKey.of(Items.IRON_INGOT);
@@ -129,7 +134,7 @@ final class NativePatternCpuFixture {
         host = helper.getBlockEntity(PORT);
         provider = new CountingProvider(host.getLogic());
         // Install before ready-time node creation, retaining the real MMCR host and logic.
-        host.getMainNode().addService(ICraftingProvider.class, provider);
+        if (countPushes) host.getMainNode().addService(ICraftingProvider.class, provider);
         energy = helper.getBlockEntity(ENERGY);
         energy.getMainNode().addService(IStorageProvider.class, mounts -> mounts.mount(storage, 0));
         // Two same-key slots prove aggregation without building an enormous ItemStack.

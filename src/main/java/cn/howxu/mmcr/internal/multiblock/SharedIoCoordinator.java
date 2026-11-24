@@ -115,6 +115,14 @@ public final class SharedIoCoordinator {
         this.remainingRequests = production ? 0 : requestBudget;
     }
 
+    /** Check a published permit without creating a coordinator or a permit from a crafting quote. */
+    public static synchronized boolean permitsHostedPreview(ServerLevel level, BlockPos pos) {
+        var coordinator = COORDINATORS.get(level);
+        if (coordinator == null || coordinator.executionRoundId == 0) return true;
+        var permit = coordinator.controllerPermits.get(pos.asLong());
+        return permit != null && permit.eligible(coordinator.executionRoundId, level.getGameTime(), level.tickRateManager().runsNormally());
+    }
+
     public static synchronized SharedIoCoordinator get(ServerLevel level) {
         return COORDINATORS.computeIfAbsent(level, ignored -> new SharedIoCoordinator(true));
     }

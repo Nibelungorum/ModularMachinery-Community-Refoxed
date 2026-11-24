@@ -6,6 +6,7 @@ import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.util.SaturatingLong;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 
 /** Allocates tentative FE reservations. Only the caller taking a successful allocation may commit it.
@@ -17,6 +18,33 @@ public final class EnergyPrefetchLedger {
 
     public record Candidate(String key, RecipeEnergyPrefetchFacet facet, RecipeEnergyPrefetchFacet.PrefetchPlan plan) {}
     public record Allocation(List<Candidate> candidates, int failureIndex) {}
+
+    /** Mirrors the real allocation order without creating or restoring native reservations. */
+    public static boolean previewFits(List<MachineRequirement> requirements, int duration, long parallelism,
+                                      List<RecipeEnergyPrefetchFacet> facets) {
+        var planned = new HashMap<String, Long>();
+        for (var requirement : requirements) {
+            if (!(requirement instanceof EnergyRequirement energy) || !energy.io().isInput()) continue;
+            if (planned.isEmpty()) {
+                for (var facet : facets) {
+                    String key = facet.reservationKey();
+                    if (key == null || key.isBlank() || planned.put(key, 0L) != null) return false;
+                }
+            }
+            long needed = SaturatingLong.multiply(SaturatingLong.multiply(energy.fePerTick(), duration), parallelism);
+            for (var facet : facets) {
+                if (needed == 0) break;
+                String key = facet.reservationKey();
+                long used = planned.get(key);
+                long amount = facet.previewPrefetch(needed, used);
+                if (amount < 0 || amount > needed || amount > Long.MAX_VALUE - used) return false;
+                planned.put(key, used + amount);
+                needed -= amount;
+            }
+            if (needed > 0) return false;
+        }
+        return true;
+    }
 
     public static Allocation allocate(List<MachineRequirement> requirements, int duration, long parallelism,
                                       List<RecipeEnergyPrefetchFacet> facets, boolean probe) {

@@ -23,6 +23,7 @@ import net.minecraft.server.level.ServerLevel;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -61,6 +62,29 @@ public final class HostedPatternDispatcher {
             if (controller.probeHostedPattern(host.getBlockPos(), hints, null, excluded(key, controller)) != null) return true;
         }
         return false;
+    }
+
+    long suggestPatternCopies(AEItemKey definition, List<MachineOutput> hints, PatternBulkSizing sizing) {
+        long cap = sizing.maxCopies();
+        if (cap <= 0) return 0;
+        var maximum = new Request(host, sizing.projected(cap));
+        for (var controller : host.hostedControllers()) {
+            if (!controller.canPreviewHostedPatterns()) continue; // Even a rejection stamp reads the controller snapshot.
+            var skip = new HashSet<>(excluded(definition, controller, false));
+            MachineControllerBlockEntity.PatternProbe candidate;
+            while ((candidate = controller.previewHostedPattern(host.getBlockPos(), hints, maximum.capabilities, skip, null)) != null) {
+                var offer = candidate;
+                long copies = PatternBulkSizing.copiesForBest(cap, n -> {
+                    if (n == cap) return offer.payable();
+                    var request = new Request(host, sizing.projected(n));
+                    var probe = controller.previewHostedPattern(host.getBlockPos(), hints, request.capabilities, skip, offer.recipeId());
+                    return probe == null ? 0 : probe.payable();
+                });
+                if (copies > 0) return copies;
+                skip.add(offer.recipeId());
+            }
+        }
+        return 0;
     }
 
     public void run(long now) {
@@ -123,13 +147,16 @@ public final class HostedPatternDispatcher {
     }
 
     private Set<ResourceLocation> excluded(AEItemKey key, MachineControllerBlockEntity controller) {
-        var failures = rejected.get(key);
+        return excluded(key, controller, true);
+    }
+
+    private Set<ResourceLocation> excluded(AEItemKey key, MachineControllerBlockEntity controller, boolean clean) {        var failures = rejected.get(key);
         if (failures == null) return Set.of();
         var last = failures.get(controller.getBlockPos());
         if (last == null) return Set.of();
         Group group = host.hostedPatterns().group(key);
         if (group != null && last.materials == group.materials() && last.stamp.equals(Stamp.of(controller))) return last.recipes;
-        failures.remove(controller.getBlockPos());
+        if (clean) failures.remove(controller.getBlockPos());
         return Set.of();
     }
 
@@ -165,14 +192,32 @@ public final class HostedPatternDispatcher {
         MachineControllerBlockEntity payer;
 
         Request(PatternInterfaceBlockEntity host, Group group) {
-            super(null, group.materials().size());
-            this.host = host;
+            this(host, group.materials());
             this.expected = group;
+        }
+
+        Request(PatternInterfaceBlockEntity host, KeyCounter[] inputs) {
+            this(host, combine(inputs));
+        }
+
+        private Request(PatternInterfaceBlockEntity host, Map<AEKey, Long> inputs) {
+            super(null, inputs.size());
+            this.host = host;
             int slot = 0;
-            for (var entry : group.materials().entrySet()) {
+            var counter = new KeyCounter();
+            for (var entry : inputs.entrySet()) {
                 setStack(slot++, new GenericStack(entry.getKey(), entry.getValue()));
+                counter.add(entry.getKey(), entry.getValue());
             }
-            capabilities = AE2ResourceFamilies.requestCapabilities(this, group.requestCounters());
+            capabilities = AE2ResourceFamilies.requestCapabilities(this, new KeyCounter[]{counter});
+        }
+
+        private static Map<AEKey, Long> combine(KeyCounter[] inputs) {
+            Map<AEKey, Long> totals = new LinkedHashMap<>();
+            for (var input : inputs) for (var entry : input) {
+                totals.merge(entry.getKey(), entry.getLongValue(), Math::addExact);
+            }
+            return totals;
         }
 
         @Override public long getMaxAmount(AEKey key) { return Long.MAX_VALUE; }

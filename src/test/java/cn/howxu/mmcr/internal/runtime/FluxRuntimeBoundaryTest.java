@@ -291,6 +291,14 @@ class FluxRuntimeBoundaryTest {
         return (List<?>) method.invoke(runtime);
     }
 
+    @Test
+    void readOnlyQuoteNeverAsksAnUnknownEnergyEndpointToReserveThenRestore() {
+        var energy = new ObservedFlux("single", 15);
+        assertThat(EnergyPrefetchLedger.previewFits(List.of(new EnergyRequirement(5)), 3, 1, List.of(energy))).isFalse();
+        assertThat(energy.planCalls).isZero();
+        assertThat(energy.networkCommits).isZero();
+    }
+
     private static void startSinglePrefetch(Fixture fixture, ObservedFlux energy, int duration) {
         List<ProcessingComponent> components = new ArrayList<>(fixture.controller.componentRuntime().components());
         components.removeIf(component -> component.getContainer() instanceof TestCapabilityHost);
@@ -1000,6 +1008,7 @@ class FluxRuntimeBoundaryTest {
         private final FluxEnergyInputCapability delegate;
         private final FluxEnergyInputCapability missing = new FluxEnergyInputCapability(new FluxEnergyBuffer(), "missing");
         private int networkCommits;
+        private int planCalls;
         private int consumeCalls;
         private int releaseCalls;
         private long released;

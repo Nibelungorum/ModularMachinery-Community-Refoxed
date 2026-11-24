@@ -486,10 +486,26 @@ public class MachineControllerBlockEntity extends BlockEntity {
 
     public @Nullable PatternProbe probeHostedPattern(BlockPos port, List<MachineOutput> hints,
             @Nullable List<MachineCapability> inputs, Set<ResourceLocation> excluded) {
+        return probeHostedPattern(port, hints, inputs, excluded, null, false);
+    }
+
+    public @Nullable PatternProbe previewHostedPattern(BlockPos port, List<MachineOutput> hints,
+            List<MachineCapability> inputs, Set<ResourceLocation> excluded, @Nullable ResourceLocation onlyRecipe) {
+        if (!canPreviewHostedPatterns()) return null;
+        return probeHostedPattern(port, hints, inputs, excluded, onlyRecipe, true);
+    }
+
+    public boolean canPreviewHostedPatterns() {
+        return pendingFactoryRuntimeInput == null && pendingCraftingRuntimeInput == null && !restoringFactoryRuntime
+                && level instanceof ServerLevel server && SharedIoCoordinator.permitsHostedPreview(server, worldPosition);
+    }
+
+    private @Nullable PatternProbe probeHostedPattern(BlockPos port, List<MachineOutput> hints,
+            @Nullable List<MachineCapability> inputs, Set<ResourceLocation> excluded, @Nullable ResourceLocation onlyRecipe, boolean preview) {
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
         if (isRemoved() || redstonePaused || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
                 || !snapshot.linkedPortPositions().contains(port)) return null;
-        if (inputs != null && level instanceof ServerLevel server) {
+        if (!preview && inputs != null && level instanceof ServerLevel server) {
             var coordinator = SharedIoCoordinator.get(server);
             long round = coordinator.executionRoundId();
             if (round != 0 && !coordinator.controllerPermit(getBlockPos()).eligible(round,
@@ -498,16 +514,22 @@ public class MachineControllerBlockEntity extends BlockEntity {
         boolean factory = hasFactoryController();
         if (!factory && (runtime.craftingRuntime().active() || runtime.craftingRuntime().pendingPatternRecipeId() != null
                 || sharedStartPending || normalRecipeThread.isStartPending() || normalRecipeThread.hasPendingAsyncSearch())) return null;
-        if (factory) {
+        if (factory && preview) {
+            if (runtime.factoryRuntime().laneLimit() != effectiveFactoryThreadLimit()
+                    || !runtime.factoryRuntime().hostedLanesCurrent(this, snapshot.structure().machine())) return null;
+        } else if (factory) {
             factoryScheduler().setThreadLimit(effectiveFactoryThreadLimit());
             runtime.factoryRuntime().syncCoreLanesIfNeeded(this, snapshot.structure().machine(), recipesForMachine());
         }
         for (MachineRecipe recipe : recipesForMachine()) {
-            if (excluded.contains(recipe.id()) || !snapshot.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())
+            if (onlyRecipe != null && !onlyRecipe.equals(recipe.id()) || excluded.contains(recipe.id())
+                    || !snapshot.moduleConnectionStatus().canRunRecipe(recipe.requiredHostIds())
                     || factory && !runtime.factoryRuntime().hasHostedPatternLane(recipe)) continue;
             EffectiveRecipe effective = effectivePatternRecipe(recipe);
             if (effective == null || !patternOutputsMatch(effective.outputs(), hints)) continue;
-            long payable = inputs == null ? 0 : runtime.craftingRuntime().probeHostedPattern(effective, inputs, port);
+            var crafting = runtime.craftingRuntime();
+            long payable = inputs == null ? 0 : preview ? crafting.previewHostedPattern(effective, inputs, port)
+                    : crafting.probeHostedPattern(effective, inputs, port);
             if (inputs == null || payable > 0) return new PatternProbe(recipe.id(), effective.parallelismLimit(), payable);
         }
         return null;

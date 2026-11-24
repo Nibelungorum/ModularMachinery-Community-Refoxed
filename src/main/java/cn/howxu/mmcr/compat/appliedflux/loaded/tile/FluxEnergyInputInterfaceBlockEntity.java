@@ -15,6 +15,9 @@ import cn.howxu.mmcr.compat.appliedflux.loaded.storage.FluxEnergyBuffer;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import cn.howxu.mmcr.util.IOType;
 import java.util.List;
+import java.util.Optional;
+import cn.howxu.mmcr.api.capability.plan.CapabilityOperation;
+import cn.howxu.mmcr.compat.appliedflux.loaded.capability.FluxEnergyInputCapability.ExactPrefetchBridge;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,9 +30,15 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class FluxEnergyInputInterfaceBlockEntity extends FluxInterfaceBlockEntity {
     private final FluxEnergyBuffer buffer = new FluxEnergyBuffer(this::onEnergyChanged);
     private final FluxEnergyInputCapability capability = new FluxEnergyInputCapability(buffer,
-            "appflux_energy_input", requested -> {
-                FluxEnergyNetwork network = network();
-                return network == null ? java.util.Optional.empty() : network.planExactExtract(requested);
+            "appflux_energy_input", new ExactPrefetchBridge() {
+                @Override public Optional<CapabilityOperation> planExactExtract(long requested) {
+                    FluxEnergyNetwork network = network();
+                    return network == null ? Optional.empty() : network.planExactExtract(requested);
+                }
+                @Override public boolean canPreviewExact(long amount) {
+                    FluxEnergyNetwork network = network();
+                    return network != null && network.canPreviewExact(amount);
+                }
             }, () -> network() != null);
     private final CapabilitySnapshot capabilitySnapshot = new CapabilitySnapshot(List.of(capability));
     private final InputTicker ticker = new InputTicker();

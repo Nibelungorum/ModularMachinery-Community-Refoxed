@@ -13,6 +13,7 @@ import cn.howxu.mmcr.LevelStub;
 import cn.howxu.mmcr.test.TestBootstrap;
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.core.Holder;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -53,6 +54,25 @@ class PatternInterfaceCraftingMachineTest {
         assertThat(PatternInterfaceCraftingMachine.validInputs(pattern, new KeyCounter[]{iron}, level)).isFalse();
         assertThat(PatternInterfaceCraftingMachine.validInputs(pattern, new KeyCounter[]{new KeyCounter(), new KeyCounter()}, level)).isFalse();
         assertThat(iron.get(AEItemKey.of(Items.IRON_INGOT))).isEqualTo(2_147_483_648L);
+    }
+
+    @Test
+    void projectionsRespectPerKeyHeadroomAcrossSlotsAndNeverEditTheCallersCounters() {
+        var iron = AEItemKey.of(Items.IRON_INGOT);
+        var water = AEFluidKey.of(Fluids.WATER);
+        var a = counter(Items.IRON_INGOT, 3);
+        var b = counter(Items.IRON_INGOT, 4);
+        b.add(water, 11);
+        var slots = new KeyCounter[]{a, b};
+        var sizing = PatternBulkSizing.from(slots, Map.of(iron, Long.MAX_VALUE - 15, water, 1L), Long.MAX_VALUE);
+        assertThat(sizing.maxCopies()).isEqualTo(2);
+        var projection = sizing.projected(2)[0];
+        assertThat(projection.get(iron)).isEqualTo(Long.MAX_VALUE - 1);
+        assertThat(projection.get(water)).isEqualTo(23);
+        assertThat(a.get(iron)).isEqualTo(3);
+        assertThat(b.get(iron)).isEqualTo(4);
+        b.set(iron, Long.MAX_VALUE);
+        assertThat(PatternBulkSizing.from(slots, Map.of(), 50).maxCopies()).isZero();
     }
 
     @Test
