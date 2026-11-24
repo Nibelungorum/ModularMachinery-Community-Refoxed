@@ -6,11 +6,9 @@ import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.AEKey;
 import appeng.api.stacks.KeyCounter;
 import appeng.helpers.externalstorage.GenericStackInv;
-import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.compat.ae2lt.loaded.LoadedLightningBridge;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2TestFixtures;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2NativeAdapters;
-import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.test.TestBootstrap;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.material.Fluids;
@@ -78,14 +76,11 @@ class LightningPatternTest {
     }
 
     @Test
-    void lightningOutputPatternMatchesOnlySameTierAndAmount() throws Exception {
-        var method = MachineControllerBlockEntity.class.getDeclaredMethod("samePatternOutput",
-                MachineOutput.class, MachineOutput.class);
-        method.setAccessible(true);
+    void lightningHintMatchesTierIndependentlyOfAmount() {
         var expected = new LightningOutput(HIGH_VOLTAGE, 17L, 1F);
-        assertThat(method.invoke(null, expected, new LightningOutput(HIGH_VOLTAGE, 17L, 1F))).isEqualTo(true);
-        assertThat(method.invoke(null, expected, new LightningOutput(EXTREME_HIGH_VOLTAGE, 17L, 1F))).isEqualTo(false);
-        assertThat(method.invoke(null, expected, new LightningOutput(HIGH_VOLTAGE, 18L, 1F))).isEqualTo(false);
+        assertThat(expected.matchesPatternResource(new LightningOutput(HIGH_VOLTAGE, 18L, 1F))).isTrue();
+        assertThat(expected.matchesPatternResource(new LightningOutput(EXTREME_HIGH_VOLTAGE, 17L, 1F))).isFalse();
+        assertThat(expected.matchesPatternOutput(new LightningOutput(HIGH_VOLTAGE, 18L, 1F))).isFalse();
         var bridge = new LoadedLightningBridge();
         var high = LoadedLightningBridge.key(HIGH_VOLTAGE);
         assertThat(bridge.patternOutput(high, 17L)).contains(expected);

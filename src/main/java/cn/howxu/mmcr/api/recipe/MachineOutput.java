@@ -62,6 +62,16 @@ public interface MachineOutput {
         return ((OutputType<MachineOutput>) outputType()).aggregationIdentity(this);
     }
 
+    default boolean matchesPatternOutput(MachineOutput other) {
+        return matchesPatternResource(other) && scaledAmount(this) == scaledAmount(other);
+    }
+
+    default boolean matchesPatternResource(MachineOutput other) {
+        if (other == null || other.outputType() != outputType()) return false;
+        Object identity = aggregationIdentity();
+        return identity != null && identity.equals(other.aggregationIdentity());
+    }
+
     /**
      * Amount represented by this output for controller-side aggregation and presentation.
      */
