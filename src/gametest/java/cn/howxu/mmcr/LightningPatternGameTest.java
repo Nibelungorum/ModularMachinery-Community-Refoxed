@@ -1,6 +1,9 @@
 package cn.howxu.mmcr;
 
 import appeng.api.crafting.PatternDetailsHelper;
+import appeng.api.networking.GridHelper;
+import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
+import appeng.core.definitions.AEBlocks;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
@@ -94,8 +97,14 @@ public class LightningPatternGameTest {
         var water = AEFluidKey.of(Fluids.WATER);
         var high = family.adapter().toKey(HIGH_VOLTAGE);
         var extreme = family.adapter().toKey(EXTREME_HIGH_VOLTAGE);
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(),
-                        "Controller forms with the real pattern interface"))
+        BlockPos powerPos = new BlockPos(3, 1, 0);
+        helper.setBlock(powerPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        var power = helper.getBlockEntity(powerPos, CreativeEnergyCellBlockEntity.class);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode() != null
+                        && power.getMainNode().getNode() != null, "Both grid nodes initialize"))
+                .thenExecute(() -> GridHelper.createConnection(host.getMainNode().getNode(), power.getMainNode().getNode()))
+                .thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed() && host.hostedOnline(),
+                        "Controller forms with the online pattern interface"))
                 .thenExecute(() -> {
                     var encoded = PatternDetailsHelper.encodeProcessingPattern(
                             List.of(new GenericStack(iron, 3L), new GenericStack(water, 1_000L),
@@ -113,19 +122,14 @@ public class LightningPatternGameTest {
                     holders[3].add(extreme, 7L);
                     helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, null),
                             "A real decoded mixed pattern reaches controller admission");
+                    host.dispatchHostedPatterns();
+                    var group = host.hostedPatterns().group(pattern.getDefinition());
                     helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId())
-                                    && controller.runtimeSnapshot().crafting().parallelism() == 1L
-                                    && host.pendingPatterns().isEmpty(),
-                            "Mixed admission immediately pays one complete recipe on one thread, without precollection");
-                    var returns = host.getLogic().getReturnInv().getAvailableStacks();
-                    helper.assertTrue(holders[0].get(iron) == 0L && holders[1].get(water) == 0L
-                                    && holders[2].get(high) == 0L && holders[3].get(extreme) == 0L
-                                    && host.pendingPatterns().isEmpty(),
-                            "The original AE2 holders are accepted once");
-                    helper.assertTrue(returns.get(iron) == 2L && returns.get(water) == 750L
-                                    && returns.get(high) == 3L && returns.get(extreme) == 4L
-                                    && returns.get(AEItemKey.of(Items.GOLD_INGOT)) == 0L,
-                            "Each family returns exactly its unconsumed amount, without finishing on the push stack");
+                                    && holders[0].isEmpty() && holders[1].isEmpty() && holders[2].isEmpty() && holders[3].isEmpty(),
+                            "One mixed delivery funds one real recipe");
+                    helper.assertTrue(group.materials().equals(Map.of(iron, 2L, water, 750L, high, 3L, extreme, 4L))
+                                    && host.getLogic().getReturnInv().isEmpty(),
+                            "Item, fluid and tier-specific leftovers remain hosted, not in the return inventory");
                     KeyCounter[] next = {new KeyCounter(), new KeyCounter(), new KeyCounter(), new KeyCounter()};
                     next[0].add(iron, 3L);
                     next[1].add(water, 1_000L);
@@ -134,17 +138,11 @@ public class LightningPatternGameTest {
                     helper.assertTrue(!host.craftingMachine().pushPattern(pattern, next, null)
                                     && next[0].get(iron) == 3L && next[1].get(water) == 1_000L
                                     && next[2].get(high) == 5L && next[3].get(extreme) == 7L
-                                    && host.pendingPatterns().isEmpty(),
+                                    && host.hostedPatterns().group(pattern.getDefinition()) == group,
                             "An active thread rejects the next mixed request without taking any resource family");
-                    var afterRejection = host.getLogic().getReturnInv().getAvailableStacks();
-                    helper.assertTrue(afterRejection.get(iron) == 2L && afterRejection.get(water) == 750L
-                                    && afterRejection.get(high) == 3L && afterRejection.get(extreme) == 4L,
-                            "Busy rejection leaves all native return balances unchanged");
                     var restored = reload(helper, host);
-                    var savedReturns = restored.getLogic().getReturnInv().getAvailableStacks();
-                    helper.assertTrue(savedReturns.get(high) == 3L && savedReturns.get(extreme) == 4L
-                                    && savedReturns.get(iron) == 2L && savedReturns.get(water) == 750L,
-                            "Native pattern NBT preserves mixed leftovers");
+                    helper.assertTrue(restored.hostedPatterns().group(pattern.getDefinition()).materials().equals(group.materials()),
+                            "Hosted NBT preserves item, fluid and both lightning tiers");
                     restored.onChunkUnloaded();
                 }).thenSucceed();
     }

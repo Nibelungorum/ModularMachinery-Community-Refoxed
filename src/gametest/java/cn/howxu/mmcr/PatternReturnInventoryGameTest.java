@@ -13,7 +13,6 @@ import appeng.helpers.externalstorage.GenericStackItemHandler;
 import appeng.helpers.externalstorage.GenericStackFluidHandler;
 import appeng.menu.SlotSemantics;
 import cn.howxu.mmcr.api.capability.plan.PlanningReservations;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.adapter.AE2ResourceFamilies;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.kind.PatternInterfaceKind;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.AE2MenuTypes;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.menu.PatternInterfaceMenu;
@@ -51,50 +50,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author howxu <dev@howxu.cn>
  */
 public class PatternReturnInventoryGameTest {
-    public void pendingQueueLongBalancesRollbackAndPersistence(GameTestHelper helper) {
-        var host = place(helper);
-        var queue = host.pendingPatterns();
-        AEItemKey iron = variant(helper, 700);
-        AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
-        KeyCounter items = new KeyCounter();
-        items.add(iron, Long.MAX_VALUE / 2L);
-        items.add(gold, Long.MAX_VALUE / 2L);
-        KeyCounter[] inputs = {items};
-        var outputs = List.of(new GenericStack(AEItemKey.of(Items.DIAMOND), 1L));
-        PendingPatternQueueGameTest.read(helper, queue,
-                PendingPatternQueueGameTest.legacyData(helper, inputs, outputs, 2L));
-        try (Transaction transaction = Transaction.openRoot()) {
-            helper.assertTrue(queue.refundNext(host, transaction), "An entire long group provisionally transfers to returns");
-        }
-        helper.assertTrue(queue.totalCopies() == 2L && host.getLogic().getReturnInv().isEmpty()
-                        && queue.committedRevision() == 0L, "Root rollback restores the entire escrow and return inventory");
-        items.add(iron, 1L);
-        helper.assertTrue(queue.totalCopies() == 2L && queue.groups().size() == 1
-                        && queue.groups().getFirst().inputs(2L)[0].get(iron) == Long.MAX_VALUE - 1L
-                        && queue.groups().getFirst().inputs(2L)[0].get(gold) == Long.MAX_VALUE - 1L
-                        && host.getLogic().getReturnInv().isEmpty(),
-                "Compressed private ownership is independent of caller mutations and cross-resource totals");
-        var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
-        host.saveAdditional(saved);
-        var restored = PatternInterfaceKind.INSTANCE.entityFactory().create(helper.absolutePos(new BlockPos(2, 0, 0)),
-                host.getBlockState());
-        restored.setLevel(helper.getLevel());
-        restored.loadWithComponents(TagValueInput.create(ProblemReporter.DISCARDING,
-                helper.getLevel().registryAccess(), saved.buildResult()));
-        var restoredInputs = restored.pendingPatterns().groups().getFirst().inputs(2L)[0];
-        helper.assertTrue(restored.pendingPatterns().totalCopies() == 2L
-                        && restoredInputs.get(iron) == Long.MAX_VALUE - 1L
-                        && restoredInputs.get(gold) == Long.MAX_VALUE - 1L,
-                "Queue persistence retains complete component keys and exact compressed long balances");
-        PendingPatternQueueGameTest.refund(helper, restored);
-        helper.assertTrue(restored.pendingPatterns().isEmpty()
-                        && restored.getLogic().getReturnInv().getAvailableStacks().get(iron) == Long.MAX_VALUE - 1L
-                        && restored.getLogic().getReturnInv().getAvailableStacks().get(gold) == Long.MAX_VALUE - 1L,
-                "Reload refunds all copies in one operation without int truncation");
-        restored.onChunkUnloaded();
-        helper.succeed();
-    }
-
     public void nativeSlotsAndExactLongBalances(GameTestHelper helper) {
         var host = place(helper);
         var inventory = host.getLogic().getReturnInv();
@@ -263,48 +218,6 @@ public class PatternReturnInventoryGameTest {
                         && inventory.getAvailableStacks().get(AEItemKey.of(Items.DIAMOND)) == Long.MAX_VALUE
                         && host.collectComponents().has(DataComponents.BLOCK_ENTITY_DATA),
                 "Old component keys and extreme return quantities remain available to the compressed block carrier");
-        helper.succeed();
-    }
-
-    public void fullReturnsKeepLegacyGroupAcrossReload(GameTestHelper helper) {
-        var host = place(helper);
-        var inventory = host.getLogic().getReturnInv();
-        AEItemKey existing = variant(helper, 0);
-        for (int index = 0; index < 256; index++) {
-            inventory.insert(variant(helper, index), index == 0 ? Long.MAX_VALUE - 10L : Long.MAX_VALUE,
-                    Actionable.MODULATE, IActionSource.empty());
-        }
-        KeyCounter inputs = new KeyCounter();
-        inputs.add(existing, 5L);
-        inputs.add(AEFluidKey.of(Fluids.WATER), 1_000L);
-        PendingPatternQueueGameTest.read(helper, host.pendingPatterns(), PendingPatternQueueGameTest.legacyData(helper,
-                new KeyCounter[]{inputs}, List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L)), 1L));
-        try (Transaction transaction = Transaction.openRoot()) {
-            helper.assertFalse(host.pendingPatterns().refundNext(host, transaction), "No partial refund when one resource key cannot fit");
-            transaction.commit();
-        }
-        helper.assertTrue(host.pendingPatterns().totalCopies() == 1L
-                        && inventory.getAvailableStacks().get(existing) == Long.MAX_VALUE - 10L
-                        && inventory.getAvailableStacks().get(AEFluidKey.of(Fluids.WATER)) == 0L,
-                "A full return inventory retains the entire legacy owner and rolls back any provisional insertion");
-        var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
-        host.saveAdditional(saved);
-        host.loadWithComponents(TagValueInput.create(ProblemReporter.DISCARDING,
-                helper.getLevel().registryAccess(), saved.buildResult()));
-        AtomicBoolean online = new AtomicBoolean(false);
-        KeyCounter received = new KeyCounter();
-        var network = receiver(received, online);
-        helper.assertFalse(inventory.injectIntoNetwork(network, IActionSource.empty(), stack -> {}),
-                "A disconnected or full network keeps all native return balances");
-        online.set(true);
-        inventory.injectIntoNetwork(network, IActionSource.empty(), stack -> {});
-        helper.assertTrue(received.get(existing) == Long.MAX_VALUE - 10L, "Recovery drains exactly the original native balance");
-        PendingPatternQueueGameTest.refund(helper, host);
-        inventory.injectIntoNetwork(network, IActionSource.empty(), stack -> {});
-        helper.assertTrue(host.pendingPatterns().isEmpty() && inventory.isEmpty()
-                        && received.get(existing) == Long.MAX_VALUE - 5L
-                        && received.get(AEFluidKey.of(Fluids.WATER)) == 1_000L,
-                "After reload and capacity recovery, escrow and native balances return exactly once");
         helper.succeed();
     }
 

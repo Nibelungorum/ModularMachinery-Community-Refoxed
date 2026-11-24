@@ -91,9 +91,9 @@ public class ItemOutputComponentGameTest {
                 "A missing enchantment cannot match");
         changed = expected.copy();
         changed.setCount(8);
-        helper.assertTrue(!controller.patternOutputsMatch(recipe, snapshot,
+        helper.assertTrue(controller.patternOutputsMatch(recipe, snapshot,
                         List.of(new MachineOutput.ItemOutput(changed, 1F))),
-                "Resolved output count must match exactly");
+                "Output quantity is not part of the resolved enchanted key");
         changed = expected.copy();
         changed.set(DataComponents.CUSTOM_NAME, Component.literal("Different output name"));
         helper.assertTrue(!controller.patternOutputsMatch(recipe, snapshot,
@@ -103,9 +103,9 @@ public class ItemOutputComponentGameTest {
         var plain = new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 9), 1F);
         helper.assertTrue(controller.patternOutputsMatch(patternRecipe(plain), snapshot, List.of(plain)),
                 "Plain output still matches without enchantments");
-        helper.assertTrue(!controller.patternOutputsMatch(patternRecipe(plain), snapshot,
+        helper.assertTrue(controller.patternOutputsMatch(patternRecipe(plain), snapshot,
                         List.of(new MachineOutput.ItemOutput(new ItemStack(Items.DIAMOND, 8), 1F))),
-                "Plain output count differences remain rejected");
+                "Plain output hints also ignore quantity");
         helper.assertTrue(!controller.patternOutputsMatch(patternRecipe(plain), snapshot, List.of(materialized)),
                 "Unexpected pattern components remain rejected");
         helper.assertTrue(detached.stack().get(DataComponents.ENCHANTMENTS).isEmpty(),

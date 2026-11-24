@@ -6,10 +6,8 @@ import appeng.api.config.Actionable;
 import appeng.api.config.LockCraftingMode;
 import appeng.api.config.Settings;
 import appeng.api.crafting.PatternDetailsHelper;
-import appeng.api.crafting.IPatternDetails;
 import appeng.api.ids.AEComponents;
 import appeng.api.networking.GridHelper;
-import appeng.api.networking.IGrid;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.GenericStack;
@@ -36,8 +34,6 @@ import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 
 import cn.howxu.mmcr.compat.extendedae_plus.loaded.MirrorPatternInterfaceLogic;
@@ -83,7 +79,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Integrated mirror lifecycle, native binding tool and independent MMCR dispatch coverage.
@@ -400,10 +395,10 @@ public class MirrorPatternInterfaceGameTest {
                             new KeyCounter[]{request}), "Native mirror logic dispatches the real MMCR recipe");
             helper.assertTrue(mirror.getLogic().getCraftingLockedReason() == LockCraftingMode.LOCK_UNTIL_RESULT,
                     "Accepted mirror dispatch takes its own native result lock");
-            helper.assertTrue(recipeId.equals(controller.runtimeSnapshot().crafting().recipeId())
+            helper.assertTrue(controller.runtimeSnapshot().crafting().recipeId() == null
                             && sourceController.runtimeSnapshot().crafting().recipeId() == null
-                            && mirror.pendingPatterns().isEmpty(),
-                    "Successful native mirror push synchronously starts only its local controller without a queue");
+                            && !mirror.hostedPatterns().isEmpty(),
+                    "Only the mirror owns the accepted delivery; neither controller has paid yet");
             helper.assertTrue(request.get(AEItemKey.of(Items.IRON_INGOT)) == 0L,
                     "Accepted dispatch consumes the requested iron");
         }).thenWaitUntil(() -> {
@@ -450,7 +445,7 @@ public class MirrorPatternInterfaceGameTest {
         MachineControllerBlockEntity sourceController = helper.getBlockEntity(sourceControllerPos, MachineControllerBlockEntity.class);
         sourceController.setMachine(sourceMachine);
         sourceController.setStructureCheckIntervalForTesting(1);
-        fixture.storage.setStack(0, new GenericStack(iron, 10_000L));
+        fixture.storage.setStack(0, new GenericStack(iron, 4L));
         fixture.ready().thenExecute(sourceController::requestImmediateStructureCheck).thenWaitUntil(() -> {
             assertNodesReady(helper, sourcePos);
             helper.assertTrue(sourceController.structureSnapshot().formed(), "Real master machine and 16-parallel hardware form");
@@ -464,78 +459,15 @@ public class MirrorPatternInterfaceGameTest {
                     "Different physical parallel controllers bound the two actual machines independently");
         }).thenWaitUntil(() -> helper.assertTrue(fixture.grid().getCraftingService().isCraftable(gold),
                 "Native grid discovers the mirror's own publication"))
-                .thenExecute(() -> fixture.begin(gold, 10_000L)).thenWaitUntil(fixture::awaitPlan).thenExecute(() -> {
-                    helper.assertTrue(fixture.plan.patternTimes().size() == 2
-                                    && fixture.plan.patternTimes().entrySet().stream().allMatch(entry ->
-                                    entry.getKey() instanceof PatternBatchDetails batch
-                                            && (batch.data().multiplier() == 256L && entry.getValue() == 39L
-                                            || batch.data().multiplier() == 16L && entry.getValue() == 1L)),
-                            "Actual native plan uses mirror-local 39x256 plus 16, not master 16 or pooled lanes");
+                .thenExecute(() -> fixture.begin(gold, 4L)).thenWaitUntil(fixture::awaitPlan).thenExecute(() -> {
+                    helper.assertTrue(fixture.plan.patternTimes().size() == 1 && fixture.plan.patternTimes().containsValue(4L),
+                            "Mirror publishes the original pattern; hardware does not rewrite the native plan");
                     fixture.submit();
-                    helper.assertTrue(fixture.dispatch() == 1, "Native CPU starts one real mirror batch");
-                    long started = fixture.cpu().getWaitingFor(gold);
-                    helper.assertTrue(started == 256L || started == 16L, "First CPU dispatch is one exact planned batch");
-                    fixture.assertActive(started);
-                    helper.assertTrue(sourceController.runtimeSnapshot().crafting().recipeId() == null,
-                            "Copying the pattern cannot dispatch the master's controller");
-                }).thenWaitUntil(() -> {
-                    if (fixture.cpu().hasJob()) fixture.dispatch();
-                    helper.assertTrue(!fixture.cpu().hasJob() && fixture.stored(gold) == 10_000L
-                                    && fixture.stored(iron) == 0L && fixture.cpu().getWaitingFor(gold) == 0L,
-                            "Real mirror recipe outputs settle the native CPU exactly");
-                    helper.assertTrue(fixture.provider.accepted == 40L
-                                    && fixture.provider.multipliers.equals(Map.of(256L, 39L, 16L, 1L)),
-                            "Only forty standard accepted pushes execute the whole job and exact tail");
-                }).thenSucceed();
-    }
-
-    public void publicationRefreshesOnSourceUnbindAndReconnect(GameTestHelper helper) {
-        AtomicReference<IPatternDetails> oldOrder = new AtomicReference<>();
-        AtomicReference<IGrid> previousGrid = new AtomicReference<>();
-        var fixture = new CompatPatternCpuFixture(helper, "mirror_publication_refresh", MIRROR, ParallelTier.PLUS,
-                List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 1)),
-                        MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT))),
-                List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT), 1F)));
-        BlockPos sourcePos = new BlockPos(8, 1, 0);
-        placePort(helper, sourcePos, ORDINARY);
-        fixture.ready().thenWaitUntil(() -> assertNodesReady(helper, sourcePos)).thenExecute(() -> {
-            port(helper, sourcePos).getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
-            helper.assertTrue(mirror(helper, CompatPatternCpuFixture.PORT).bindToMaster(master(helper, sourcePos)), "Master binds");
-        }).thenWaitUntil(() -> helper.assertTrue(!PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty(),
-                "Mirror publishes future-plan capacity on its own grid"))
-                .thenExecute(() -> {
-                    oldOrder.set(((PatternBatchDetails) fixture.host.getLogic().getAvailablePatterns().getFirst()).scaled(16L));
-                    port(helper, sourcePos).getLogic().getPatternInv().setItemDirect(0, pattern(Items.DIAMOND));
-                })
-                .thenWaitUntil(() -> {
-                    mirror(helper, CompatPatternCpuFixture.PORT).serverTick(helper.getLevel());
-                    helper.assertTrue(PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty(),
-                            "Changing the master to an unsupported output removes the stale bound publication");
-                    assertPatterns(helper, fixture.host.getLogic(), pattern(Items.DIAMOND));
-                    KeyCounter staleInput = new KeyCounter();
-                    staleInput.add(AEItemKey.of(Items.IRON_INGOT), 16L);
-                    helper.assertFalse(fixture.host.getLogic().pushPattern(oldOrder.get(), new KeyCounter[]{staleInput}),
-                            "An old bound CPU definition cannot run against the master's replaced physical pattern");
-                    helper.assertTrue(staleInput.get(AEItemKey.of(Items.IRON_INGOT)) == 16L,
-                            "Refusing the stale binding preserves all caller-owned material");
-                }).thenExecute(() -> {
-                    port(helper, sourcePos).getLogic().getPatternInv().setItemDirect(0, pattern(Items.GOLD_INGOT));
-                }).thenWaitUntil(() -> {
-                    mirror(helper, CompatPatternCpuFixture.PORT).serverTick(helper.getLevel());
-                    helper.assertTrue(!PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty(), "Updated source republishes its own binding");
-                }).thenExecute(() -> {
-                    previousGrid.set(fixture.grid());
-                    fixture.disconnect();
-                }).thenWaitUntil(() -> helper.assertTrue(!fixture.host.getMainNode().isActive()
-                                && PatternBatchPlanning.capture(previousGrid.get()).limits().isEmpty(),
-                        "Mirror really leaves the powered grid and removes its old future-plan index"))
-                .thenExecute(fixture::reconnect).thenWaitUntil(() -> helper.assertTrue(fixture.host.getMainNode().isActive()
-                                && !PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty(),
-                        "Network reconnect refreshes future-plan publication on the new current grid"))
-                .thenExecute(() -> helper.assertTrue(mirror(helper, CompatPatternCpuFixture.PORT).unbindFromMaster(), "Mirror unbinds"))
-                .thenWaitUntil(() -> helper.assertTrue(PatternBatchPlanning.capture(fixture.grid()).limits().isEmpty()
-                                && fixture.host.getLogic().getAvailablePatterns().isEmpty(),
-                        "Unbinding removes both actual patterns and future-plan publication")).thenSucceed();
+                    fixture.cpu().setJobSuspended(false);
+                }).thenWaitUntil(() -> helper.assertTrue(!fixture.cpu().hasJob() && fixture.stored(gold) == 4L
+                                && fixture.provider.accepted == 4 && fixture.stored(iron) == 0
+                                && sourceController.runtimeSnapshot().crafting().recipeId() == null,
+                        "Four standard deliveries settle locally without starting the master controller")).thenSucceed();
     }
 
     public void unavailableMasterChunkIsNeverForceLoaded(GameTestHelper helper) {

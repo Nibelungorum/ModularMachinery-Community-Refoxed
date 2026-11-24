@@ -154,7 +154,8 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
         storageChangesPending = true;
         enqueueStorageChanges();
         for (BlockPos controllerPos : linkedControllerPositions()) {
-            if (level != null && level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
+            if (level != null && level.hasChunkAt(controllerPos)
+                    && level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
                 controller.componentRuntime().markCapabilitySourceChanged(getBlockPos());
             }
         }
@@ -297,7 +298,7 @@ public abstract class IOPortBlockEntity extends LinkedAppearanceBlockEntity impl
                                                          @Nullable Object resource, @Nullable RuntimeException failure) {
         if (level == null || level.isClientSide()) return failure;
         for (BlockPos controllerPos : linkedControllerPositions()) {
-            if (level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
+            if (level.hasChunkAt(controllerPos) && level.getBlockEntity(controllerPos) instanceof MachineControllerBlockEntity controller) {
                 try {
                     controller.notifyResourceAvailability(reason, resource, getBlockPos());
                 } catch (RuntimeException exception) {

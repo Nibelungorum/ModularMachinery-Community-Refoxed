@@ -7,6 +7,7 @@ import cn.howxu.mmcr.internal.multiblock.SharedIoCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StatusBlockCoordinator;
 import cn.howxu.mmcr.internal.multiblock.StructureClaimRegistry;
 import cn.howxu.mmcr.internal.async.MachineAsyncCoordinator;
+import cn.howxu.mmcr.compat.appliedenergistics2.AE2Bridge;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
 import cn.howxu.mmcr.internal.tile.IOPortBlockEntity;
 import cn.howxu.mmcr.internal.network.NetworkServerState;
@@ -53,6 +54,7 @@ public final class LevelTickFireEvents {
             async.completeTick(() -> sharedIo.resolvePost(level));
         });
         IOPortBlockEntity.flushStorageChanges(level);
+        AE2Bridge.get().dispatchHostedPatterns(level);
         async.pumpReceiptDrains();
         StatusBlockCoordinator.get(level).tick(level);
         if (level.getServer() != null) NetworkInterfaceBindingCoordinator.heartbeat(level);

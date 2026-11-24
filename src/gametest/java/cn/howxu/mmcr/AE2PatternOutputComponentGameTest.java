@@ -1,8 +1,6 @@
 package cn.howxu.mmcr;
 
 import appeng.api.config.Actionable;
-import appeng.api.config.LockCraftingMode;
-import appeng.api.config.Settings;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.crafting.PatternDetailsHelper;
 import appeng.api.networking.GridHelper;
@@ -22,8 +20,6 @@ import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
 import cn.howxu.mmcr.api.machine.DynamicMachine;
 import cn.howxu.mmcr.api.machine.MachineRegistry;
-import cn.howxu.mmcr.api.machine.MachineControllerSpec;
-import cn.howxu.mmcr.api.machine.PortRequirementSpec;
 import cn.howxu.mmcr.api.recipe.MachineIngredient;
 import cn.howxu.mmcr.api.recipe.MachineOutput;
 import cn.howxu.mmcr.api.recipe.MachineRecipe;
@@ -35,7 +31,6 @@ import cn.howxu.mmcr.api.recipe.modifier.RecipeModifier;
 import cn.howxu.mmcr.api.recipe.requirement.ItemRequirement;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.jade.RecipeOutputCodec;
 import cn.howxu.mmcr.compat.jade.RecipeOutputDataProvider;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
@@ -68,122 +63,6 @@ import java.util.Set;
  * @author howxu <dev@howxu.cn>
  */
 public class AE2PatternOutputComponentGameTest {
-    public void requestExcessReturnsExactlyOnce(GameTestHelper helper) {
-        var machineId = MMCR.id("ae2_exact_batch_return_test");
-        var recipeId = MMCR.id("ae2_exact_batch_return_recipe");
-        BlockPos portPos = new BlockPos(0, 1, 0);
-        BlockPos chestPos = new BlockPos(3, 0, 0);
-        BlockPos energyPos = new BlockPos(3, 0, 2);
-        BlockPos cpuPos = new BlockPos(3, 0, 4);
-        helper.setBlock(BlockPos.ZERO, ModBlocks.controllerFor(MMCR.id("test_cube")).get().defaultBlockState()
-                .setValue(MachineControllerBlock.FACING, Direction.SOUTH));
-        helper.setBlock(portPos, ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get().defaultBlockState());
-        BlockPos parallelPos = new BlockPos(1, 0, 0);
-        var parallelBlock = ModBlocks.BLOCKS.get("parallel_controller_pro").get();
-        helper.setBlock(parallelPos, parallelBlock.defaultBlockState());
-        helper.setBlock(chestPos, AEBlocks.ME_CHEST.block().defaultBlockState());
-        helper.setBlock(energyPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
-        helper.setBlock(cpuPos, AEBlocks.CRAFTING_STORAGE_64K.block().defaultBlockState());
-        var machine = new DynamicMachine(machineId, "AE2 Exact Batch Return Test", new BlockArray(Map.of(
-                portPos, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get("ae2_me_pattern_interface").get()),
-                parallelPos, new BlockPredicate.OfBlock(parallelBlock))),
-                MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
-                256L, true, false, 1);
-        if (!MachineRegistry.containsStatic(machineId)) MachineRegistry.register(machine);
-        if (!RecipeRegistry.containsStatic(recipeId)) {
-            RecipeRegistry.registerStatic(MachineRecipe.fromCanonical(recipeId, machineId, 1,
-                    List.of(MachineRequirement.fromInput(new MachineIngredient.ItemIngredient(Ingredient.of(Items.IRON_INGOT), 2)),
-                            MachineRequirement.itemOutput(new ItemStack(Items.GOLD_INGOT, 2))),
-                    List.of(new MachineOutput.ItemOutput(new ItemStack(Items.GOLD_INGOT, 2), 1F)),
-                    List.of(), 0, 1, false, true, false, Set.of()));
-        }
-        var controller = helper.getBlockEntity(BlockPos.ZERO, MachineControllerBlockEntity.class);
-        controller.setMachine(machine);
-        controller.setStructureCheckIntervalForTesting(1);
-        var port = helper.getBlockEntity(portPos, PatternInterfaceBlockEntity.class);
-        var chest = helper.getBlockEntity(chestPos, MEChestBlockEntity.class);
-        chest.setCell(AEItems.ITEM_CELL_64K.stack());
-        var energy = helper.getBlockEntity(energyPos, CreativeEnergyCellBlockEntity.class);
-        var cpuBlock = helper.getBlockEntity(cpuPos, CraftingBlockEntity.class);
-        AEItemKey iron = AEItemKey.of(Items.IRON_INGOT);
-        AEItemKey gold = AEItemKey.of(Items.GOLD_INGOT);
-        AEItemKey coal = AEItemKey.of(Items.COAL);
-        helper.startSequence().thenWaitUntil(() -> {
-            helper.assertTrue(port.getMainNode().getNode() != null && chest.getMainNode().getNode() != null
-                            && energy.getMainNode().getNode() != null && cpuBlock.getMainNode().getNode() != null,
-                    "AE2 nodes initialize for the exact batch test");
-        }).thenExecute(() -> {
-            GridHelper.createConnection(port.getMainNode().getNode(), chest.getMainNode().getNode());
-            GridHelper.createConnection(port.getMainNode().getNode(), energy.getMainNode().getNode());
-            GridHelper.createConnection(port.getMainNode().getNode(), cpuBlock.getMainNode().getNode());
-            controller.requestImmediateStructureCheck();
-        }).thenWaitUntil(() -> {
-            helper.assertTrue(controller.structureSnapshot().formed() && port.getMainNode().isActive()
-                            && cpuBlock.getCluster() != null && cpuBlock.getCluster().isActive(),
-                    "Actual controller and CPU are ready for a complete 256 batch");
-        }).thenExecute(() -> {
-            port.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
-                    List.of(new GenericStack(iron, 5L)), List.of(new GenericStack(gold, 2L))));
-            port.getLogic().updatePatterns();
-            var advertised = port.getLogic().getAvailablePatterns().getFirst();
-            helper.assertTrue(advertised instanceof PatternBatchDetails,
-                    "The native provider advertises a bound unit pattern, not the bare definition");
-            PatternBatchDetails pattern = ((PatternBatchDetails) advertised).scaled(256L);
-            KeyCounter rejected = new KeyCounter();
-            rejected.add(iron, 1_280L);
-            for (int slot = 0; slot < port.getLogic().getReturnInv().size(); slot++) {
-                port.getLogic().getReturnInv().setStack(slot, new GenericStack(coal, 64L));
-            }
-            helper.assertTrue(!port.craftingMachine().pushPattern(pattern, new KeyCounter[]{rejected}, null)
-                            && rejected.get(iron) == 1_280L
-                            && controller.runtimeSnapshot().crafting().recipeId() == null
-                            && port.pendingPatterns().isEmpty(),
-                    "A full native return inventory rolls back the whole batch without taking CPU material");
-            for (int slot = 0; slot < port.getLogic().getReturnInv().size(); slot++) {
-                helper.assertTrue(new GenericStack(coal, 64L).equals(port.getLogic().getReturnInv().getStack(slot)),
-                        "Rejected batch leaves every return slot unchanged");
-                port.getLogic().getReturnInv().setStack(slot, null);
-            }
-            port.getConfigManager().putSetting(Settings.LOCK_CRAFTING_MODE, LockCraftingMode.LOCK_UNTIL_RESULT);
-            var grid = port.getMainNode().getNode().getGrid();
-            KeyCounter used = new KeyCounter();
-            used.add(iron, 1_280L);
-            helper.assertTrue(grid.getStorageService().getInventory().insert(iron, 1_280L,
-                    Actionable.MODULATE, new BaseActionSource()) == 1_280L, "Network owns exactly this batch's input");
-            ICraftingPlan plan = new ICraftingPlan() {
-                @Override public GenericStack finalOutput() { return new GenericStack(gold, 512L); }
-                @Override public long bytes() { return 1L; }
-                @Override public boolean simulation() { return false; }
-                @Override public boolean multiplePaths() { return false; }
-                @Override public KeyCounter usedItems() { return used; }
-                @Override public KeyCounter emittedItems() { return new KeyCounter(); }
-                @Override public KeyCounter missingItems() { return new KeyCounter(); }
-                @Override public Map<IPatternDetails, Long> patternTimes() { return Map.of(pattern, 1L); }
-            };
-            var cpu = cpuBlock.getCluster().craftingLogic;
-            helper.assertTrue(cpu.trySubmitJob(grid, plan, new BaseActionSource(), null).successful(),
-                    "Real CPU accepts one 256-multiplier task");
-            helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
-                            grid.getEnergyService(), helper.getLevel()) == 1
-                            && cpu.getWaitingFor(gold) == 512L && cpu.getStored(iron) == 0L
-                            && controller.runtimeSnapshot().crafting().parallelism() == 256L
-                            && port.pendingPatterns().isEmpty(),
-                    "One CPU dispatch fully pays exactly one thread at 256 parallelism");
-            helper.assertTrue(port.getLogic().getReturnInv().getAvailableStacks().get(iron) == 768L
-                            && port.getLogic().getReturnInv().getAvailableStacks().get(gold) == 0L,
-                    "Only 512 iron is paid; 768 excess returns once, with no push-stack output");
-            helper.assertTrue(port.getLogic().getCraftingLockedReason() == LockCraftingMode.LOCK_UNTIL_RESULT
-                            && new GenericStack(gold, 512L).equals(port.getLogic().getUnlockStack()),
-                    "Native result lock tracks the scaled 512 output, not one unit's output");
-        }).thenWaitUntil(() -> {
-            helper.assertTrue(chest.getInventory().extract(gold, 513L, Actionable.SIMULATE, new BaseActionSource()) == 512L
-                            && chest.getInventory().extract(iron, 769L, Actionable.SIMULATE, new BaseActionSource()) == 768L
-                            && !cpuBlock.getCluster().craftingLogic.hasJob()
-                            && port.getLogic().getCraftingLockedReason() == LockCraftingMode.NONE,
-                    "Native return settles all scaled outputs and exactly one copy of the excess");
-        }).thenSucceed();
-    }
-
     public void craftingCpuSettlesLargeInputsOutputsAndLeftovers(GameTestHelper helper) {
         var machineId = MMCR.id("ae2_large_pattern_return_test");
         var recipeId = MMCR.id("ae2_large_pattern_return_recipe");
@@ -256,12 +135,14 @@ public class AE2PatternOutputComponentGameTest {
             helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
                             grid.getEnergyService(), helper.getLevel()) == 1 && cpu.getWaitingFor(gold) == 10_000L,
                     "Real CPU dispatch admits large leftovers and reserves the full output");
-            helper.assertTrue(port.pendingPatterns().isEmpty()
-                            && recipeId.equals(controller.runtimeSnapshot().crafting().recipeId())
-                            && port.getLogic().getReturnInv().getAvailableStacks().get(gold) == 0L,
-                    "Standard CPU dispatch pays one active request but cannot emit outputs on its call stack");
-            helper.assertTrue(port.getLogic().getReturnInv().getAvailableStacks().get(iron) == 9_999L,
-                    "Exactly one item is consumed and 9999 leftovers are safely owned by the return inventory");
+            helper.assertTrue(port.hostedPatterns().group(pattern.getDefinition()).materials().get(iron) == 10_000L
+                            && controller.runtimeSnapshot().crafting().recipeId() == null,
+                    "All inputs are hosted before the first payment");
+            port.dispatchHostedPatterns();
+            helper.assertTrue(port.hostedPatterns().group(pattern.getDefinition()).materials().get(iron) == 9_999L,
+                    "One paid execution has its own inputs; the remainder is still owned by the interface");
+            port.getLogic().getPatternInv().setItemDirect(0, ItemStack.EMPTY);
+            port.getLogic().updatePatterns();
         }).thenWaitUntil(() -> {
             helper.assertTrue(chest.getInventory().extract(gold, 10_000L, Actionable.SIMULATE, new BaseActionSource()) == 10_000L
                             && chest.getInventory().extract(iron, 9_999L, Actionable.SIMULATE, new BaseActionSource()) == 9_999L,
@@ -344,8 +225,8 @@ public class AE2PatternOutputComponentGameTest {
                     List.of(new GenericStack(outputKey, 9L))));
             port.getLogic().updatePatterns();
             IPatternDetails pattern = port.getLogic().getAvailablePatterns().getFirst();
-            helper.assertTrue(pattern instanceof PatternBatchDetails,
-                    "Exact enchanted outputs retain a bound batch identity rather than falling back to a bare pattern");
+            helper.assertTrue(pattern instanceof AEProcessingPattern,
+                    "Enchanted outputs keep their native processing pattern identity");
             var grid = port.getMainNode().getNode().getGrid();
             KeyCounter usedItems = new KeyCounter();
             usedItems.add(AEItemKey.of(Items.IRON_INGOT), 1L);
@@ -370,7 +251,8 @@ public class AE2PatternOutputComponentGameTest {
                     "CPU pushes the pattern whose recipe enchantment is stored independently");
             helper.assertTrue(cpu.getWaitingFor(outputKey) == 9L,
                     "CPU waits for the exact enchanted and named output");
-            helper.assertTrue(port.pendingPatterns().isEmpty()
+            port.dispatchHostedPatterns();
+            helper.assertTrue(port.hostedPatterns().isEmpty()
                             && recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
                     "Component-bearing output is paid and active without a private pending request");
             var accessor = new BlockAccessorImpl.Builder().level(helper.getLevel())

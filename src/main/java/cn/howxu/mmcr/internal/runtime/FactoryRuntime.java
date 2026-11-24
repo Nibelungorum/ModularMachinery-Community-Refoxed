@@ -1073,7 +1073,8 @@ public final class FactoryRuntime {
         for (int index = 0; index < Math.min(laneLimit, lanes.size()); index++) {
             FactoryRecipeThread lane = lanes.get(index);
             if (!lane.isIdle() || lane.isStartPending() || pendingAsyncSearches.containsKey(lane)
-                    || patternPreparations.containsKey(lane) || !lane.canStartPatternRecipe(recipe)) continue;
+                    || patternStartReservations.contains(lane) || patternPreparations.containsKey(lane)
+                    || !lane.canStartPatternRecipe(recipe)) continue;
             if (selected == null) selected = lane;
             if (lane.cachedPatternRecipe(recipe.id()) != null) { selected = lane; break; }
         }

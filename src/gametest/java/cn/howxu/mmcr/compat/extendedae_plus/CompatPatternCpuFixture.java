@@ -4,7 +4,6 @@ import appeng.api.config.Actionable;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.IGrid;
-import appeng.api.networking.IGridConnection;
 import appeng.api.networking.crafting.CalculationStrategy;
 import appeng.api.networking.crafting.ICraftingPlan;
 import appeng.api.networking.crafting.ICraftingProvider;
@@ -17,7 +16,6 @@ import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.crafting.execution.CraftingCpuLogic;
 import appeng.helpers.externalstorage.GenericStackInv;
-import appeng.me.service.CraftingService;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.BlockArray;
 import cn.howxu.mmcr.api.machine.BlockPredicate;
@@ -30,7 +28,6 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -42,11 +39,7 @@ import appeng.api.networking.crafting.ICraftingSimulationRequester;
 import appeng.api.networking.IGridNode;
 import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.block.state.BlockState;
 
-import java.util.LinkedHashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -68,21 +61,9 @@ public final class CompatPatternCpuFixture {
     public final CountingProvider provider;
     public ICraftingPlan plan;
     private Future<ICraftingPlan> calculation;
-    private IGridConnection hostConnection;
 
     public CompatPatternCpuFixture(GameTestHelper helper, String name, String portId, ParallelTier tier,
                                    List<MachineRequirement> requirements, List<MachineOutput> outputs) {
-        this(helper, name, portId, tier, requirements, outputs, false);
-    }
-
-    public CompatPatternCpuFixture(GameTestHelper helper, String name, String portId, ParallelTier tier,
-                                   List<MachineRequirement> requirements, List<MachineOutput> outputs,
-                                   boolean ordinaryInput) {
-        this(helper, name, portId, tier, requirements, outputs, ordinaryInput ? "item_input_bus" : null);
-    }
-
-    CompatPatternCpuFixture(GameTestHelper helper, String name, String portId, ParallelTier tier,
-                            List<MachineRequirement> requirements, List<MachineOutput> outputs, String ordinaryInputId) {
         this.helper = helper;
         Identifier machineId = MMCR.id(name);
         recipeId = MMCR.id(name + "_recipe");
@@ -93,19 +74,9 @@ public final class CompatPatternCpuFixture {
         helper.setBlock(parallel, ModBlocks.BLOCKS.get(tier.idSuffix()).get().defaultBlockState());
         helper.setBlock(ENERGY, AEBlocks.CREATIVE_ENERGY_CELL.block());
         helper.setBlock(CPU, AEBlocks.CRAFTING_STORAGE_64K.block());
-        helper.setBlock(CPU.east(), AEBlocks.CRAFTING_UNIT.block());
-        CraftingBlockEntity original = helper.getBlockEntity(CPU, CraftingBlockEntity.class);
-        helper.getLevel().removeBlockEntity(original.getBlockPos());
-        helper.getLevel().setBlockEntity(new CapacityCpu(original.getType(), original.getBlockPos(), original.getBlockState()));
-        Map<BlockPos, BlockPredicate> blocks = new LinkedHashMap<>(Map.of(
+        Map<BlockPos, BlockPredicate> blocks = Map.of(
                 PORT, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(portId).get()),
-                parallel, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(tier.idSuffix()).get())));
-        if (ordinaryInputId != null) {
-            BlockPos ordinary = new BlockPos(2, 0, 0);
-            var block = ModBlocks.BLOCKS.get(ordinaryInputId).get();
-            helper.setBlock(ordinary, block.defaultBlockState());
-            blocks.put(ordinary, new BlockPredicate.OfBlock(block));
-        }
+                parallel, new BlockPredicate.OfBlock(ModBlocks.BLOCKS.get(tier.idSuffix()).get()));
         DynamicMachine machine = new DynamicMachine(machineId, "block.mmcr.test_cube", new BlockArray(blocks),
                 MachineControllerSpec.defaultsFor(machineId), PortRequirementSpec.none(), List.of(), Map.of(),
                 tier.maxParallelism(), true, false, 1);
@@ -128,7 +99,7 @@ public final class CompatPatternCpuFixture {
                 "Native interface, storage owner and CPU nodes initialize"))
                 .thenExecute(() -> {
                     GridHelper.createConnection(energy().getMainNode().getNode(), cpuBlock().getMainNode().getNode());
-                    reconnect();
+                    GridHelper.createConnection(host.getMainNode().getNode(), energy().getMainNode().getNode());
                     controller.requestImmediateStructureCheck();
                 }).thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed()
                                 && host.getMainNode().isActive() && cpuBlock().getCluster() != null
@@ -165,45 +136,19 @@ public final class CompatPatternCpuFixture {
         cpu().setJobSuspended(true);
     }
 
-    public int dispatch() {
-        return cpu().executeCrafting(1, (CraftingService) grid().getCraftingService(),
-                grid().getEnergyService(), helper.getLevel());
-    }
-
-    public void assertActive(long parallelism) {
-        var crafting = controller.runtimeSnapshot().crafting();
-        helper.assertTrue(recipeId.equals(crafting.recipeId()) && crafting.parallelism() == parallelism
-                        && !controller.hasFactoryController(),
-                "One standard CPU push synchronously starts only one local lane at exact parallelism");
-    }
-
-    public void disconnect() { hostConnection.destroy(); }
-    public void reconnect() {
-        hostConnection = GridHelper.createConnection(host.getMainNode().getNode(), energy().getMainNode().getNode());
-    }
     public long stored(AEKey key) { return storage.getAvailableStacks().get(key); }
     public IGrid grid() { return host.getMainNode().getNode().getGrid(); }
     public CraftingCpuLogic cpu() { return cpuBlock().getCluster().craftingLogic; }
     private CraftingBlockEntity cpuBlock() { return helper.getBlockEntity(CPU, CraftingBlockEntity.class); }
     private CreativeEnergyCellBlockEntity energy() { return helper.getBlockEntity(ENERGY, CreativeEnergyCellBlockEntity.class); }
 
-    /** Capacity-only override, not evidence a stock 64K CPU can hold a huge plan.
-     * @author howxu <dev@howxu.cn>
-     */
-    private static final class CapacityCpu extends CraftingBlockEntity {
-        CapacityCpu(BlockEntityType<?> type, BlockPos pos, BlockState state) { super(type, pos, state); }
-        @Override public long getStorageBytes() { return 1L << 40; }
-    }
-
     /** Fixed physical inventory shared by all mounted resource types; never manufactures outputs.
      * @author howxu <dev@howxu.cn>
      */
     public static final class LongStorage extends GenericStackInv {
-        public final Set<AEKey> blocked = new HashSet<>();
         LongStorage() { super(null, 16); }
         @Override public long getMaxAmount(AEKey key) { return Long.MAX_VALUE; }
         @Override public long insert(AEKey key, long amount, Actionable mode, IActionSource source) {
-            if (blocked.contains(key)) return 0L;
             return super.insert(key, Math.min(amount, Long.MAX_VALUE - getAvailableStacks().get(key)), mode, source);
         }
     }
@@ -214,7 +159,6 @@ public final class CompatPatternCpuFixture {
     public static final class CountingProvider implements ICraftingProvider {
         private final ICraftingProvider delegate;
         public long accepted;
-        public final Map<Long, Long> multipliers = new LinkedHashMap<>();
         CountingProvider(ICraftingProvider delegate) { this.delegate = delegate; }
         @Override public List<IPatternDetails> getAvailablePatterns() { return delegate.getAvailablePatterns(); }
         @Override public int getPatternPriority() { return delegate.getPatternPriority(); }
@@ -222,11 +166,7 @@ public final class CompatPatternCpuFixture {
         @Override public boolean isBusy() { return delegate.isBusy(); }
         @Override public boolean pushPattern(IPatternDetails details, KeyCounter[] inputs) {
             boolean success = delegate.pushPattern(details, inputs);
-            if (success) {
-                accepted++;
-                multipliers.merge(details instanceof PatternBatchDetails batch ? batch.data().multiplier() : 1L,
-                        1L, Long::sum);
-            }
+            if (success) accepted++;
             return success;
         }
     }

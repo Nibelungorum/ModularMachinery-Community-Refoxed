@@ -413,6 +413,12 @@ public class MachineControllerBlockEntity extends BlockEntity {
         ControllerRuntimeSnapshot snapshot = currentRuntimeSnapshot();
         if (isRemoved() || redstonePaused || !snapshot.structure().formed() || !snapshot.structure().structureAreaLoaded()
                 || !snapshot.linkedPortPositions().contains(port)) return null;
+        if (inputs != null && level instanceof ServerLevel server) {
+            var coordinator = SharedIoCoordinator.get(server);
+            long round = coordinator.executionRoundId();
+            if (round != 0 && !coordinator.controllerPermit(getBlockPos()).eligible(round,
+                    server.getGameTime(), server.tickRateManager().runsNormally())) return null;
+        }
         boolean factory = hasFactoryController();
         if (!factory && (runtime.craftingRuntime().active() || runtime.craftingRuntime().pendingPatternRecipeId() != null
                 || sharedStartPending || normalRecipeThread.isStartPending() || normalRecipeThread.hasPendingAsyncSearch())) return null;

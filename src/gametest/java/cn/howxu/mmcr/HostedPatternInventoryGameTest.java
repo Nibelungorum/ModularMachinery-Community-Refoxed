@@ -40,6 +40,12 @@ public final class HostedPatternInventoryGameTest {
             root.commit();
         }
         helper.assertTrue(!inventory.canAccept(key) && raw.isEmpty(), "First delivery closes admission");
+        var firstSave = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+        inventory.write(firstSave, 101);
+        var reloadedFirst = new HostedPatternInventory(() -> {});
+        reloadedFirst.read(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), firstSave.buildResult()));
+        helper.assertTrue(!reloadedFirst.canAccept(key) && reloadedFirst.group(key).materials().get(named) == 2_147_483_648L,
+                "Reload cannot turn a first delivery into permission to accept a second one");
         inventory.eligibility(inventory.group(key), true, 102);
         raw.add(iron, 3);
         try (Transaction root = Transaction.openRoot()) {

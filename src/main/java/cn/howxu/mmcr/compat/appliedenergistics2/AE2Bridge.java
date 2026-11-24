@@ -9,6 +9,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MenuType;
@@ -27,6 +28,8 @@ public interface AE2Bridge {
     }
 
     boolean available();
+
+    default void dispatchHostedPatterns(ServerLevel level) { }
 
     List<IOPortKind> portKinds();
 
