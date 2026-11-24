@@ -99,10 +99,10 @@ public final class HostedPatternInventory {
         return next;
     }
 
-    public void suspend(Group group) {
+    public void suspend(Group group, long now) {
         if (groups.get(group.definition) == group && group.gate == Gate.OPEN) {
             groups.put(group.definition, new Group(group.definition, group.outputs, group.materials,
-                    Gate.FIRST, group.lastDelivery, STOPPED, group.ageCredit));
+                    Gate.FIRST, group.lastDelivery, STOPPED, Math.min(20, group.eligibleAge(now))));
             changed.run();
         }
     }
@@ -131,9 +131,9 @@ public final class HostedPatternInventory {
         else groups.put(group.definition, group.withMaterials(next));
     }
 
-    public void retireMissing(Set<AEItemKey> present) {
+    public void retire(Set<AEItemKey> removed) {
         for (Group group : groups()) {
-            if (group.gate != Gate.REFUND && !present.contains(group.definition)) {
+            if (group.gate != Gate.REFUND && removed.contains(group.definition)) {
                 groups.put(group.definition, new Group(group.definition, group.outputs, group.materials,
                         Gate.REFUND, group.lastDelivery, STOPPED, 0));
                 changed.run();

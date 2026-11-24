@@ -40,6 +40,7 @@ public final class CraftingPlan {
     private final Map<Integer, RecipeModifier.IOType> directions;
     private final InputScope inputScope;
     private final long inputRoutingRevision;
+    private final boolean entrustedDebit;
     private @Nullable ExecutionStatus failure;
     private final Set<Integer> nativeExecutedRequirements = new HashSet<>();
 
@@ -55,6 +56,13 @@ public final class CraftingPlan {
     public CraftingPlan(List<RequirementPlan> requirements, long parallelism,
                         Map<Integer, RecipeModifier.IOType> directions, InputScope inputScope,
                         long inputRoutingRevision) {
+        this(requirements, parallelism, directions, inputScope, inputRoutingRevision, false);
+    }
+
+    public CraftingPlan(List<RequirementPlan> requirements, long parallelism,
+                        Map<Integer, RecipeModifier.IOType> directions, InputScope inputScope,
+                        long inputRoutingRevision, boolean entrustedDebit) {
+        this.entrustedDebit = entrustedDebit;
         if (requirements == null) throw new IllegalArgumentException("requirements must not be null");
         if (parallelism <= 0) throw new IllegalArgumentException("parallelism must be positive");
         this.requirements = List.copyOf(requirements);
@@ -161,6 +169,8 @@ public final class CraftingPlan {
         }
         return true;
     }
+
+    public boolean debitsEntrustedInput() { return entrustedDebit; }
 
     public long parallelism() {
         return parallelism;

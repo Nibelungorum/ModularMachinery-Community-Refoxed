@@ -31,6 +31,11 @@ public final class PlanningReservations {
     private Map<Object, Map<Object, NativeSlotState>> nativeSlots;
     private Map<StateKey<?>, Object> extensions;
 
+    /** Marker for an input-only native slot owner whose actual debit is required for a hosted start. */
+    public interface EntrustedInput { }
+    private boolean entrustedDebit;
+    public boolean debitsEntrustedInput() { return entrustedDebit; }
+
     /** Branch-local trial budget. A key owns its factory and its deep-copy semantics. */
     public interface StateKey<S> {
         S create();
@@ -198,6 +203,7 @@ public final class PlanningReservations {
         long current = nativeAmount(identity, slot, storedAmount);
         Object currentKey = nativeKey(identity, slot, storedKey);
         if (key == null || amount <= 0L || amount > current || !Objects.equals(currentKey, key)) return false;
+        if (identity instanceof EntrustedInput) entrustedDebit = true;
         long remaining = current - amount;
         if (nativeSlots == null) nativeSlots = new IdentityHashMap<>();
         nativeSlots.computeIfAbsent(identity, ignored -> new HashMap<>())
@@ -315,6 +321,7 @@ public final class PlanningReservations {
 
     public PlanningReservations copy() {
         PlanningReservations copy = new PlanningReservations();
+        copy.entrustedDebit = entrustedDebit;
         if (extensions != null) {
             copy.extensions = new IdentityHashMap<>();
             extensions.keySet().forEach(key -> copyState(key, copy));

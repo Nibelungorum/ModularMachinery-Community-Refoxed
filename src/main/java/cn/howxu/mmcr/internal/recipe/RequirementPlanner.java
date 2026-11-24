@@ -199,7 +199,7 @@ public final class RequirementPlanner {
             materialized.add(resolved);
             directions.put(requirementIndexes.get(index), requirements.get(index).io());
         }
-        return new PlanningResult(craftingPlan(materialized, selectedParallelism, directions, context), null);
+        return new PlanningResult(craftingPlan(materialized, selectedParallelism, directions, context, materializationReservations.debitsEntrustedInput()), null);
     }
 
     /** Resolves the complete requirement set at fixed parallelism; native commit retains completed effects. */
@@ -275,14 +275,14 @@ public final class RequirementPlanner {
             materialized.add(resolved);
             directions.put(originalIndex, requirements.get(index).io());
         }
-        return new PlanningResult(craftingPlan(materialized, selected, directions, context), null);
+        return new PlanningResult(craftingPlan(materialized, selected, directions, context, false), null);
     }
 
     private static CraftingPlan craftingPlan(List<RequirementPlan> plans, long parallelism,
-                                             Map<Integer, RecipeModifier.IOType> directions, PlanningContext context) {
+                                             Map<Integer, RecipeModifier.IOType> directions, PlanningContext context, boolean entrustedDebit) {
         return new CraftingPlan(plans, parallelism, directions,
                 context.inputScope() == null ? InputScope.legacy() : context.inputScope(),
-                context.inputRouting() == null ? -1L : context.inputRouting().revision());
+                context.inputRouting() == null ? -1L : context.inputRouting().revision(), entrustedDebit);
     }
 
     private static ReservationAttempt reserveCandidate(List<RequirementPlan> plans,

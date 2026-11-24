@@ -70,6 +70,11 @@ public final class LoadedAE2Bridge implements AE2Bridge {
     private final ExtendedAEContributor contributor = ExtendedAEContributorBootstrap.contributor();
 
     @Override
+    public void dispatchHostedPatterns(ServerLevel level) {
+        HostedPatternDispatcher.flush(level);
+    }
+
+    @Override
     public boolean available() {
         return true;
     }

@@ -2,6 +2,9 @@ package cn.howxu.mmcr;
 
 import appeng.api.crafting.PatternDetailsHelper;
 import appeng.api.config.Actionable;
+import appeng.api.networking.GridHelper;
+import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
+import appeng.core.definitions.AEBlocks;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
@@ -93,8 +96,14 @@ public final class LightningPatternGameTest {
         var water = AEFluidKey.of(Fluids.WATER);
         var high = LoadedLightningBridge.key(HIGH_VOLTAGE);
         var extreme = LoadedLightningBridge.key(EXTREME_HIGH_VOLTAGE);
-        long batches = factory ? 2L : 1L;
-        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed(), "Mixed lightning pattern controller forms"))
+        BlockPos powerPos = new BlockPos(3, 1, 0);
+        helper.setBlock(powerPos, AEBlocks.CREATIVE_ENERGY_CELL.block().defaultBlockState());
+        CreativeEnergyCellBlockEntity power = helper.getBlockEntity(powerPos);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(host.getMainNode().getNode() != null
+                        && power.getMainNode().getNode() != null, "Both grid nodes initialize"))
+                .thenExecute(() -> GridHelper.createConnection(host.getMainNode().getNode(), power.getMainNode().getNode()))
+                .thenWaitUntil(() -> helper.assertTrue(controller.structureSnapshot().formed() && host.hostedOnline(),
+                        "Controller forms with the online pattern interface"))
                 .thenExecute(() -> {
                     host.getLogic().getPatternInv().addItems(PatternDetailsHelper.encodeProcessingPattern(
                             List.of(new GenericStack(iron, 3L), new GenericStack(water, 1_000L),
@@ -102,48 +111,39 @@ public final class LightningPatternGameTest {
                             List.of(new GenericStack(AEItemKey.of(Items.GOLD_INGOT), 1L),
                                     new GenericStack(high, 4L), new GenericStack(extreme, 5L))));
                     var pattern = host.getLogic().getAvailablePatterns().getFirst();
-                    for (int copy = 0; copy < batches; copy++) {
-                        KeyCounter[] holders = {new KeyCounter(), new KeyCounter(), new KeyCounter(), new KeyCounter()};
-                        holders[0].add(iron, 3L);
-                        holders[1].add(water, 1_000L);
-                        holders[2].add(high, 5L);
-                        holders[3].add(extreme, 7L);
-                        helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, Direction.NORTH),
-                                "Standard mixed pattern accepts one complete request with both lightning tiers");
-                         for (KeyCounter holder : holders) helper.assertTrue(holder.isEmpty(),
-                                 "Successful admission claims each original holder exactly once");
-                         long started = copy + 1L;
-                         helper.assertTrue(host.pendingPatterns().isEmpty()
-                                         && (factory ? controller.runtimeSnapshot().factory().activeLaneCount() == started
-                                         : recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()))
-                                         && amount(host, iron) == 2L * started && amount(host, water) == 750L * started
-                                         && amount(host, high) == 3L * started && amount(host, extreme) == 4L * started,
-                                 "Each push synchronously pays one actual lane with exact mixed leftovers: "
-                                         + mixedState(host, controller));
-                     }
-                    helper.assertTrue(host.pendingPatterns().isEmpty()
-                                    && amount(host, iron) == 2L * batches && amount(host, water) == 750L * batches
-                                    && amount(host, high) == 3L * batches && amount(host, extreme) == 4L * batches,
-                             "Synchronous starts consume each request and return only its exact excess once: "
-                                    + mixedState(host, controller));
-                    if (!factory) {
-                        CompoundTag paid = controller.saveWithoutMetadata(helper.getLevel().registryAccess());
-                        controller.loadWithComponents(paid, helper.getLevel().registryAccess());
-                        controller.requestImmediateStructureCheck();
-                    }
-                }).thenWaitUntil(() -> {
-                    helper.assertTrue(amount(host, AEItemKey.of(Items.GOLD_INGOT)) == batches && amount(host, iron) == 2L * batches
-                                    && amount(host, water) == 750L * batches && amount(host, high) == 7L * batches && amount(host, extreme) == 9L * batches,
-                            "Products plus exact leftovers settle once for every lane and family, including a paid controller reload: "
-                                    + mixedState(host, controller));
-                }).thenExecute(() -> {
-                    CompoundTag saved = host.saveWithoutMetadata(helper.getLevel().registryAccess());
-                    host.getLogic().getReturnInv().clear();
-                    host.loadWithComponents(saved, helper.getLevel().registryAccess());
-                    helper.assertTrue(amount(host, high) == 7L * batches && amount(host, extreme) == 9L * batches,
-                            "Native return inventory NBT preserves both tier balances");
-                    host.craftingMachine().flushPendingReturns();
-                    helper.assertTrue(amount(host, high) == 7L * batches, "Repeating return settlement cannot duplicate paid lightning");
+                    KeyCounter[] holders = {new KeyCounter(), new KeyCounter(), new KeyCounter(), new KeyCounter()};
+                    holders[0].add(iron, 3L);
+                    holders[1].add(water, 1_000L);
+                    holders[2].add(high, 5L);
+                    holders[3].add(extreme, 7L);
+                    helper.assertTrue(host.craftingMachine().pushPattern(pattern, holders, null),
+                            "A real decoded mixed pattern reaches controller admission");
+                    host.dispatchHostedPatterns();
+                    var group = host.hostedPatterns().group(pattern.getDefinition());
+                    helper.assertTrue((factory ? controller.runtimeSnapshot().factory().activeLaneCount() == 2
+                                    : recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()))
+                                    && holders[0].isEmpty() && holders[1].isEmpty() && holders[2].isEmpty() && holders[3].isEmpty(),
+                            "One mixed delivery funds one real recipe");
+                    helper.assertTrue(group.materials().equals(Map.of(iron, factory ? 1L : 2L, water, factory ? 500L : 750L, high, factory ? 1L : 3L, extreme, factory ? 1L : 4L))
+                                    && host.getLogic().getReturnInv().isEmpty(),
+                            "Item, fluid and tier-specific leftovers remain hosted, not in the return inventory");
+                    KeyCounter[] next = {new KeyCounter(), new KeyCounter(), new KeyCounter(), new KeyCounter()};
+                    next[0].add(iron, 3L);
+                    next[1].add(water, 1_000L);
+                    next[2].add(high, 5L);
+                    next[3].add(extreme, 7L);
+                    helper.assertTrue(!host.craftingMachine().pushPattern(pattern, next, null)
+                                    && next[0].get(iron) == 3L && next[1].get(water) == 1_000L
+                                    && next[2].get(high) == 5L && next[3].get(extreme) == 7L
+                                    && host.hostedPatterns().group(pattern.getDefinition()) == group,
+                            "An active thread rejects the next mixed request without taking any resource family");
+                    var restored = PatternInterfaceKind.INSTANCE.entityFactory().create(host.getBlockPos(), host.getBlockState());
+                    restored.setLevel(helper.getLevel());
+                    var registries = helper.getLevel().registryAccess();
+                    restored.loadWithComponents(host.saveWithoutMetadata(registries), registries);
+                    helper.assertTrue(restored.hostedPatterns().group(pattern.getDefinition()).materials().equals(group.materials()),
+                            "Hosted NBT preserves item, fluid and both lightning tiers");
+                    restored.onChunkUnloaded();
                 }).thenSucceed();
     }
 
@@ -173,8 +173,8 @@ public final class LightningPatternGameTest {
         holder.clear();
         CompoundTag pending = new CompoundTag();
         owner.writeToChildTag(pending, "pattern_pending_returns", helper.getLevel().registryAccess());
-        host.craftingMachine().loadPendingReturns(pending, helper.getLevel().registryAccess());
-        host.craftingMachine().flushPendingReturns();
+        host.loadWithComponents(pending, helper.getLevel().registryAccess());
+        host.refundLegacyInputs();
         CompoundTag saved = host.saveWithoutMetadata(helper.getLevel().registryAccess());
         var restored = PatternInterfaceKind.INSTANCE.entityFactory().create(helper.absolutePos(new BlockPos(4, 0, 0)),
                 host.getBlockState());
@@ -196,7 +196,7 @@ public final class LightningPatternGameTest {
                         && received.get(iron) == 10L && received.get(water) == 3_000L
                         && received.get(high) == 4_294_967_294L && received.get(extreme) == 16L,
                 "Reloaded native returns preserve every exact long tier balance and ordinary family");
-        restored.craftingMachine().flushPendingReturns();
+        restored.refundLegacyInputs();
         restored.getLogic().getReturnInv().injectIntoNetwork(receiver, IActionSource.empty(), stack -> {});
         helper.assertTrue(received.get(high) == 4_294_967_294L && received.get(extreme) == 16L,
                 "Repeated legacy settlement and injection cannot duplicate paid lightning");
@@ -215,22 +215,5 @@ public final class LightningPatternGameTest {
         helper.fail("Requested resource has no native family slot");
     }
 
-    private static String mixedState(PatternInterfaceBlockEntity host, MachineControllerBlockEntity controller) {
-        return "queueCopies=" + host.pendingPatterns().totalCopies()
-                + ", groups=" + host.pendingPatterns().groups().size()
-                + ", activeLanes=" + controller.runtimeSnapshot().factory().activeLaneCount()
-                + ", activeRecipe=" + controller.runtimeSnapshot().crafting().recipeId()
-                + ", iron=" + amount(host, AEItemKey.of(Items.IRON_INGOT))
-                + ", water=" + amount(host, AEFluidKey.of(Fluids.WATER))
-                + ", high=" + amount(host, LoadedLightningBridge.key(HIGH_VOLTAGE))
-                + ", extreme=" + amount(host, LoadedLightningBridge.key(EXTREME_HIGH_VOLTAGE))
-                + ", gold=" + amount(host, AEItemKey.of(Items.GOLD_INGOT));
-    }
 
-    private static long amount(PatternInterfaceBlockEntity host, AEKey key) {
-        long amount = 0L;
-        var inventory = host.getLogic().getReturnInv();
-        for (int slot = 0; slot < inventory.size(); slot++) if (key.equals(inventory.getKey(slot))) amount += inventory.getAmount(slot);
-        return amount;
-    }
 }

@@ -13,6 +13,7 @@ import appeng.blockentity.networking.CreativeEnergyCellBlockEntity;
 import appeng.blockentity.storage.MEChestBlockEntity;
 import appeng.core.definitions.AEBlocks;
 import appeng.core.definitions.AEItems;
+import appeng.crafting.pattern.AEProcessingPattern;
 import appeng.me.helpers.BaseActionSource;
 import appeng.me.service.CraftingService;
 import cn.howxu.mmcr.api.machine.BlockArray;
@@ -131,11 +132,14 @@ public class AE2PatternOutputComponentGameTest {
             helper.assertTrue(cpu.executeCrafting(1, (CraftingService) grid.getCraftingService(),
                             grid.getEnergyService(), helper.getLevel()) == 1 && cpu.getWaitingFor(gold) == 20_000L,
                     "Real CPU dispatch admits large leftovers and reserves the full output");
-             helper.assertTrue(port.pendingPatterns().isEmpty()
-                             && controller.runtimeSnapshot().crafting().recipeId() != null,
-                     "Standard CPU dispatch synchronously starts exactly one actual recipe");
-            helper.assertTrue(port.getLogic().getReturnInv().getAvailableStacks().get(iron) == 9_999L,
-                    "Exactly one item is consumed and 9999 leftovers are safely owned by the return inventory");
+            helper.assertTrue(port.hostedPatterns().group(pattern.getDefinition()).materials().get(iron) == 10_000L
+                            && controller.runtimeSnapshot().crafting().recipeId() == null,
+                    "All inputs are hosted before the first payment");
+            port.dispatchHostedPatterns();
+            helper.assertTrue(port.hostedPatterns().group(pattern.getDefinition()).materials().get(iron) == 9_999L,
+                    "One paid execution has its own inputs; the remainder is still owned by the interface");
+            port.getLogic().getPatternInv().setItemDirect(0, ItemStack.EMPTY);
+            port.getLogic().updatePatterns();
         }).thenWaitUntil(() -> {
             helper.assertTrue(chest.getInventory().extract(gold, 20_000L, Actionable.SIMULATE, new BaseActionSource()) == 20_000L
                             && chest.getInventory().extract(iron, 9_999L, Actionable.SIMULATE, new BaseActionSource()) == 9_999L,
@@ -203,18 +207,24 @@ public class AE2PatternOutputComponentGameTest {
                             && cpuBlock.getCluster() != null && cpuBlock.getCluster().isActive(),
                     "Controller forms and the crafting network becomes active");
         }).thenExecute(() -> {
-            helper.assertTrue(port.maxRecipeBatchSize(List.of(new MachineOutput.ItemOutput(expected, 1F))) > 0L,
-                    "Component-bearing pattern has a nonzero recipe admission capacity");
             ItemStack wrongLevel = expected.copy();
             wrongLevel.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT)
                     .getOrThrow(Enchantments.SHARPNESS), 5);
-            helper.assertTrue(port.maxRecipeBatchSize(List.of(new MachineOutput.ItemOutput(wrongLevel, 1F))) == 0L,
-                    "Sharpness V pattern is rejected before CPU dispatch");
+            KeyCounter wrongRequest = new KeyCounter();
+            wrongRequest.add(AEItemKey.of(Items.IRON_INGOT), 1L);
+            var wrongPattern = new AEProcessingPattern(AEItemKey.of(PatternDetailsHelper.encodeProcessingPattern(
+                    List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
+                    List.of(new GenericStack(AEItemKey.of(wrongLevel), 9L)))));
+            helper.assertTrue(!port.craftingMachine().pushPattern(wrongPattern, new KeyCounter[]{wrongRequest}, null)
+                            && wrongRequest.get(AEItemKey.of(Items.IRON_INGOT)) == 1L,
+                    "Sharpness V pattern is rejected without taking material before CPU dispatch");
             port.getLogic().getPatternInv().setItemDirect(0, PatternDetailsHelper.encodeProcessingPattern(
                     List.of(new GenericStack(AEItemKey.of(Items.IRON_INGOT), 1L)),
                     List.of(new GenericStack(outputKey, 9L))));
             port.getLogic().updatePatterns();
             IPatternDetails pattern = port.getLogic().getAvailablePatterns().getFirst();
+            helper.assertTrue(pattern instanceof AEProcessingPattern,
+                    "Enchanted outputs keep their native processing pattern identity");
             var grid = port.getMainNode().getNode().getGrid();
             KeyCounter usedItems = new KeyCounter();
             usedItems.add(AEItemKey.of(Items.IRON_INGOT), 1L);
@@ -239,9 +249,10 @@ public class AE2PatternOutputComponentGameTest {
                     "CPU pushes the pattern whose recipe enchantment is stored independently");
             helper.assertTrue(cpu.getWaitingFor(outputKey) == 9L,
                     "CPU waits for the exact enchanted and named output");
-             helper.assertTrue(port.pendingPatterns().isEmpty()
-                             && controller.runtimeSnapshot().crafting().recipeId() != null,
-                     "Component-bearing output starts synchronously on the CPU push");
+            port.dispatchHostedPatterns();
+            helper.assertTrue(port.hostedPatterns().isEmpty()
+                            && recipeId.equals(controller.runtimeSnapshot().crafting().recipeId()),
+                    "Component-bearing output is paid and active without a private pending request");
             var accessor = new BlockAccessorImpl.Builder().level(helper.getLevel())
                     .blockState(controller.getBlockState()).blockEntity(() -> controller).build();
             CompoundTag jadeData = new CompoundTag();

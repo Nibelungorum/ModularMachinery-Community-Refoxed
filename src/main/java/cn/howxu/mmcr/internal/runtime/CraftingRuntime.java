@@ -765,9 +765,21 @@ public final class CraftingRuntime {
         var requirements = facets.isEmpty() ? recipe.requirements() : recipe.requirements().stream()
                 .filter(req -> !(req instanceof EnergyRequirement && req.io().isInput())).toList();
         var planned = context.planStartRequirements(requirements,
-                recipe.parallelismLimit(), recipe.source().allowPartialOutputs());
+                recipe.parallelismLimit(), false);
         if (!planned.successful() || planned.plan() == null) return 0;
-        return planned.plan().parallelism();
+        long limit = planned.plan().parallelism();
+        if (facets.isEmpty() || prefetchedEnergyFits(recipe, limit, facets)) return limit;
+        long low = 0, high = limit - 1;
+        while (low < high) {
+            long mid = low + (high - low + 1) / 2;
+            if (prefetchedEnergyFits(recipe, mid, facets)) low = mid;
+            else high = mid - 1;
+        }
+        return low;
+    }
+
+    private static boolean prefetchedEnergyFits(EffectiveRecipe recipe, long count, List<RecipeEnergyPrefetchFacet> facets) {
+        return EnergyPrefetchLedger.allocate(recipe.requirements(), recipe.duration(), count, facets, true).failureIndex() < 0;
     }
 
     /** A hosted start uses the payable prefix but keeps the source and catalyst fences of an external start. */

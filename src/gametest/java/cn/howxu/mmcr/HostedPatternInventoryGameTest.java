@@ -33,6 +33,12 @@ public final class HostedPatternInventoryGameTest {
         helper.assertTrue(raw.get(named) == 2_147_483_648L && inventory.isEmpty(), "Simulation leaves both owners unchanged");
         inventory.accept(pattern, new KeyCounter[]{raw}, 100, Actionable.MODULATE);
         helper.assertTrue(!inventory.canAccept(key) && raw.isEmpty(), "First delivery closes admission");
+        var firstSave = new CompoundTag();
+        inventory.write(firstSave, helper.getLevel().registryAccess(), 101);
+        var reloadedFirst = new HostedPatternInventory(() -> {});
+        reloadedFirst.read(firstSave, helper.getLevel().registryAccess());
+        helper.assertTrue(!reloadedFirst.canAccept(key) && reloadedFirst.group(key).materials().get(named) == 2_147_483_648L,
+                "Reload cannot turn a first delivery into permission to accept a second one");
         inventory.eligibility(inventory.group(key), true, 102);
         raw.add(iron, 3);
         inventory.accept(pattern, new KeyCounter[]{raw}, 106, Actionable.MODULATE);

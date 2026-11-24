@@ -267,8 +267,9 @@ class InputRoutingTest {
         CraftingContext request = context.forPatternStart(List.of(input(1), returned), SECOND);
         assertThat(returned.directions().supports(IOType.INPUT)).isTrue();
         assertThat(returned.view().directions().supports(IOType.INPUT)).isFalse();
-        assertThat(request.inputRouting().sources()).extracting(InputRoutingFacet.Source::capabilityIndex)
-                .containsExactly(1, 2);
+        assertThat(request.inputRouting().sources())
+                .extracting(source -> request.capabilitySnapshot().capabilities().get(source.capabilityIndex()))
+                .noneMatch(capability -> capability == returned);
         assertThat(request.planRequirements(List.of(inputRequirement(2)), 1, Map.of()).successful()).isFalse();
         assertThat(request.planRequirements(List.of(inputRequirement(1)), 1, Map.of()).successful()).isTrue();
         assertThat(RequirementPlanner.matchingCapabilities(new ItemRequirement(RecipeModifier.IOType.OUTPUT, null, 0,

@@ -30,7 +30,6 @@ import cn.howxu.mmcr.api.recipe.MachineRecipe;
 import cn.howxu.mmcr.api.recipe.ParallelTier;
 import cn.howxu.mmcr.api.recipe.RecipeRegistry;
 import cn.howxu.mmcr.api.recipe.requirement.MachineRequirement;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.pattern.PatternBatchDetails;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.internal.tile.MachineControllerBlockEntity;
@@ -172,7 +171,7 @@ public final class CompatPatternCpuFixture {
         var crafting = controller.runtimeSnapshot().crafting();
         helper.assertTrue(recipeId.equals(crafting.recipeId()) && crafting.parallelism() == parallelism
                         && !controller.hasFactoryController(),
-                "One standard CPU push synchronously starts only one local lane at exact parallelism");
+                "Hosted payment starts one local lane at the payable parallelism");
     }
 
     public void disconnect() { hostConnection.destroy(); }
@@ -212,7 +211,6 @@ public final class CompatPatternCpuFixture {
     public static final class CountingProvider implements ICraftingProvider {
         private final ICraftingProvider delegate;
         public long accepted;
-        public final Map<Long, Long> multipliers = new LinkedHashMap<>();
         CountingProvider(ICraftingProvider delegate) { this.delegate = delegate; }
         @Override public List<IPatternDetails> getAvailablePatterns() { return delegate.getAvailablePatterns(); }
         @Override public int getPatternPriority() { return delegate.getPatternPriority(); }
@@ -220,11 +218,7 @@ public final class CompatPatternCpuFixture {
         @Override public boolean isBusy() { return delegate.isBusy(); }
         @Override public boolean pushPattern(IPatternDetails details, KeyCounter[] inputs) {
             boolean success = delegate.pushPattern(details, inputs);
-            if (success) {
-                accepted++;
-                multipliers.merge(details instanceof PatternBatchDetails batch ? batch.data().multiplier() : 1L,
-                        1L, Long::sum);
-            }
+            if (success) accepted++;
             return success;
         }
     }

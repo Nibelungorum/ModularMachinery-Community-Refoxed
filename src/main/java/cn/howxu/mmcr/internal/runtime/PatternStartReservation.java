@@ -71,7 +71,9 @@ public final class PatternStartReservation implements AutoCloseable {
     /** Revalidates lane/core admission before the first native payment. */
     public PatternStartReservation guard(BooleanSupplier current) {
         if (status != Status.RESERVED || rolledBack) throw new IllegalStateException("Reservation is no longer pending");
-        admissionCurrent = Objects.requireNonNull(current, "current");
+        Objects.requireNonNull(current, "current");
+        var previous = admissionCurrent;
+        admissionCurrent = () -> previous.getAsBoolean() && current.getAsBoolean();
         return this;
     }
 
@@ -95,6 +97,8 @@ public final class PatternStartReservation implements AutoCloseable {
     public List<MachineRequirement> effectiveRequirements() {
         return preparedStart == null ? List.of() : MachineRequirement.copyList(preparedStart.effective().requirements());
     }
+
+    public boolean debitsEntrustedInput() { return preparedStart != null && preparedStart.plan().debitsEntrustedInput(); }
 
     public List<MachineOutput> effectiveOutputs() {
         return preparedStart == null ? List.of() : MachineOutput.copyList(preparedStart.effective().outputs());

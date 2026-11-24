@@ -5,7 +5,6 @@ import appeng.helpers.patternprovider.PatternProviderLogicHost;
 import appeng.helpers.patternprovider.PatternProviderReturnInventory;
 import appeng.api.implementations.blockentities.ICraftingMachine;
 import appeng.api.crafting.IPatternDetails;
-import cn.howxu.mmcr.compat.appliedenergistics2.loaded.PatternBatchPlanning;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.storage.PatternReturnInventory;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceHost;
 import cn.howxu.mmcr.compat.appliedenergistics2.loaded.tile.PatternInterfaceBlockEntity;
@@ -14,7 +13,6 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
-import net.minecraft.server.level.ServerLevel;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -44,28 +42,8 @@ public abstract class PatternProviderLogicMixin {
 
     @Inject(method = "updatePatterns", at = @At(value = "INVOKE",
             target = "Lappeng/api/networking/crafting/ICraftingProvider;requestUpdate(Lappeng/api/networking/IManagedGridNode;)V"))
-    private void mmcr$publishBatchPatterns(CallbackInfo callback) {
-        if (PatternBatchPlanning.isBatchHost(host) && host.getBlockEntity().getLevel() instanceof ServerLevel) {
-            PatternBatchPlanning.publish((PatternInterfaceBlockEntity) host, patterns);
-        }
-    }
-
-    @Inject(method = "getAvailablePatterns", at = @At("RETURN"), cancellable = true)
-    private void mmcr$availableBatchPatterns(CallbackInfoReturnable<List<IPatternDetails>> callback) {
-        if (PatternBatchPlanning.isBatchHost(host)) {
-            callback.setReturnValue(PatternBatchPlanning.publishedPatterns(
-                    (PatternInterfaceBlockEntity) host, callback.getReturnValue()));
-        }
-    }
-
-    @WrapOperation(method = "pushPattern", at = @At(value = "INVOKE",
-            target = "Ljava/util/List;contains(Ljava/lang/Object;)Z"))
-    private boolean mmcr$containsBatchPattern(List<IPatternDetails> originals, Object requested,
-                                             Operation<Boolean> original) {
-        if (PatternBatchPlanning.isBatchHost(host) && requested instanceof IPatternDetails pattern) {
-            return PatternBatchPlanning.contains((PatternInterfaceBlockEntity) host, originals, pattern);
-        }
-        return original.call(originals, requested);
+    private void mmcr$syncHostedDefinitions(CallbackInfo callback) {
+        if (host instanceof PatternInterfaceBlockEntity patternHost) patternHost.syncHostedPatterns(patterns);
     }
 
     @Unique
