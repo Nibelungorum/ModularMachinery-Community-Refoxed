@@ -46,10 +46,12 @@ import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
 import net.neoforged.neoforge.client.model.geometry.IGeometryLoader;
 import net.neoforged.neoforge.client.model.geometry.IUnbakedGeometry;
 import net.neoforged.neoforge.client.model.pipeline.QuadBakingVertexConsumer;
+import net.neoforged.neoforge.common.util.TriState;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -69,7 +71,8 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
     private static final ResourceLocation FALLBACK_TEXTURE = MMCR.id("block/ctm/basic_casing/particle");
     private static final ModelProperty<CtmContext> CTM_CONTEXT = new ModelProperty<>();
-    private static final ModelProperty<Boolean> EASTER_EGG_ACTIVE = new ModelProperty<>();
+    private static final ModelProperty<WorldAppearance> WORLD_APPEARANCE = new ModelProperty<>();
+    // Item overlays still grow; world overlays reuse the base face's plane.
     static final float OVERLAY_GROW = 0.0005f;
     private static final Set<ResourceLocation> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
@@ -204,7 +207,13 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         }
     }
 
-    private record CtmContext(BakedModel model, BlockState state, ModelData data, ChunkRenderTypeSet renderTypes) {
+    private record WorldAppearance(DynamicOverlayBakedModel.FaceTextures base, WorldFaceLayers layers) {}
+
+    private record CtmContext(BakedModel model, BlockState state, ModelData data, ChunkRenderTypeSet renderTypes, long seed) {
+        List<BakedQuad> quads(@Nullable Direction side, @Nullable RenderType pass) {
+            // Replay the same weighted variant when another pass needs this face for its overlays.
+            return model.getQuads(state, side, RandomSource.create(seed), data, pass);
+        }
     }
 
     static final class DynamicModel implements IDynamicBakedModel {
@@ -236,28 +245,28 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
         @Override
         public ModelData getModelData(BlockAndTintGetter level, BlockPos pos, BlockState state, ModelData modelData) {
-            ModelData.Builder derived = modelData.derive();
-            boolean easterEggTracked = false;
-            if (kind == DynamicOverlayBakedModel.Kind.CONTROLLER) {
-                derived.with(EASTER_EGG_ACTIVE, ControllerIdleEasterEggManager.trackAndIsActive(
-                        level, pos, state, machineId(state, modelData)));
-                easterEggTracked = true;
+            boolean easterEgg = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
+                    && ControllerIdleEasterEggManager.trackAndIsActive(level, pos, state, machineId(state, modelData));
+            var sourceState = DynamicOverlayBakedModel.sourceState(ctmSource(kind, state, modelData), level, pos);
+            var client = Minecraft.getInstance();
+            if (sourceState.isPresent() && client != null && client.getModelManager() != null) {
+                var appearance = sourceState.get();
+                var source = client.getModelManager().getBlockModelShaper().getBlockModel(appearance);
+                modelData = withCtmSource(source, level, pos, appearance, modelData, state.getSeed(pos));
             }
-            MachineAppearanceSpec.TextureSource source = ctmSource(kind, state, modelData);
-            var sourceState = DynamicOverlayBakedModel.sourceState(source, level, pos);
-            if (sourceState.isEmpty()) {
-                return easterEggTracked ? derived.build() : modelData;
-            }
-            BlockState appearance = sourceState.get();
-            BakedModel sourceModel = Minecraft.getInstance().getModelManager()
-                    .getBlockModelShaper().getBlockModel(appearance);
-            ModelData sourceData = AthenaModelBridge.get().modelData(sourceModel, level, pos, appearance, modelData);
-            if (sourceData == null) {
-                sourceData = sourceModel.getModelData(level, pos, appearance, modelData);
-            }
-            ChunkRenderTypeSet sourceLayers = sourceModel.getRenderTypes(appearance,
-                    RandomSource.create(state.getSeed(pos)), sourceData);
-            return derived.with(CTM_CONTEXT, new CtmContext(sourceModel, appearance, sourceData, sourceLayers)).build();
+            // Resolve the current atlas once for this render, not for each of its cull buckets and passes.
+            return modelData.derive().with(WORLD_APPEARANCE, worldAppearance(state, modelData, easterEgg)).build();
+        }
+
+        static ModelData withCtmSource(BakedModel source, BlockAndTintGetter level, BlockPos pos, BlockState appearance,
+                                       ModelData data, long seed) {
+            if (source instanceof DynamicModel) return data;
+            var bridge = AthenaModelBridge.get();
+            var sourceData = bridge.available() ? bridge.modelData(source, level, pos, appearance, data) : null;
+            // Other 1.21.1 models (including CTM) can supply geometry without Athena.
+            if (sourceData == null) sourceData = source.getModelData(level, pos, appearance, data);
+            var passes = source.getRenderTypes(appearance, RandomSource.create(seed), sourceData);
+            return data.derive().with(CTM_CONTEXT, new CtmContext(source, appearance, sourceData, passes, seed)).build();
         }
 
         @Override
@@ -267,29 +276,37 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                 return itemQuads(side, renderType);
             }
 
-            List<BakedQuad> quads = new ArrayList<>();
             Direction.Axis shaftAxis = stressAxis(state);
             CtmContext ctm = modelData.get(CTM_CONTEXT);
-            if (ctm != null && (renderType == null
-                    || ctm.renderTypes().contains(renderType))) {
-                for (BakedQuad quad : ctm.model().getQuads(ctm.state(), side, random, ctm.data(), renderType)) {
-                    if (quad.getDirection().getAxis() != shaftAxis) quads.add(quad);
-                }
-            } else if (ctm == null && side != null && side.getAxis() != shaftAxis
-                    && (renderType == null || renderType == RenderType.solid())) {
-                DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
-                quads.add(face(side, Direction.NORTH, baseSprite(textures.base().forFace(side)), 0.0f));
-            }
-            if (shaftAxis != null && side == null && (renderType == null || renderType == RenderType.solid())) {
-                var textures = textures(state, modelData);
-                for (Direction direction : Direction.values()) {
-                    if (direction.getAxis() == shaftAxis) {
-                        addShaftEnd(quads, direction, baseSprite(textures.base().forFace(direction)));
+            if (ctm == null && (side == null ? shaftAxis == null : side.getAxis() == shaftAxis)) return List.of();
+
+            var appearance = modelData.get(WORLD_APPEARANCE);
+            if (appearance == null) appearance = worldAppearance(state, modelData, false);
+            var layers = appearance.layers();
+            var casing = shaftAxis != null || (ctm == null && layers.front() != null && side != layers.front())
+                    ? WorldFaceLayers.BASE_ONLY : layers;
+            List<BakedQuad> quads = new ArrayList<>();
+            var solid = RenderType.solid();
+            if (ctm != null) {
+                // A null query asks the source for all geometry in this bucket, not once per render pass.
+                Iterable<RenderType> passes = renderType == null ? Collections.singletonList(null) : ctm.renderTypes();
+                for (var pass : passes) {
+                    var basePass = pass == null ? solid : pass;
+                    if (!casing.rendersIn(basePass, renderType)) continue;
+                    for (var quad : ctm.quads(side, pass)) {
+                        if (quad.getDirection().getAxis() != shaftAxis) casing.emit(quads, quad, basePass, renderType);
                     }
                 }
+            } else if (side != null && casing.rendersIn(solid, renderType)) {
+                casing.emit(quads, face(side, Direction.NORTH, baseSprite(appearance.base().forFace(side)), 0F), solid, renderType);
             }
-            if (side == null) {
-                addBlockOverlays(quads, state, modelData, renderType);
+            if (shaftAxis != null && side == null && layers.rendersIn(solid, renderType)) {
+                for (Direction direction : Direction.values()) {
+                    if (direction.getAxis() != shaftAxis) continue;
+                    var sprite = baseSprite(appearance.base().forFace(direction));
+                    if (renderType == null || renderType == solid) addShaftRim(quads, direction, sprite);
+                    layers.emit(quads, shaftPanel(direction, sprite, 0F), solid, renderType);
+                }
             }
             return quads;
         }
@@ -307,7 +324,9 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             if (renderType == null || renderType == RenderType.solid()) {
                 for (Direction direction : Direction.values()) {
                     if (itemShaft != null && direction.getAxis() == Direction.Axis.Z) {
-                        addShaftEnd(quads, direction, baseSprite(base.forFace(direction)));
+                        var sprite = baseSprite(base.forFace(direction));
+                        addShaftRim(quads, direction, sprite);
+                        quads.add(shaftPanel(direction, sprite, 0F));
                     } else {
                         quads.add(face(direction, Direction.NORTH, baseSprite(base.forFace(direction)), 0.0f));
                     }
@@ -321,7 +340,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             }
             for (OverlayLayer layer : overlayLayers(description.overlayTextures(),
                     description.stateOverlayTexture())) {
-                if (renderType != null && renderType != overlayRenderType(layer.texture())) continue;
+                if (renderType != null && renderType != overlayRenderType(sprite(layer.texture()))) continue;
                 for (Direction direction : description.overlayFaces()) {
                     if (itemShaft != null && direction.getAxis() != Direction.Axis.Z) continue;
                     quads.add(overlayFace(direction, Direction.NORTH, layer.texture(), layer.grow(),
@@ -331,9 +350,9 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             return quads;
         }
 
-        private void addBlockOverlays(List<BakedQuad> quads, BlockState state, ModelData modelData,
-                                      @Nullable RenderType renderType) {
-            DynamicOverlayBakedModel.TextureSet textures = textures(state, modelData);
+        private WorldAppearance worldAppearance(BlockState state, ModelData modelData, boolean easterEgg) {
+            var textures = textures(state, modelData);
+            var overlays = textures.overlays();
             Direction overlayFace = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
                     && state.hasProperty(MachineControllerBlock.FACING)
                     ? state.getValue(MachineControllerBlock.FACING) : null;
@@ -342,18 +361,17 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     ? state.getValue(MachineControllerBlock.ROLL_FACING) : Direction.NORTH;
             ResourceLocation stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
                     ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
-                    state.getValue(MachineControllerBlock.ACTIVE),
-                    Boolean.TRUE.equals(modelData.get(EASTER_EGG_ACTIVE))) : null;
-            Direction.Axis shaftAxis = stressAxis(state);
-            for (OverlayLayer layer : overlayLayers(textures.overlays(), stateOverlay)) {
-                if (renderType != null && renderType != overlayRenderType(layer.texture())) continue;
-                for (Direction direction : Direction.values()) {
-                    if (shaftAxis != null && direction.getAxis() != shaftAxis) continue;
-                    if (overlayFace == null || direction == overlayFace) {
-                        quads.add(overlayFace(direction, rollFacing, layer.texture(), layer.grow(), shaftAxis));
-                    }
-                }
+                    state.getValue(MachineControllerBlock.ACTIVE), easterEgg) : null;
+            if (stateOverlay != null) overlays = ImmutableList.<ResourceLocation>builder().addAll(overlays).add(stateOverlay).build();
+            var layers = new ArrayList<WorldFaceLayers.Layer>(overlays.size());
+            var pass = RenderType.solid();
+            for (var texture : overlays) {
+                var sprite = sprite(texture);
+                // A later overlay cannot be submitted before a translucent layer underneath it.
+                pass = WorldFaceLayers.later(pass, overlayRenderType(sprite));
+                layers.add(new WorldFaceLayers.Layer(texture, sprite, pass));
             }
+            return new WorldAppearance(textures.base(), new WorldFaceLayers(overlayFace, rollFacing, layers));
         }
 
         private DynamicOverlayBakedModel.TextureSet textures(BlockState state, ModelData modelData) {
@@ -369,9 +387,9 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             return runtimeSpriteGetter.apply(texture);
         }
 
-        private RenderType overlayRenderType(ResourceLocation texture) {
+        private RenderType overlayRenderType(TextureAtlasSprite atlasSprite) {
             // 26.1 chooses the layer per sprite; cache the backported alpha scan per baked model.
-            return overlayRenderTypes.computeIfAbsent(sprite(texture), sprite -> {
+            return overlayRenderTypes.computeIfAbsent(atlasSprite, sprite -> {
                 NativeImage image = sprite.contents().getOriginalImage();
                 boolean transparent = false;
                 for (int y = 0; y < image.getHeight(); y++) {
@@ -406,12 +424,11 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     ? state.getValue(BlockStateProperties.AXIS) : null;
         }
 
-        private void addShaftEnd(List<BakedQuad> quads, Direction direction, TextureAtlasSprite sprite) {
+        private void addShaftRim(List<BakedQuad> quads, Direction direction, TextureAtlasSprite sprite) {
             quads.add(endFace(direction, sprite, 0F, 0F, 0F, 1F, 0.125F, 0F));
             quads.add(endFace(direction, sprite, 0F, 0F, 0.875F, 1F, 1F, 0F));
             quads.add(endFace(direction, sprite, 0F, 0F, 0.125F, 0.125F, 0.875F, 0F));
             quads.add(endFace(direction, sprite, 0F, 0.875F, 0.125F, 1F, 0.875F, 0F));
-            quads.add(endFace(direction, sprite, 0F, 0.125F, 0.125F, 0.875F, 0.875F, 0.95F / 16F));
             // Close the recessed opening's inner walls so oblique views cannot see through the casing.
             for (Direction wall : Direction.values()) {
                 if (wall.getAxis() == direction.getAxis()) continue;
@@ -436,11 +453,14 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         private BakedQuad overlayFace(Direction direction, Direction rollFacing, ResourceLocation texture,
                                       float grow, @Nullable Direction.Axis shaftAxis) {
             TextureAtlasSprite sprite = sprite(texture);
-            BakedQuad flux = FluxNetworkOverlay.quad(texture, direction, sprite, grow);
-            if (flux != null) return flux;
-            return direction.getAxis() == shaftAxis
-                    ? endFace(direction, sprite, grow, 0.125F, 0.125F, 0.875F, 0.875F, 0.95F / 16F)
+            var base = direction.getAxis() == shaftAxis ? shaftPanel(direction, sprite, grow)
                     : face(direction, rollFacing, sprite, grow);
+            var flux = FluxNetworkOverlay.quad(texture, base, sprite);
+            return flux != null ? flux : base;
+        }
+
+        private BakedQuad shaftPanel(Direction direction, TextureAtlasSprite sprite, float grow) {
+            return endFace(direction, sprite, grow, 0.125F, 0.125F, 0.875F, 0.875F, 0.95F / 16F);
         }
 
         private BakedQuad endFace(Direction direction, TextureAtlasSprite sprite, float grow,
@@ -503,6 +523,19 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         @Override
         public TextureAtlasSprite getParticleIcon() {
             return particle;
+        }
+
+        @Override
+        public TextureAtlasSprite getParticleIcon(ModelData data) {
+            var ctm = data.get(CTM_CONTEXT);
+            return ctm == null ? particle : ctm.model().getParticleIcon(ctm.data());
+        }
+
+        @Override
+        public TriState useAmbientOcclusion(BlockState state, ModelData data, RenderType renderType) {
+            var ctm = data.get(CTM_CONTEXT);
+            return ctm == null ? IDynamicBakedModel.super.useAmbientOcclusion(state, data, renderType)
+                    : ctm.model().useAmbientOcclusion(ctm.state(), ctm.data(), renderType);
         }
 
         @Override

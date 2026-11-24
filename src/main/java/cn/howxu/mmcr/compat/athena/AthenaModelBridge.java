@@ -17,6 +17,8 @@ public interface AthenaModelBridge {
         return AthenaModelBridgeBootstrap.bridge();
     }
 
+    default boolean available() { return false; }
+
     @Nullable
     ModelData modelData(BakedModel sourceModel, BlockAndTintGetter level, BlockPos pos,
                         BlockState appearance, ModelData fallback);

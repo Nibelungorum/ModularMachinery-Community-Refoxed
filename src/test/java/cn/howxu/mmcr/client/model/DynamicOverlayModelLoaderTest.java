@@ -4,6 +4,8 @@ import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineAppearanceSpec;
 import cn.howxu.mmcr.api.machine.MachineControllerSpec;
 import cn.howxu.mmcr.client.controller.ControllerSpecCache;
+import cn.howxu.mmcr.compat.create.loaded.StressInterfaceKind;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworkOverlay;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
@@ -16,22 +18,29 @@ import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.metadata.animation.AnimationMetadataSection;
 import net.minecraft.client.resources.metadata.animation.FrameSize;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.WeightedBakedModel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceMetadata;
+import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.model.data.ModelData;
-import net.neoforged.neoforge.client.model.data.ModelProperty;
+import net.neoforged.neoforge.client.model.IQuadTransformer;
 import net.neoforged.neoforge.client.ChunkRenderTypeSet;
 import net.neoforged.neoforge.client.NeoForgeRenderTypes;
 import net.neoforged.neoforge.client.model.geometry.IGeometryBakingContext;
@@ -132,34 +141,45 @@ class DynamicOverlayModelLoaderTest {
         for (var direction : Direction.values()) {
             assertThat(model.getQuads(state, direction, random, data, RenderType.solid()))
                     .extracting(quad -> quad.getSprite().contents().name()).containsExactly(base);
+            assertThat(model.getQuads(state, direction, random, data, RenderType.cutout()))
+                    .extracting(quad -> quad.getSprite().contents().name()).containsExactly(DynamicOverlayBakedModel.defaultPortOverlayTexture());
             assertThat(model.getQuads(state, direction, random, data, RenderType.translucent())).isEmpty();
         }
-        assertThat(model.getQuads(state, null, random, data, RenderType.solid())).isEmpty();
-        assertThat(model.getQuads(state, null, random, data, RenderType.cutout()))
-                .hasSize(6).allSatisfy(quad -> assertThat(quad.getSprite().contents().name())
-                        .isEqualTo(DynamicOverlayBakedModel.defaultPortOverlayTexture()));
-        assertThat(model.getQuads(state, null, random, data, RenderType.translucent())).isEmpty();
-        assertThat(model.getQuads(state, Direction.NORTH, random, data, null)).hasSize(1);
+        assertThat(model.getQuads(state, null, random, data, null)).isEmpty();
     }
 
     @Test
-    void controller_base_and_front_state_overlays_use_separate_layers() {
+    void only_controller_front_changes_when_active_and_vertical_roll_is_retained() {
         var machineId = MMCR.id("test_cube");
         var base = MMCR.id("block/controller_base");
         MachineAppearanceCache.replaceSnapshot(Map.of(machineId,
                 new MachineAppearanceSpec(MMCR.id("basic_casing"), base, null)));
         MachineControllerBlock block = (MachineControllerBlock) ModBlocks.controllerFor(machineId).get();
-        var state = block.defaultBlockState().setValue(MachineControllerBlock.FACING, Direction.EAST)
-                .setValue(MachineControllerBlock.FORMED, true).setValue(MachineControllerBlock.ACTIVE, true);
+        var state = block.defaultBlockState().setValue(MachineControllerBlock.FACING, Direction.UP)
+                .setValue(MachineControllerBlock.ROLL_FACING, Direction.EAST).setValue(MachineControllerBlock.FORMED, true);
         BakedModel model = bake(DynamicOverlayBakedModel.Kind.CONTROLLER, null);
         var random = RandomSource.create(0L);
-
-        assertThat(model.getQuads(state, Direction.NORTH, random, ModelData.EMPTY, RenderType.solid()))
-                .extracting(quad -> quad.getSprite().contents().name()).containsExactly(base);
-        assertThat(model.getQuads(state, null, random, ModelData.EMPTY, RenderType.cutout()))
-                .allSatisfy(quad -> assertThat(quad.getDirection()).isEqualTo(Direction.EAST))
-                .extracting(quad -> quad.getSprite().contents().name()).containsExactly(
-                        ControllerSpecCache.specFor(machineId).frontTexture(), MMCR.id("block/overlay_basic_active"));
+        for (boolean running : List.of(false, true)) {
+            var current = state.setValue(MachineControllerBlock.ACTIVE, running);
+            var data = model.getModelData(null, POS, current, ModelData.EMPTY);
+            assertThat(model.getQuads(current, null, random, data, null)).isEmpty();
+            for (var face : Direction.values()) {
+                var quads = model.getQuads(current, face, random, data, null);
+                if (face != Direction.UP) {
+                    assertThat(quads).extracting(q -> q.getSprite().contents().name()).containsExactly(base);
+                } else {
+                    assertThat(quads).extracting(q -> q.getSprite().contents().name()).containsExactly(base,
+                            ControllerSpecCache.specFor(machineId).frontTexture(), MMCR.id(running ? "block/overlay_basic_active" : "block/overlay_basic_idle"));
+                    for (var quad : quads) for (int i = 0; i < 4; i++) {
+                        var point = position(quad, i);
+                        assertThat(point).isEqualTo(position(quads.getFirst(), i));
+                        float u = quad == quads.getFirst() ? point.x : point.z;
+                        float v = quad == quads.getFirst() ? point.z : 1F - point.x;
+                        assertUv(quad, i, u, v);
+                    }
+                }
+            }
+        }
     }
 
     @Test
@@ -174,7 +194,8 @@ class DynamicOverlayModelLoaderTest {
         var random = RandomSource.create(0L);
         var originalBase = model.getQuads(state, Direction.DOWN, random, ModelData.EMPTY, RenderType.solid())
                 .getFirst().getSprite();
-        var originalOverlays = model.getQuads(state, null, random, ModelData.EMPTY, RenderType.cutout())
+        var front = state.getValue(MachineControllerBlock.FACING);
+        var originalOverlays = model.getQuads(state, front, random, ModelData.EMPTY, RenderType.cutout())
                 .stream().map(BakedQuad::getSprite).toList();
         assertThat(originalOverlays).hasSize(2);
         var passes = model.getRenderPasses(ItemStack.EMPTY, false);
@@ -189,12 +210,12 @@ class DynamicOverlayModelLoaderTest {
         assertThat(model.getQuads(state, Direction.DOWN, random, ModelData.EMPTY, RenderType.solid()))
                 .singleElement().satisfies(quad -> assertThat(quad.getSprite())
                         .isSameAs(sprites.get(base)).isNotSameAs(originalBase));
-        assertThat(model.getQuads(state, null, random, ModelData.EMPTY, RenderType.translucent()))
+        assertThat(model.getQuads(state, front, random, ModelData.EMPTY, RenderType.translucent()))
                 .extracting(BakedQuad::getSprite)
                 .containsExactly(sprites.get(ControllerSpecCache.specFor(machineId).frontTexture()),
                         sprites.get(MMCR.id("block/overlay_basic_idle")))
                  .doesNotContainAnyElementsOf(originalOverlays);
-        assertThat(model.getQuads(state, null, random, ModelData.EMPTY, RenderType.cutout())).isEmpty();
+        assertThat(model.getQuads(state, front, random, ModelData.EMPTY, RenderType.cutout())).isEmpty();
         assertThat(passes.get(1).getQuads(null, null, random)).isEmpty();
         assertThat(passes.get(2).getQuads(null, null, random)).hasSize(2);
         for (var pass : passes) {
@@ -202,6 +223,53 @@ class DynamicOverlayModelLoaderTest {
                     .allSatisfy(quad -> assertThat(quad.getSprite())
                             .isSameAs(sprites.get(quad.getSprite().contents().name())));
         }
+    }
+
+    @Test
+    void port_layers_keep_native_animations_and_pass_order_across_atlas_replacement() {
+        var base = MMCR.id("block/runtime_base");
+        var panel = MMCR.id("block/overlay/base/item");
+        var arrows = MMCR.id("block/overlay/direction/input");
+        var icon = MMCR.id("block/overlay/type/item");
+        var tier = MMCR.id("block/overlay/tier/ludicrous");
+        var state = ModBlocks.BLOCKS.get("item_input_bus_ludicrous").get().defaultBlockState();
+        var model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
+        var input = ModelData.of(MachineModelDataKeys.PORT_TEXTURE_SOURCE, new MachineAppearanceSpec.TextureSource(MMCR.id("basic_casing"), base));
+        var random = RandomSource.create(1);
+        sprites.put(tier, animated(tier, 3, false, 0));
+        for (boolean reload : List.of(false, true)) {
+            var previous = sprites.put(arrows, animated(arrows, reload ? 5 : 2, !reload, reload ? 0 : 128));
+            if (previous != null) previous.contents().close();
+            var data = model.getModelData(null, POS, state, input);
+            assertThat(model.getQuads(state, null, random, data, null)).isEmpty();
+            for (var face : Direction.values()) {
+                var quads = model.getQuads(state, face, random, data, null);
+                assertThat(quads).extracting(BakedQuad::getSprite)
+                        .containsExactly(sprites.get(base), sprites.get(panel), sprites.get(arrows), sprites.get(icon), sprites.get(tier));
+                assertThat(model.getQuads(state, face, random, data, RenderType.cutout())).extracting(BakedQuad::getSprite)
+                        .containsExactlyElementsOf(reload ? List.of(sprites.get(panel), sprites.get(arrows), sprites.get(icon), sprites.get(tier))
+                                : List.of(sprites.get(panel)));
+                assertThat(model.getQuads(state, face, random, data, RenderType.translucent())).extracting(BakedQuad::getSprite)
+                        .containsExactlyElementsOf(reload ? List.of() : List.of(sprites.get(arrows), sprites.get(icon), sprites.get(tier)));
+                for (var quad : quads) for (int i = 0; i < 4; i++) {
+                    var point = position(quad, i);
+                    assertThat(point).isEqualTo(position(quads.getFirst(), i));
+                    float[] uv = DynamicOverlayModelLoader.uv(face, Direction.NORTH, point);
+                    assertUv(quad, i, uv[0], uv[1]);
+                }
+            }
+            assertThat(sprites.get(arrows).contents().getUniqueFrames().toArray()).containsExactly(0, 1);
+        }
+    }
+
+    private static TextureAtlasSprite animated(ResourceLocation id, int time, boolean interpolate, int nextAlpha) {
+        var image = new NativeImage(1, 2, false);
+        image.setPixelRGBA(0, 0, -1);
+        image.setPixelRGBA(0, 1, nextAlpha << 24 | 0x00ffffff);
+        var metadata = new ResourceMetadata.Builder().put(AnimationMetadataSection.SERIALIZER,
+                new AnimationMetadataSection(List.of(), 1, 1, time, interpolate)).build();
+        var contents = new SpriteContents(id, new FrameSize(1, 1), image, metadata);
+        return new TextureAtlasSprite(TextureAtlas.LOCATION_BLOCKS, contents, 32, 32, time, time) {};
     }
 
     @Test
@@ -247,7 +315,8 @@ class DynamicOverlayModelLoaderTest {
         var passes = model.getRenderPasses(ItemStack.EMPTY, false);
         for (int index = 0; index < layers.size(); index++) {
             var layer = layers.get(index);
-            var blockQuads = model.getQuads(state, null, random, ModelData.EMPTY, layer);
+            var blockQuads = model.getQuads(state, state.getValue(MachineControllerBlock.FACING), random, ModelData.EMPTY, layer)
+                    .stream().filter(q -> q.getSprite() == sprites.get(front) || q.getSprite() == sprites.get(idle)).toList();
             var itemQuads = passes.get(index).getQuads(null, null, random);
             if (layer == expectedLayer) {
                 assertThat(blockQuads).extracting(quad -> quad.getSprite().contents().name())
@@ -263,7 +332,7 @@ class DynamicOverlayModelLoaderTest {
     }
 
     @Test
-    void ctm_proxy_keeps_weighted_base_selection_and_filters_other_layers() throws Exception {
+    void ctm_proxy_keeps_weighted_base_selection_and_filters_other_layers() {
         var state = Blocks.IRON_BLOCK.defaultBlockState();
         BakedModel model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
         BakedQuad first = model.getQuads(state, Direction.NORTH, RandomSource.create(0L),
@@ -275,50 +344,140 @@ class DynamicOverlayModelLoaderTest {
                         new MachineAppearanceSpec.TextureSource(MMCR.id("basic_casing"), MMCR.id("block/second"))),
                 RenderType.solid()).getFirst();
         BakedModel source = new WeightedBakedModel.Builder()
-                .add(sourceModel(first, RenderType.solid()), 1)
-                .add(sourceModel(second, RenderType.cutout()), 1).build();
+                .add(sourceModel(first, Direction.NORTH, RenderType.solid()), 1)
+                .add(sourceModel(second, Direction.NORTH, RenderType.cutout()), 1).build();
 
         for (long seed = 0; seed < 32; seed++) {
             var sourceLayers = source.getRenderTypes(state, RandomSource.create(seed), ModelData.EMPTY);
-            ModelData data = ctmData(source, state, sourceLayers);
+            ModelData data = DynamicOverlayModelLoader.DynamicModel.withCtmSource(source, null, POS, state, ModelData.EMPTY, seed);
+            BakedQuad chosen = source.getQuads(state, Direction.NORTH, RandomSource.create(seed), ModelData.EMPTY, null).getFirst();
             assertThat(model.getRenderTypes(state, RandomSource.create(seed), data).asList())
                     .containsExactlyElementsOf(ChunkRenderTypeSet.union(sourceLayers,
                             ChunkRenderTypeSet.of(RenderType.solid(), RenderType.cutout(),
                                     RenderType.translucent())).asList());
             for (RenderType layer : List.of(RenderType.solid(), RenderType.cutout(), RenderType.translucent())) {
                 var actual = model.getQuads(state, Direction.NORTH, RandomSource.create(seed), data, layer);
-                if (sourceLayers.contains(layer)) {
-                    assertThat(actual).containsExactlyElementsOf(source.getQuads(state, Direction.NORTH,
-                            RandomSource.create(seed), ModelData.EMPTY, layer));
-                } else {
-                    assertThat(actual).isEmpty();
-                }
+                assertThat(actual.stream().filter(q -> q == first || q == second).toList())
+                        .isEqualTo(sourceLayers.contains(layer) ? List.of(chosen) : List.of());
+                assertThat(actual.stream().filter(q -> q != first && q != second).map(BakedQuad::getSprite).toList())
+                        .isEqualTo(layer == RenderType.cutout() ? List.of(sprites.get(DynamicOverlayBakedModel.defaultPortOverlayTexture())) : List.of());
             }
             assertThat(model.getQuads(state, Direction.NORTH, RandomSource.create(seed), data, null))
-                    .containsExactlyElementsOf(source.getQuads(state, Direction.NORTH,
-                            RandomSource.create(seed), ModelData.EMPTY, null));
+                    .extracting(BakedQuad::getSprite).containsExactly(chosen.getSprite(), sprites.get(DynamicOverlayBakedModel.defaultPortOverlayTexture()));
+            assertThat(model.getQuads(state, Direction.SOUTH, RandomSource.create(seed), data, null)).isEmpty();
         }
     }
 
-    private BakedModel sourceModel(BakedQuad quad, RenderType layer) {
+    @Test
+    void unculled_ctm_quad_keeps_its_light_and_normals_but_not_its_tint_on_the_overlay() {
+        var state = Blocks.IRON_BLOCK.defaultBlockState();
+        var model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
+        var random = RandomSource.create(42);
+        var original = model.getQuads(state, Direction.WEST, random, ModelData.EMPTY, RenderType.solid()).getFirst();
+        var vertices = original.getVertices().clone();
+        for (int i = 0; i < vertices.length; i += IQuadTransformer.STRIDE) {
+            vertices[i + IQuadTransformer.COLOR] = 0xff887766;
+            vertices[i + IQuadTransformer.UV2] = 0x00b000c0;
+        }
+        var tinted = new BakedQuad(vertices, 7, Direction.WEST, original.getSprite(), false, false);
+        var source = sourceModel(tinted, null, RenderType.translucent());
+        var data = DynamicOverlayModelLoader.DynamicModel.withCtmSource(source, null, POS, state, ModelData.EMPTY, 42);
+        assertThat(model.getQuads(state, Direction.WEST, random, data, null)).isEmpty();
+        assertThat(model.getQuads(state, null, random, data, RenderType.cutout())).isEmpty();
+        var quads = model.getQuads(state, null, random, data, RenderType.translucent());
+        assertThat(quads).hasSize(2);
+        assertThat(quads.getFirst()).isSameAs(tinted);
+        var panel = quads.getLast();
+        assertThat(panel.isShade()).isFalse();
+        assertThat(panel.hasAmbientOcclusion()).isFalse();
+        assertThat(panel.isTinted()).isFalse();
+        for (int i = 0; i < vertices.length; i += IQuadTransformer.STRIDE) {
+            assertThat(panel.getVertices()[i + IQuadTransformer.UV2]).isEqualTo(vertices[i + IQuadTransformer.UV2]);
+            assertThat(panel.getVertices()[i + IQuadTransformer.NORMAL]).isEqualTo(vertices[i + IQuadTransformer.NORMAL]);
+            assertThat(panel.getVertices()[i + IQuadTransformer.COLOR]).isEqualTo(-1);
+            assertThat(vertices[i + IQuadTransformer.COLOR]).isEqualTo(0xff887766);
+        }
+    }
+
+    @Test
+    void stress_overlays_cover_recessed_panels_not_the_rim_or_casing_sides() {
+        var blocks = (MappedRegistry<Block>) BuiltInRegistries.BLOCK;
+        var id = ResourceLocation.parse("mmcr_test:overlay_stress_fixture");
+        if (!blocks.containsKey(id)) {
+            blocks.unfreeze();
+            try {
+                Registry.register(blocks, id, StressInterfaceKind.INPUT.createBlock(Blocks.IRON_BLOCK.properties(), () -> BlockEntityType.CHEST));
+            } finally {
+                blocks.freeze();
+            }
+        }
+        var state = blocks.get(id).defaultBlockState().setValue(BlockStateProperties.AXIS, Direction.Axis.X);
+        var model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
+        var random = RandomSource.create(42);
+        var all = model.getQuads(state, null, random, ModelData.EMPTY, null);
+        var panels = model.getQuads(state, null, random, ModelData.EMPTY, RenderType.cutout());
+        assertThat(panels).extracting(BakedQuad::getDirection).containsExactlyInAnyOrder(Direction.WEST, Direction.EAST);
+        for (var panel : panels) {
+            var base = all.stream().filter(q -> q.getSprite() != panel.getSprite() && q.getDirection() == panel.getDirection()
+                    && position(q, 0).equals(position(panel, 0))).findFirst().orElseThrow();
+            for (int i = 0; i < 4; i++) {
+                var point = position(panel, i);
+                assertThat(point).isEqualTo(position(base, i));
+                assertThat(point.x).isStrictlyBetween(0F, 1F);
+            }
+        }
+        for (var face : Direction.values()) assertThat(model.getQuads(state, face, random, ModelData.EMPTY, RenderType.cutout())).isEmpty();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"flux_point, 0.3125", "flux_plug, 0.5"})
+    void flux_tiles_form_one_centered_core_and_only_the_colour_layer_is_tinted(String core, float width) {
+        var model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
+        var base = model.getQuads(Blocks.IRON_BLOCK.defaultBlockState(), Direction.NORTH,
+                RandomSource.create(1), ModelData.EMPTY, RenderType.solid()).getFirst();
+        // One quarter of a casing face; this must produce a quarter of the core, not a whole core.
+        var vertices = base.getVertices().clone();
+        for (int i = 0; i < vertices.length; i += IQuadTransformer.STRIDE) {
+            int pos = i + IQuadTransformer.POSITION;
+            vertices[pos] = Float.floatToRawIntBits(Float.intBitsToFloat(vertices[pos]) / 2F);
+            vertices[pos + 1] = Float.floatToRawIntBits(Float.intBitsToFloat(vertices[pos + 1]) / 2F);
+        }
+        var tile = new BakedQuad(vertices, 3, Direction.NORTH, base.getSprite(), true, true);
+        for (var suffix : List.of("_on", "_colour")) {
+            var id = ResourceLocation.fromNamespaceAndPath("fluxnetworks", "block/" + core + suffix);
+            var sprite = sprites.computeIfAbsent(id, TestSprite::new);
+            var overlay = FluxNetworkOverlay.quad(id, tile, sprite);
+            assertThat(overlay.getSprite()).isSameAs(sprite);
+            assertThat(overlay.getTintIndex()).isEqualTo(suffix.equals("_colour") ? FluxNetworkOverlay.NETWORK_TINT_INDEX : -1);
+            for (int i = 0; i < 4; i++) {
+                var point = position(tile, i);
+                assertThat(position(overlay, i)).isEqualTo(new Vector3f((1F - width) / 2 + point.x * width,
+                        (1F - width) / 2 + point.y * width, point.z));
+            }
+        }
+    }
+
+    private BakedModel sourceModel(BakedQuad quad, Direction bucket, RenderType layer) {
         return (BakedModel) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{BakedModel.class},
                 (proxy, method, args) -> switch (method.getName()) {
+                    case "getModelData" -> args[3];
                     case "getRenderTypes" -> ChunkRenderTypeSet.of(layer);
-                    case "getQuads" -> args[1] == Direction.NORTH ? List.of(quad) : List.of();
+                    case "getQuads" -> args[1] == bucket ? List.of(quad) : List.of();
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
     }
 
-    @SuppressWarnings("unchecked")
-    private static ModelData ctmData(BakedModel source, BlockState state, ChunkRenderTypeSet layers) throws Exception {
-        var property = DynamicOverlayModelLoader.class.getDeclaredField("CTM_CONTEXT");
-        property.setAccessible(true);
-        var type = Class.forName(DynamicOverlayModelLoader.class.getName() + "$CtmContext");
-        var constructor = type.getDeclaredConstructor(BakedModel.class, BlockState.class, ModelData.class,
-                ChunkRenderTypeSet.class);
-        constructor.setAccessible(true);
-        return ModelData.of((ModelProperty<Object>) property.get(null),
-                constructor.newInstance(source, state, ModelData.EMPTY, layers));
+    static Vector3f position(BakedQuad quad, int vertex) {
+        int pos = vertex * IQuadTransformer.STRIDE + IQuadTransformer.POSITION;
+        var data = quad.getVertices();
+        return new Vector3f(Float.intBitsToFloat(data[pos]), Float.intBitsToFloat(data[pos + 1]), Float.intBitsToFloat(data[pos + 2]));
+    }
+
+    static void assertUv(BakedQuad quad, int vertex, float u, float v) {
+        var sprite = quad.getSprite();
+        int offset = vertex * IQuadTransformer.STRIDE + IQuadTransformer.UV0;
+        assertThat(Float.intBitsToFloat(quad.getVertices()[offset])).isEqualTo(sprite.getU(Mth.lerp(sprite.uvShrinkRatio(), u, .5F)));
+        assertThat(Float.intBitsToFloat(quad.getVertices()[offset + 1])).isEqualTo(sprite.getV(Mth.lerp(sprite.uvShrinkRatio(), v, .5F)));
     }
 
     private static void assertUvInsideSprite(BakedQuad quad) {

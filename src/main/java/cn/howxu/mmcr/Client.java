@@ -96,6 +96,7 @@ public class Client {
         }
         // modBus.addListener(ArtificialStarRenderer::registerModel);
         modBus.addListener(Client::registerRuntimeResourcePack);
+        modBus.addListener((ModelEvent.BakingCompleted event) -> DynamicOverlayBakedModel.clearCache());
         modBus.addListener(Client::registerPreviewReloadListener);
         NeoForge.EVENT_BUS.addListener(this::tickMachineSounds);
         NeoForge.EVENT_BUS.addListener(Client::tickControllerIdleEasterEgg);

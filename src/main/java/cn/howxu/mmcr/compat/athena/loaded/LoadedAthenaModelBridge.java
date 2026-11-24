@@ -15,6 +15,9 @@ import net.neoforged.neoforge.client.model.data.ModelData;
  */
 public final class LoadedAthenaModelBridge implements AthenaModelBridge {
     @Override
+    public boolean available() { return true; }
+
+    @Override
     public ModelData modelData(BakedModel sourceModel, BlockAndTintGetter level, BlockPos pos,
                                BlockState appearance, ModelData fallback) {
         if (!(sourceModel instanceof AthenaBakedModel athenaModel)) {

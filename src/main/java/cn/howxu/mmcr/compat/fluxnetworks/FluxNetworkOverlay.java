@@ -5,14 +5,11 @@ import com.google.common.collect.ImmutableList;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
-import net.minecraft.core.Vec3i;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.neoforged.neoforge.client.model.pipeline.QuadBakingVertexConsumer;
+import net.neoforged.neoforge.client.model.IQuadTransformer;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
-
-import java.util.List;
 
 /** Native Flux core faces centred over the dynamic MMCR casing.
  * @author howxu <dev@howxu.cn>
@@ -37,8 +34,7 @@ public final class FluxNetworkOverlay {
                 ? ImmutableList.of(POINT, POINT_COLOUR) : ImmutableList.of(PLUG, PLUG_COLOUR);
     }
 
-    public static @Nullable BakedQuad quad(ResourceLocation texture, Direction direction,
-                                           TextureAtlasSprite sprite, float grow) {
+    public static @Nullable BakedQuad quad(ResourceLocation texture, BakedQuad base, TextureAtlasSprite sprite) {
         boolean point = POINT.equals(texture) || POINT_COLOUR.equals(texture);
         if (!point && !PLUG.equals(texture) && !PLUG_COLOUR.equals(texture)) return null;
         float size = (point ? 5F : 8F) / 16F;
@@ -46,22 +42,18 @@ public final class FluxNetworkOverlay {
         float minU = (point ? 12F : 8F) / 16F;
         float minV = (point ? 6F : 2F) / 16F;
         float uvSize = (point ? 4F : 8F) / 16F;
-        List<Vector3f> points = switch (direction) {
-            case EAST -> List.of(new Vector3f(1, 1, 1), new Vector3f(1, 0, 1), new Vector3f(1, 0, 0), new Vector3f(1, 1, 0));
-            case WEST -> List.of(new Vector3f(0, 1, 0), new Vector3f(0, 0, 0), new Vector3f(0, 0, 1), new Vector3f(0, 1, 1));
-            case UP -> List.of(new Vector3f(0, 1, 1), new Vector3f(1, 1, 1), new Vector3f(1, 1, 0), new Vector3f(0, 1, 0));
-            case DOWN -> List.of(new Vector3f(0, 0, 0), new Vector3f(1, 0, 0), new Vector3f(1, 0, 1), new Vector3f(0, 0, 1));
-            case SOUTH -> List.of(new Vector3f(0, 1, 1), new Vector3f(0, 0, 1), new Vector3f(1, 0, 1), new Vector3f(1, 1, 1));
-            case NORTH -> List.of(new Vector3f(1, 1, 0), new Vector3f(1, 0, 0), new Vector3f(0, 0, 0), new Vector3f(0, 1, 0));
-        };
-        QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
-        builder.setSprite(sprite);
-        builder.setDirection(direction);
-        builder.setShade(true);
-        builder.setHasAmbientOcclusion(true);
-        builder.setTintIndex(POINT_COLOUR.equals(texture) || PLUG_COLOUR.equals(texture) ? NETWORK_TINT_INDEX : -1);
-        Vec3i normal = direction.getNormal();
-        for (Vector3f vertex : points) {
+        Direction direction = base.getDirection();
+        int axis = direction.getAxis().ordinal();
+        int[] data = base.getVertices().clone();
+        Vector3f vertex = new Vector3f();
+        for (int i = 0; i < data.length; i += IQuadTransformer.STRIDE) {
+            int pos = i + IQuadTransformer.POSITION;
+            for (int j = 0; j < 3; j++) {
+                float coordinate = Mth.clamp(Float.intBitsToFloat(data[pos + j]), 0F, 1F);
+                vertex.setComponent(j, coordinate);
+                // Contract CTM tiles into one core; leave the base plane (or grown item depth) intact.
+                if (j != axis) data[pos + j] = Float.floatToRawIntBits(min + coordinate * size);
+            }
             float u = switch (direction) {
                 case EAST -> 1F - vertex.z;
                 case WEST -> vertex.z;
@@ -75,16 +67,12 @@ public final class FluxNetworkOverlay {
             };
             u = minU + u * uvSize;
             v = minV + v * uvSize;
-            vertex.mul(size).add(min, min, min);
-            vertex.setComponent(direction.getAxis().ordinal(),
-                    direction.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1F + grow : -grow);
-            builder.addVertex(vertex.x, vertex.y, vertex.z);
-            builder.setColor(255, 255, 255, 255);
-            builder.setNormal(normal.getX(), normal.getY(), normal.getZ());
-            builder.setUv(sprite.getU(Mth.lerp(sprite.uvShrinkRatio(), u, minU + uvSize / 2F)),
-                    sprite.getV(Mth.lerp(sprite.uvShrinkRatio(), v, minV + uvSize / 2F)));
+            data[i + IQuadTransformer.COLOR] = -1;
+            data[i + IQuadTransformer.UV0] = Float.floatToRawIntBits(sprite.getU(Mth.lerp(sprite.uvShrinkRatio(), u, minU + uvSize / 2F)));
+            data[i + IQuadTransformer.UV0 + 1] = Float.floatToRawIntBits(sprite.getV(Mth.lerp(sprite.uvShrinkRatio(), v, minV + uvSize / 2F)));
         }
-        return builder.bakeQuad();
+        int tint = POINT_COLOUR.equals(texture) || PLUG_COLOUR.equals(texture) ? NETWORK_TINT_INDEX : -1;
+        return new BakedQuad(data, tint, direction, sprite, base.isShade(), base.hasAmbientOcclusion());
     }
 
     private static ResourceLocation texture(String name) {
