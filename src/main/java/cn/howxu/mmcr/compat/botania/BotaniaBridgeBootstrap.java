@@ -1,11 +1,15 @@
 package cn.howxu.mmcr.compat.botania;
 
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.common.Mod;
 
+import java.lang.annotation.ElementType;
 import java.util.Objects;
 
-/** Selects the native bridge only after the mod-presence guard. @author howxu <dev@howxu.cn> */
+/** Selects the native bridge only for official Botania. @author howxu <dev@howxu.cn> */
 public final class BotaniaBridgeBootstrap {
+    private static final String BOTANIA_ID = "botania";
+    private static final String OFFICIAL_ENTRYPOINT = "vazkii.botania.neoforge.NeoForgeCommonInitializer";
     private static final String LOADED_BRIDGE = "cn.howxu.mmcr.compat.botania.loaded.LoadedBotaniaBridge";
     private static volatile BotaniaBridge bridge;
     private static volatile BotaniaBridge testingBridge;
@@ -45,7 +49,14 @@ public final class BotaniaBridgeBootstrap {
 
     private static BotaniaBridge load() {
         ModList mods = ModList.get();
-        return mods != null && mods.isLoaded("botania") ? loadLoadedBridge() : UnavailableBotaniaBridge.INSTANCE;
+        if (mods == null || !mods.isLoaded(BOTANIA_ID)) return UnavailableBotaniaBridge.INSTANCE;
+
+        // Botania Revived shares the mod ID but not the official API packages.
+        var file = mods.getModFileById(BOTANIA_ID);
+        boolean official = file != null && file.getFile().getScanResult().getAnnotatedBy(Mod.class, ElementType.TYPE)
+                .anyMatch(entry -> BOTANIA_ID.equals(entry.annotationData().get("value"))
+                        && OFFICIAL_ENTRYPOINT.equals(entry.clazz().getClassName()));
+        return official ? loadLoadedBridge() : UnavailableBotaniaBridge.INSTANCE;
     }
 
     private static BotaniaBridge loadLoadedBridge() {
