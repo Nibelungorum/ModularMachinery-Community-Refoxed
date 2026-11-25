@@ -81,30 +81,16 @@ public final class BlockArrayCache {
         BlockArray pattern = key.pattern();
         Direction facing = key.facing();
         Direction roll = key.rollFacing();
-        if (facing == Direction.SOUTH) {
-            Rotation rotation = rotationFor(facing);
-            PositionTable<BlockPredicate> predicates = pattern.positions().rotate(facing, roll,
-                    predicate -> rotatePredicate(predicate, facing, roll, rotation));
-            if (predicates == pattern.positions()) return pattern;
-            return new BlockArray(predicates, pattern.tagsByPosition(), pattern.symbolsByPosition());
-        }
+        if (facing == Direction.SOUTH) return pattern;
         Map<BlockPos, List<String>> tags = new LinkedHashMap<>();
         pattern.tagsByPosition().forEach((pos, values) ->
                 tags.put(BlockRotator.rotateSouthTo(pos, facing, roll), values));
-        // Block states rotate with the structure, so those patterns still need real rotated predicates.
-        // Everything else (cached blocks, tags, deferred blocks, air, couplers) is orientation-invariant
-        // and is served through a view: one small object per facing instead of a copy of every entry.
-        PositionTable<BlockPredicate> predicates = needsPredicateRotation(pattern.positions())
-                ? pattern.positions().rotate(facing, roll,
-                        predicate -> rotatePredicate(predicate, facing, roll, rotationFor(facing)))
-                : new RotatedPositions<>(pattern.positions(), facing, roll);
-        // The symbol table is shared the same way.
-        return new BlockArray(predicates, tags, new GlyphView(pattern.glyphs(), facing, roll));
-    }
-
-    /** Mirrors {@link #rotatePredicate}: only block states (directly or inside alternatives) rotate. */
-    private static boolean needsPredicateRotation(PositionTable<BlockPredicate> table) {
-        return table.anyValueMatches(BlockArrayCache::rotatesWithStructure);
+        Rotation rotation = rotationFor(facing);
+        var positions = pattern.positions();
+        var predicates = positions.anyValueMatches(BlockArrayCache::rotatesWithStructure)
+                ? positions.rotate(facing, roll, predicate -> rotatePredicate(predicate, facing, roll, rotation))
+                : new RotatedPositions<>(positions, facing, roll);
+        return new BlockArray(predicates, tags, new RotatedPositions<>(pattern.glyphs(), facing, roll));
     }
 
     private static boolean rotatesWithStructure(BlockPredicate predicate) {

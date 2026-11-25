@@ -158,10 +158,10 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> implements Po
     @Override public void visit(Visitor<V> visitor) {
         int p = 0;
         for (Run<V> run : runs) {
-            while (p < run.pointsBefore) { visitor.accept(keys.get(p), Direction.EAST, 1, values.get(p)); p++; }
-            visitor.accept(run.start, run.step, run.length, run.value);
+            while (p < run.pointsBefore) { visitor.accept(keys.get(p), Direction.EAST, 1, values.get(p), false); p++; }
+            visitor.accept(run.start, run.step, run.length, run.value, true);
         }
-        while (p < keys.size()) { visitor.accept(keys.get(p), Direction.EAST, 1, values.get(p)); p++; }
+        while (p < keys.size()) { visitor.accept(keys.get(p), Direction.EAST, 1, values.get(p), false); p++; }
     }
     @Override public void visitPoints(BiConsumer<BlockPos, V> consumer) { points.forEach(consumer); }
 
@@ -179,8 +179,8 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> implements Po
         if (exceptions.isEmpty() || runs.isEmpty()) { visitPoints(consumer); return; }
         Set<SectionPos> sections = new HashSet<>();
         exceptions.forEach(pos -> sections.add(SectionPos.of(pos)));
-        visit((start, step, length, value) -> {
-            if (length == 1) { consumer.accept(start, value); return; }
+        visit((start, step, length, value, packedAir) -> {
+            if (!packedAir) { consumer.accept(start, value); return; }
             for (int i = 0; i < length;) {
                 BlockPos pos = start.relative(step, i);
                 int n = sectionSpan(pos, step, length - i);
@@ -197,7 +197,7 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> implements Po
         for (var run : runs) { consumer.accept(run.start); consumer.accept(run.at(run.length - 1)); }
     }
     @Override public void forValues(Predicate<V> select, BiConsumer<BlockPos, V> consumer) {
-        visit((start, step, length, value) -> {
+        visit((start, step, length, value, packedAir) -> {
             if (select.test(value)) for (int i = 0; i < length; i++) consumer.accept(start.relative(step, i), value);
         });
     }
@@ -224,9 +224,8 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> implements Po
         return new PackedAirPositions<>(rotated, order, pos -> lookup.apply(BlockRotator.normalizeFromFace(pos, facing, roll)), size);
     }
 
-    @SuppressWarnings("unchecked")
     static <V> PositionTable<V> copy(Map<BlockPos, V> source, BiPredicate<BlockPos, V> pack) {
-        if (source != null && source instanceof PositionTable<?> table) return (PositionTable<V>) table;
+        if (source instanceof PositionTable<V> table) return table;
         Writer<V> out = new Writer<>();
         if (source != null) source.forEach((pos, value) -> out.add(pos, Direction.EAST, 1, value, pack.test(pos, value)));
         return out.finish();
@@ -306,12 +305,6 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> implements Po
             if (dy != 0) return dy > 0 ? Direction.UP : Direction.DOWN;
             return dz > 0 ? Direction.SOUTH : Direction.NORTH;
         }
-        /** Copies another table verbatim, keeping existing run structure where it survives. */
-        PositionTable<V> finishCopy(PositionTable<V> source) {
-            source.visit((start, step, length, value) -> add(start, step, length, value, length > 1));
-            return finish();
-        }
-
         /** Packs the writer's input into the run store, then compacts it into the row-indexed table. */
         PositionTable<V> finish() {
             return RowRlePositions.from(finishPacked());
@@ -327,34 +320,12 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> implements Po
         }
     }
 
-    @Override public PositionTable<V> union(PositionTable<V> extension,
-                                            Function<BlockPos, IllegalArgumentException> conflict) {
-        if (extension.isEmpty() || extension == this) return this;
-        if (isEmpty()) return extension instanceof PositionTable<V> table ? table
-                : new Writer<V>().finishCopy(extension);
-        Writer<V> out = new Writer<>();
-        visit((start, step, n, value) -> out.add(start, step, n, value, n > 1));
-        extension.visit((start, step, n, value) -> {
-            for (int i = 0; i < n; i++) {
-                BlockPos pos = start.relative(step, i);
-                V previous = get(pos);
-                if (previous != null) {
-                    if (!previous.equals(value)) throw conflict.apply(pos);
-                } else if (points.containsKey(pos)) {
-                    // LinkedHashMap.putIfAbsent fills a null value without moving its key.
-                    if (value != null) out.put(pos, value, n > 1);
-                } else out.add(pos, step, 1, value, n > 1);
-            }
-        });
-        return out.finish();
-    }
-
     private PackedAirPositions<V> replacing(Map<BlockPos, V> changes) {
         if (changes.isEmpty()) return this;
         Set<SectionPos> touched = new HashSet<>();
         changes.keySet().forEach(pos -> touched.add(SectionPos.of(pos)));
         Writer<V> out = new Writer<>();
-        visit((start, step, length, value) -> {
+        visit((start, step, length, value, packedAir) -> {
             for (int i = 0; i < length;) {
                 BlockPos pos = start.relative(step, i);
                 int n = sectionSpan(pos, step, length - i);

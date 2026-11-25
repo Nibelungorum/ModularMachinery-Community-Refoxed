@@ -6,7 +6,6 @@ import net.minecraft.core.Direction;
 import java.util.AbstractList;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -15,22 +14,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
-import java.util.function.UnaryOperator;
 
-/**
- * Rotation-aware view over a south-facing {@link PositionTable}.
- *
- * <p>A non-south facing of a structure reads the shared south-facing table through this view instead
- * of materialising a rotated copy of every predicate (measured at roughly 92 bytes per entry before
- * this change). Lookups convert the query position into south space in integer arithmetic.
- *
- * <p>{@link #cursor()} is the allocation-free path used by the structure scan: it rotates the source
- * cursor's scratch position into its own mutable position. Everything else materialises positions on
- * demand and is used only by diagnostics, wire encoding and compile-time candidate collection.
- */
+/** Rotates positions on access, sharing the template's predicate or glyph table across facings. */
 final class RotatedPositions<V> extends AbstractMap<BlockPos, V> implements PositionTable<V> {
 
     private final PositionTable<V> source;
@@ -96,7 +83,7 @@ final class RotatedPositions<V> extends AbstractMap<BlockPos, V> implements Posi
                     @Override
                     public Entry<BlockPos, V> next() {
                         Entry<BlockPos, V> entry = delegate.next();
-                        return Map.entry(rotate(entry.getKey()), entry.getValue());
+                        return new SimpleImmutableEntry<>(rotate(entry.getKey()), entry.getValue());
                     }
                 };
             }
@@ -105,8 +92,8 @@ final class RotatedPositions<V> extends AbstractMap<BlockPos, V> implements Posi
 
     @Override
     public void visit(Visitor<V> visitor) {
-        source.visit((start, step, length, value) -> visitor.accept(rotate(start),
-                BlockRotator.rotateDirection(step, facing, roll), length, value));
+        source.visit((start, step, length, value, air) -> visitor.accept(rotate(start),
+                BlockRotator.rotateDirection(step, facing, roll), length, value, air));
     }
 
     @Override
@@ -152,7 +139,7 @@ final class RotatedPositions<V> extends AbstractMap<BlockPos, V> implements Posi
     public List<Entry<BlockPos, V>> entries() {
         List<BlockPos> sourcePositions = source.positions();
         List<V> sourceValues = source.orderedValues();
-        return view(index -> Map.entry(rotate(sourcePositions.get(index)), sourceValues.get(index)));
+        return view(index -> new SimpleImmutableEntry<>(rotate(sourcePositions.get(index)), sourceValues.get(index)));
     }
 
     private <T> List<T> view(IntFunction<T> get) {
@@ -178,23 +165,6 @@ final class RotatedPositions<V> extends AbstractMap<BlockPos, V> implements Posi
     @Override
     public boolean anyValueMatches(Predicate<V> test) {
         return source.anyValueMatches(test);
-    }
-
-    /**
-     * Union is a south-facing operation: structure families merge their own templates, never a view.
-     * Failing loudly beats silently merging an un-rotated table.
-     */
-    @Override
-    public PositionTable<V> union(PositionTable<V> extension,
-                                  Function<BlockPos, IllegalArgumentException> conflict) {
-        throw new UnsupportedOperationException("union requires the south-facing pattern, not a rotated view");
-    }
-
-    @Override
-    public PositionTable<V> rotate(Direction target, Direction targetRoll, UnaryOperator<V> transform) {
-        PackedAirPositions.Writer<V> writer = new PackedAirPositions.Writer<>();
-        visit((start, step, length, value) -> writer.add(start, step, length, transform.apply(value), false));
-        return writer.finish();
     }
 
     /** Rotates the source cursor's scratch position into this view's orientation without allocating. */
@@ -233,18 +203,4 @@ final class RotatedPositions<V> extends AbstractMap<BlockPos, V> implements Posi
         }
     }
 
-    /** Materialises a south-facing copy; used only when a rotated table must become a source table. */
-    static <V> List<BlockPos> materialize(PositionTable<V> table) {
-        List<BlockPos> positions = new ArrayList<>(table.size());
-        table.visit((start, step, length, value) -> {
-            if (length == 1) {
-                positions.add(start);
-                return;
-            }
-            for (int i = 0; i < length; i++) {
-                positions.add(start.relative(step, i));
-            }
-        });
-        return positions;
-    }
 }

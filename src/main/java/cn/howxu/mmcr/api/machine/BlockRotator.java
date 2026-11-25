@@ -48,14 +48,7 @@ public final class BlockRotator {
         return project(pos, xAxis, up, front);
     }
 
-    /**
-     * Allocation-free variant used by the structure scan cursor.
-     *
-     * <p>Rotating a per-entry position with the methods above allocates a {@link BlockPos} on every
-     * call. The scan walks up to hundreds of thousands of entries, so the cursor writes the result into
-     * a caller-owned scratch position instead. Semantics are identical to
-     * {@link #rotateSouthTo(BlockPos, Direction, Direction)}.
-     */
+    /** Writes the rotated coordinate into the scan cursor's reusable position. */
     public static BlockPos.MutableBlockPos rotateSouthTo(BlockPos pos, Direction target, Direction rollFacing,
                                                          BlockPos.MutableBlockPos out) {
         if (!target.getAxis().isVertical()) {
@@ -124,11 +117,8 @@ public final class BlockRotator {
                 + front.getStepY() * source.getStepZ();
         int z = xAxis.getStepZ() * source.getStepX() + up.getStepZ() * source.getStepY()
                 + front.getStepZ() * source.getStepZ();
-        for (Direction direction : Direction.values()) {
-            if (direction.getStepX() == x && direction.getStepY() == y && direction.getStepZ() == z) {
-                return direction;
-            }
-        }
+        Direction result = Direction.fromDelta(x, y, z);
+        if (result != null) return result;
         throw new IllegalArgumentException("Invalid direction rotation: " + source + ", " + target + ", " + rollFacing);
     }
 
@@ -161,11 +151,8 @@ public final class BlockRotator {
         int x = a.getStepY() * b.getStepZ() - a.getStepZ() * b.getStepY();
         int y = a.getStepZ() * b.getStepX() - a.getStepX() * b.getStepZ();
         int z = a.getStepX() * b.getStepY() - a.getStepY() * b.getStepX();
-        for (Direction direction : Direction.values()) {
-            if (direction.getStepX() == x && direction.getStepY() == y && direction.getStepZ() == z) {
-                return direction;
-            }
-        }
+        Direction result = Direction.fromDelta(x, y, z);
+        if (result != null) return result;
         throw new IllegalArgumentException("Directions must be perpendicular: " + a + ", " + b);
     }
 }

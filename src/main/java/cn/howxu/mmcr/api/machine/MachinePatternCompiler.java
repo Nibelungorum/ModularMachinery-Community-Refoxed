@@ -206,13 +206,7 @@ public final class MachinePatternCompiler {
         return switch (predicate) {
             case BlockPredicate.OfBlock of -> isComponentBlock(of.block());
             case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
-            // Resolve the deferred block instead of assuming every deferred block is a component.
-            // Assuming otherwise made every position of a deferred-block structure a candidate, which
-            // both quadrupled the per-facing candidate lists and scanned them on every formation check.
-            case BlockPredicate.DeferredBlock deferred -> {
-                Block block = deferred.supplier().get();
-                yield isComponentBlock(block);
-            }
+            case BlockPredicate.DeferredBlock deferred -> !deferred.networkInterface() && isComponentBlock(deferred.supplier().get());
             case BlockPredicate.AnyOf anyOf -> anyOf.children().stream()
                     .anyMatch(MachinePatternCompiler::couldBeComponent);
             default -> true;
@@ -220,7 +214,7 @@ public final class MachinePatternCompiler {
     }
 
     private static boolean isComponentBlock(Block block) {
-        return block instanceof MachinePort && !isNetworkInterfaceBlock(block)
+        return isPortBlock(block)
                 || block instanceof ParallelControllerBlock
                 || block instanceof FactorySchedulerBlock
                 || block instanceof DataStorageBlock
@@ -238,14 +232,16 @@ public final class MachinePatternCompiler {
 
     private static boolean couldBePort(BlockPredicate predicate) {
         return switch (predicate) {
-            case BlockPredicate.OfBlock of -> of.block() instanceof MachinePort && !isNetworkInterfaceBlock(of.block());
+            case BlockPredicate.OfBlock of -> isPortBlock(of.block());
             case BlockPredicate.OfBlockState ofState -> !isNetworkInterfaceBlock(ofState.state().getBlock());
-            // Same reasoning as couldBeComponent: test the resolved block, not the predicate kind.
-            case BlockPredicate.DeferredBlock deferred -> deferred.supplier().get() instanceof MachinePort
-                    && !isNetworkInterfaceBlock(deferred.supplier().get());
+            case BlockPredicate.DeferredBlock deferred -> !deferred.networkInterface() && isPortBlock(deferred.supplier().get());
             case BlockPredicate.AnyOf anyOf -> !couldBeNetworkInterface(anyOf);
             default -> true;
         };
+    }
+
+    private static boolean isPortBlock(Block block) {
+        return block instanceof MachinePort && !isNetworkInterfaceBlock(block);
     }
 
     private static boolean couldBeNetworkInterface(BlockPredicate predicate) {
