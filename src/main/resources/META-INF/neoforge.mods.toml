@@ -34,6 +34,14 @@ config="mixins/extras/mmcr.ae2.mixins.json"
 requiredMods=["ae2"]
 
 [[mixins]]
+config="mixins/extras/mmcr.ae2lt.cpu.mixins.json"
+requiredMods=["ae2", "ae2lt", "thunderbolt"]
+
+[[mixins]]
+config="mixins/extras/mmcr.neoecoae.cpu.mixins.json"
+requiredMods=["ae2", "neoecoae"]
+
+[[mixins]]
 config="mixins/extras/mmcr.ae2lt.jei.mixins.json"
 requiredMods=["ae2", "jei", "ae2jeiintegration"]
 

@@ -130,6 +130,17 @@ public final class GameTestRegistry {
             register(event, "hosted_pattern_reload_offline", 600, HostedPatternLifecycleGameTest::reloadPaidAndUnpaidOwners);
             register(event, "hosted_pattern_break_online", 600, h -> HostedPatternLifecycleGameTest.dismantle(h, true));
             register(event, "hosted_pattern_break_offline", 600, h -> HostedPatternLifecycleGameTest.dismantle(h, false));
+            if (ModList.get().isLoaded("ae2lt")) {
+                register(event, "hosted_pattern_tianshu_bulk", 600, TianshuCpuBulkGameTest::deliveries);
+                register(event, "hosted_pattern_tianshu_refused", 600, TianshuCpuBulkGameTest::refused);
+                register(event, "hosted_pattern_tianshu_fractional_power", 600, TianshuCpuBulkGameTest::fractionalPower);
+                register(event, "hosted_pattern_non_tianshu", 600, TianshuCpuBulkGameTest::nonTianshu);
+            }
+            if (ModList.get().isLoaded("neoecoae")) {
+                register(event, "hosted_pattern_eco_bulk", 600, EcoCpuBulkGameTest::deliveries);
+                register(event, "hosted_pattern_eco_refused", 600, EcoCpuBulkGameTest::refused);
+                register(event, "hosted_pattern_eco_blocking", 600, EcoCpuBulkGameTest::blocking);
+            }
             register(event, "native_cpu_bulk_dispatch", 600, NativeCpuBulkDispatchGameTest::oneDispatch);
             register(event, "native_cpu_bulk_limited_power", 600, NativeCpuBulkDispatchGameTest::limitedPowerAndCancel);
             register(event, "native_cpu_bulk_fallback", 600, NativeCpuBulkDispatchGameTest::rejectedBatchFallsBack);

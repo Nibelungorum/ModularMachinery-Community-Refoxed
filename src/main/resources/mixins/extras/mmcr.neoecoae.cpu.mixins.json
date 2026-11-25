@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.neoecoae",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "EcoRequestAccessor",
+    "EcoProviderDispatcherMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

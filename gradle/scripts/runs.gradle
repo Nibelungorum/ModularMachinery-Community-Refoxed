@@ -1,5 +1,10 @@
 configurations {
+    ecoMods {
+        canBeConsumed = false
+        canBeResolved = true
+    }
     clientMods {
+        extendsFrom ecoMods
         canBeConsumed = false
         canBeResolved = true
     }
@@ -39,8 +44,8 @@ dependencies {
     clientMods("curse.maven:${aae_id}:${aae_version}")
     clientMods("curse.maven:${geckolib_id}:${geckolib_version}")
     // eco
-    clientMods("curse.maven:${ldlib_id}:${ldlib_version}")
-    clientMods("curse.maven:${eco_id}:${eco_version}")
+    ecoMods("curse.maven:${ldlib_id}:${ldlib_version}")
+    ecoMods("curse.maven:${eco_id}:${eco_version}")
 }
 
 runs {
@@ -70,6 +75,7 @@ runs {
 
     gameTestServer {
         modSource project.sourceSets.gametest
+        runtimeClasspath.from(project.configurations.ecoMods)
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         // The full suite also needs heap headroom while saving its chunks on shutdown.
         jvmArguments.add('-Xmx6G')

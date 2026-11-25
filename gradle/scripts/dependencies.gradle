@@ -20,7 +20,9 @@ dependencies {
     // AE2 Lightning Tech 2.1.1
     implementation "maven.modrinth:${ae2lt_id}:${ae2lt_version}"
     // Required by AE2LT 2.1.1 闪电Core
+    compileOnly "maven.modrinth:${th_core_id}:${th_core_version}"
     runtimeOnly "maven.modrinth:${th_core_id}:${th_core_version}"
+    compileOnly "curse.maven:${eco_id}:${eco_version}"
     // In 1.21.1 AE2's JEI transfer implementation lives in this optional addon.
     compileOnly("curse.maven:ae2-jei-integration-1074338:7727898") { transitive = false }
     // guide me from maven central

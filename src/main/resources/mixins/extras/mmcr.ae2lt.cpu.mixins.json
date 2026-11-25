@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.howxu.mmcr.mixin.compat.ae2lt",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "TimeWheelJobAccessor",
+    "TimeWheelCpuLogicMixin",
+    "TianshuBatchExecutorMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
