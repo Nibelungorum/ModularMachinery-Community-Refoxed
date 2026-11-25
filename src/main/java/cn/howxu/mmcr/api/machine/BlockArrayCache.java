@@ -79,15 +79,40 @@ public final class BlockArrayCache {
 
     private static BlockArray rotate(Key key) {
         BlockArray pattern = key.pattern();
-        Rotation rotation = rotationFor(key.facing());
-        var predicates = pattern.positions().rotate(key.facing(), key.rollFacing(),
-                predicate -> rotatePredicate(predicate, key.facing(), key.rollFacing(), rotation));
+        Direction facing = key.facing();
+        Direction roll = key.rollFacing();
+        if (facing == Direction.SOUTH) {
+            Rotation rotation = rotationFor(facing);
+            PositionTable<BlockPredicate> predicates = pattern.positions().rotate(facing, roll,
+                    predicate -> rotatePredicate(predicate, facing, roll, rotation));
+            if (predicates == pattern.positions()) return pattern;
+            return new BlockArray(predicates, pattern.tagsByPosition(), pattern.symbolsByPosition());
+        }
         Map<BlockPos, List<String>> tags = new LinkedHashMap<>();
         pattern.tagsByPosition().forEach((pos, values) ->
-                tags.put(BlockRotator.rotateSouthTo(pos, key.facing(), key.rollFacing()), values));
-        if (key.facing() == Direction.SOUTH && predicates == pattern.positions()) return pattern;
-        return new BlockArray(predicates, tags, key.facing() == Direction.SOUTH ? pattern.glyphs()
-                : pattern.glyphs().rotate(key.facing(), key.rollFacing(), UnaryOperator.identity()));
+                tags.put(BlockRotator.rotateSouthTo(pos, facing, roll), values));
+        // Block states rotate with the structure, so those patterns still need real rotated predicates.
+        // Everything else (cached blocks, tags, deferred blocks, air, couplers) is orientation-invariant
+        // and is served through a view: one small object per facing instead of a copy of every entry.
+        PositionTable<BlockPredicate> predicates = needsPredicateRotation(pattern.positions())
+                ? pattern.positions().rotate(facing, roll,
+                        predicate -> rotatePredicate(predicate, facing, roll, rotationFor(facing)))
+                : new RotatedPositions<>(pattern.positions(), facing, roll);
+        // The symbol table is shared the same way.
+        return new BlockArray(predicates, tags, new GlyphView(pattern.glyphs(), facing, roll));
+    }
+
+    /** Mirrors {@link #rotatePredicate}: only block states (directly or inside alternatives) rotate. */
+    private static boolean needsPredicateRotation(PositionTable<BlockPredicate> table) {
+        return table.anyValueMatches(BlockArrayCache::rotatesWithStructure);
+    }
+
+    private static boolean rotatesWithStructure(BlockPredicate predicate) {
+        return switch (predicate) {
+            case BlockPredicate.OfBlockState ignored -> true;
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(BlockArrayCache::rotatesWithStructure);
+            default -> false;
+        };
     }
 
     private static Rotation rotationFor(Direction facing) {

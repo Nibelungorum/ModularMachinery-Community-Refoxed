@@ -29,11 +29,10 @@ import java.util.function.UnaryOperator;
 /** Immutable ordered position map. Straight air runs encode encounter order; local masks answer coordinate lookups.
  * @author HowXu {@literal <dev@howxu.cn>}
  */
-final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
+final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> implements PositionTable<V> {
     record Run<V>(int index, int pointsBefore, BlockPos start, Direction step, int length, V value) {
         BlockPos at(int offset) { return offset == 0 ? start : start.relative(step, offset); }
     }
-    interface Visitor<V> { void accept(BlockPos start, Direction step, int length, V value); }
 
     private final Map<BlockPos, V> points;
     private final List<BlockPos> keys;
@@ -92,17 +91,19 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
         return values.get(pointIndex(i, r));
     }
     /** Server-thread lookup scratch. Neither this cursor nor its mutable relative position escapes into a batch. */
-    final class Cursor {
+    final class Cursor implements PositionCursor<V> {
         private final BlockPos.MutableBlockPos scratch = new BlockPos.MutableBlockPos();
         private Run<V> run;
         private int from, until, offset;
-        BlockPos position;
-        V value;
+        private BlockPos position;
+        private V value;
 
-        int runEnd(int index) { return run == null ? index + 1 : until; }
-        Direction step() { return run.step; }
+        @Override public int runEnd(int index) { return run == null ? index + 1 : until; }
+        @Override public Direction step() { return run.step; }
+        @Override public BlockPos position() { return position; }
+        @Override public V value() { return value; }
 
-        void seek(int index) {
+        @Override public void seek(int index) {
             if (runs.isEmpty()) {
                 position = keys.get(index);
                 value = values.get(index);
@@ -132,16 +133,16 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
         }
     }
 
-    Cursor cursor() { return new Cursor(); }
-    List<BlockPos> positions() { return runs.isEmpty() ? keys : view(this::positionAt); }
-    List<V> orderedValues() { return runs.isEmpty() ? values : view(this::valueAt); }
+    @Override public Cursor cursor() { return new Cursor(); }
+    @Override public List<BlockPos> positions() { return runs.isEmpty() ? keys : view(this::positionAt); }
+    @Override public List<V> orderedValues() { return runs.isEmpty() ? values : view(this::valueAt); }
     private <T> List<T> view(IntFunction<T> get) {
         return new AbstractList<>() {
             @Override public int size() { return size; }
             @Override public T get(int index) { return get.apply(Objects.checkIndex(index, size)); }
         };
     }
-    List<Entry<BlockPos, V>> entries() {
+    @Override public List<Entry<BlockPos, V>> entries() {
         List<BlockPos> positions = positions();
         List<V> orderedValues = orderedValues();
         return view(i -> new SimpleImmutableEntry<>(positions.get(i), orderedValues.get(i)));
@@ -154,7 +155,7 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
         };
     }
 
-    void visit(Visitor<V> visitor) {
+    @Override public void visit(Visitor<V> visitor) {
         int p = 0;
         for (Run<V> run : runs) {
             while (p < run.pointsBefore) { visitor.accept(keys.get(p), Direction.EAST, 1, values.get(p)); p++; }
@@ -162,9 +163,19 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
         }
         while (p < keys.size()) { visitor.accept(keys.get(p), Direction.EAST, 1, values.get(p)); p++; }
     }
-    void visitPoints(BiConsumer<BlockPos, V> consumer) { points.forEach(consumer); }
+    @Override public void visitPoints(BiConsumer<BlockPos, V> consumer) { points.forEach(consumer); }
 
-    void visitPointsAndExceptions(Set<BlockPos> exceptions, BiConsumer<BlockPos, V> consumer) {
+    @Override public boolean anyValueMatches(Predicate<V> test) {
+        for (Run<V> run : runs) {
+            if (test.test(run.value)) return true;
+        }
+        for (V value : values) {
+            if (test.test(value)) return true;
+        }
+        return false;
+    }
+
+    @Override public void visitPointsAndExceptions(Set<BlockPos> exceptions, BiConsumer<BlockPos, V> consumer) {
         if (exceptions.isEmpty() || runs.isEmpty()) { visitPoints(consumer); return; }
         Set<SectionPos> sections = new HashSet<>();
         exceptions.forEach(pos -> sections.add(SectionPos.of(pos)));
@@ -181,17 +192,17 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
             }
         });
     }
-    void visitBounds(Consumer<BlockPos> consumer) {
+    @Override public void visitBounds(Consumer<BlockPos> consumer) {
         keys.forEach(consumer);
         for (var run : runs) { consumer.accept(run.start); consumer.accept(run.at(run.length - 1)); }
     }
-    void forValues(Predicate<V> select, BiConsumer<BlockPos, V> consumer) {
+    @Override public void forValues(Predicate<V> select, BiConsumer<BlockPos, V> consumer) {
         visit((start, step, length, value) -> {
             if (select.test(value)) for (int i = 0; i < length; i++) consumer.accept(start.relative(step, i), value);
         });
     }
 
-    PackedAirPositions<V> rotate(Direction facing, Direction roll, UnaryOperator<V> transform) {
+    @Override public PackedAirPositions<V> rotate(Direction facing, Direction roll, UnaryOperator<V> transform) {
         if (facing == Direction.SOUTH) {
             Map<BlockPos, V> changes = new LinkedHashMap<>();
             points.forEach((pos, value) -> {
@@ -213,8 +224,9 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
         return new PackedAirPositions<>(rotated, order, pos -> lookup.apply(BlockRotator.normalizeFromFace(pos, facing, roll)), size);
     }
 
-    static <V> PackedAirPositions<V> copy(Map<BlockPos, V> source, BiPredicate<BlockPos, V> pack) {
-        if (source instanceof PackedAirPositions<V> frozen) return frozen;
+    @SuppressWarnings("unchecked")
+    static <V> PositionTable<V> copy(Map<BlockPos, V> source, BiPredicate<BlockPos, V> pack) {
+        if (source != null && source instanceof PositionTable<?> table) return (PositionTable<V>) table;
         Writer<V> out = new Writer<>();
         if (source != null) source.forEach((pos, value) -> out.add(pos, Direction.EAST, 1, value, pack.test(pos, value)));
         return out.finish();
@@ -294,7 +306,19 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
             if (dy != 0) return dy > 0 ? Direction.UP : Direction.DOWN;
             return dz > 0 ? Direction.SOUTH : Direction.NORTH;
         }
-        PackedAirPositions<V> finish() {
+        /** Copies another table verbatim, keeping existing run structure where it survives. */
+        PositionTable<V> finishCopy(PositionTable<V> source) {
+            source.visit((start, step, length, value) -> add(start, step, length, value, length > 1));
+            return finish();
+        }
+
+        /** Packs the writer's input into the run store, then compacts it into the row-indexed table. */
+        PositionTable<V> finish() {
+            return RowRlePositions.from(finishPacked());
+        }
+
+        /** The uncompacted packing; kept for internal paths that build another writer on top of it. */
+        PackedAirPositions<V> finishPacked() {
             flush();
             frozen = true;
             var index = masks;
@@ -303,9 +327,11 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
         }
     }
 
-    PackedAirPositions<V> union(PackedAirPositions<V> extension, Function<BlockPos, IllegalArgumentException> conflict) {
+    @Override public PositionTable<V> union(PositionTable<V> extension,
+                                            Function<BlockPos, IllegalArgumentException> conflict) {
         if (extension.isEmpty() || extension == this) return this;
-        if (isEmpty()) return extension;
+        if (isEmpty()) return extension instanceof PositionTable<V> table ? table
+                : new Writer<V>().finishCopy(extension);
         Writer<V> out = new Writer<>();
         visit((start, step, n, value) -> out.add(start, step, n, value, n > 1));
         extension.visit((start, step, n, value) -> {
@@ -341,7 +367,7 @@ final class PackedAirPositions<V> extends AbstractMap<BlockPos, V> {
             }
         });
         changes.forEach((pos, value) -> { if (!containsKey(pos)) out.add(pos, Direction.EAST, 1, value, false); });
-        return out.finish();
+        return out.finishPacked();
     }
     private static int sectionSpan(BlockPos pos, Direction step, int remaining) {
         int coord = step.getAxis().choose(pos.getX(), pos.getY(), pos.getZ()) & 15;

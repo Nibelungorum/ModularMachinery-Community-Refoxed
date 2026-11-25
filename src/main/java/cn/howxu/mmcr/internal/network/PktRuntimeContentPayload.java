@@ -29,12 +29,15 @@ import java.util.function.BiConsumer;
  *
  * @author howxu <dev@howxu.cn>
  */
-public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implements CustomPacketPayload {
+public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot,
+                                       List<ResourceLocation> chunkedStructureIds) implements CustomPacketPayload {
     private static final int MAX_STRUCTURES = 4096;
     private static final int MAX_RECIPES = 16384;
     private static final int MAX_SPECS = 4096;
     private static final int MAX_TOOLTIP_LINES = 1024;
-    private static final int FORMAT_VERSION = 4;
+    // 5: structure patterns are sent as run+palette instead of one entry per cell.
+    // 6: structures are deflated and chunked; this payload names the chunked ids.
+    private static final int FORMAT_VERSION = 6;
 
     private static final StreamCodec<RegistryFriendlyByteBuf, List<String>> TOOLTIP_CODEC = StreamCodec.of(
             PktRuntimeContentPayload::writeTooltip,
@@ -85,6 +88,12 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         if (snapshot == null) {
             throw new IllegalArgumentException("snapshot null");
         }
+        chunkedStructureIds = List.copyOf(chunkedStructureIds == null ? List.of() : chunkedStructureIds);
+    }
+
+    /** Inline-only payload: every structure travels inside the snapshot (small structures, tests). */
+    public PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) {
+        this(snapshot, List.of());
     }
 
     @Override
@@ -94,8 +103,22 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
 
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (snapshot.applyClient()) {
-                JeiRuntimeReloadBridge.reloadIfAvailable(snapshot);
+            RuntimeContentSnapshot effective = snapshot;
+            if (!chunkedStructureIds.isEmpty()) {
+                Map<ResourceLocation, MachineStructureDefinition> decoded = ClientStructureChunkBuffer.assemble(
+                        snapshot.contentVersion(), chunkedStructureIds,
+                        MachineStructureSyncCodec.maximumBlockPatternCount());
+                if (decoded == null) {
+                    MMCR.LOG.warn("Incomplete chunked structure sync for version {} ({} structures); waiting for a fresh sync",
+                            snapshot.contentVersion(), chunkedStructureIds.size());
+                    return;
+                }
+                effective = new RuntimeContentSnapshot(decoded, snapshot.recipes(), snapshot.controllerSpecs(),
+                        snapshot.appearances(), snapshot.machineRecipePools(), snapshot.contentVersion());
+                ClientStructureChunkBuffer.reset();
+            }
+            if (effective.applyClient()) {
+                JeiRuntimeReloadBridge.reloadIfAvailable(effective);
             }
         });
     }
@@ -111,6 +134,11 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
         writeMap(buf, snapshot.controllerSpecs(), maxSpecs(), CONTROLLER_SPEC_CODEC::encode);
         writeMap(buf, snapshot.appearances(), maxSpecs(), APPEARANCE_SPEC_CODEC::encode);
         writeMap(buf, snapshot.machineRecipePools(), maxStructures(), PktRuntimeContentPayload::writeRecipePools);
+        checkSize(payload.chunkedStructureIds().size(), maxStructures(), "chunked structure");
+        buf.writeVarInt(payload.chunkedStructureIds().size());
+        for (ResourceLocation id : payload.chunkedStructureIds()) {
+            ResourceLocation.STREAM_CODEC.encode(buf, id);
+        }
         buf.writeVarLong(snapshot.contentVersion());
     }
 
@@ -146,10 +174,17 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) implemen
                 .noneMatch(pools -> pools.contains(recipe.recipePoolId())))) {
             throw new IllegalArgumentException("Synced recipe pool is not mapped to a machine");
         }
+        int chunkedCount = buf.readVarInt();
+        checkSize(chunkedCount, maxStructures(), "chunked structure");
+        List<ResourceLocation> chunkedStructureIds = new ArrayList<>(chunkedCount);
+        for (int i = 0; i < chunkedCount; i++) {
+            chunkedStructureIds.add(ResourceLocation.STREAM_CODEC.decode(buf));
+        }
         long contentVersion = buf.readVarLong();
         if (contentVersion < 0) throw new IllegalArgumentException("Invalid runtime content version: " + contentVersion);
         return new PktRuntimeContentPayload(new RuntimeContentSnapshot(
-                structures, recipes, controllerSpecs, appearances, machineRecipePools, contentVersion));
+                structures, recipes, controllerSpecs, appearances, machineRecipePools, contentVersion),
+                chunkedStructureIds);
     }
 
     private static <T> void writeMap(RegistryFriendlyByteBuf buf, Map<ResourceLocation, T> values, int max,

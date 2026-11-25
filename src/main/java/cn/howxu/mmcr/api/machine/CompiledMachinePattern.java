@@ -148,7 +148,7 @@ public record CompiledMachinePattern(
      * @author howxu <dev@howxu.cn>
      */
     public static final class ScanPlan {
-        private final PackedAirPositions<BlockPredicate> positions;
+        private final PositionTable<BlockPredicate> positions;
         private final List<BlockPos> entryPositions;
         private final List<BlockPredicate> entryPredicates;
         private final List<Map.Entry<BlockPos, BlockPredicate>> entries;
@@ -193,7 +193,7 @@ public record CompiledMachinePattern(
             return membership;
         }
 
-        PackedAirPositions<BlockPredicate>.Cursor cursor() { return positions.cursor(); }
+        PositionCursor<BlockPredicate> cursor() { return positions.cursor(); }
 
         int entryCount() { return entries.size(); }
 
