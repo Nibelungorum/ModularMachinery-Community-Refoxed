@@ -15,13 +15,14 @@ public final class ServerConfig {
     public static final int DEFAULT_STRUCTURE_SCAN_BATCHES = 10;
     public static final int DEFAULT_STRUCTURE_SENTINEL_COUNT = 16;
     /**
-     * Default per-structure sync budget. Structures are deflated and chunked as of the structure-sync
-     * rework, so the wire format no longer constrains this value; it only bounds how much memory a client
-     * spends on one structure. The previous 524,288 silently overran real content (the largest lotus
-     * ritual has 558,517 cells), which failed the encode and dropped the connection outright, so the
-     * default now leaves headroom.
+     * Default per-structure sync budget: bounds how much memory a client spends on one structure.
+     *
+     * <p>Kept at the historical 524,288 on purpose. It is a configurable guard, not a promise about content
+     * size: a pack whose structures are larger (for example 558,517 cells) raises
+     * {@code server.toml:network.sync_max_blocks} instead of relying on a higher default. A structure over
+     * the limit is now skipped with a clear log line rather than aborting the join.
      */
-    public static final int DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS = 1_048_576;
+    public static final int DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS = 524_288;
     public static final int DEFAULT_MAX_REQUESTS_PER_TICK = 1024;
     public static final int DEFAULT_STRUCTURE_SAFETY_CHECK_INTERVAL_TICKS = 120;
     public static final int DEFAULT_STRUCTURE_SAFETY_SCAN_BATCHES = 40;

@@ -622,12 +622,11 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void structureSyncCodecUsesConfiguredDefaultBlockPatternLimit() {
-        // Structures ship deflated and chunked, so this value only bounds client-side memory. It must stay
-        // above real content: the largest lotus ritual has 558,517 cells, which the old 524,288 rejected.
-        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(1_048_576);
+        // A configurable guard, not a content-size promise: packs with larger structures raise it in
+        // server.toml. Structures over the limit are skipped with a log line instead of aborting the join.
+        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(524_288);
         assertThat(MachineStructureSyncCodec.maximumBlockPatternCount())
                 .isEqualTo(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
-        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isGreaterThan(558_517);
     }
 
     @Test
