@@ -196,6 +196,11 @@ final class NativePatternCpuFixture {
     }
 
     void assertSettled(long pushes) {
+        assertSettled();
+        helper.assertTrue(provider.accepted == pushes, "Only the planned standard deliveries were accepted");
+    }
+
+    void assertSettled() {
         helper.assertTrue(!cpu().hasJob() && cpu().getWaitingFor(output) == 0
                         && cpu().getStored(input) == 0 && stored(input) == 0 && stored(output) == total
                         && host.hostedPatterns().isEmpty() && host.getLogic().getReturnInv().isEmpty()
@@ -204,8 +209,6 @@ final class NativePatternCpuFixture {
                         + cpu().hasJob() + ", waiting=" + cpu().getWaitingFor(output) + ", input=" + stored(input)
                         + ", output=" + stored(output) + ", returns=" + returnAmount(output)
                         + ", factory=" + controller.runtimeSnapshot().factory());
-        helper.assertTrue(provider.accepted == pushes,
-                "Only the planned standard deliveries were accepted");
     }
 
     long stored(AEKey key) { return storage.getAvailableStacks().get(key); }
