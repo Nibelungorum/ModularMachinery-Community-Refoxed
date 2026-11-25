@@ -10,8 +10,8 @@ import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworkInterfaceKind;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
-import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
@@ -27,6 +27,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceMetadata;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -77,10 +78,15 @@ class DynamicOverlayModelLoaderTest {
     private DynamicOverlayModelLoader.DynamicModel bake(DynamicOverlayBakedModel.Kind kind, ResourceLocation itemBlockId) {
         var description = itemBlockId == null ? null
                 : DynamicOverlayItemModel.describeBlock(BuiltInRegistries.BLOCK.get(itemBlockId));
+        return bake(kind, description, null);
+    }
+
+    private DynamicOverlayModelLoader.DynamicModel bake(DynamicOverlayBakedModel.Kind kind,
+                                                          DynamicOverlayItemModel.Description description, BakedModel shaft) {
         return new DynamicOverlayModelLoader.DynamicModel(kind, description,
                 sprites.computeIfAbsent(MMCR.id("block/ctm/basic_casing/particle"), TestSprite::new),
                 texture -> sprites.computeIfAbsent(texture, TestSprite::new),
-                ItemTransforms.NO_TRANSFORMS, ItemOverrides.EMPTY, null);
+                ItemTransforms.NO_TRANSFORMS, ItemOverrides.EMPTY, shaft);
     }
 
     @ParameterizedTest
@@ -184,12 +190,14 @@ class DynamicOverlayModelLoaderTest {
         }
     }
 
-    @Test
-    void runtime_block_and_item_quads_follow_the_reloaded_atlas() {
+    @ParameterizedTest
+    @EnumSource(value = ItemDisplayContext.class, names = {"GUI", "FIRST_PERSON_RIGHT_HAND", "THIRD_PERSON_LEFT_HAND"})
+    void runtime_block_and_item_quads_follow_the_reloaded_atlas(ItemDisplayContext context) {
         var machineId = MMCR.id("test_cube");
         var base = ResourceLocation.parse("mekanism:block/sps_casing");
+        var idle = MMCR.id("block/custom_idle");
         MachineAppearanceCache.replaceSnapshot(Map.of(machineId,
-                new MachineAppearanceSpec(MMCR.id("basic_casing"), base, null)));
+                new MachineAppearanceSpec(MMCR.id("basic_casing"), base, null, idle, null)));
         MachineControllerBlock block = (MachineControllerBlock) ModBlocks.controllerFor(machineId).get();
         var state = block.defaultBlockState();
         var model = bake(DynamicOverlayBakedModel.Kind.CONTROLLER, BuiltInRegistries.BLOCK.getKey(block));
@@ -200,8 +208,9 @@ class DynamicOverlayModelLoaderTest {
         var originalOverlays = model.getQuads(state, front, random, ModelData.EMPTY, RenderType.cutout())
                 .stream().map(BakedQuad::getSprite).toList();
         assertThat(originalOverlays).hasSize(2);
-        var passes = model.getRenderPasses(ItemStack.EMPTY, false);
-        passes.forEach(pass -> pass.getQuads(null, null, random));
+        var passes = model.applyTransform(context, new PoseStack(), context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND)
+                .getRenderPasses(new ItemStack(block), true);
+        assertItemFacesMatchWorld(model, state, ModelData.EMPTY, passes);
 
         // Atlas upload closes the old sprites and installs replacements, even for the same texture IDs.
         sprites.replaceAll((texture, sprite) -> {
@@ -215,39 +224,34 @@ class DynamicOverlayModelLoaderTest {
         assertThat(model.getQuads(state, front, random, ModelData.EMPTY, RenderType.translucent()))
                 .extracting(BakedQuad::getSprite)
                 .containsExactly(sprites.get(ControllerSpecCache.specFor(machineId).frontTexture()),
-                        sprites.get(MMCR.id("block/overlay_basic_idle")))
-                 .doesNotContainAnyElementsOf(originalOverlays);
+                        sprites.get(idle))
+                .doesNotContainAnyElementsOf(originalOverlays);
         assertThat(model.getQuads(state, front, random, ModelData.EMPTY, RenderType.cutout())).isEmpty();
-        assertThat(passes.get(1).getQuads(null, null, random)).isEmpty();
-        assertThat(passes.get(2).getQuads(null, null, random)).hasSize(2);
-        for (var pass : passes) {
-            assertThat(pass.getQuads(null, null, random))
-                    .allSatisfy(quad -> assertThat(quad.getSprite())
-                            .isSameAs(sprites.get(quad.getSprite().contents().name())));
-        }
+        assertItemFacesMatchWorld(model, state, ModelData.EMPTY, passes);
     }
 
     @Test
     void port_layers_keep_native_animations_and_pass_order_across_atlas_replacement() {
-        var base = MMCR.id("block/runtime_base");
+        var base = DynamicOverlayBakedModel.resolveBase(MachineAppearanceSpec.defaults().formedPortTextureSource());
         var panel = MMCR.id("block/overlay/base/item");
         var arrows = MMCR.id("block/overlay/direction/input");
         var icon = MMCR.id("block/overlay/type/item");
         var tier = MMCR.id("block/overlay/tier/ludicrous");
         var state = ModBlocks.BLOCKS.get("item_input_bus_ludicrous").get().defaultBlockState();
-        var model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
-        var input = ModelData.of(MachineModelDataKeys.PORT_TEXTURE_SOURCE, new MachineAppearanceSpec.TextureSource(MMCR.id("basic_casing"), base));
+        var model = bake(DynamicOverlayBakedModel.Kind.PORT, BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+        var passes = model.getRenderPasses(new ItemStack(state.getBlock()), true);
         var random = RandomSource.create(1);
         sprites.put(tier, animated(tier, 3, false, 0));
         for (boolean reload : List.of(false, true)) {
             var previous = sprites.put(arrows, animated(arrows, reload ? 5 : 2, !reload, reload ? 0 : 128));
             if (previous != null) previous.contents().close();
-            var data = model.getModelData(null, POS, state, input);
+            var data = model.getModelData(null, POS, state, ModelData.EMPTY);
+            assertItemFacesMatchWorld(model, state, data, passes);
             assertThat(model.getQuads(state, null, random, data, null)).isEmpty();
             for (var face : Direction.values()) {
                 var quads = model.getQuads(state, face, random, data, null);
                 assertThat(quads).extracting(BakedQuad::getSprite)
-                        .containsExactly(sprites.get(base), sprites.get(panel), sprites.get(arrows), sprites.get(icon), sprites.get(tier));
+                        .containsExactly(sprites.get(base.forFace(face)), sprites.get(panel), sprites.get(arrows), sprites.get(icon), sprites.get(tier));
                 assertThat(model.getQuads(state, face, random, data, RenderType.cutout())).extracting(BakedQuad::getSprite)
                         .containsExactlyElementsOf(reload ? List.of(sprites.get(panel), sprites.get(arrows), sprites.get(icon), sprites.get(tier))
                                 : List.of(sprites.get(panel)));
@@ -261,6 +265,24 @@ class DynamicOverlayModelLoaderTest {
                 }
             }
             assertThat(sprites.get(arrows).contents().getUniqueFrames().toArray()).containsExactly(0, 1);
+        }
+    }
+
+    private static void assertItemFacesMatchWorld(BakedModel model, BlockState state, ModelData data, List<BakedModel> passes) {
+        var random = RandomSource.create(42);
+        var types = List.of(RenderType.solid(), RenderType.cutout(), RenderType.translucent());
+        for (int i = 0; i <= types.size(); i++) {
+            // Also check the unfiltered model used by consumers that don't request individual passes.
+            var type = i == types.size() ? null : types.get(i);
+            var item = (type == null ? model : passes.get(i)).getQuads(null, null, random);
+            var placed = new ArrayList<BakedQuad>();
+            for (var face : Direction.values()) placed.addAll(model.getQuads(state, face, random, data, type));
+            assertThat(item).as("item face and layer order in %s", type).zipSatisfy(placed, (actual, expected) -> {
+                assertThat(actual.getSprite()).isSameAs(expected.getSprite());
+                assertThat(actual.getDirection()).isEqualTo(expected.getDirection());
+                assertThat(actual.getTintIndex()).isEqualTo(expected.getTintIndex());
+                assertThat(actual.getVertices()).containsExactly(expected.getVertices());
+            });
         }
     }
 
@@ -431,6 +453,28 @@ class DynamicOverlayModelLoaderTest {
         for (var face : Direction.values()) assertThat(model.getQuads(state, face, random, ModelData.EMPTY, RenderType.cutout())).isEmpty();
     }
 
+    @Test
+    void stress_item_keeps_the_shaft_and_only_layers_its_recessed_end_panels() {
+        var random = RandomSource.create(42);
+        var shaftQuad = bake(DynamicOverlayBakedModel.Kind.PORT, null).getQuads(Blocks.IRON_BLOCK.defaultBlockState(),
+                Direction.NORTH, random, ModelData.EMPTY, RenderType.solid()).getFirst();
+        var description = DynamicOverlayItemModel.Description.port(StressInterfaceKind.INPUT);
+        var model = bake(description.kind(), description, sourceModel(shaftQuad, Direction.NORTH, RenderType.solid()));
+        var passes = model.getRenderPasses(ItemStack.EMPTY, true);
+        var solid = passes.getFirst().getQuads(null, null, random);
+        assertThat(solid).containsOnlyOnce(shaftQuad);
+        var panels = passes.get(1).getQuads(null, null, random);
+        assertThat(panels).extracting(BakedQuad::getDirection).containsExactly(Direction.NORTH, Direction.SOUTH);
+        for (var panel : panels) {
+            assertThat(panel.getSprite().contents().name()).isEqualTo(description.overlayTextures().getFirst());
+            assertThat(position(panel, 0).z).isStrictlyBetween(0F, 1F);
+            assertThat(solid).anySatisfy(base -> {
+                assertThat(base.getDirection()).isEqualTo(panel.getDirection());
+                for (int i = 0; i < 4; i++) assertThat(position(panel, i)).isEqualTo(position(base, i));
+            });
+        }
+    }
+
     @ParameterizedTest
     @CsvSource({"INPUT, flux_point, false", "OUTPUT, flux_plug, false",
                 "INPUT, flux_point, true", "OUTPUT, flux_plug, true"})
@@ -439,7 +483,7 @@ class DynamicOverlayModelLoaderTest {
         var on = MMCR.id("block/fluxnetworks/" + core + "_on");
         var colour = MMCR.id("block/fluxnetworks/" + core + "_colour");
         sprites.put(colour, new TestSprite(colour, translucentColour ? 128 : 0));
-        var layers = model.worldLayers(null, Direction.NORTH, kind.overlayTextures());
+        var layers = model.faceLayers(null, Direction.NORTH, kind.overlayTextures(), null);
         for (var face : Direction.values()) {
             var base = model.getQuads(Blocks.IRON_BLOCK.defaultBlockState(), face,
                     RandomSource.create(1), ModelData.EMPTY, RenderType.solid()).getFirst();
@@ -480,27 +524,32 @@ class DynamicOverlayModelLoaderTest {
     }
 
     @ParameterizedTest
-    @EnumSource(FluxNetworkInterfaceKind.class)
-    void flux_item_core_keeps_its_existing_layer_spacing(FluxNetworkInterfaceKind kind) {
+    @CsvSource({"INPUT, flux_point", "OUTPUT, flux_plug"})
+    void flux_item_projects_padded_core_then_network_colour_on_each_casing_face(FluxNetworkInterfaceKind kind, String core) {
         var description = DynamicOverlayItemModel.Description.port(kind);
-        var model = new DynamicOverlayModelLoader.DynamicModel(description.kind(), description,
-                sprites.computeIfAbsent(description.overlayTextures().getFirst(), TestSprite::new),
-                id -> sprites.computeIfAbsent(id, TestSprite::new), ItemTransforms.NO_TRANSFORMS, ItemOverrides.EMPTY, null);
-        var item = model.getQuads(null, null, RandomSource.create(1), ModelData.EMPTY, null);
-        for (var face : Direction.values()) {
-            var quads = item.stream().filter(q -> q.getDirection() == face).toList();
-            assertThat(quads).hasSize(3);
-            int axis = face.getAxis().ordinal();
-            float plane = position(quads.getFirst(), 0).get(axis);
-            for (int layer = 0; layer < description.overlayTextures().size(); layer++) {
-                var quad = quads.get(layer + 1);
-                assertThat(quad.getSprite().contents().name()).isEqualTo(description.overlayTextures().get(layer));
-                assertThat(quad.getTintIndex()).isEqualTo(layer == 0 ? -1 : FluxNetworkOverlay.NETWORK_TINT_INDEX);
-                float depth = plane + face.getAxisDirection().getStep() * DynamicOverlayModelLoader.overlayGrow(layer);
-                float width = (kind == FluxNetworkInterfaceKind.INPUT ? 5F : 8F) / 16F, min = (1F - width) / 2F;
-                for (int i = 0; i < 4; i++) {
-                    var expected = position(quads.getFirst(), i).mul(width).add(min, min, min).setComponent(axis, depth);
-                    assertThat(position(quad, i)).isEqualTo(expected);
+        var model = bake(description.kind(), description, null);
+        var on = MMCR.id("block/fluxnetworks/" + core + "_on");
+        var colour = MMCR.id("block/fluxnetworks/" + core + "_colour");
+        sprites.put(on, new TestSprite(on, 128));
+        var random = RandomSource.create(42);
+        var passes = model.getRenderPasses(ItemStack.EMPTY, true);
+        var bases = passes.getFirst().getQuads(null, null, random);
+        assertThat(passes.get(1).getQuads(null, null, random)).isEmpty();
+        var translucent = passes.get(2).getQuads(null, null, random);
+        assertThat(bases).extracting(BakedQuad::getDirection).containsExactly(Direction.values());
+        assertThat(bases).noneMatch(BakedQuad::isTinted);
+        for (var base : bases) {
+            var face = base.getDirection();
+            var layers = translucent.stream().filter(q -> q.getDirection() == face).toList();
+            assertThat(translucent).containsSequence(layers);
+            assertThat(layers).extracting(q -> q.getSprite().contents().name(), BakedQuad::getTintIndex)
+                    .containsExactly(tuple(on, -1), tuple(colour, FluxNetworkOverlay.NETWORK_TINT_INDEX));
+            for (int i = 0; i < 4; i++) {
+                var point = position(base, i);
+                var uv = FluxNetworkOverlay.uv(face, point);
+                for (var layer : layers) {
+                    assertThat(position(layer, i)).isEqualTo(point);
+                    assertUv(layer, i, uv[0], uv[1]);
                 }
             }
         }
@@ -563,23 +612,6 @@ class DynamicOverlayModelLoaderTest {
     @BeforeAll
     static void bootstrapMinecraft() throws Exception {
         TestBootstrap.bootstrap();
-    }
-
-    @Test
-    void overlay_layers_keep_texture_order_and_append_state_last() {
-        var basic = MMCR.id("block/overlay_basic");
-        var type = MMCR.id("block/overlay_type");
-        var tier = MMCR.id("block/overlay_tier");
-        var state = MMCR.id("block/overlay_state");
-
-        assertThat(DynamicOverlayModelLoader.overlayLayers(ImmutableList.of(basic, type, tier), state))
-                .extracting(DynamicOverlayModelLoader.OverlayLayer::texture,
-                        DynamicOverlayModelLoader.OverlayLayer::grow)
-                .containsExactly(
-                        tuple(basic, DynamicOverlayModelLoader.OVERLAY_GROW),
-                        tuple(type, DynamicOverlayModelLoader.OVERLAY_GROW * 2.0f),
-                        tuple(tier, DynamicOverlayModelLoader.OVERLAY_GROW * 3.0f),
-                        tuple(state, DynamicOverlayModelLoader.OVERLAY_GROW * 4.0f));
     }
 
     @Test

@@ -12,12 +12,12 @@ import org.joml.Vector3f;
 import java.util.List;
 
 /**
- * Decorates only the quads emitted in the base model's cull bucket. Each layer keeps its atlas sprite.
+ * Projects ordered overlays onto the same casing quad in block cull buckets and item render passes.
  *
  * @author HowXu {@literal <dev@howxu.cn>}
  */
-record WorldFaceLayers(@Nullable Direction front, Direction roll, List<Layer> layers) {
-    static final WorldFaceLayers BASE_ONLY = new WorldFaceLayers(null, Direction.NORTH, List.of());
+record FaceLayers(@Nullable Direction front, Direction roll, List<Layer> layers) {
+    static final FaceLayers BASE_ONLY = new FaceLayers(null, Direction.NORTH, List.of());
 
     /** Block-space UVs, independent of the geometry in a CTM tile.
      * @author HowXu {@literal <dev@howxu.cn>}

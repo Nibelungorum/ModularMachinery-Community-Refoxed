@@ -72,10 +72,8 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
     private static final ResourceLocation FALLBACK_TEXTURE = MMCR.id("block/ctm/basic_casing/particle");
     private static final ModelProperty<CtmContext> CTM_CONTEXT = new ModelProperty<>();
     private static final ModelProperty<WorldAppearance> WORLD_APPEARANCE = new ModelProperty<>();
-    private static final WorldFaceLayers.Projection PANEL_UV = DynamicOverlayModelLoader::uv;
-    private static final WorldFaceLayers.Projection FLUX_UV = (face, roll, point) -> FluxNetworkOverlay.uv(face, point);
-    // Item overlays only. All world layers share the casing vertices.
-    static final float OVERLAY_GROW = 0.0005f;
+    private static final FaceLayers.Projection PANEL_UV = DynamicOverlayModelLoader::uv;
+    private static final FaceLayers.Projection FLUX_UV = (face, roll, point) -> FluxNetworkOverlay.uv(face, point);
     private static final Set<ResourceLocation> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private final DynamicOverlayBakedModel.Kind kind;
@@ -125,32 +123,13 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                 : definition.itemDescription().overlayTextures();
     }
 
-    static float overlayGrow(int index) {
-        return OVERLAY_GROW * (index + 1);
-    }
-
-    static ImmutableList<OverlayLayer> overlayLayers(List<ResourceLocation> overlays,
-                                                      @Nullable ResourceLocation stateOverlay) {
-        ImmutableList.Builder<OverlayLayer> layers = ImmutableList.builder();
-        for (int index = 0; index < overlays.size(); index++) {
-            layers.add(new OverlayLayer(overlays.get(index), overlayGrow(index)));
-        }
-        if (stateOverlay != null) {
-            layers.add(new OverlayLayer(stateOverlay, overlayGrow(overlays.size())));
-        }
-        return layers.build();
-    }
-
-    record OverlayLayer(ResourceLocation texture, float grow) {
-    }
-
     static void clearMissingBaseTextureWarnings() {
         MISSING_BASE_TEXTURES.clear();
     }
 
-    private static List<Vector3f> vertices(Direction direction, float grow) {
-        float min = -grow;
-        float max = 1.0f + grow;
+    private static List<Vector3f> vertices(Direction direction) {
+        float min = 0.0f;
+        float max = 1.0f;
         return switch (direction) {
             case EAST -> List.of(new Vector3f(max, max, max), new Vector3f(max, min, max), new Vector3f(max, min, min), new Vector3f(max, max, min));
             case WEST -> List.of(new Vector3f(min, max, min), new Vector3f(min, min, min), new Vector3f(min, min, max), new Vector3f(min, max, max));
@@ -209,7 +188,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         }
     }
 
-    private record WorldAppearance(DynamicOverlayBakedModel.FaceTextures base, WorldFaceLayers layers) {}
+    private record WorldAppearance(DynamicOverlayBakedModel.FaceTextures base, FaceLayers layers) {}
 
     private record CtmContext(BakedModel model, BlockState state, ModelData data, ChunkRenderTypeSet renderTypes, long seed) {
         List<BakedQuad> quads(@Nullable Direction side, @Nullable RenderType pass) {
@@ -286,7 +265,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             if (appearance == null) appearance = worldAppearance(state, modelData, false);
             var layers = appearance.layers();
             var casing = shaftAxis != null || (ctm == null && layers.front() != null && side != layers.front())
-                    ? WorldFaceLayers.BASE_ONLY : layers;
+                    ? FaceLayers.BASE_ONLY : layers;
             List<BakedQuad> quads = new ArrayList<>();
             var solid = RenderType.solid();
             if (ctm != null) {
@@ -300,14 +279,14 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     }
                 }
             } else if (side != null && casing.rendersIn(solid, renderType)) {
-                casing.emit(quads, face(side, Direction.NORTH, baseSprite(appearance.base().forFace(side)), 0F), solid, renderType);
+                casing.emit(quads, baseFace(side, baseSprite(appearance.base().forFace(side))), solid, renderType);
             }
             if (shaftAxis != null && side == null && layers.rendersIn(solid, renderType)) {
                 for (Direction direction : Direction.values()) {
                     if (direction.getAxis() != shaftAxis) continue;
                     var sprite = baseSprite(appearance.base().forFace(direction));
                     if (renderType == null || renderType == solid) addShaftRim(quads, direction, sprite);
-                    layers.emit(quads, shaftPanel(direction, sprite, 0F), solid, renderType);
+                    layers.emit(quads, shaftPanel(direction, sprite), solid, renderType);
                 }
             }
             return quads;
@@ -322,31 +301,24 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     ? DynamicOverlayItemModel.Description.controller(itemDescription.machineId()) : itemDescription;
             DynamicOverlayBakedModel.FaceTextures base = DynamicOverlayBakedModel.resolveBase(
                     description.baseTextureSource());
+            var layers = faceLayers(null, Direction.NORTH, description.overlayTextures(), description.stateOverlayTexture());
+            var solid = RenderType.solid();
+            boolean drawBase = renderType == null || renderType == solid;
+            // NeoForge selects the pass per model, so keep each face's layers together within that pass.
             List<BakedQuad> quads = new ArrayList<>();
-            if (renderType == null || renderType == RenderType.solid()) {
-                for (Direction direction : Direction.values()) {
-                    if (itemShaft != null && direction.getAxis() == Direction.Axis.Z) {
-                        var sprite = baseSprite(base.forFace(direction));
-                        addShaftRim(quads, direction, sprite);
-                        quads.add(shaftPanel(direction, sprite, 0F));
-                    } else {
-                        quads.add(face(direction, Direction.NORTH, baseSprite(base.forFace(direction)), 0.0f));
-                    }
-                }
-                if (itemShaft != null) {
-                    quads.addAll(itemShaft.getQuads(null, null, RandomSource.create()));
-                    for (Direction direction : Direction.values()) {
-                        quads.addAll(itemShaft.getQuads(null, direction, RandomSource.create()));
-                    }
-                }
+            for (Direction direction : Direction.values()) {
+                boolean shaftEnd = itemShaft != null && direction.getAxis() == Direction.Axis.Z;
+                var casing = description.overlayFaces().contains(direction) && (itemShaft == null || shaftEnd)
+                        ? layers : FaceLayers.BASE_ONLY;
+                if (!casing.rendersIn(solid, renderType)) continue;
+                var sprite = baseSprite(base.forFace(direction));
+                if (shaftEnd && drawBase) addShaftRim(quads, direction, sprite);
+                casing.emit(quads, shaftEnd ? shaftPanel(direction, sprite) : baseFace(direction, sprite), solid, renderType);
             }
-            for (OverlayLayer layer : overlayLayers(description.overlayTextures(),
-                    description.stateOverlayTexture())) {
-                if (renderType != null && renderType != overlayRenderType(sprite(layer.texture()))) continue;
-                for (Direction direction : description.overlayFaces()) {
-                    if (itemShaft != null && direction.getAxis() != Direction.Axis.Z) continue;
-                    quads.add(overlayFace(direction, Direction.NORTH, layer.texture(), layer.grow(),
-                            itemShaft == null ? null : Direction.Axis.Z));
+            if (itemShaft != null && drawBase) {
+                quads.addAll(itemShaft.getQuads(null, null, RandomSource.create()));
+                for (Direction direction : Direction.values()) {
+                    quads.addAll(itemShaft.getQuads(null, direction, RandomSource.create()));
                 }
             }
             return quads;
@@ -354,7 +326,6 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
 
         private WorldAppearance worldAppearance(BlockState state, ModelData modelData, boolean easterEgg) {
             var textures = textures(state, modelData);
-            var overlays = textures.overlays();
             Direction overlayFace = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
                     && state.hasProperty(MachineControllerBlock.FACING)
                     ? state.getValue(MachineControllerBlock.FACING) : null;
@@ -364,22 +335,23 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             ResourceLocation stateOverlay = kind == DynamicOverlayBakedModel.Kind.CONTROLLER
                     ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
                     state.getValue(MachineControllerBlock.ACTIVE), easterEgg) : null;
-            if (stateOverlay != null) overlays = ImmutableList.<ResourceLocation>builder().addAll(overlays).add(stateOverlay).build();
-            return new WorldAppearance(textures.base(), worldLayers(overlayFace, rollFacing, overlays));
+            return new WorldAppearance(textures.base(), faceLayers(overlayFace, rollFacing, textures.overlays(), stateOverlay));
         }
 
-        WorldFaceLayers worldLayers(@Nullable Direction front, Direction roll, List<ResourceLocation> overlays) {
-            var layers = new ArrayList<WorldFaceLayers.Layer>(overlays.size());
+        FaceLayers faceLayers(@Nullable Direction front, Direction roll, List<ResourceLocation> overlays,
+                              @Nullable ResourceLocation stateOverlay) {
+            if (stateOverlay != null) overlays = ImmutableList.<ResourceLocation>builder().addAll(overlays).add(stateOverlay).build();
+            var layers = new ArrayList<FaceLayers.Layer>(overlays.size());
             var pass = RenderType.solid();
             for (var texture : overlays) {
                 var core = FluxNetworkOverlay.forTexture(texture);
                 var sprite = sprite(core == null ? texture : core.worldSprite());
                 // A later overlay cannot be submitted before a translucent layer underneath it.
-                pass = WorldFaceLayers.later(pass, overlayRenderType(sprite));
-                layers.add(new WorldFaceLayers.Layer(sprite, pass, core == null ? -1 : core.tintIndex(),
+                pass = FaceLayers.later(pass, overlayRenderType(sprite));
+                layers.add(new FaceLayers.Layer(sprite, pass, core == null ? -1 : core.tintIndex(),
                         core == null ? PANEL_UV : FLUX_UV));
             }
-            return new WorldFaceLayers(front, roll, layers);
+            return new FaceLayers(front, roll, layers);
         }
 
         private DynamicOverlayBakedModel.TextureSet textures(BlockState state, ModelData modelData) {
@@ -422,9 +394,8 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             return sprite(FALLBACK_TEXTURE);
         }
 
-        private BakedQuad face(Direction direction, Direction rollFacing, TextureAtlasSprite sprite,
-                               float grow) {
-            return face(direction, rollFacing, sprite, vertices(direction, grow));
+        private BakedQuad baseFace(Direction direction, TextureAtlasSprite sprite) {
+            return face(direction, sprite, vertices(direction));
         }
 
         private static @Nullable Direction.Axis stressAxis(BlockState state) {
@@ -433,10 +404,10 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
         }
 
         private void addShaftRim(List<BakedQuad> quads, Direction direction, TextureAtlasSprite sprite) {
-            quads.add(endFace(direction, sprite, 0F, 0F, 0F, 1F, 0.125F, 0F));
-            quads.add(endFace(direction, sprite, 0F, 0F, 0.875F, 1F, 1F, 0F));
-            quads.add(endFace(direction, sprite, 0F, 0F, 0.125F, 0.125F, 0.875F, 0F));
-            quads.add(endFace(direction, sprite, 0F, 0.875F, 0.125F, 1F, 0.875F, 0F));
+            quads.add(endFace(direction, sprite, 0F, 0F, 1F, 0.125F, 0F));
+            quads.add(endFace(direction, sprite, 0F, 0.875F, 1F, 1F, 0F));
+            quads.add(endFace(direction, sprite, 0F, 0.125F, 0.125F, 0.875F, 0F));
+            quads.add(endFace(direction, sprite, 0.875F, 0.125F, 1F, 0.875F, 0F));
             // Close the recessed opening's inner walls so oblique views cannot see through the casing.
             for (Direction wall : Direction.values()) {
                 if (wall.getAxis() == direction.getAxis()) continue;
@@ -449,31 +420,22 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                 float edge = wall.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 0.125F : 0.875F;
                 min.setComponent(wall.getAxis().ordinal(), edge);
                 max.setComponent(wall.getAxis().ordinal(), edge);
-                List<Vector3f> points = vertices(wall, 0F);
+                List<Vector3f> points = vertices(wall);
                 for (Vector3f point : points) {
                     point.set(Mth.lerp(point.x, min.x, max.x), Mth.lerp(point.y, min.y, max.y),
                             Mth.lerp(point.z, min.z, max.z));
                 }
-                quads.add(face(wall, Direction.NORTH, sprite, points));
+                quads.add(face(wall, sprite, points));
             }
         }
 
-        private BakedQuad overlayFace(Direction direction, Direction rollFacing, ResourceLocation texture,
-                                      float grow, @Nullable Direction.Axis shaftAxis) {
-            TextureAtlasSprite sprite = sprite(texture);
-            var base = direction.getAxis() == shaftAxis ? shaftPanel(direction, sprite, grow)
-                    : face(direction, rollFacing, sprite, grow);
-            var core = FluxNetworkOverlay.forTexture(texture);
-            return core == null ? base : core.itemQuad(base, sprite);
+        private BakedQuad shaftPanel(Direction direction, TextureAtlasSprite sprite) {
+            return endFace(direction, sprite, 0.125F, 0.125F, 0.875F, 0.875F, 0.95F / 16F);
         }
 
-        private BakedQuad shaftPanel(Direction direction, TextureAtlasSprite sprite, float grow) {
-            return endFace(direction, sprite, grow, 0.125F, 0.125F, 0.875F, 0.875F, 0.95F / 16F);
-        }
-
-        private BakedQuad endFace(Direction direction, TextureAtlasSprite sprite, float grow,
+        private BakedQuad endFace(Direction direction, TextureAtlasSprite sprite,
                                   float minU, float minV, float maxU, float maxV, float inset) {
-            List<Vector3f> points = vertices(direction, 0F);
+            List<Vector3f> points = vertices(direction);
             for (Vector3f point : points) {
                 switch (direction.getAxis()) {
                     case X -> { point.y = Mth.lerp(point.y, minV, maxV); point.z = Mth.lerp(point.z, minU, maxU); }
@@ -481,13 +443,12 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     case Z -> { point.x = Mth.lerp(point.x, minU, maxU); point.y = Mth.lerp(point.y, minV, maxV); }
                 }
                 Vec3i normal = direction.getNormal();
-                point.add(normal.getX() * (grow - inset), normal.getY() * (grow - inset), normal.getZ() * (grow - inset));
+                point.add(normal.getX() * -inset, normal.getY() * -inset, normal.getZ() * -inset);
             }
-            return face(direction, Direction.NORTH, sprite, points);
+            return face(direction, sprite, points);
         }
 
-        private BakedQuad face(Direction direction, Direction rollFacing, TextureAtlasSprite sprite,
-                               List<Vector3f> points) {
+        private BakedQuad face(Direction direction, TextureAtlasSprite sprite, List<Vector3f> points) {
             QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
             builder.setSprite(sprite);
             builder.setDirection(direction);
@@ -495,10 +456,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             builder.setHasAmbientOcclusion(true);
             Vec3i normal = direction.getNormal();
             for (Vector3f vertex : points) {
-                // Growing geometry must not sample outside its atlas sprite.
-                float[] uv = uv(direction, rollFacing, new Vector3f(
-                        Mth.clamp(vertex.x(), 0.0f, 1.0f), Mth.clamp(vertex.y(), 0.0f, 1.0f),
-                        Mth.clamp(vertex.z(), 0.0f, 1.0f)));
+                float[] uv = uv(direction, Direction.NORTH, vertex);
                 builder.addVertex(vertex.x(), vertex.y(), vertex.z());
                 builder.setColor(255, 255, 255, 255);
                 builder.setNormal(normal.getX(), normal.getY(), normal.getZ());

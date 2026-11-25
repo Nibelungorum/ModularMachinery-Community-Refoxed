@@ -3,18 +3,14 @@ package cn.howxu.mmcr.compat.fluxnetworks;
 import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.internal.port.IOPortKind;
 import com.google.common.collect.ImmutableList;
-import net.minecraft.client.renderer.block.model.BakedQuad;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Mth;
-import net.neoforged.neoforge.client.model.IQuadTransformer;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
 import java.util.Map;
 
-/** Native Flux core regions shared by the item geometry and the block atlas.
+/** Native Flux core regions baked into padded face sprites for blocks and items.
  * @author howxu <dev@howxu.cn>
  */
 public enum FluxNetworkOverlay {
@@ -80,28 +76,5 @@ public enum FluxNetworkOverlay {
             case DOWN -> point.z;
             default -> 1F - point.y;
         };
-    }
-
-    public BakedQuad itemQuad(BakedQuad base, TextureAtlasSprite sprite) {
-        float size = faceSize / 16F;
-        float min = (1F - size) / 2F;
-        Direction direction = base.getDirection();
-        int axis = direction.getAxis().ordinal();
-        int[] data = base.getVertices().clone();
-        Vector3f vertex = new Vector3f();
-        for (int i = 0; i < data.length; i += IQuadTransformer.STRIDE) {
-            int pos = i + IQuadTransformer.POSITION;
-            for (int j = 0; j < 3; j++) {
-                float coordinate = Mth.clamp(Float.intBitsToFloat(data[pos + j]), 0F, 1F);
-                vertex.setComponent(j, coordinate);
-                if (j != axis) data[pos + j] = Float.floatToRawIntBits(min + coordinate * size);
-            }
-            float u = (minU + u(direction, vertex) * uvSize) / 16F;
-            float v = (minV + v(direction, vertex) * uvSize) / 16F;
-            data[i + IQuadTransformer.COLOR] = -1;
-            data[i + IQuadTransformer.UV0] = Float.floatToRawIntBits(sprite.getU(Mth.lerp(sprite.uvShrinkRatio(), u, (minU + uvSize / 2F) / 16F)));
-            data[i + IQuadTransformer.UV0 + 1] = Float.floatToRawIntBits(sprite.getV(Mth.lerp(sprite.uvShrinkRatio(), v, (minV + uvSize / 2F) / 16F)));
-        }
-        return new BakedQuad(data, tintIndex, direction, sprite, base.isShade(), base.hasAmbientOcclusion());
     }
 }
