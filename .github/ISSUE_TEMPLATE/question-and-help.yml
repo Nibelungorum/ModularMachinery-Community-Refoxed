@@ -1,0 +1,19 @@
+name: Question and help / 问题求助
+description: Get help using or configuring MMCR / 询问 MMCR 的用法或配置
+title: "[Question] "
+labels: ["help", "question"]
+
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question / 你的问题
+      description: What are you trying to do? Where are you stuck? / 你想做什么? 哪一步遇到了困难?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you have tried (optional) / 试过的方法(选填)
+      description: Include any relevant machine definitions, KubeJS snippets, or screenshots / 可以贴出相关的机器定义, KubeJS脚本或截图

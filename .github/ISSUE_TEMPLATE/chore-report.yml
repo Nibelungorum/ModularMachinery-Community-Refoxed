@@ -1,0 +1,26 @@
+name: Chore report / 项目维护
+description: Request a translation, documentation, or project layout change / 翻译、文档或项目结构上的改动
+title: "[Chore] "
+labels: ["chore"]
+type: Task
+
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category / 类别
+      options:
+        - Translation / 翻译
+        - Documentation / 文档
+        - Project structure / 项目结构
+        - Other / 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: change
+    attributes:
+      label: Where and what to change / 修改位置和内容
+      description: Point to the file, page, or in-game text and describe the change / 指出文件、页面或游戏内原文, 并说明应该怎样改
+    validations:
+      required: true

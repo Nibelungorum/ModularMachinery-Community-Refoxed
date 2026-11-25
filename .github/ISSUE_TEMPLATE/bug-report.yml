@@ -1,0 +1,82 @@
+name: Bug report / Bug 报告
+description: Report a bug in MMCR or one of its mod integrations / 报告 MMCR 或模组联动中的异常
+title: "[Bug] "
+type: Bug
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        [Search existing reports / 搜索已有报告](https://github.com/Nibelungorum/ModularMachinery-Community-Refoxed/issues?q=is%3Aissue)
+
+        If possible, retest with the latest MMCR release for your Minecraft version.
+        如果可以，请用对应 Minecraft 版本的最新 MMCR 复测
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 实际表现
+      description: What happened? Include the exact error message if any. / 具体情况是怎样的? 如有报错, 请贴出日志
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 预期结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce /  复现步骤
+      description: Start from a new world or a minimal setup if possible / 尽量从空存档或最小配置开始
+      placeholder: |
+        1. Place an item port / 放置物品接口
+        2. Attach an AE2 storage bus / 连接 AE2 存储总线
+        3. Insert an item into the network / 向网络插入物品
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "### 运行环境 / Game environment"
+
+  - type: dropdown
+    id: minecraft-version
+    attributes:
+      label: Minecraft version / Minecraft 版本
+      options:
+        - "1.21.1"
+        - "26.1.2"
+    validations:
+      required: true
+
+  - type: input
+    id: neoforge-version
+    attributes:
+      label: NeoForge version / NeoForge 版本
+      placeholder: "e.g. 26.1.2.99"
+    validations:
+      required: true
+
+  - type: input
+    id: mmcr-version
+    attributes:
+      label: MMCR version / MMCR 版本
+      description: Copy the full version from the Mods screen or the JAR filename / 请填写模组列表或 JAR 文件名中的完整版本号
+    validations:
+      required: true
+
+  - type: textarea
+    id: related-mods
+    attributes:
+      label: Related mods and versions / 相关模组及版本
+      description: For integration issues, list the mods involved and their exact versions / 如涉及联动模组, 请列出其具体版本
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs and attachments / 日志与附件
+      description: Attach or link to latest.log, a crash report, screenshots, or the script that triggers the bug / 可附上 latest.log、崩溃报告、截图或触发问题的脚本, 也可以输入链接

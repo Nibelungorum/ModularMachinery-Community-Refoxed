@@ -1,0 +1,26 @@
+name: 功能建议 / Feature request
+description: Suggest a new feature or an improvement to MMCR / 建议新增功能或改进现有功能
+title: "[Feature] "
+type: Feature
+
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case / 使用场景
+      description: What are you trying to do, and where do the current features fall short? / 你想做什么? 现有功能哪里不够用?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change / 建议的改动
+      description: How would a player or modpack author use the feature? / 玩家或整合包作者会怎么用这个功能?
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation ideas (optional if you do not have) / 实现思路(选填)
