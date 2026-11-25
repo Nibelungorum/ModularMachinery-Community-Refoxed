@@ -79,15 +79,26 @@ public final class BlockArrayCache {
 
     private static BlockArray rotate(Key key) {
         BlockArray pattern = key.pattern();
-        Rotation rotation = rotationFor(key.facing());
-        var predicates = pattern.positions().rotate(key.facing(), key.rollFacing(),
-                predicate -> rotatePredicate(predicate, key.facing(), key.rollFacing(), rotation));
+        Direction facing = key.facing();
+        Direction roll = key.rollFacing();
+        if (facing == Direction.SOUTH) return pattern;
         Map<BlockPos, List<String>> tags = new LinkedHashMap<>();
         pattern.tagsByPosition().forEach((pos, values) ->
-                tags.put(BlockRotator.rotateSouthTo(pos, key.facing(), key.rollFacing()), values));
-        if (key.facing() == Direction.SOUTH && predicates == pattern.positions()) return pattern;
-        return new BlockArray(predicates, tags, key.facing() == Direction.SOUTH ? pattern.glyphs()
-                : pattern.glyphs().rotate(key.facing(), key.rollFacing(), UnaryOperator.identity()));
+                tags.put(BlockRotator.rotateSouthTo(pos, facing, roll), values));
+        Rotation rotation = rotationFor(facing);
+        var positions = pattern.positions();
+        var predicates = positions.anyValueMatches(BlockArrayCache::rotatesWithStructure)
+                ? positions.rotate(facing, roll, predicate -> rotatePredicate(predicate, facing, roll, rotation))
+                : new RotatedPositions<>(positions, facing, roll);
+        return new BlockArray(predicates, tags, new RotatedPositions<>(pattern.glyphs(), facing, roll));
+    }
+
+    private static boolean rotatesWithStructure(BlockPredicate predicate) {
+        return switch (predicate) {
+            case BlockPredicate.OfBlockState ignored -> true;
+            case BlockPredicate.AnyOf anyOf -> anyOf.children().stream().anyMatch(BlockArrayCache::rotatesWithStructure);
+            default -> false;
+        };
     }
 
     private static Rotation rotationFor(Direction facing) {

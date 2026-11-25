@@ -38,6 +38,7 @@ import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
+import cn.howxu.mmcr.internal.network.PktStructureChunkPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
 import cn.howxu.mmcr.internal.network.PktTerminalStatePayload;
@@ -198,7 +199,7 @@ class ModEventRegistrationTest {
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND,
-                  PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
+                  PacketFlow.CLIENTBOUND, PacketFlow.CLIENTBOUND, PacketFlow.SERVERBOUND,
                   PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
                    PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND, PacketFlow.SERVERBOUND,
                    PacketFlow.SERVERBOUND,
@@ -212,6 +213,7 @@ class ModEventRegistrationTest {
                 PktControllerScreenTextPayload.TYPE,
                 PktMachineAppearancePayload.TYPE,
                 PktRuntimeContentPayload.TYPE,
+                PktStructureChunkPayload.TYPE,
                 PktPortStorageSyncPayload.TYPE,
                  PktMultiblockMismatchHighlightPayload.TYPE,
                  PktMultiblockPreviewPayload.TYPE,
@@ -235,7 +237,7 @@ class ModEventRegistrationTest {
 
     @Test
     void production_payload_protocol_version_tracks_the_current_packet_layout() {
-        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("15");
+        assertThat(ModEventRegistration.PAYLOAD_PROTOCOL_VERSION).isEqualTo("16");
     }
 
     @Test

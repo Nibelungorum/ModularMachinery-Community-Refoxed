@@ -48,6 +48,33 @@ public final class BlockRotator {
         return project(pos, xAxis, up, front);
     }
 
+    /** Writes the rotated coordinate into the scan cursor's reusable position. */
+    public static BlockPos.MutableBlockPos rotateSouthTo(BlockPos pos, Direction target, Direction rollFacing,
+                                                         BlockPos.MutableBlockPos out) {
+        if (!target.getAxis().isVertical()) {
+            int x = pos.getX();
+            int y = pos.getY();
+            int z = pos.getZ();
+            Direction current = Direction.SOUTH;
+            while (current != target) {
+                current = current.getCounterClockWise();
+                int rotatedX = z;
+                int rotatedZ = -x;
+                x = rotatedX;
+                z = rotatedZ;
+            }
+            return out.set(x, y, z);
+        }
+
+        Direction front = target;
+        Direction up = normalizedRoll(target, rollFacing);
+        Direction xAxis = cross(up, front);
+        return out.set(
+                xAxis.getStepX() * pos.getX() + up.getStepX() * pos.getY() + front.getStepX() * pos.getZ(),
+                xAxis.getStepY() * pos.getX() + up.getStepY() * pos.getY() + front.getStepY() * pos.getZ(),
+                xAxis.getStepZ() * pos.getX() + up.getStepZ() * pos.getY() + front.getStepZ() * pos.getZ());
+    }
+
     public static BlockPos normalizeFromFace(BlockPos offset, Direction sourceFace) {
         return normalizeFromFace(offset, sourceFace, Direction.SOUTH);
     }
@@ -90,11 +117,8 @@ public final class BlockRotator {
                 + front.getStepY() * source.getStepZ();
         int z = xAxis.getStepZ() * source.getStepX() + up.getStepZ() * source.getStepY()
                 + front.getStepZ() * source.getStepZ();
-        for (Direction direction : Direction.values()) {
-            if (direction.getStepX() == x && direction.getStepY() == y && direction.getStepZ() == z) {
-                return direction;
-            }
-        }
+        Direction result = Direction.getNearest(x, y, z, null);
+        if (result != null) return result;
         throw new IllegalArgumentException("Invalid direction rotation: " + source + ", " + target + ", " + rollFacing);
     }
 
@@ -127,11 +151,8 @@ public final class BlockRotator {
         int x = a.getStepY() * b.getStepZ() - a.getStepZ() * b.getStepY();
         int y = a.getStepZ() * b.getStepX() - a.getStepX() * b.getStepZ();
         int z = a.getStepX() * b.getStepY() - a.getStepY() * b.getStepX();
-        for (Direction direction : Direction.values()) {
-            if (direction.getStepX() == x && direction.getStepY() == y && direction.getStepZ() == z) {
-                return direction;
-            }
-        }
+        Direction result = Direction.getNearest(x, y, z, null);
+        if (result != null) return result;
         throw new IllegalArgumentException("Directions must be perpendicular: " + a + ", " + b);
     }
 }

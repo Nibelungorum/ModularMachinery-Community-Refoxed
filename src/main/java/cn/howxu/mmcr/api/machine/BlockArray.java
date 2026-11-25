@@ -40,10 +40,8 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
             tagsByPosition.forEach((pos, values) -> tags.put(pos.immutable(), List.copyOf(values)));
             tagsByPosition = Collections.unmodifiableMap(tags);
         }
-        symbolsByPosition = PackedAirPositions.copy(symbolsByPosition, (pos, symbol) -> {
-            BlockPredicate predicate = positions.get(pos);
-            return symbol != null && packableAir(predicate);
-        });
+        symbolsByPosition = PackedAirPositions.copy(symbolsByPosition,
+                (pos, symbol) -> symbol != null && packableAir(positions.get(pos)));
     }
 
     public @Nullable BlockPredicate get(BlockPos pos) {
@@ -67,8 +65,8 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         return predicate != null && !(predicate instanceof BlockPredicate.AnyOf) && predicate.onlyAir();
     }
 
-    PackedAirPositions<BlockPredicate> positions() { return (PackedAirPositions<BlockPredicate>) pattern; }
-    PackedAirPositions<Character> glyphs() { return (PackedAirPositions<Character>) symbolsByPosition; }
+    PositionTable<BlockPredicate> positions() { return (PositionTable<BlockPredicate>) pattern; }
+    PositionTable<Character> glyphs() { return (PositionTable<Character>) symbolsByPosition; }
 
     BoundingBox bounds() {
         int[] b = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
@@ -83,6 +81,31 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
 
     public void forSymbols(Predicate<Character> select, BiConsumer<BlockPos, Character> consumer) {
         glyphs().forValues(select, consumer);
+    }
+
+    /** Receives one straight run of equal predicates. {@code length == 1} means a single cell. */
+    @FunctionalInterface
+    public interface RunVisitor {
+        void accept(BlockPos start, Direction step, int length, BlockPredicate value);
+    }
+
+    /** Receives one straight run of equal symbols. */
+    @FunctionalInterface
+    public interface SymbolRunVisitor {
+        void accept(BlockPos start, Direction step, int length, char symbol);
+    }
+
+    /**
+     * Walks the predicate table as runs instead of cells. Wire encoding uses this to send one entry per
+     * run plus a palette; the order matches {@link #pattern()} iteration exactly.
+     */
+    public void forRuns(RunVisitor visitor) {
+        positions().visit((start, step, length, value, air) -> visitor.accept(start, step, length, value));
+    }
+
+    /** Walks the symbol table in the same orientation as the predicates. */
+    public void forSymbolRuns(SymbolRunVisitor visitor) {
+        glyphs().visit((start, step, length, symbol, air) -> visitor.accept(start, step, length, symbol == null ? ' ' : symbol));
     }
 
     /** Applies display-only level choices in encounter order without rebuilding the underlying geometry. */
@@ -100,13 +123,19 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
     public static final class PositionInput {
         private final PackedAirPositions.Writer<BlockPredicate> predicates = new PackedAirPositions.Writer<>();
         private final PackedAirPositions.Writer<Character> symbols = new PackedAirPositions.Writer<>();
-        private PackedAirPositions<BlockPredicate> positions;
+        private PositionTable<BlockPredicate> positions;
 
         public void predicate(BlockPos pos, BlockPredicate predicate) {
             predicates.put(pos, predicate, packableAir(predicate));
         }
 
-        private PackedAirPositions<BlockPredicate> positions() {
+        /** Adds a whole straight run in one call; the wire format sends runs rather than cells. */
+        public void predicateRun(BlockPos start, Direction step, int length, BlockPredicate predicate) {
+            if (length <= 0) throw new IllegalArgumentException("run length must be positive");
+            predicates.add(start.immutable(), step, length, predicate, length > 1 && packableAir(predicate));
+        }
+
+        private PositionTable<BlockPredicate> positions() {
             if (positions == null) positions = predicates.finish();
             return positions;
         }
@@ -114,6 +143,13 @@ public record BlockArray(Map<BlockPos, BlockPredicate> pattern, Map<BlockPos, Li
         public void symbol(BlockPos pos, char symbol) {
             BlockPredicate predicate = positions().get(pos);
             symbols.put(pos, symbol, packableAir(predicate));
+        }
+
+        /** Adds a whole straight symbol run in one call. */
+        public void symbolRun(BlockPos start, Direction step, int length, char symbol) {
+            if (length <= 0) throw new IllegalArgumentException("run length must be positive");
+            BlockPredicate predicate = positions().get(start);
+            symbols.add(start.immutable(), step, length, symbol, length > 1 && packableAir(predicate));
         }
 
         public BlockArray build(Map<BlockPos, List<String>> tags) {

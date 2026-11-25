@@ -153,35 +153,24 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
-    void legacy_air_run_bytes_keep_independent_symbol_order_and_logical_limits() {
-        var id = MMCR.id("wire_air");
+    void run_encoded_bytes_keep_independent_symbol_order_and_logical_limits() {
+        Map<BlockPos, BlockPredicate> cells = new LinkedHashMap<>();
+        Map<BlockPos, Character> glyphs = new LinkedHashMap<>();
+        var air = new BlockPredicate.Air();
+        for (int x = -10; x < 10; x++) cells.put(new BlockPos(x, 0, 0), air);
+        for (int x = 9; x >= -10; x--) glyphs.put(new BlockPos(x, 0, 0), x < 0 ? ' ' : '空');
+        var pattern = new BlockArray(cells, Map.of(), glyphs);
+        var structure = new MachineStructureDefinition(MMCR.id("wire_air"), List.of(MachineStructureDefinition.Declaration.full(pattern)));
         var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        var encoded = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         try {
-            Identifier.STREAM_CODEC.encode(wire, id);
-            wire.writeVarInt(1); // declarations
-            wire.writeEnum(MachineStructureDefinition.Declaration.Kind.FULL);
-            wire.writeVarInt(20);
-            for (int x = -10; x < 10; x++) {
-                wire.writeBlockPos(new BlockPos(x, 0, 0));
-                wire.writeVarInt(1); // original PredicateKind.AIR
-            }
-            wire.writeVarInt(0); // tag positions
-            wire.writeVarInt(20);
-            for (int x = 9; x >= -10; x--) {
-                wire.writeBlockPos(new BlockPos(x, 0, 0));
-                wire.writeChar(x < 0 ? ' ' : '空');
-            }
-            for (int i = 0; i < 5; i++) wire.writeVarInt(0); // ports, tiers, dynamics, modifiers, levels
-            wire.writeBoolean(false);
-            var decoded = MachineStructureSyncCodec.decode(wire, 20);
-            assertThat(decoded.pattern().get(BlockPos.ZERO)).isInstanceOf(BlockPredicate.Air.class);
-            MachineStructureSyncCodec.encode(encoded, decoded, 20);
+            MachineStructureSyncCodec.encode(wire, structure, 20);
+            BlockArray decoded = MachineStructureSyncCodec.decode(wire, 20).pattern();
+            assertThat(decoded.pattern()).containsExactlyEntriesOf(cells);
+            assertThat(decoded.symbolsByPosition()).containsExactlyEntriesOf(glyphs);
             wire.readerIndex(0);
-            assertThat(encoded.equals(wire)).isTrue();
-            assertThatThrownBy(() -> MachineStructureSyncCodec.decode(wire, 19)).hasMessageContaining("block pattern count");
+            assertThatThrownBy(() -> MachineStructureSyncCodec.decode(wire, 19))
+                    .hasMessageContaining("block pattern count");
         } finally {
-            encoded.release();
             wire.release();
         }
     }
@@ -352,7 +341,7 @@ class RuntimeContentSnapshotTest {
     void runtimeContentPayloadRejectsDuplicateStructureKeys() {
         Identifier machineId = MMCR.id("runtime_test_machine");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(4);
+        buf.writeVarInt(6);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(2);
         Identifier.STREAM_CODEC.encode(buf, machineId);
@@ -370,7 +359,7 @@ class RuntimeContentSnapshotTest {
         Identifier key = MMCR.id("runtime_test_machine");
         Identifier structureId = MMCR.id("runtime_test_machine_new");
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(4);
+        buf.writeVarInt(6);
         buf.writeVarInt(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
         buf.writeVarInt(1);
         Identifier.STREAM_CODEC.encode(buf, key);
@@ -389,7 +378,7 @@ class RuntimeContentSnapshotTest {
     @Test
     void runtimeContentPayloadRejectsUnknownPayloadVersion() {
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
-        buf.writeVarInt(5);
+        buf.writeVarInt(7);
 
         assertThatThrownBy(() -> PktRuntimeContentPayload.STREAM_CODEC.decode(buf))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -660,9 +649,40 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
-    void structureSyncCodecUsesConfiguredDefaultBlockPatternLimit() {
-        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(524_288);
-        assertThat(MachineStructureSyncCodec.maximumBlockPatternCount()).isEqualTo(524_288);
+    void aPaletteOfDistinctPredicatesUsesTheStructureBudget() {
+        Map<BlockPos, BlockPredicate> cells = new LinkedHashMap<>();
+        for (int x = 0; x < 1025; x++) cells.put(BlockPos.ZERO.east(x), new BlockPredicate.Any());
+        var pattern = new BlockArray(cells);
+        var structure = new MachineStructureDefinition(MMCR.id("many_predicates"),
+                List.of(MachineStructureDefinition.Declaration.full(pattern)));
+        var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            MachineStructureSyncCodec.encode(wire, structure, cells.size());
+            var restored = MachineStructureSyncCodec.decode(wire, cells.size()).pattern();
+            assertThat(restored.pattern()).containsExactlyEntriesOf(cells);
+            assertThat(restored.get(BlockPos.ZERO)).isNotSameAs(restored.get(BlockPos.ZERO.east()));
+        } finally {
+            wire.release();
+        }
+    }
+
+    @Test
+    void structureSyncCodecCountsExpandedGlyphCellsAgainstTheBudget() {
+        Map<BlockPos, Character> glyphs = new LinkedHashMap<>();
+        for (int x = 0; x < 3; x++) glyphs.put(BlockPos.ZERO.east(x), 'X');
+        var pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()), Map.of(), glyphs);
+        var structure = new MachineStructureDefinition(MMCR.id("glyph_budget"), List.of(MachineStructureDefinition.Declaration.full(pattern)));
+        var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            assertThatThrownBy(() -> MachineStructureSyncCodec.encode(wire, structure, 2))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("symbol count");
+            wire.clear();
+            MachineStructureSyncCodec.encode(wire, structure, 3);
+            assertThatThrownBy(() -> MachineStructureSyncCodec.decode(wire, 2))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("symbol run");
+        } finally {
+            wire.release();
+        }
     }
 
     @Test

@@ -40,6 +40,7 @@ import cn.howxu.mmcr.internal.network.PktRecipePoolSelectPayload;
 import cn.howxu.mmcr.internal.network.PktPortStorageSyncPayload;
 import cn.howxu.mmcr.internal.network.PktPortContainerTransferPayload;
 import cn.howxu.mmcr.internal.network.PktRuntimeContentPayload;
+import cn.howxu.mmcr.internal.network.PktStructureChunkPayload;
 import cn.howxu.mmcr.internal.network.PktSmartInterfaceUpdatePayload;
 import cn.howxu.mmcr.internal.network.PktTerminalActionPayload;
 import cn.howxu.mmcr.internal.network.PktTerminalStatePayload;
@@ -93,7 +94,7 @@ import java.util.function.Consumer;
  * @author howxu <dev@howxu.cn>
  */
 public final class ModEventRegistration {
-    static final String PAYLOAD_PROTOCOL_VERSION = "15";
+    static final String PAYLOAD_PROTOCOL_VERSION = "16";
 
     private ModEventRegistration() {
     }
@@ -201,6 +202,8 @@ public final class ModEventRegistration {
                         PktMachineAppearancePayload::handle)
                  .playToClient(PktRuntimeContentPayload.TYPE, PktRuntimeContentPayload.STREAM_CODEC,
                          PktRuntimeContentPayload::handle)
+                 .playToClient(PktStructureChunkPayload.TYPE, PktStructureChunkPayload.STREAM_CODEC,
+                         PktStructureChunkPayload::handle)
                  .playToClient(PktPortStorageSyncPayload.TYPE, PktPortStorageSyncPayload.STREAM_CODEC,
                          PktPortStorageSyncPayload::handle)
                 .playToClient(PktMultiblockMismatchHighlightPayload.TYPE,

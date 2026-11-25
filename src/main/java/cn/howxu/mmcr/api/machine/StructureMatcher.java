@@ -262,7 +262,7 @@ public final class StructureMatcher {
         private final ScanOptions options;
         private final int activeSentinelCount;
         private final CapturePredicates capturePredicates = new CapturePredicates();
-        private final PackedAirPositions<BlockPredicate>.Cursor lookup;
+        private final PositionCursor<BlockPredicate> lookup;
         private final BlockPos.MutableBlockPos worldPosition = new BlockPos.MutableBlockPos();
         private int sentinelCursor;
         private boolean sentinelsChecked;
@@ -389,8 +389,8 @@ public final class StructureMatcher {
         private void entryAt(int entryIndex, Level level, BlockPos ctrlPos,
                              CapturePredicates memo, CapturedEntries entries) {
             if (entryIndex >= 0) lookup.seek(entryIndex);
-            BlockPos relativePos = entryIndex < 0 ? previousMismatch.relativePos() : lookup.position;
-            BlockPredicate expected = entryIndex < 0 ? previousMismatch.expected() : lookup.value;
+            BlockPos relativePos = entryIndex < 0 ? previousMismatch.relativePos() : lookup.position();
+            BlockPredicate expected = entryIndex < 0 ? previousMismatch.expected() : lookup.value();
             BlockState actualState = level.getBlockState(worldPosition.setWithOffset(ctrlPos, relativePos));
             List<SingleBlockModifierReplacement> entryReplacements = replacements.isEmpty() ? List.of()
                     : replacements.getOrDefault(relativePos, List.of());
@@ -581,14 +581,14 @@ public final class StructureMatcher {
         var worldPos = new BlockPos.MutableBlockPos();
         for (int i = 0, size = pattern.pattern().size(); i < size;) {
             cursor.seek(i);
-            worldPos.setWithOffset(ctrlPos, cursor.position);
+            worldPos.setWithOffset(ctrlPos, cursor.position());
             int end = cursor.runEnd(i);
             while (true) {
                 BlockState actual = level.getBlockState(worldPos);
-                if (!cursor.value.matches(actual, stateSensitive)) {
+                if (!cursor.value().matches(actual, stateSensitive)) {
                     BlockPos relative = worldPos.subtract(ctrlPos).immutable();
-                    if (!matchesAlternative(cursor.value, actual, replacements.getOrDefault(relative, List.of()), stateSensitive)) {
-                        return Optional.of(new Mismatch(relative, worldPos.immutable(), cursor.value, actual,
+                    if (!matchesAlternative(cursor.value(), actual, replacements.getOrDefault(relative, List.of()), stateSensitive)) {
+                        return Optional.of(new Mismatch(relative, worldPos.immutable(), cursor.value(), actual,
                                 0L, Direction.SOUTH, Direction.SOUTH, 0, pattern));
                     }
                 }
