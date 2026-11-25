@@ -1,11 +1,9 @@
 package cn.howxu.mmcr.client.model;
 
-import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworkOverlay;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.neoforged.neoforge.client.model.IQuadTransformer;
 import org.jetbrains.annotations.Nullable;
@@ -21,7 +19,15 @@ import java.util.List;
 record WorldFaceLayers(@Nullable Direction front, Direction roll, List<Layer> layers) {
     static final WorldFaceLayers BASE_ONLY = new WorldFaceLayers(null, Direction.NORTH, List.of());
 
-    record Layer(ResourceLocation texture, TextureAtlasSprite sprite, RenderType pass) {}
+    /** Block-space UVs, independent of the geometry in a CTM tile.
+     * @author HowXu {@literal <dev@howxu.cn>}
+     */
+    @FunctionalInterface
+    interface Projection {
+        float[] uv(Direction face, Direction roll, Vector3f point);
+    }
+
+    record Layer(TextureAtlasSprite sprite, RenderType pass, int tintIndex, Projection projection) {}
 
     static RenderType later(RenderType a, RenderType b) {
         return a.getChunkLayerId() >= b.getChunkLayerId() ? a : b;
@@ -39,17 +45,14 @@ record WorldFaceLayers(@Nullable Direction front, Direction roll, List<Layer> la
         if (requested == null || requested == basePass) result.add(base);
         if (front != null && base.getDirection() != front) return;
         float[][] uv = null;
-        for (int index = 0; index < layers.size(); index++) {
-            Layer layer = layers.get(index);
+        Projection projection = null;
+        for (Layer layer : layers) {
             if (requested != null && later(basePass, layer.pass()) != requested) continue;
             var sprite = layer.sprite();
-            // Flux cores have a smaller footprint than the casing: coplanar draw order is not sufficient.
-            var flux = FluxNetworkOverlay.quad(layer.texture(), base, sprite, DynamicOverlayModelLoader.overlayGrow(index));
-            if (flux != null) {
-                result.add(flux);
-                continue;
+            if (projection != layer.projection()) {
+                projection = layer.projection();
+                uv = project(base, projection);
             }
-            if (uv == null) uv = project(base);
             int[] data = base.getVertices().clone();
             for (int i = 0; i < 4; i++) {
                 int offset = i * IQuadTransformer.STRIDE;
@@ -57,11 +60,11 @@ record WorldFaceLayers(@Nullable Direction front, Direction roll, List<Layer> la
                 data[offset + IQuadTransformer.UV0] = Float.floatToRawIntBits(sprite.getU(Mth.lerp(sprite.uvShrinkRatio(), uv[i][0], .5F)));
                 data[offset + IQuadTransformer.UV0 + 1] = Float.floatToRawIntBits(sprite.getV(Mth.lerp(sprite.uvShrinkRatio(), uv[i][1], .5F)));
             }
-            result.add(new BakedQuad(data, -1, base.getDirection(), sprite, base.isShade(), base.hasAmbientOcclusion()));
+            result.add(new BakedQuad(data, layer.tintIndex(), base.getDirection(), sprite, base.isShade(), base.hasAmbientOcclusion()));
         }
     }
 
-    private float[][] project(BakedQuad base) {
+    private float[][] project(BakedQuad base, Projection projection) {
         // Use block coordinates, not a CTM tile's own (possibly rotated) UVs.
         int[] data = base.getVertices();
         float[][] uv = new float[4][];
@@ -69,7 +72,7 @@ record WorldFaceLayers(@Nullable Direction front, Direction roll, List<Layer> la
         for (int i = 0; i < 4; i++) {
             int pos = i * IQuadTransformer.STRIDE + IQuadTransformer.POSITION;
             for (int j = 0; j < 3; j++) point.setComponent(j, Mth.clamp(Float.intBitsToFloat(data[pos + j]), 0F, 1F));
-            uv[i] = DynamicOverlayModelLoader.uv(base.getDirection(), roll, point);
+            uv[i] = projection.uv(base.getDirection(), roll, point);
         }
         return uv;
     }

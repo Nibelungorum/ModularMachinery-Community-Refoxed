@@ -11,6 +11,7 @@ import cn.howxu.mmcr.compat.create.CreateBridge;
 import cn.howxu.mmcr.compat.ars_nouveau.ArsNouveauBridge;
 import cn.howxu.mmcr.compat.botania.BotaniaBridge;
 import cn.howxu.mmcr.compat.pneumaticcraft.PneumaticCraftBridge;
+import cn.howxu.mmcr.compat.fluxnetworks.FluxFaceSpriteSource;
 import cn.howxu.mmcr.compat.fluxnetworks.FluxNetworksIds;
 import cn.howxu.mmcr.compat.fluxnetworks.loaded.FluxNetworksClient;
 import cn.howxu.mmcr.client.gui.CombinedPortScreen;
@@ -90,6 +91,8 @@ public class Client {
         modBus.addListener(Client::registerMachineRenderers);
         modBus.addListener(Client::registerCreateVisuals);
         modBus.addListener(Client::registerBotaniaClientCapabilities);
+        // The block atlas always names this source; without Flux textures it emits nothing.
+        modBus.addListener(FluxFaceSpriteSource::register);
         if (ModList.get().isLoaded(FluxNetworksIds.MOD_ID)) {
             modBus.addListener(FluxNetworksClient::registerBlockColors);
             modBus.addListener(FluxNetworksClient::registerItemColors);

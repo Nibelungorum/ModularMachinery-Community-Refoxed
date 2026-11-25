@@ -1,0 +1,5 @@
+{
+  "sources": [
+    { "type": "mmcr:flux_network_faces" }
+  ]
+}

@@ -74,7 +74,7 @@ class DynamicOverlayModelLoaderTest {
         ControllerSpecCache.replaceSnapshot(Map.of());
     }
 
-    private BakedModel bake(DynamicOverlayBakedModel.Kind kind, ResourceLocation itemBlockId) {
+    private DynamicOverlayModelLoader.DynamicModel bake(DynamicOverlayBakedModel.Kind kind, ResourceLocation itemBlockId) {
         var description = itemBlockId == null ? null
                 : DynamicOverlayItemModel.describeBlock(BuiltInRegistries.BLOCK.get(itemBlockId));
         return new DynamicOverlayModelLoader.DynamicModel(kind, description,
@@ -432,49 +432,51 @@ class DynamicOverlayModelLoaderTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"flux_point, 0.3125, false", "flux_plug, 0.5, false",
-                "flux_point, 0.3125, true", "flux_plug, 0.5, true"})
-    void world_flux_tiles_form_one_centered_core_with_colour_above_it(String core, float width, boolean translucentColour) {
+    @CsvSource({"INPUT, flux_point, false", "OUTPUT, flux_plug, false",
+                "INPUT, flux_point, true", "OUTPUT, flux_plug, true"})
+    void world_flux_layers_project_one_face_over_coplanar_tiles(FluxNetworkInterfaceKind kind, String core, boolean translucentColour) {
         var model = bake(DynamicOverlayBakedModel.Kind.PORT, null);
-        var on = ResourceLocation.parse("fluxnetworks:block/" + core + "_on");
-        var colour = ResourceLocation.parse("fluxnetworks:block/" + core + "_colour");
-        var colourSprite = sprites.computeIfAbsent(colour, id -> new TestSprite(id, translucentColour ? 128 : 0));
-        var layers = new WorldFaceLayers(null, Direction.NORTH, List.of(
-                new WorldFaceLayers.Layer(on, sprites.computeIfAbsent(on, TestSprite::new), RenderType.cutout()),
-                new WorldFaceLayers.Layer(colour, colourSprite, translucentColour ? RenderType.translucent() : RenderType.cutout())));
+        var on = MMCR.id("block/fluxnetworks/" + core + "_on");
+        var colour = MMCR.id("block/fluxnetworks/" + core + "_colour");
+        sprites.put(colour, new TestSprite(colour, translucentColour ? 128 : 0));
+        var layers = model.worldLayers(null, Direction.NORTH, kind.overlayTextures());
         for (var face : Direction.values()) {
             var base = model.getQuads(Blocks.IRON_BLOCK.defaultBlockState(), face,
                     RandomSource.create(1), ModelData.EMPTY, RenderType.solid()).getFirst();
-            int axis = face.getAxis().ordinal();
-            int sign = face.getAxisDirection().getStep();
-            // One CTM quarter must produce a quarter of the core, not a whole core.
-            var vertices = base.getVertices().clone();
-            for (int i = 0; i < vertices.length; i += IQuadTransformer.STRIDE) {
-                for (int j = 0; j < 3; j++) {
-                    int pos = i + IQuadTransformer.POSITION + j;
-                    if (j != axis) vertices[pos] = Float.floatToRawIntBits(Float.intBitsToFloat(vertices[pos]) / 2F);
-                }
-            }
-            var tile = new BakedQuad(vertices, 3, face, base.getSprite(), true, true);
-            var overlays = new ArrayList<BakedQuad>();
-            layers.emit(overlays, tile, RenderType.solid(), RenderType.cutout());
-            layers.emit(overlays, tile, RenderType.solid(), RenderType.translucent());
-            assertThat(overlays).extracting(BakedQuad::getSprite, BakedQuad::getTintIndex)
-                    .containsExactly(tuple(sprites.get(on), -1), tuple(sprites.get(colour), FluxNetworkOverlay.NETWORK_TINT_INDEX));
-            for (int i = 0; i < 4; i++) {
-                var point = position(tile, i);
-                var inner = position(overlays.getFirst(), i);
-                var outer = position(overlays.getLast(), i);
-                assertThat(inner.get(axis) * sign).isGreaterThan(point.get(axis) * sign);
-                assertThat(outer.get(axis) * sign).isGreaterThan(inner.get(axis) * sign);
-                for (int j = 0; j < 3; j++) {
-                    if (j == axis) continue;
-                    float expected = (1F - width) / 2 + point.get(j) * width;
-                    assertThat(inner.get(j)).isEqualTo(expected);
-                    assertThat(outer.get(j)).isEqualTo(expected);
+            for (var tile : List.of(base, quarter(base, 0, 0), quarter(base, 0, 1), quarter(base, 1, 0), quarter(base, 1, 1))) {
+                var overlays = new ArrayList<BakedQuad>();
+                layers.emit(overlays, tile, RenderType.solid(), RenderType.cutout());
+                assertThat(overlays).hasSize(translucentColour ? 1 : 2);
+                layers.emit(overlays, tile, RenderType.solid(), RenderType.translucent());
+                assertThat(overlays).extracting(BakedQuad::getSprite, BakedQuad::getTintIndex)
+                        .containsExactly(tuple(sprites.get(on), -1), tuple(sprites.get(colour), FluxNetworkOverlay.NETWORK_TINT_INDEX));
+                for (int i = 0; i < 4; i++) {
+                    var point = position(tile, i);
+                    float u = switch (face) {
+                        case NORTH -> 1 - point.x;
+                        case EAST -> 1 - point.z;
+                        case WEST -> point.z;
+                        default -> point.x;
+                    };
+                    float v = face == Direction.UP ? 1 - point.z : face == Direction.DOWN ? point.z : 1 - point.y;
+                    for (var overlay : overlays) {
+                        assertThat(position(overlay, i)).isEqualTo(point);
+                        assertUv(overlay, i, u, v);
+                    }
                 }
             }
         }
+    }
+
+    private static BakedQuad quarter(BakedQuad base, int column, int row) {
+        var data = base.getVertices().clone();
+        int axis = base.getDirection().getAxis().ordinal();
+        for (int i = IQuadTransformer.POSITION; i < data.length; i += IQuadTransformer.STRIDE) {
+            int a = i + (axis + 1) % 3, b = i + (axis + 2) % 3;
+            data[a] = Float.floatToRawIntBits((column + Float.intBitsToFloat(data[a])) / 2F);
+            data[b] = Float.floatToRawIntBits((row + Float.intBitsToFloat(data[b])) / 2F);
+        }
+        return new BakedQuad(data, 3, base.getDirection(), base.getSprite(), true, true);
     }
 
     @ParameterizedTest
@@ -493,8 +495,13 @@ class DynamicOverlayModelLoaderTest {
             for (int layer = 0; layer < description.overlayTextures().size(); layer++) {
                 var quad = quads.get(layer + 1);
                 assertThat(quad.getSprite().contents().name()).isEqualTo(description.overlayTextures().get(layer));
+                assertThat(quad.getTintIndex()).isEqualTo(layer == 0 ? -1 : FluxNetworkOverlay.NETWORK_TINT_INDEX);
                 float depth = plane + face.getAxisDirection().getStep() * DynamicOverlayModelLoader.overlayGrow(layer);
-                for (int i = 0; i < 4; i++) assertThat(position(quad, i).get(axis)).isEqualTo(depth);
+                float width = (kind == FluxNetworkInterfaceKind.INPUT ? 5F : 8F) / 16F, min = (1F - width) / 2F;
+                for (int i = 0; i < 4; i++) {
+                    var expected = position(quads.getFirst(), i).mul(width).add(min, min, min).setComponent(axis, depth);
+                    assertThat(position(quad, i)).isEqualTo(expected);
+                }
             }
         }
     }

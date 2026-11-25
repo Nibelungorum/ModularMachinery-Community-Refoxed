@@ -72,7 +72,9 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
     private static final ResourceLocation FALLBACK_TEXTURE = MMCR.id("block/ctm/basic_casing/particle");
     private static final ModelProperty<CtmContext> CTM_CONTEXT = new ModelProperty<>();
     private static final ModelProperty<WorldAppearance> WORLD_APPEARANCE = new ModelProperty<>();
-    // Item overlays and contracted world Flux cores use this spacing; full-face world layers stay coplanar.
+    private static final WorldFaceLayers.Projection PANEL_UV = DynamicOverlayModelLoader::uv;
+    private static final WorldFaceLayers.Projection FLUX_UV = (face, roll, point) -> FluxNetworkOverlay.uv(face, point);
+    // Item overlays only. All world layers share the casing vertices.
     static final float OVERLAY_GROW = 0.0005f;
     private static final Set<ResourceLocation> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
@@ -363,15 +365,21 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
                     ? DynamicOverlayBakedModel.controllerStateOverlay(machineId(state, modelData),
                     state.getValue(MachineControllerBlock.ACTIVE), easterEgg) : null;
             if (stateOverlay != null) overlays = ImmutableList.<ResourceLocation>builder().addAll(overlays).add(stateOverlay).build();
+            return new WorldAppearance(textures.base(), worldLayers(overlayFace, rollFacing, overlays));
+        }
+
+        WorldFaceLayers worldLayers(@Nullable Direction front, Direction roll, List<ResourceLocation> overlays) {
             var layers = new ArrayList<WorldFaceLayers.Layer>(overlays.size());
             var pass = RenderType.solid();
             for (var texture : overlays) {
-                var sprite = sprite(texture);
+                var core = FluxNetworkOverlay.forTexture(texture);
+                var sprite = sprite(core == null ? texture : core.worldSprite());
                 // A later overlay cannot be submitted before a translucent layer underneath it.
                 pass = WorldFaceLayers.later(pass, overlayRenderType(sprite));
-                layers.add(new WorldFaceLayers.Layer(texture, sprite, pass));
+                layers.add(new WorldFaceLayers.Layer(sprite, pass, core == null ? -1 : core.tintIndex(),
+                        core == null ? PANEL_UV : FLUX_UV));
             }
-            return new WorldAppearance(textures.base(), new WorldFaceLayers(overlayFace, rollFacing, layers));
+            return new WorldFaceLayers(front, roll, layers);
         }
 
         private DynamicOverlayBakedModel.TextureSet textures(BlockState state, ModelData modelData) {
@@ -455,8 +463,8 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             TextureAtlasSprite sprite = sprite(texture);
             var base = direction.getAxis() == shaftAxis ? shaftPanel(direction, sprite, grow)
                     : face(direction, rollFacing, sprite, grow);
-            var flux = FluxNetworkOverlay.quad(texture, base, sprite, 0F); // The item face already includes grow.
-            return flux != null ? flux : base;
+            var core = FluxNetworkOverlay.forTexture(texture);
+            return core == null ? base : core.itemQuad(base, sprite);
         }
 
         private BakedQuad shaftPanel(Direction direction, TextureAtlasSprite sprite, float grow) {
