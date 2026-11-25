@@ -30,8 +30,6 @@ import java.util.function.UnaryOperator;
  * <p>{@link #cursor()} is the allocation-free path used by the structure scan: it rotates the source
  * cursor's scratch position into its own mutable position. Everything else materialises positions on
  * demand and is used only by diagnostics, wire encoding and compile-time candidate collection.
- *
- * @author howxu {@literal <dev@howxu.cn>}
  */
 final class RotatedPositions<V> extends AbstractMap<BlockPos, V> implements PositionTable<V> {
 

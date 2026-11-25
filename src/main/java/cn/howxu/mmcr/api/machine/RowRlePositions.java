@@ -38,8 +38,6 @@ import java.util.function.UnaryOperator;
  * packing, duplicate handling and the update path keep their current behaviour; this is a compaction of
  * its output, not a second implementation of it. Anything the model cannot express (oversized extents,
  * vertical runs, out-of-order rows) keeps the packed representation unchanged.
- *
- * @author howxu {@literal <dev@howxu.cn>}
  */
 final class RowRlePositions<V> extends AbstractMap<BlockPos, V> implements PositionTable<V> {
 

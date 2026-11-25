@@ -21,8 +21,6 @@ import java.util.Set;
  *
  * <p>{@link #normalized()} exposes the south-facing table for the internal packing paths
  * ({@link BlockArray#glyphs()} union), which must keep seeing untransformed coordinates.
- *
- * @author howxu {@literal <dev@howxu.cn>}
  */
 final class GlyphView extends AbstractMap<BlockPos, Character> {
 

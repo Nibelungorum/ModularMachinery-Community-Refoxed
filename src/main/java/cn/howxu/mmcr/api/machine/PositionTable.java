@@ -23,8 +23,6 @@ import java.util.function.UnaryOperator;
  * <p>The per-entry scan loop must use {@link #cursor()}: it is the only access path guaranteed not to
  * allocate. {@link #positions()}, {@link #orderedValues()} and {@link #entries()} are for diagnostics
  * and wire encoding, which materialise positions on demand.
- *
- * @author howxu {@literal <dev@howxu.cn>}
  */
 interface PositionTable<V> extends Map<BlockPos, V> {
 

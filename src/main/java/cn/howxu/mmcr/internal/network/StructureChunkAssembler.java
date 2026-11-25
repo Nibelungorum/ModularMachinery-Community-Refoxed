@@ -22,8 +22,6 @@ import java.util.zip.InflaterInputStream;
  * <p>A single structure can be several megabytes, well past vanilla's 1 MiB custom payload limit, so the
  * server deflates and slices it. Reassembly is byte-level: slices are concatenated and inflated with no
  * understanding of the structure format, which keeps the protocol independent of the structure codec.
- *
- * @author howxu {@literal <dev@howxu.cn>}
  */
 final class StructureChunkAssembler {
 

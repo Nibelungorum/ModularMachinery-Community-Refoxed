@@ -20,8 +20,6 @@ import java.util.Map;
  * metadata is handled every slice is already buffered and reassembly is immediate.
  *
  * <p>State is reset whenever the content version changes, so a new sync never mixes with stale slices.
- *
- * @author howxu {@literal <dev@howxu.cn>}
  */
 final class ClientStructureChunkBuffer {
 

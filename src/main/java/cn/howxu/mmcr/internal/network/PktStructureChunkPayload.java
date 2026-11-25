@@ -15,8 +15,6 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * whole packet with {@code EncoderException: Failed to encode packet}. Structures are therefore deflated
  * and split into slices that each fit the limit, and the client reassembles them before applying the
  * snapshot.
- *
- * @author howxu {@literal <dev@howxu.cn>}
  */
 public record PktStructureChunkPayload(long contentVersion, ResourceLocation machineId,
                                        int chunkIndex, int chunkCount, byte[] data)

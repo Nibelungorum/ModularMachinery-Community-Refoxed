@@ -9,8 +9,6 @@ import net.minecraft.core.Direction;
  * <p>One cursor instance owns one reusable scratch position, so implementations that decode runs or
  * rotate coordinates never allocate inside the per-entry scan loop, which walks up to hundreds of
  * thousands of entries per structure check.
- *
- * @author howxu {@literal <dev@howxu.cn>}
  */
 interface PositionCursor<V> {
 
