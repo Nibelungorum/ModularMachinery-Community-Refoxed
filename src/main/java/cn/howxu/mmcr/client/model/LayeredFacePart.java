@@ -29,12 +29,12 @@ record LayeredFacePart(BlockStateModelPart base, @Nullable Direction front, Dire
         var result = new ArrayList<BakedQuad>(quads.size() * (1 + overlays.size()));
         for (var quad : quads) {
             result.add(quad);
-            if (front == null || quad.direction() == front) addOverlays(result, quad);
+            if (front == null || quad.direction() == front) addOverlays(result, quad, roll, overlays);
         }
         return result;
     }
 
-    private void addOverlays(List<BakedQuad> result, BakedQuad quad) {
+    static void addOverlays(List<BakedQuad> result, BakedQuad quad, Direction roll, List<Material.Baked> overlays) {
         var face = quad.direction();
         // Project from block space, not the CTM tile's own (possibly rotated) UVs.
         var uv0 = DynamicOverlayModelLoader.uv(face, roll, quad.position0());

@@ -7,7 +7,6 @@ import cn.howxu.mmcr.client.controller.ControllerSpecCache;
 import cn.howxu.mmcr.internal.block.MachineControllerBlock;
 import cn.howxu.mmcr.registry.ModBlocks;
 import cn.howxu.mmcr.test.TestBootstrap;
-import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.model.geom.builders.UVPair;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -46,7 +45,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
 
 class DynamicOverlayModelLoaderTest {
     private static final BlockPos POS = BlockPos.ZERO;
@@ -225,23 +223,6 @@ class DynamicOverlayModelLoaderTest {
         image.setPixel(0, 0, color);
         var contents = new SpriteContents(texture, new FrameSize(1, 1), image);
         return new TextureAtlasSprite(TextureAtlas.LOCATION_BLOCKS, contents, 1, 1, 0, 0, 0) {};
-    }
-
-    @Test
-    void overlay_layers_keep_texture_order_and_append_state_last() {
-        var basic = MMCR.id("block/overlay_basic");
-        var type = MMCR.id("block/overlay_type");
-        var tier = MMCR.id("block/overlay_tier");
-        var state = MMCR.id("block/overlay_state");
-
-        assertThat(DynamicOverlayModelLoader.overlayLayers(ImmutableList.of(basic, type, tier), state))
-                .extracting(DynamicOverlayModelLoader.OverlayLayer::texture,
-                        DynamicOverlayModelLoader.OverlayLayer::grow)
-                .containsExactly(
-                        tuple(basic, DynamicOverlayModelLoader.OVERLAY_GROW),
-                        tuple(type, DynamicOverlayModelLoader.OVERLAY_GROW * 2.0f),
-                        tuple(tier, DynamicOverlayModelLoader.OVERLAY_GROW * 3.0f),
-                        tuple(state, DynamicOverlayModelLoader.OVERLAY_GROW * 4.0f));
     }
 
     @Test

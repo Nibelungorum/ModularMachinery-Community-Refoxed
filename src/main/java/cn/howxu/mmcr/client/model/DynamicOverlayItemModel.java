@@ -14,7 +14,6 @@ import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.item.ModelRenderProperties;
 import net.minecraft.client.resources.model.ResolvableModel;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
-import net.minecraft.client.resources.model.geometry.QuadCollection;
 import net.minecraft.client.resources.model.sprite.Material;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -26,14 +25,13 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4fc;
-import org.joml.Vector3fc;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
  * Item model entry point shared by runtime machine controller and I/O port items.
@@ -65,38 +63,33 @@ public final class DynamicOverlayItemModel implements ItemModel {
         }
         renderState.appendModelIdentityElement(description);
 
-        BaseModel baseModel = baseModel(description.baseModel(), DynamicOverlayBakedModel.resolveBase(description.baseTextureSource()));
-        baseModel.applyToLayer(renderState.newLayer(), displayContext, transformation);
+        var baseTextures = DynamicOverlayBakedModel.resolveBase(description.baseTextureSource());
+        var overlays = new ArrayList<Material.Baked>(description.overlayTextures().size() + 1);
+        for (var texture : description.overlayTextures()) {
+            overlays.add(material(texture));
+        }
+        if (description.stateOverlayTexture() != null) {
+            overlays.add(material(description.stateOverlayTexture()));
+        }
 
-        QuadCollection.Builder quads = new QuadCollection.Builder();
-        for (DynamicOverlayModelLoader.OverlayLayer overlay : DynamicOverlayModelLoader.overlayLayers(
-                description.overlayTextures(), description.stateOverlayTexture())) {
-            for (Direction direction : description.overlayFaces()) {
-                DynamicOverlayModelLoader.addFace(quads, direction, material(overlay.texture()), overlay.grow(), false);
+        // The renderer assigns passes per item submit; keep each base face and its overlays together.
+        var layer = renderState.newLayer();
+        renderProperties.get(description.baseModel()).applyToLayer(layer, displayContext);
+        layer.setLocalTransform(transformation);
+        var baseQuads = new ArrayList<BakedQuad>(6);
+        var quads = layer.prepareQuadList();
+        for (Direction face : Direction.values()) {
+            var base = DynamicOverlayModelLoader.baseFace(face, material(baseTextures.forFace(face)));
+            baseQuads.add(base);
+            quads.add(base);
+            if (description.overlayFaces().contains(face)) {
+                LayeredFacePart.addOverlays(quads, base, Direction.NORTH, overlays);
             }
         }
-
-        var layer = renderState.newLayer();
-        baseModel.renderProperties().applyToLayer(layer, displayContext);
-        layer.setExtents(baseModel.extents());
-        layer.setLocalTransform(transformation);
-        layer.setParticleMaterial(material(description.overlayTextures().getFirst()));
-        QuadCollection overlayQuads = quads.build();
-        layer.prepareQuadList().addAll(overlayQuads.getAll());
-        if (baseModel.quads().hasMaterialFlag(BakedQuad.FLAG_ANIMATED)
-                || overlayQuads.hasMaterialFlag(BakedQuad.FLAG_ANIMATED)) {
+        layer.setExtents(() -> CuboidItemModelWrapper.computeExtents(baseQuads));
+        if (quads.stream().anyMatch(q -> (q.materialInfo().flags() & BakedQuad.FLAG_ANIMATED) != 0)) {
             renderState.setAnimated();
         }
-    }
-
-    private BaseModel baseModel(Identifier modelId, DynamicOverlayBakedModel.FaceTextures baseTextures) {
-        QuadCollection.Builder quads = new QuadCollection.Builder();
-        for (Direction direction : Direction.values()) {
-            DynamicOverlayModelLoader.addFace(quads, direction, material(baseTextures.forFace(direction)), 0.0f, true);
-        }
-        QuadCollection builtQuads = quads.build();
-        return new BaseModel(builtQuads, () -> CuboidItemModelWrapper.computeExtents(builtQuads.getAll()),
-                renderProperties.get(modelId));
     }
 
     private Material.Baked material(Identifier texture) {
@@ -163,18 +156,6 @@ public final class DynamicOverlayItemModel implements ItemModel {
         static Description staticItem() {
             return new Description(null, null, null, null, null, ImmutableList.of(), null,
                     EnumSet.noneOf(Direction.class));
-        }
-    }
-
-    private record BaseModel(
-            QuadCollection quads,
-            Supplier<Vector3fc[]> extents,
-            ModelRenderProperties renderProperties) {
-        void applyToLayer(ItemStackRenderState.LayerRenderState layer, ItemDisplayContext context, Matrix4fc transformation) {
-            layer.setExtents(extents);
-            layer.setLocalTransform(transformation);
-            renderProperties.applyToLayer(layer, context);
-            layer.prepareQuadList().addAll(quads.getAll());
         }
     }
 

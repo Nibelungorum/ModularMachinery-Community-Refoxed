@@ -50,8 +50,6 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
     public static final MapCodec<Unbaked> PORT_CODEC = MapCodec.unit(() -> new Unbaked(DynamicOverlayBakedModel.Kind.PORT));
 
     private static final Material FALLBACK_PARTICLE = new Material(MMCR.id("block/ctm/basic_casing/particle"));
-    // Only item models grow overlays. World layers share the base quad's vertices.
-    static final float OVERLAY_GROW = 0.0003f;
     private static final Set<Identifier> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private final DynamicOverlayBakedModel.Kind kind;
@@ -103,7 +101,7 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
 
         var quads = new QuadCollection.Builder();
         for (Direction direction : Direction.values()) {
-            addFace(quads, direction, baseMaterial(textures.forFace(direction)), 0.0f, true);
+            quads.addCulledFace(direction, baseFace(direction, baseMaterial(textures.forFace(direction))));
         }
         parts.add(new SimpleModelWrapper(quads.build(), true, material(textures.forFace(Direction.NORTH))));
     }
@@ -175,24 +173,6 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
                 : definition.itemDescription().overlayTextures();
     }
 
-    static float overlayGrow(int index) {
-        return OVERLAY_GROW * (index + 1);
-    }
-
-    static ImmutableList<OverlayLayer> overlayLayers(List<Identifier> overlays, @Nullable Identifier stateOverlay) {
-        ImmutableList.Builder<OverlayLayer> layers = ImmutableList.builder();
-        for (int index = 0; index < overlays.size(); index++) {
-            layers.add(new OverlayLayer(overlays.get(index), overlayGrow(index)));
-        }
-        if (stateOverlay != null) {
-            layers.add(new OverlayLayer(stateOverlay, overlayGrow(overlays.size())));
-        }
-        return layers.build();
-    }
-
-    record OverlayLayer(Identifier texture, float grow) {
-    }
-
     private Material.Baked material(Identifier texture) {
         return runtimeMaterialGetter.apply(texture);
     }
@@ -217,29 +197,18 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         MISSING_BASE_TEXTURES.clear();
     }
 
-    static void addFace(QuadCollection.Builder quads, Direction direction, Material.Baked material,
-                        float grow, boolean culled) {
-        addFace(quads, direction, Direction.NORTH, material, grow, culled);
-    }
-
-    static void addFace(QuadCollection.Builder quads, Direction direction, Direction rollFacing, Material.Baked material,
-                        float grow, boolean culled) {
+    static BakedQuad baseFace(Direction direction, Material.Baked material) {
         QuadBakingVertexConsumer builder = new QuadBakingVertexConsumer();
         builder.setSprite(material);
         builder.setDirection(direction);
         builder.setShade(true);
 
         Vec3i normal = direction.getUnitVec3i();
-        for (Vector3f vertex : vertices(direction, grow)) {
-            float[] uv = uv(direction, rollFacing, vertex);
+        for (Vector3f vertex : vertices(direction)) {
+            float[] uv = uv(direction, Direction.NORTH, vertex);
             putVertex(builder, material, normal, vertex.x(), vertex.y(), vertex.z(), uv[0], uv[1]);
         }
-
-        if (culled) {
-            quads.addCulledFace(direction, builder.bakeQuad());
-        } else {
-            quads.addUnculledFace(builder.bakeQuad());
-        }
+        return builder.bakeQuad();
     }
 
     private static void putVertex(QuadBakingVertexConsumer builder, Material.Baked material, Vec3i normal,
@@ -251,9 +220,9 @@ public final class DynamicOverlayModelLoader implements DynamicBlockStateModel {
         builder.setUv(sprite.getU(u), sprite.getV(v));
     }
 
-    private static List<Vector3f> vertices(Direction direction, float grow) {
-        float min = -grow;
-        float max = 1.0f + grow;
+    private static List<Vector3f> vertices(Direction direction) {
+        float min = 0.0f;
+        float max = 1.0f;
         return switch (direction) {
             case EAST -> List.of(new Vector3f(max, max, max), new Vector3f(max, min, max), new Vector3f(max, min, min), new Vector3f(max, max, min));
             case WEST -> List.of(new Vector3f(min, max, min), new Vector3f(min, min, min), new Vector3f(min, min, max), new Vector3f(min, max, max));
