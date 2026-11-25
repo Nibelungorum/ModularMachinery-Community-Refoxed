@@ -129,7 +129,6 @@ public final class MachineStructureSyncCodec {
             }
         });
         buf.writeVarInt(runCount[0]);
-        checkSize(palette.size(), maxCollectionEntries(), "predicate palette");
         buf.writeVarInt(palette.size());
         for (BlockPredicate predicate : palette) writeBlockPredicate(buf, predicate);
         value.forRuns((start, step, length, predicate) -> {
@@ -146,7 +145,11 @@ public final class MachineStructureSyncCodec {
             writeStringList(buf, entry.getValue());
         }
 
-        // Symbols use the same run+palette shape: one character per run instead of per cell.
+        int symbolCount = value.symbolsByPosition().size();
+        if (symbolCount > blockPatternLimit.maxBlocks) {
+            logExceededBlockLimit(machineId, "block symbol", symbolCount, blockPatternLimit.maxBlocks);
+            throw new IllegalArgumentException("Invalid block symbol count: " + symbolCount);
+        }
         List<Character> symbolPalette = new ArrayList<>();
         Map<Character, Integer> symbolIndex = new HashMap<>();
         int[] symbolRunCount = {0};
@@ -157,12 +160,7 @@ public final class MachineStructureSyncCodec {
                 symbolPalette.add(symbol);
             }
         });
-        if (symbolRunCount[0] > blockPatternLimit.maxBlocks) {
-            logExceededBlockLimit(machineId, "block symbol run", symbolRunCount[0], blockPatternLimit.maxBlocks);
-            throw new IllegalArgumentException("Invalid block symbol run count: " + symbolRunCount[0]);
-        }
         buf.writeVarInt(symbolRunCount[0]);
-        checkSize(symbolPalette.size(), Character.MAX_VALUE, "symbol palette");
         buf.writeVarInt(symbolPalette.size());
         for (char symbol : symbolPalette) buf.writeChar(symbol);
         value.forSymbolRuns((start, step, length, symbol) -> {
@@ -175,13 +173,14 @@ public final class MachineStructureSyncCodec {
 
     private static BlockArray readBlockArray(RegistryFriendlyByteBuf buf, BlockPatternLimit blockPatternLimit) {
         int patternCount = buf.readVarInt();
+        checkSize(patternCount, blockPatternLimit.maxBlocks, "block pattern");
         blockPatternLimit.add(patternCount);
         var input = new BlockArray.PositionInput();
 
         int runCount = buf.readVarInt();
-        checkSize(runCount, blockPatternLimit.maxBlocks, "block run");
+        checkSize(runCount, patternCount, "block run");
         int paletteSize = buf.readVarInt();
-        checkSize(paletteSize, maxCollectionEntries(), "predicate palette");
+        checkSize(paletteSize, runCount, "predicate palette");
         BlockPredicate[] palette = new BlockPredicate[paletteSize];
         for (int i = 0; i < paletteSize; i++) {
             palette[i] = readBlockPredicate(buf);
@@ -196,7 +195,7 @@ public final class MachineStructureSyncCodec {
                 throw new IllegalArgumentException("Invalid run entry at " + i);
             }
             cells = Math.addExact(cells, length);
-            if (cells > blockPatternLimit.maxBlocks) {
+            if (cells > patternCount) {
                 throw new IllegalArgumentException("Block pattern exceeds its declared size: " + cells);
             }
             input.predicateRun(start, step, length, palette[index]);
@@ -215,19 +214,21 @@ public final class MachineStructureSyncCodec {
         int symbolRunCount = buf.readVarInt();
         checkSize(symbolRunCount, blockPatternLimit.maxBlocks, "block symbol run");
         int symbolPaletteSize = buf.readVarInt();
-        checkSize(symbolPaletteSize, Character.MAX_VALUE, "symbol palette");
+        checkSize(symbolPaletteSize, Math.min(symbolRunCount, Character.MAX_VALUE + 1), "symbol palette");
         char[] symbolPalette = new char[symbolPaletteSize];
         for (int i = 0; i < symbolPaletteSize; i++) {
             symbolPalette[i] = buf.readChar();
         }
+        int remainingSymbols = blockPatternLimit.maxBlocks;
         for (int i = 0; i < symbolRunCount; i++) {
             BlockPos start = buf.readBlockPos();
             Direction step = buf.readEnum(Direction.class);
             int length = buf.readVarInt();
             int index = buf.readVarInt();
-            if (length <= 0 || index < 0 || index >= symbolPaletteSize) {
+            if (length <= 0 || length > remainingSymbols || index < 0 || index >= symbolPaletteSize) {
                 throw new IllegalArgumentException("Invalid symbol run entry at " + i);
             }
+            remainingSymbols -= length;
             input.symbolRun(start, step, length, symbolPalette[index]);
         }
         return input.build(tags);

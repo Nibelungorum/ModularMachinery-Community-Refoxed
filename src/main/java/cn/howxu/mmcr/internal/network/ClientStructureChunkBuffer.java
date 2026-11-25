@@ -1,80 +1,79 @@
 package cn.howxu.mmcr.internal.network;
 
-import cn.howxu.mmcr.MMCR;
 import cn.howxu.mmcr.api.machine.MachineStructureDefinition;
 import cn.howxu.mmcr.internal.sync.MachineStructureSyncCodec;
+import cn.howxu.mmcr.internal.sync.RuntimeContentSnapshot;
 import io.netty.buffer.Unpooled;
+import io.netty.util.AttributeKey;
+import io.netty.util.AttributeMap;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
-/**
- * Client-side reassembly of chunked machine structures.
- *
- * <p>Structures are deflated and sliced on the server because a single multiblock pattern can exceed the
- * 1 MiB custom payload cap. Slices arrive before the metadata payload that names them, so by the time the
- * metadata is handled every slice is already buffered and reassembly is immediate.
- *
- * <p>State is reset whenever the content version changes, so a new sync never mixes with stale slices.
- */
+/** Both packet handlers run on the game thread. Pending slices belong only to their connection. */
 final class ClientStructureChunkBuffer {
+    private static final AttributeKey<ClientStructureChunkBuffer> KEY = AttributeKey.valueOf("mmcr:structure_chunks");
 
-    private static StructureChunkAssembler.Transfer transfer;
-    private static RegistryAccess registryAccess;
+    private final long version;
+    private final Map<ResourceLocation, StructureChunkAssembler> structures = new HashMap<>();
 
-    private ClientStructureChunkBuffer() {
+    private ClientStructureChunkBuffer(long version) {
+        this.version = version;
     }
 
-    /** Called from the chunk packet decoder, which is the only place with registry access. */
-    static synchronized void acceptSlice(PktStructureChunkPayload payload, RegistryAccess access) {
-        if (access != null) registryAccess = access;
-        StructureChunkAssembler.Transfer current = transfer;
-        if (current == null || current.contentVersion() != payload.contentVersion()) {
-            if (current != null) current.clear();
-            current = new StructureChunkAssembler.Transfer(payload.contentVersion());
-            transfer = current;
+    static void accept(AttributeMap connection, PktStructureChunkPayload chunk) {
+        var attribute = connection.attr(KEY);
+        var pending = attribute.get();
+        if (pending != null && pending.version > chunk.contentVersion()) return;
+        if (pending == null || pending.version != chunk.contentVersion()) {
+            pending = new ClientStructureChunkBuffer(chunk.contentVersion());
+            attribute.set(pending);
         }
-        current.accept(payload.machineId(), payload.chunkIndex(), payload.chunkCount(), payload.data());
+        var structure = pending.structures.get(chunk.machineId());
+        if (structure == null) {
+            if (pending.structures.size() >= PktRuntimeContentPayload.maxStructures()) {
+                throw new IllegalArgumentException("Too many chunked structures");
+            }
+            structure = new StructureChunkAssembler(chunk);
+            pending.structures.put(chunk.machineId(), structure);
+        }
+        structure.accept(chunk);
     }
 
-    /**
-     * Reassembles every structure named in {@code chunkedStructureIds}.
-     *
-     * @return the decoded structures, or {@code null} while slices are still missing
-     */
-    static synchronized Map<ResourceLocation, MachineStructureDefinition> assemble(long contentVersion,
-                                                                                  List<ResourceLocation> chunkedStructureIds,
-                                                                                  int maxBlocks) {
-        StructureChunkAssembler.Transfer current = transfer;
-        if (current == null || current.contentVersion() != contentVersion) return null;
-        if (registryAccess == null) return null;
+    /** Metadata ends the transfer. Never expose a partial snapshot or consume a newer transfer. */
+    static @Nullable RuntimeContentSnapshot finish(AttributeMap connection, PktRuntimeContentPayload metadata,
+                                                  RegistryAccess registries) {
+        RuntimeContentSnapshot snapshot = metadata.snapshot();
+        var attribute = connection.attr(KEY);
+        var pending = attribute.get();
+        if (pending != null) {
+            if (pending.version > snapshot.contentVersion()) return null;
+            attribute.set(null);
+        }
+        if (metadata.chunkedStructureIds().isEmpty()) return snapshot;
+        if (pending == null || pending.version != snapshot.contentVersion()) return null;
 
-        Map<ResourceLocation, MachineStructureDefinition> decoded = new LinkedHashMap<>();
-        for (ResourceLocation machineId : chunkedStructureIds) {
-            byte[] raw = current.assemble(machineId);
-            if (raw == null) return null;
-            RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(raw), registryAccess);
+        Map<ResourceLocation, MachineStructureDefinition> decoded = new LinkedHashMap<>(snapshot.structures());
+        for (ResourceLocation id : metadata.chunkedStructureIds()) {
+            var parts = pending.structures.remove(id);
+            if (parts == null) return null;
+            var buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
             try {
-                MachineStructureDefinition definition = MachineStructureSyncCodec.decode(buf, maxBlocks);
-                if (!machineId.equals(definition.machineId())) {
-                    throw new IllegalArgumentException("Chunked structure id mismatch: " + machineId
-                            + " decoded as " + definition.machineId());
+                if (!parts.inflateInto(buf)) return null;
+                var definition = MachineStructureSyncCodec.decode(buf, metadata.maxStructureBlocks());
+                if (!id.equals(definition.machineId()) || decoded.putIfAbsent(id, definition) != null) {
+                    throw new IllegalArgumentException("Invalid chunked structure id: " + id);
                 }
-                decoded.put(machineId, definition);
             } finally {
                 buf.release();
             }
         }
-        return Map.copyOf(decoded);
-    }
-
-    /** Drops every buffered slice; called after a snapshot is applied or when a sync restarts. */
-    static synchronized void reset() {
-        if (transfer != null) transfer.clear();
-        transfer = null;
+        return new RuntimeContentSnapshot(decoded, snapshot.recipes(), snapshot.controllerSpecs(),
+                snapshot.appearances(), snapshot.machineRecipePools(), snapshot.contentVersion());
     }
 }

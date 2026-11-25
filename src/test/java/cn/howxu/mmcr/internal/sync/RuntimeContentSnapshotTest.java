@@ -34,7 +34,6 @@ import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.Registry;
@@ -151,42 +150,19 @@ class RuntimeContentSnapshotTest {
 
     @Test
     void run_encoded_bytes_keep_independent_symbol_order_and_logical_limits() {
-        var id = MMCR.id("wire_air");
+        Map<BlockPos, BlockPredicate> cells = new LinkedHashMap<>();
+        Map<BlockPos, Character> glyphs = new LinkedHashMap<>();
+        var air = new BlockPredicate.Air();
+        for (int x = -10; x < 10; x++) cells.put(new BlockPos(x, 0, 0), air);
+        for (int x = 9; x >= -10; x--) glyphs.put(new BlockPos(x, 0, 0), x < 0 ? ' ' : '空');
+        var pattern = new BlockArray(cells, Map.of(), glyphs);
+        var structure = new MachineStructureDefinition(MMCR.id("wire_air"), List.of(MachineStructureDefinition.Declaration.full(pattern)));
         var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         try {
-            ResourceLocation.STREAM_CODEC.encode(wire, id);
-            wire.writeVarInt(1); // declarations
-            wire.writeEnum(MachineStructureDefinition.Declaration.Kind.FULL);
-            wire.writeVarInt(20); // logical cell count
-            wire.writeVarInt(1);  // predicate runs: one straight air run
-            wire.writeVarInt(1);  // predicate palette size
-            wire.writeVarInt(1);  // PredicateKind.AIR
-            wire.writeBlockPos(new BlockPos(-10, 0, 0));
-            wire.writeEnum(Direction.EAST);
-            wire.writeVarInt(20);
-            wire.writeVarInt(0);
-            wire.writeVarInt(0); // tag positions
-            // Symbols arrive in their own palette/run stream, in reverse order, independent of predicates.
-            wire.writeVarInt(2); // symbol runs
-            wire.writeVarInt(2); // symbol palette size
-            wire.writeChar('空');
-            wire.writeChar(' ');
-            wire.writeBlockPos(new BlockPos(9, 0, 0));
-            wire.writeEnum(Direction.EAST);
-            wire.writeVarInt(10);
-            wire.writeVarInt(0);
-            wire.writeBlockPos(new BlockPos(-1, 0, 0));
-            wire.writeEnum(Direction.EAST);
-            wire.writeVarInt(10);
-            wire.writeVarInt(1);
-            for (int i = 0; i < 5; i++) wire.writeVarInt(0); // ports, tiers, dynamics, modifiers, levels
-            wire.writeBoolean(false);
-            var decoded = MachineStructureSyncCodec.decode(wire, 20);
-            BlockArray decodedPattern = decoded.declarations().getFirst().pattern();
-            assertThat(decodedPattern.pattern().get(BlockPos.ZERO)).isInstanceOf(BlockPredicate.Air.class);
-            assertThat(decodedPattern.pattern().size()).isEqualTo(20);
-            assertThat(decodedPattern.symbolsByPosition()).containsEntry(new BlockPos(9, 0, 0), '空')
-                    .containsEntry(new BlockPos(-1, 0, 0), ' ');
+            MachineStructureSyncCodec.encode(wire, structure, 20);
+            BlockArray decoded = MachineStructureSyncCodec.decode(wire, 20).pattern();
+            assertThat(decoded.pattern()).containsExactlyEntriesOf(cells);
+            assertThat(decoded.symbolsByPosition()).containsExactlyEntriesOf(glyphs);
             wire.readerIndex(0);
             assertThatThrownBy(() -> MachineStructureSyncCodec.decode(wire, 19))
                     .hasMessageContaining("block pattern count");
@@ -621,12 +597,40 @@ class RuntimeContentSnapshotTest {
     }
 
     @Test
-    void structureSyncCodecUsesConfiguredDefaultBlockPatternLimit() {
-        // A configurable guard, not a content-size promise: packs with larger structures raise it in
-        // server.toml. Structures over the limit are skipped with a log line instead of aborting the join.
-        assertThat(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS).isEqualTo(524_288);
-        assertThat(MachineStructureSyncCodec.maximumBlockPatternCount())
-                .isEqualTo(ServerConfig.DEFAULT_STRUCTURE_SYNC_MAX_BLOCKS);
+    void aPaletteOfDistinctPredicatesUsesTheStructureBudget() {
+        Map<BlockPos, BlockPredicate> cells = new LinkedHashMap<>();
+        for (int x = 0; x < 1025; x++) cells.put(BlockPos.ZERO.east(x), new BlockPredicate.Any());
+        var pattern = new BlockArray(cells);
+        var structure = new MachineStructureDefinition(MMCR.id("many_predicates"),
+                List.of(MachineStructureDefinition.Declaration.full(pattern)));
+        var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            MachineStructureSyncCodec.encode(wire, structure, cells.size());
+            var restored = MachineStructureSyncCodec.decode(wire, cells.size()).pattern();
+            assertThat(restored.pattern()).containsExactlyEntriesOf(cells);
+            assertThat(restored.get(BlockPos.ZERO)).isNotSameAs(restored.get(BlockPos.ZERO.east()));
+        } finally {
+            wire.release();
+        }
+    }
+
+    @Test
+    void structureSyncCodecCountsExpandedGlyphCellsAgainstTheBudget() {
+        Map<BlockPos, Character> glyphs = new LinkedHashMap<>();
+        for (int x = 0; x < 3; x++) glyphs.put(BlockPos.ZERO.east(x), 'X');
+        var pattern = new BlockArray(Map.of(BlockPos.ZERO, new BlockPredicate.Any()), Map.of(), glyphs);
+        var structure = new MachineStructureDefinition(MMCR.id("glyph_budget"), List.of(MachineStructureDefinition.Declaration.full(pattern)));
+        var wire = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            assertThatThrownBy(() -> MachineStructureSyncCodec.encode(wire, structure, 2))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("symbol count");
+            wire.clear();
+            MachineStructureSyncCodec.encode(wire, structure, 3);
+            assertThatThrownBy(() -> MachineStructureSyncCodec.decode(wire, 2))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("symbol run");
+        } finally {
+            wire.release();
+        }
     }
 
     @Test

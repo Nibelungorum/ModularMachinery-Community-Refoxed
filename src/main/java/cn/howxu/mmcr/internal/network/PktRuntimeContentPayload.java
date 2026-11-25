@@ -30,7 +30,7 @@ import java.util.function.BiConsumer;
  * @author howxu <dev@howxu.cn>
  */
 public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot,
-                                       List<ResourceLocation> chunkedStructureIds) implements CustomPacketPayload {
+                                       List<ResourceLocation> chunkedStructureIds, int maxStructureBlocks) implements CustomPacketPayload {
     private static final int MAX_STRUCTURES = 4096;
     private static final int MAX_RECIPES = 16384;
     private static final int MAX_SPECS = 4096;
@@ -88,10 +88,15 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot,
         if (snapshot == null) {
             throw new IllegalArgumentException("snapshot null");
         }
-        chunkedStructureIds = List.copyOf(chunkedStructureIds == null ? List.of() : chunkedStructureIds);
+        if (maxStructureBlocks <= 0) throw new IllegalArgumentException("Invalid maximum block pattern count: " + maxStructureBlocks);
+        chunkedStructureIds = chunkedStructureIds == null ? List.of() : List.copyOf(chunkedStructureIds);
     }
 
-    /** Inline-only payload: every structure travels inside the snapshot (small structures, tests). */
+    public PktRuntimeContentPayload(RuntimeContentSnapshot snapshot, List<ResourceLocation> chunkedStructureIds) {
+        this(snapshot, chunkedStructureIds, MachineStructureSyncCodec.maximumBlockPatternCount());
+    }
+
+    /** Snapshot with all structures inline. */
     public PktRuntimeContentPayload(RuntimeContentSnapshot snapshot) {
         this(snapshot, List.of());
     }
@@ -103,21 +108,10 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot,
 
     public void handle(IPayloadContext context) {
         context.enqueueWork(() -> {
-            RuntimeContentSnapshot effective = snapshot;
-            if (!chunkedStructureIds.isEmpty()) {
-                Map<ResourceLocation, MachineStructureDefinition> decoded = ClientStructureChunkBuffer.assemble(
-                        snapshot.contentVersion(), chunkedStructureIds,
-                        MachineStructureSyncCodec.maximumBlockPatternCount());
-                if (decoded == null) {
-                    MMCR.LOG.warn("Incomplete chunked structure sync for version {} ({} structures); waiting for a fresh sync",
-                            snapshot.contentVersion(), chunkedStructureIds.size());
-                    return;
-                }
-                effective = new RuntimeContentSnapshot(decoded, snapshot.recipes(), snapshot.controllerSpecs(),
-                        snapshot.appearances(), snapshot.machineRecipePools(), snapshot.contentVersion());
-                ClientStructureChunkBuffer.reset();
-            }
-            if (effective.applyClient()) {
+            var effective = ClientStructureChunkBuffer.finish(context.connection().channel(), this, context.player().registryAccess());
+            if (effective == null) {
+                MMCR.LOG.warn("Incomplete structure sync for content version {}", snapshot.contentVersion());
+            } else if (effective.applyClient()) {
                 JeiRuntimeReloadBridge.reloadIfAvailable(effective);
             }
         });
@@ -126,7 +120,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot,
     private static void encode(RegistryFriendlyByteBuf buf, PktRuntimeContentPayload payload) {
         RuntimeContentSnapshot snapshot = payload.snapshot();
         buf.writeVarInt(FORMAT_VERSION);
-        int maxStructureBlocks = MachineStructureSyncCodec.maximumBlockPatternCount();
+        int maxStructureBlocks = payload.maxStructureBlocks();
         buf.writeVarInt(maxStructureBlocks);
         writeMap(buf, snapshot.structures(), maxStructures(),
                 (structureBuf, structure) -> MachineStructureSyncCodec.encode(structureBuf, structure, maxStructureBlocks));
@@ -184,7 +178,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot,
         if (contentVersion < 0) throw new IllegalArgumentException("Invalid runtime content version: " + contentVersion);
         return new PktRuntimeContentPayload(new RuntimeContentSnapshot(
                 structures, recipes, controllerSpecs, appearances, machineRecipePools, contentVersion),
-                chunkedStructureIds);
+                chunkedStructureIds, maxStructureBlocks);
     }
 
     private static <T> void writeMap(RegistryFriendlyByteBuf buf, Map<ResourceLocation, T> values, int max,
@@ -256,7 +250,7 @@ public record PktRuntimeContentPayload(RuntimeContentSnapshot snapshot,
         if (size < 0 || size > max) throw new IllegalArgumentException("Invalid " + label + " count: " + size);
     }
 
-    private static int maxStructures() {
+    static int maxStructures() {
         return CommonConfig.valueOrDefault(CommonConfig.RUNTIME_CONTENT_MAX_STRUCTURES, MAX_STRUCTURES);
     }
 
