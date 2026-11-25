@@ -72,7 +72,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
     private static final ResourceLocation FALLBACK_TEXTURE = MMCR.id("block/ctm/basic_casing/particle");
     private static final ModelProperty<CtmContext> CTM_CONTEXT = new ModelProperty<>();
     private static final ModelProperty<WorldAppearance> WORLD_APPEARANCE = new ModelProperty<>();
-    // Item overlays still grow; world overlays reuse the base face's plane.
+    // Item overlays and contracted world Flux cores use this spacing; full-face world layers stay coplanar.
     static final float OVERLAY_GROW = 0.0005f;
     private static final Set<ResourceLocation> MISSING_BASE_TEXTURES = ConcurrentHashMap.newKeySet();
 
@@ -455,7 +455,7 @@ public final class DynamicOverlayModelLoader implements IGeometryLoader<DynamicO
             TextureAtlasSprite sprite = sprite(texture);
             var base = direction.getAxis() == shaftAxis ? shaftPanel(direction, sprite, grow)
                     : face(direction, rollFacing, sprite, grow);
-            var flux = FluxNetworkOverlay.quad(texture, base, sprite);
+            var flux = FluxNetworkOverlay.quad(texture, base, sprite, 0F); // The item face already includes grow.
             return flux != null ? flux : base;
         }
 

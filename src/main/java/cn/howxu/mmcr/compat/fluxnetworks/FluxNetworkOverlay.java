@@ -34,7 +34,8 @@ public final class FluxNetworkOverlay {
                 ? ImmutableList.of(POINT, POINT_COLOUR) : ImmutableList.of(PLUG, PLUG_COLOUR);
     }
 
-    public static @Nullable BakedQuad quad(ResourceLocation texture, BakedQuad base, TextureAtlasSprite sprite) {
+    public static @Nullable BakedQuad quad(ResourceLocation texture, BakedQuad base, TextureAtlasSprite sprite,
+                                           float outwardOffset) {
         boolean point = POINT.equals(texture) || POINT_COLOUR.equals(texture);
         if (!point && !PLUG.equals(texture) && !PLUG_COLOUR.equals(texture)) return null;
         float size = (point ? 5F : 8F) / 16F;
@@ -44,15 +45,17 @@ public final class FluxNetworkOverlay {
         float uvSize = (point ? 4F : 8F) / 16F;
         Direction direction = base.getDirection();
         int axis = direction.getAxis().ordinal();
+        float offset = direction.getAxisDirection().getStep() * outwardOffset;
         int[] data = base.getVertices().clone();
         Vector3f vertex = new Vector3f();
         for (int i = 0; i < data.length; i += IQuadTransformer.STRIDE) {
             int pos = i + IQuadTransformer.POSITION;
             for (int j = 0; j < 3; j++) {
-                float coordinate = Mth.clamp(Float.intBitsToFloat(data[pos + j]), 0F, 1F);
-                vertex.setComponent(j, coordinate);
-                // Contract CTM tiles into one core; leave the base plane (or grown item depth) intact.
-                if (j != axis) data[pos + j] = Float.floatToRawIntBits(min + coordinate * size);
+                float coordinate = Float.intBitsToFloat(data[pos + j]);
+                float clamped = Mth.clamp(coordinate, 0F, 1F);
+                vertex.setComponent(j, clamped);
+                // Contract CTM tiles tangentially; keep depth relative to the original face.
+                data[pos + j] = Float.floatToRawIntBits(j == axis ? coordinate + offset : min + clamped * size);
             }
             float u = switch (direction) {
                 case EAST -> 1F - vertex.z;

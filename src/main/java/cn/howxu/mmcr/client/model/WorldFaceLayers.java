@@ -39,10 +39,12 @@ record WorldFaceLayers(@Nullable Direction front, Direction roll, List<Layer> la
         if (requested == null || requested == basePass) result.add(base);
         if (front != null && base.getDirection() != front) return;
         float[][] uv = null;
-        for (Layer layer : layers) {
+        for (int index = 0; index < layers.size(); index++) {
+            Layer layer = layers.get(index);
             if (requested != null && later(basePass, layer.pass()) != requested) continue;
             var sprite = layer.sprite();
-            var flux = FluxNetworkOverlay.quad(layer.texture(), base, sprite);
+            // Flux cores have a smaller footprint than the casing: coplanar draw order is not sufficient.
+            var flux = FluxNetworkOverlay.quad(layer.texture(), base, sprite, DynamicOverlayModelLoader.overlayGrow(index));
             if (flux != null) {
                 result.add(flux);
                 continue;
