@@ -26,11 +26,11 @@ Feature proposals should explain the use case and why existing Minecraft, MMCR, 
 6. Generate data when the changed content requires it, then run the relevant build checks:
 
    ```bash
-   chmod u+x run_data.sh
-   ./run_data.sh
-   ./gradlew compileJava --no-daemon
-   ./gradlew test --no-daemon
-   ./gradlew runGameTestServer --no-daemon
+   gradle runClientData
+   gradle runServerData
+   gradle compileJava
+   gradle test
+   gradle runGameTestServer
    ```
 
 7. In the pull request, describe the behavioral change and the testing performed. Include screenshots for user-interface changes and reproduction steps for bug fixes.
