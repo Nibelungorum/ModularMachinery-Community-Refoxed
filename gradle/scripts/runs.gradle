@@ -8,8 +8,8 @@ configurations {
 dependencies {
     // spark
     clientMods("curse.maven:${spark_id}:${spark_version}")
-    // sodium
-    clientMods("curse.maven:${sodium_id}:${sodium_version}")
+    // iris
+    clientMods("maven.modrinth:${iris_id}:${iris_version}")
     // athena for ctm
     // clientMods("curse.maven:${athena_id}:${athena_version}")
     // lithium
@@ -43,6 +43,15 @@ dependencies {
     clientMods("curse.maven:${eco_id}:${eco_version}")
 }
 
+// Sodium's outer jar provides an early FML service that discovers the actual mod inside it.
+// Keep it in the client's mods directory, not on the userdev runtime classpath.
+def clientSodium = configurations.detachedConfiguration(dependencies.create("curse.maven:${sodium_id}:${sodium_version}@jar"))
+def prepareClientSodium = tasks.register('prepareClientSodium', Copy) {
+    from clientSodium
+    into layout.projectDirectory.dir('run/client/mods')
+    rename { 'mmcr-dev-sodium.jar' }
+}
+
 runs {
     configureEach {
         systemProperty 'forge.logging.markers', 'REGISTRIES'
@@ -52,6 +61,7 @@ runs {
     }
 
     client {
+        dependsOn.add(prepareClientSodium)
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         arguments.addAll('--username', "howxu")
         runtimeClasspath.from(project.configurations.clientMods)
