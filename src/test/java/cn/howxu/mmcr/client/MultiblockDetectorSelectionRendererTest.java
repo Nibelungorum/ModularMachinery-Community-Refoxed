@@ -1,9 +1,11 @@
 package cn.howxu.mmcr.client;
 
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
+import cn.howxu.mmcr.test.TestBootstrap;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
@@ -15,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.within;
 
 /** Verifies the controller overlay's face colors and outward geometry without a client renderer.
@@ -53,6 +56,17 @@ class MultiblockDetectorSelectionRendererTest {
                         .isLessThan(0.00001);
             }
         }
+    }
+
+    @Test
+    void camera_relative_batches_cannot_accept_vertices_from_the_next_frame() throws Exception {
+        TestBootstrap.bootstrap();
+        List<VertexConsumer> frames = new ArrayList<>();
+        // An empty visible set still ends the real batch without requiring a GPU draw.
+        WorldOverlayBuffers.draw(RenderTypes.debugFilledBox(), frames::add);
+        assertThatIllegalStateException().isThrownBy(() -> frames.getFirst().addVertex(0, 0, 0));
+        WorldOverlayBuffers.draw(RenderTypes.debugFilledBox(), frames::add);
+        assertThat(frames.getLast()).isNotSameAs(frames.getFirst());
     }
 
     @Test

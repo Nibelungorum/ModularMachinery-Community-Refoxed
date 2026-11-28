@@ -14,6 +14,8 @@ runs {
             runtime("curse.maven:${spark_id}:${spark_version}")
             // sodium
             runtime("curse.maven:${sodium_id}:${sodium_version}")
+            // iris
+            // runtime("maven.modrinth:${iris_id}:${iris_version}")
             // athena for ctm
             // runtime("curse.maven:${athena_id}:${athena_version}")
             // lithium

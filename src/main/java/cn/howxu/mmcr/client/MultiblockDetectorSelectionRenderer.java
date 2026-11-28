@@ -17,7 +17,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Vector3f;
 
 /**
@@ -37,7 +37,7 @@ public final class MultiblockDetectorSelectionRenderer {
     private MultiblockDetectorSelectionRenderer() {}
 
     @SubscribeEvent
-    public static void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
+    public static void onRenderLevelAfterTranslucentFeatures(RenderLevelStageEvent.AfterTranslucentFeatures event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return;
 
@@ -46,9 +46,9 @@ public final class MultiblockDetectorSelectionRenderer {
 
         MultiblockDetectorSelection selection = MultiblockDetectorItem.selection(detector);
         Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
+        PoseStack.Pose pose = event.getPoseStack().last();
         if (selection.controllerPos() != null && selection.controllerFace() != null) {
-            event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.debugFilledBox(),
-                    (pose, buffer) -> renderControllerFaces(pose, buffer, camera, selection));
+            WorldOverlayBuffers.draw(RenderTypes.debugFilledBox(), buffer -> renderControllerFaces(pose, buffer, camera, selection));
         }
         if (selection.firstPos() == null || selection.secondPos() == null) return;
 
@@ -61,12 +61,11 @@ public final class MultiblockDetectorSelectionRenderer {
         double maxY = Math.max(first.getY(), second.getY()) + 1.0D;
         double maxZ = Math.max(first.getZ(), second.getZ()) + 1.0D;
 
-        event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.lines(), (pose, buffer) ->
+        WorldOverlayBuffers.draw(RenderTypes.lines(), buffer ->
                 renderBoxEdges(pose, buffer, camera, minX, minY, minZ, maxX, maxY, maxZ));
         if (shouldRenderMask(detector, selection)) {
-            event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.debugFilledBox(),
-                    (pose, buffer) -> renderRegionMask(pose, buffer, camera,
-                            minX, minY, minZ, maxX, maxY, maxZ));
+            WorldOverlayBuffers.draw(RenderTypes.debugFilledBox(), buffer ->
+                    renderRegionMask(pose, buffer, camera, minX, minY, minZ, maxX, maxY, maxZ));
         }
     }
 

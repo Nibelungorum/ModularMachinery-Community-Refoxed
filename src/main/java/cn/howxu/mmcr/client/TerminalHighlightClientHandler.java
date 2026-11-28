@@ -11,7 +11,6 @@ import cn.howxu.mmcr.internal.item.TerminalData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -19,7 +18,6 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
-import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -80,17 +78,15 @@ public final class TerminalHighlightClientHandler {
                 || !minecraft.level.dimension().equals(controller.dimension())) return;
         double radius = renderRadius();
         Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
-        MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
-        PoseStack pose = event.getPoseStack();
-        VertexConsumer vertices = buffers.getBuffer(RenderTypes.debugFilledBox());
-        forEachVisibleHighlight(camera, radius, (position, color) ->
-                drawFilledBox(vertices, pose.last(), new AABB(position).inflate(0.002D)
-                        .move(-camera.x, -camera.y, -camera.z), color));
-        buffers.endBatch(RenderTypes.debugFilledBox());
+        PoseStack.Pose pose = event.getPoseStack().last();
+        WorldOverlayBuffers.draw(RenderTypes.debugFilledBox(), vertices ->
+                forEachVisibleHighlight(camera, radius, (position, color) ->
+                        drawFilledBox(vertices, pose, new AABB(position).inflate(0.002D)
+                                .move(-camera.x, -camera.y, -camera.z), color)));
     }
 
     @SubscribeEvent
-    public static void onSubmitCustomGeometry(SubmitCustomGeometryEvent event) {
+    public static void onRenderLevelAfterTranslucentFeatures(RenderLevelStageEvent.AfterTranslucentFeatures event) {
         Minecraft minecraft = Minecraft.getInstance();
         if (bounds == null || controller == null || minecraft.level == null
                 || !minecraft.level.dimension().equals(controller.dimension())) return;
@@ -99,11 +95,12 @@ public final class TerminalHighlightClientHandler {
         if (box == null) return;
         // Keep the translucent faces just outside the outer blocks to avoid z-fighting.
         AABB mask = box.inflate(0.001D);
-        event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.debugFilledBox(),
-                (pose, buffer) -> MultiblockDetectorSelectionRenderer.renderRegionMask(pose, buffer, camera,
+        PoseStack.Pose pose = event.getPoseStack().last();
+        WorldOverlayBuffers.draw(RenderTypes.debugFilledBox(), buffer ->
+                MultiblockDetectorSelectionRenderer.renderRegionMask(pose, buffer, camera,
                         mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ));
-        event.getSubmitNodeCollector().submitCustomGeometry(event.getPoseStack(), RenderTypes.lines(),
-                (pose, buffer) -> MultiblockDetectorSelectionRenderer.renderBoxEdges(pose, buffer, camera,
+        WorldOverlayBuffers.draw(RenderTypes.lines(), buffer ->
+                MultiblockDetectorSelectionRenderer.renderBoxEdges(pose, buffer, camera,
                         mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ));
     }
 

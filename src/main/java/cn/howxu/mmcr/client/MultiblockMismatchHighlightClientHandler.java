@@ -4,7 +4,6 @@ import cn.howxu.mmcr.MMCR;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
@@ -52,11 +51,9 @@ public final class MultiblockMismatchHighlightClientHandler {
         if (((highlight.expiresAtMillis - now) / PHASE_MILLIS) % 2L == 0L) return;
 
         AABB box = new AABB(highlight.pos).inflate(0.005D);
-        Vec3 camera = minecraft.gameRenderer.getMainCamera().position();
-        PoseStack poseStack = event.getPoseStack();
-        MultiBufferSource.BufferSource buffer = minecraft.renderBuffers().bufferSource();
-        renderBoxEdges(poseStack.last(), buffer.getBuffer(RenderTypes.lines()), camera, box);
-        buffer.endBatch(RenderTypes.lines());
+        Vec3 camera = event.getLevelRenderState().cameraRenderState.pos;
+        PoseStack.Pose pose = event.getPoseStack().last();
+        WorldOverlayBuffers.draw(RenderTypes.lines(), buffer -> renderBoxEdges(pose, buffer, camera, box));
     }
 
     private static void renderBoxEdges(PoseStack.Pose pose, VertexConsumer buffer, Vec3 camera, AABB box) {
