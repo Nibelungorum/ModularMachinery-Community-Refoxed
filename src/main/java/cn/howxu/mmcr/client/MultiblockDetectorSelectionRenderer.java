@@ -9,7 +9,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -48,11 +47,10 @@ public final class MultiblockDetectorSelectionRenderer {
         MultiblockDetectorSelection selection = MultiblockDetectorItem.selection(detector);
         Vec3 camera = event.getCamera().getPosition();
         PoseStack poseStack = event.getPoseStack();
-        MultiBufferSource.BufferSource buffer = minecraft.renderBuffers().bufferSource();
         if (selection.controllerPos() != null && selection.controllerFace() != null) {
             // In 1.21.1 debugFilledBox uses TRIANGLE_STRIP, not independent quads.
-            renderControllerFaces(poseStack.last(), buffer.getBuffer(RenderType.debugQuads()), camera, selection);
-            buffer.endBatch(RenderType.debugQuads());
+            WorldOverlayBuffers.draw(RenderType.debugQuads(), vertices ->
+                    renderControllerFaces(poseStack.last(), vertices, camera, selection));
         }
         if (selection.firstPos() == null || selection.secondPos() == null) return;
 
@@ -65,13 +63,11 @@ public final class MultiblockDetectorSelectionRenderer {
         double maxY = Math.max(first.getY(), second.getY()) + 1.0D;
         double maxZ = Math.max(first.getZ(), second.getZ()) + 1.0D;
 
-        renderBoxEdges(poseStack.last(), buffer.getBuffer(RenderType.lines()), camera,
-                minX, minY, minZ, maxX, maxY, maxZ);
-        buffer.endBatch(RenderType.lines());
+        WorldOverlayBuffers.draw(RenderType.lines(), vertices ->
+                renderBoxEdges(poseStack.last(), vertices, camera, minX, minY, minZ, maxX, maxY, maxZ));
         if (shouldRenderMask(detector, selection)) {
-            renderRegionMask(poseStack, buffer.getBuffer(RenderType.debugFilledBox()), camera,
-                    minX, minY, minZ, maxX, maxY, maxZ);
-            buffer.endBatch(RenderType.debugFilledBox());
+            WorldOverlayBuffers.draw(RenderType.debugFilledBox(), vertices ->
+                    renderRegionMask(poseStack, vertices, camera, minX, minY, minZ, maxX, maxY, maxZ));
         }
     }
 

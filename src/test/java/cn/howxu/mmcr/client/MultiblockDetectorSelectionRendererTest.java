@@ -1,9 +1,14 @@
 package cn.howxu.mmcr.client;
 
 import cn.howxu.mmcr.internal.item.MultiblockDetectorSelection;
+import cn.howxu.mmcr.test.TestBootstrap;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.function.BiConsumer;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.FastColor;
@@ -54,6 +59,32 @@ class MultiblockDetectorSelectionRendererTest {
                         .isLessThan(0.00001);
             }
         }
+    }
+
+    @Test
+    void submits_each_camera_relative_overlay_before_the_next_frame() throws Exception {
+        TestBootstrap.bootstrap();
+        List<Float> drawnY = new ArrayList<>();
+        RenderType layer = new RenderType("test_overlay", DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS,
+                RenderType.TRANSIENT_BUFFER_SIZE, false, false, () -> {}, () -> {}) {
+            @Override
+            public void draw(MeshData mesh) {
+                try (mesh) {
+                    drawnY.add(mesh.vertexBuffer().getFloat(Float.BYTES));
+                }
+            }
+        };
+        var selection = MultiblockDetectorSelection.EMPTY.withController(new BlockPos(0, 64, 0), Direction.UP);
+        var pose = new PoseStack().last();
+        Vec3 camera = new Vec3(0, 65, 2);
+        Vec3 lowerCamera = camera.add(0, -0.25, 0);
+        WorldOverlayBuffers.draw(layer, vertices ->
+                MultiblockDetectorSelectionRenderer.renderControllerFaces(pose, vertices, camera, selection));
+        assertThat(drawnY).hasSize(1);
+        WorldOverlayBuffers.draw(layer, vertices ->
+                MultiblockDetectorSelectionRenderer.renderControllerFaces(pose, vertices, lowerCamera, selection));
+        assertThat(drawnY).hasSize(2);
+        assertThat(drawnY.getLast() - drawnY.getFirst()).isCloseTo((float) (camera.y - lowerCamera.y), within(0.00001F));
     }
 
     @Test

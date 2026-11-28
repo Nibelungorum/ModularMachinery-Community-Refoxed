@@ -11,7 +11,6 @@ import cn.howxu.mmcr.internal.item.TerminalData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -80,23 +79,21 @@ public final class TerminalHighlightClientHandler {
                 || !minecraft.level.dimension().equals(controller.dimension())) return;
         double radius = renderRadius();
         Vec3 camera = event.getCamera().getPosition();
-        MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
         PoseStack pose = event.getPoseStack();
         // The box emits independent quads; 1.21.1 debugFilledBox uses a triangle strip.
-        VertexConsumer vertices = buffers.getBuffer(RenderType.debugQuads());
-        forEachVisibleHighlight(camera, radius, (position, color) ->
-                drawFilledBox(vertices, pose.last(), new AABB(position).inflate(0.002D)
-                        .move(-camera.x, -camera.y, -camera.z), color));
-        buffers.endBatch(RenderType.debugQuads());
+        WorldOverlayBuffers.draw(RenderType.debugQuads(), vertices ->
+                forEachVisibleHighlight(camera, radius, (position, color) ->
+                        drawFilledBox(vertices, pose.last(), new AABB(position).inflate(0.002D)
+                                .move(-camera.x, -camera.y, -camera.z), color)));
         AABB box = visibleBounds(camera, radius);
         if (box != null) {
             AABB mask = box.inflate(0.001D);
-            MultiblockDetectorSelectionRenderer.renderRegionMask(pose, buffers.getBuffer(RenderType.debugFilledBox()), camera,
-                    mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ);
-            buffers.endBatch(RenderType.debugFilledBox());
-            MultiblockDetectorSelectionRenderer.renderBoxEdges(pose.last(), buffers.getBuffer(RenderType.lines()), camera,
-                    mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ);
-            buffers.endBatch(RenderType.lines());
+            WorldOverlayBuffers.draw(RenderType.debugFilledBox(), vertices ->
+                    MultiblockDetectorSelectionRenderer.renderRegionMask(pose, vertices, camera,
+                            mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ));
+            WorldOverlayBuffers.draw(RenderType.lines(), vertices ->
+                    MultiblockDetectorSelectionRenderer.renderBoxEdges(pose.last(), vertices, camera,
+                            mask.minX, mask.minY, mask.minZ, mask.maxX, mask.maxY, mask.maxZ));
         }
     }
 
